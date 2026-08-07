@@ -1,0 +1,499 @@
+export type StepId = 'agent' | 'knowledge' | 'connections' | 'safety' | 'publish'
+
+export interface StepMeta {
+  id: StepId
+  index: number
+  label: string
+  /** Small grey label shown next to the nav item — only "Connections" has one. */
+  optionalTag?: boolean
+}
+
+// ---- Step 1.0 Gate ----
+export interface WabaNumber {
+  id: string
+  phoneNumber: string
+  displayName: string
+  vertical: string
+  status: 'eligible' | 'ineligible' | 'needs_registration'
+  registered: boolean
+  billingAttached: boolean
+}
+
+export interface GateState {
+  selectedWabaId: string | null
+  /** Phone number and WABA name, captured directly so display doesn't depend on a MOCK_WABAS lookup
+   *  (needed since the Create Agent modal draws from its own WABA directory). */
+  selectedPhoneNumber: string | null
+  selectedWabaName: string | null
+  pin: string
+  pinAttempted: boolean
+  pinError: string | null
+  registrationComplete: boolean
+  billingAttached: boolean
+  gatePassed: boolean
+}
+
+// ---- Step 1.1 Agent Identity ----
+export interface IdentityState {
+  agentName: string
+  companyName: string
+  agentRole: string
+  capabilities: string[]
+  exclusionsOpen: boolean
+  exclusions: string
+  avatarDataUrl: string | null
+}
+
+// ---- Step 1.2 Business Profile ----
+export type PaymentMethodId = 'cod' | 'upi' | 'cards' | 'netbanking' | 'wallets' | 'other'
+export type Day = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun'
+
+export interface BusinessHourRow {
+  day: Day
+  /** Explicitly marked closed. */
+  closed: boolean
+  /** '' means unset — a row that hasn't been touched by a shortcut or manual entry yet. */
+  open: string
+  close: string
+}
+
+/** Where the saved payment text came from: our own chips, or plain text saved elsewhere with no
+ *  chip record to restore. `null` means no prior data — behaves like 'chips' with nothing selected. */
+export type PaymentSource = 'chips' | 'text' | null
+
+export interface BusinessState {
+  businessDescription: string
+  paymentMethods: PaymentMethodId[]
+  paymentOtherText: string
+  paymentSource: PaymentSource
+  /** Only meaningful when paymentSource === 'text'. */
+  paymentPlainText: string
+  returnPolicy: string
+  purchaseInfo: string
+  deliveryAndShipping: string
+  contactEmail: string
+  businessAddress: string
+  businessHours: BusinessHourRow[]
+  businessHoursEnabled: boolean
+}
+
+// ---- Prototype-only demo controls, shared across steps ----
+export interface DemoState {
+  businessCategory: string
+  /** One-shot: the next simulated async action (any step) fails, then this resets itself. */
+  forceNextFailure: boolean
+  /** Persistent (not one-shot), unlike forceNextFailure — Rich replies saves immediately rather
+   *  than on Next, so it needs a toggle that stays on across multiple saves. Kept in global state
+   *  (not local component state) so the floating Demo controls popover reflects it live: a
+   *  sibling component's local state change never re-renders the popover while it stays open. */
+  richRepliesForceSaveFailure: boolean
+  /** Lets the Safety & handoff step's multi-language warning be demoed without actually
+   *  configuring more than one language back on the Personality tab. */
+  simulateMultipleLanguages: boolean
+}
+
+// ---- Step 1.3 Knowledge Base ----
+export interface FaqRow {
+  id: string
+  question: string
+  answer: string
+  createdAt: number
+  /** Which CSV import produced this row, if any — lets "Undo this import" remove exactly those rows. */
+  importBatchId?: string
+}
+
+export interface DocumentFile {
+  id: string
+  fileName: string
+  sizeBytes: number
+  type: string
+  uploadedAt: number
+}
+
+export type WebsiteStatus = 'waiting' | 'reading' | 'done' | 'failed'
+
+export interface WebsiteSource {
+  id: string
+  url: string
+  status: WebsiteStatus
+  pagesRead: number
+  updatedAt: number
+}
+
+export interface KnowledgeState {
+  faqs: FaqRow[]
+  documents: DocumentFile[]
+  websites: WebsiteSource[]
+  /** The most recent CSV import, kept only for the lifetime of this step so "Undo this import" can appear. */
+  lastFaqImport: { id: string; count: number } | null
+}
+
+// ---- Step 1.4 Personalization ----
+export type ToneId = 'professional' | 'enthusiastic' | 'informal' | 'custom'
+export type AnswerLength = 'concise' | 'standard' | 'detailed'
+export type EmojiUse = 'never' | 'sparingly' | 'freely'
+
+export interface PersonalizationState {
+  tone: ToneId
+  customToneInstructions: string
+  emojiUse: EmojiUse
+  nameIntroduction: boolean
+  answerLength: AnswerLength
+  defaultLanguage: string
+  additionalLanguages: string[]
+  matchCustomerLanguage: boolean
+  allowMixedLanguage: boolean
+  /** Layer 2: user-authored skills, separate from the combined Layer-1 skill. Each saves on its own. */
+  customSkills: CustomSkill[]
+  lastSkillImport: { id: string; count: number } | null
+}
+
+export interface CustomSkill {
+  id: string
+  /** The plain name as the user typed it — shown in the UI. */
+  name: string
+  /** Generated from name: lowercase, hyphenated, <=64 chars, collision-suffixed. Never shown to the user. */
+  title: string
+  instruction: string
+  createdAt: number
+  importBatchId?: string
+}
+
+// ---- Step 1 Rich replies (the system underneath calls these "UI skills") ----
+export type RichReplyType =
+  | 'cta_url'
+  | 'image'
+  | 'interactive_list'
+  | 'carousel_url'
+  | 'carousel_quick_reply'
+  | 'location'
+  | 'location_request'
+  | 'flow'
+
+export interface CtaUrlBlanks {
+  messageText: string
+  buttonLabel: string
+  link: string
+}
+
+export interface ImageBlanks {
+  imageUrl: string
+  caption: string
+}
+
+export interface MenuOption {
+  id: string
+  title: string
+  description: string
+  /** Which named group this option sits under — only meaningful when groupsEnabled is true. */
+  group: string
+}
+
+export interface InteractiveListBlanks {
+  messageText: string
+  menuButtonLabel: string
+  groupsEnabled: boolean
+  options: MenuOption[]
+}
+
+export interface CarouselCard {
+  id: string
+  imageUrl: string
+  cardText: string
+  buttonLabel: string
+  /** Present for carousel_url cards; ignored (kept empty) for carousel_quick_reply cards. */
+  link: string
+}
+
+export interface CarouselUrlBlanks {
+  messageText: string
+  cards: CarouselCard[]
+}
+
+export interface CarouselQuickReplyBlanks {
+  messageText: string
+  cards: CarouselCard[]
+}
+
+export interface LocationBlanks {
+  placeName: string
+  address: string
+  latitude: string
+  longitude: string
+}
+
+export interface LocationRequestBlanks {
+  messageText: string
+}
+
+export interface FlowBlanks {
+  /** One of the canned WhatsApp Flow names, or null if none is available/selected. */
+  flowName: string | null
+  messageText: string
+  buttonLabel: string
+}
+
+interface RichReplyBase {
+  id: string
+  name: string
+  trigger: string
+  enabled: boolean
+  /** Regenerated in full from `blanks` on every save — never parsed back into blanks. */
+  instructionSentence: string
+  createdAt: number
+}
+
+/** `blanks` is null only for a row the system has with no structured record on our side (created
+ *  elsewhere) — the row then shows `instructionSentence` as raw text and offers "Rebuild as a
+ *  form" instead of "Edit". */
+export type RichReply =
+  | (RichReplyBase & { type: 'cta_url'; blanks: CtaUrlBlanks | null })
+  | (RichReplyBase & { type: 'image'; blanks: ImageBlanks | null })
+  | (RichReplyBase & { type: 'interactive_list'; blanks: InteractiveListBlanks | null })
+  | (RichReplyBase & { type: 'carousel_url'; blanks: CarouselUrlBlanks | null })
+  | (RichReplyBase & { type: 'carousel_quick_reply'; blanks: CarouselQuickReplyBlanks | null })
+  | (RichReplyBase & { type: 'location'; blanks: LocationBlanks | null })
+  | (RichReplyBase & { type: 'location_request'; blanks: LocationRequestBlanks | null })
+  | (RichReplyBase & { type: 'flow'; blanks: FlowBlanks | null })
+
+export interface RichRepliesState {
+  richReplies: RichReply[]
+}
+
+// ---- Step 1.5 Journeys and Routing ----
+export type JourneyProfile = 'support' | 'commerce' | 'both' | null
+
+export interface IntentRow {
+  id: string
+  name: string
+  triggerPhrases: string[]
+  eligibleStates: string[]
+  action: string
+  fromTemplate: string | null
+}
+
+export interface RoutingState {
+  journeyProfile: JourneyProfile
+  selectedTemplateIds: string[]
+  intents: IntentRow[]
+  fallbackBehaviour: 'escalate' | 'retry_prompt' | 'fallback_reply'
+}
+
+// ---- Step 1.6 Connectors ----
+export type ConnectorType = 'shopify' | 'woocommerce' | 'custom_rest' | 'none' | null
+export type TestStatus = 'untested' | 'testing' | 'success' | 'failed'
+
+export interface ConnectorTool {
+  id: string
+  name: string
+  description: string
+  enabled: boolean
+  testStatus: TestStatus
+  lastResponse: string | null
+}
+
+export interface CustomTool {
+  id: string
+  name: string
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  path: string
+  paramsJson: string
+}
+
+export interface ConnectorsState {
+  connectorType: ConnectorType
+  apiKey: string
+  clientId: string
+  clientSecret: string
+  connectionStatus: TestStatus
+  tools: ConnectorTool[]
+  customTools: CustomTool[]
+  skipped: boolean
+}
+
+// ---- New Step 3 Connections ----
+// A connection is one outside system (base address + auth). Actions are the individual things
+// the agent can do there. Kept as a separate slice from the old, unused ConnectorsState above.
+export type AuthMethod = 'api_key' | 'client_credentials' | 'none'
+export type ApiKeyLocation = 'header' | 'query'
+export type ConnectionStatus = 'working' | 'waiting_signin' | 'key_rejected' | 'having_problems' | 'not_tested'
+
+/** One row of the repeatable API key list — most systems need one, some need more. */
+export interface ApiKeyEntry {
+  id: string
+  value: string
+  location: ApiKeyLocation
+  fieldName: string
+  prefix: string
+}
+
+export interface Connection {
+  id: string
+  name: string
+  description: string
+  baseUrl: string
+  authMethod: AuthMethod
+  // authMethod === 'api_key'
+  apiKeys?: ApiKeyEntry[]
+  // authMethod === 'client_credentials'
+  tokenUrl?: string
+  clientId?: string
+  clientSecret?: string
+  scopes?: string[]
+  createdFromRecipe?: string
+  createdAt: number
+  /** Prototype-only: drives the status shown on the card, chosen from the card's own dropdown. */
+  demoStatus: ConnectionStatus
+}
+
+export type ActionMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+export type ValueType = 'text' | 'number' | 'integer' | 'boolean'
+/** 'conversation_memory' ("a value from earlier in this conversation"): grounded in a real
+ *  conversation-memory mechanism, but its exact compiled binding was not independently verified
+ *  this session (the real system reportedly uses a `$stored.<name>` variable namespace — see
+ *  reference docs/postman collection, skill "state-and-variables"). The prototype stores the
+ *  user's selection and, for demo purposes only, treats it identically to 'conversation'. FLAG
+ *  FOR TECHNICAL REVIEW before any real compiled representation is built for this source. */
+export type ValueSource = 'conversation' | 'whatsapp_number' | 'fixed' | 'conversation_memory'
+export type ValueLocation = 'path' | 'query' | 'header' | 'body'
+
+export interface ActionValue {
+  id: string
+  name: string
+  type: ValueType
+  required: boolean
+  location: ValueLocation
+  source: ValueSource
+  fixedValue?: string
+  /** Only meaningful (and near-mandatory) when source === 'conversation'. */
+  description: string
+}
+
+export interface ConnectionAction {
+  id: string
+  connectionId: string
+  name: string
+  description: string
+  method: ActionMethod
+  path: string
+  values: ActionValue[]
+  createdAt: number
+}
+
+export interface ActivityLogRow {
+  id: string
+  connectionId: string
+  actionId: string
+  actionName: string
+  timestamp: number
+  outcome: 'worked' | 'failed'
+  errorText?: string
+}
+
+export interface ConnectionsPageState {
+  connections: Connection[]
+  actions: ConnectionAction[]
+  activity: ActivityLogRow[]
+}
+
+// ---- Step 1.7 Guardrails ----
+export interface GuardrailsState {
+  groundingMode: 'strict' | 'assisted'
+  neverSayPhrases: string[]
+  topicsToAvoid: string[]
+  handoffMessageEnabled: boolean
+  handoffMessage: string
+}
+
+// ---- Step 1.8 System Replies ----
+export type FollowUpInterval = 0 | 300 | 900 | 1800 | 3600 | 7200 | 28800 | 86400
+
+export interface RepliesState {
+  greetingReply: string
+  wrapUpHelpful: string
+  wrapUpUnhelpful: string
+  offerHumanHandover: boolean
+  fallbackReply: string
+  outOfHoursReply: string
+  unsupportedMediaReply: string
+  followUpEnabled: boolean
+  followUpInterval: FollowUpInterval
+  followUpMessage: string
+}
+
+// ---- Step 1.9 Review, Test, Publish ----
+export interface TestConversationResult {
+  id: string
+  title: string
+  category: 'safety' | 'faq' | 'routing'
+  passed: boolean
+  transcript: { from: 'customer' | 'agent'; text: string }[]
+}
+
+export interface MetaEvalResult {
+  available: boolean
+  avgConversationScore: number
+  avgTurnScore: number
+  summary: string
+  failureCategories: { category: string; count: number }[]
+}
+
+export interface PublishState {
+  versionNote: string
+  approverRequired: boolean
+  approverName: string | null
+  approved: boolean
+  testRunStatus: 'idle' | 'running' | 'done'
+  testResults: TestConversationResult[]
+  testsStaleSince: number | null
+  metaEval: MetaEvalResult
+  allowlistNumbers: string[]
+  audienceMode: 'allowlisted' | 'everyone'
+  activated: boolean
+  activatedChannels: string[]
+}
+
+export interface WizardState {
+  gate: GateState
+  currentStep: StepId
+  completedSteps: Record<StepId, boolean>
+  identity: IdentityState
+  business: BusinessState
+  knowledge: KnowledgeState
+  personalization: PersonalizationState
+  richReplies: RichRepliesState
+  routing: RoutingState
+  connectors: ConnectorsState
+  connections: ConnectionsPageState
+  guardrails: GuardrailsState
+  replies: RepliesState
+  publish: PublishState
+  demo: DemoState
+  /** Keyed by data slice (not step) — several steps now span more than one slice. */
+  lastEditedAt: Record<SliceKey, number>
+  /** Cross-step navigation signal: "Customise handoff rules" on Safety & handoff sets this and
+   *  jumps to Step 1, where the Skills tab consumes it to pre-fill (not save) a new custom skill.
+   *  Kept outside the slice system so it never marks saved tests stale — it's pure UI intent,
+   *  not agent configuration. */
+  pendingSkillPrefill: { name: string; instruction: string } | null
+}
+
+export type SliceKey = Exclude<keyof WizardState, 'currentStep' | 'completedSteps' | 'lastEditedAt' | 'pendingSkillPrefill'>
+
+// ---- AI Agents listing (Helo-side summary of a configured agent instance) ----
+export type AgentRolloutStatus = 'live' | 'needs_testing' | 'draft' | 'paused'
+
+export interface AgentInstanceSummary {
+  id: string
+  name: string
+  companyName: string
+  phoneNumber: string
+  status: AgentRolloutStatus
+  connector: 'Shopify' | 'WooCommerce' | 'Custom REST' | 'None'
+  journeyProfile: 'Support' | 'Commerce' | 'Both' | '—'
+  audienceMode: 'Everyone' | 'Allowlisted'
+  allowlistCount: number
+  evalScore: number | null
+  updatedAt: string
+  isCurrent?: boolean
+}

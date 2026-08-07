@@ -1,0 +1,75 @@
+:root {
+  /* Primary & secondary */
+  --primary: rgba(49, 134, 223, 1);
+  --primary-foreground: rgba(255, 255, 255, 1);
+  --secondary: rgba(255, 255, 255, 1);
+  --secondary-foreground: rgba(20, 24, 27, 1);
+
+  /* Surfaces */
+  --background: rgba(255, 255, 255, 1);
+  --foreground: rgba(20, 24, 27, 1);
+  --card: rgba(255, 255, 255, 1);
+  --card-foreground: rgba(20, 24, 27, 1);
+  --popover: rgba(255, 255, 255, 1);
+  --popover-foreground: rgba(20, 24, 27, 1);
+
+  /* State */
+  --muted: rgba(242, 243, 243, 1);
+  --muted-foreground: rgba(103, 110, 115, 1);
+  --accent: rgba(240, 248, 254, 1);
+  --accent-foreground: rgba(49, 134, 223, 1);
+  --destructive: rgba(237, 28, 52, 1);
+  --destructive-foreground: rgba(255, 255, 255, 1);
+
+  /* Success (extends the documented palette for status pills; sourced from chart-2) */
+  --success: rgba(32, 176, 56, 1);
+  --success-foreground: rgba(255, 255, 255, 1);
+  --warning: rgba(255, 193, 7, 1);
+  --warning-foreground: rgba(20, 24, 27, 1);
+
+  /* UI elements */
+  --border: rgba(206, 209, 211, 1);
+  /* Border color for form controls (Input/Textarea/Select/Checkbox/etc via border-input) and the
+     Switch's unchecked track (bg-input). Kept distinct from --input-background (always white) —
+     this must stay a visible grey or every control's outline disappears against a white page. */
+  --input: rgba(206, 209, 211, 1);
+  --input-background: rgba(255, 255, 255, 1);
+  --ring: rgba(49, 134, 223, 1);
+
+  /* Charts */
+  --chart-1: rgba(49, 134, 223, 1);
+  --chart-2: rgba(32, 176, 56, 1);
+  --chart-3: rgba(237, 28, 52, 1);
+  --chart-4: rgba(214, 90, 9, 1);
+  --chart-5: rgba(130, 137, 142, 1);
+
+  /* Sidebar */
+  --sidebar: rgba(255, 255, 255, 1);
+  --sidebar-foreground: rgba(75, 79, 83, 1);
+  --sidebar-primary: rgba(49, 134, 223, 1);
+  --sidebar-primary-foreground: rgba(255, 255, 255, 1);
+  --sidebar-accent: rgba(240, 248, 254, 1);
+  --sidebar-accent-foreground: rgba(49, 134, 223, 1);
+  --sidebar-border: rgba(229, 231, 232, 1);
+  --sidebar-ring: rgba(49, 134, 223, 1);
+
+  /* Radius */
+  --radius: 8px;
+
+  /* Typography scale */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-h4: 2rem;
+  --text-lg: 2.5rem;
+  --text-xl: 3rem;
+  --text-2xl: 3.5rem;
+  --text-caption: 0.75rem;
+  --text-badge: 0.875rem;
+
+  /* Font weights */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semi-bold: 600;
+  --font-weight-bold: 700;
+}

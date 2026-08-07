@@ -1,0 +1,1018 @@
+import type {
+  ActionMethod,
+  BusinessHourRow,
+  BusinessState,
+  ApiKeyEntry,
+  CarouselCard,
+  Connection,
+  ConnectionAction,
+  ConnectionStatus,
+  ConnectorTool,
+  ConnectorType,
+  Day,
+  FaqRow,
+  FollowUpInterval,
+  IntentRow,
+  MenuOption,
+  RichReply,
+  RichReplyType,
+  StepMeta,
+  ToneId,
+  ValueLocation,
+  ValueSource,
+  ValueType,
+  WabaNumber,
+} from './types'
+
+export const STEP_ORDER: StepMeta[] = [
+  { id: 'agent', index: 1, label: 'Your agent' },
+  { id: 'knowledge', index: 2, label: 'Knowledge' },
+  { id: 'connections', index: 3, label: 'Connections', optionalTag: true },
+  { id: 'safety', index: 4, label: 'Safety & handoff' },
+  { id: 'publish', index: 5, label: 'Test & publish' },
+]
+
+export const MOCK_WABAS: WabaNumber[] = [
+  {
+    id: 'waba_1',
+    phoneNumber: '+91 98765 43210',
+    displayName: 'Aurora Home Goods',
+    vertical: 'Retail',
+    status: 'eligible',
+    registered: true,
+    billingAttached: true,
+  },
+  {
+    id: 'waba_2',
+    phoneNumber: '+91 91234 56780',
+    displayName: 'Aurora Home Goods — Support',
+    vertical: 'Retail',
+    status: 'eligible',
+    registered: true,
+    billingAttached: false,
+  },
+  {
+    id: 'waba_3',
+    phoneNumber: '+91 90000 11122',
+    displayName: 'Aurora Wellness Clinic',
+    vertical: 'Health',
+    status: 'ineligible',
+    registered: true,
+    billingAttached: true,
+  },
+  {
+    id: 'waba_4',
+    phoneNumber: '+91 99887 76655',
+    displayName: 'Aurora Fresh Grocer',
+    vertical: 'E-commerce',
+    status: 'needs_registration',
+    registered: false,
+    billingAttached: false,
+  },
+]
+
+export const CAPABILITY_STARTER_SET = [
+  'Answer questions',
+  'Provide business hours',
+  'Share return policy',
+  'Track an order',
+]
+
+export const CAPABILITY_FROM_CONNECTORS: Record<string, string[]> = {
+  shopify: ['Check order status', 'Create a cart', 'Track a shipment'],
+  woocommerce: ['Check order status', 'Track a shipment'],
+  custom_rest: ['Run a custom action'],
+}
+
+export const PAYMENT_METHOD_OPTIONS: { id: string; label: string }[] = [
+  { id: 'cod', label: 'Cash on delivery' },
+  { id: 'upi', label: 'UPI' },
+  { id: 'cards', label: 'Cards' },
+  { id: 'netbanking', label: 'Net banking' },
+  { id: 'wallets', label: 'Wallets' },
+  { id: 'other', label: 'Other' },
+]
+
+const DAYS: Day[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+// Rows start unset — no shortcut or manual entry has touched them yet.
+export const DEFAULT_BUSINESS_HOURS: BusinessHourRow[] = DAYS.map((day) => ({
+  day,
+  closed: false,
+  open: '',
+  close: '',
+}))
+
+// 30-minute steps, 00:00 through 23:30.
+export const TIME_OPTIONS: string[] = Array.from({ length: 48 }, (_, i) => {
+  const hours = String(Math.floor(i / 2)).padStart(2, '0')
+  const minutes = i % 2 === 0 ? '00' : '30'
+  return `${hours}:${minutes}`
+})
+
+// Business categories whose Section 2 leads with "How customers buy or book" (appointments,
+// bookings) rather than returns/shipping. Drawn from the same category set as the Agent Identity
+// step's "Demo: business category" control.
+export const SERVICES_TYPE_CATEGORIES = ['Services', 'Health']
+
+export const SAMPLE_BUSINESS_PROFILE: Partial<BusinessState> = {
+  businessDescription:
+    'We are a family run home decor and textiles shop, serving customers across India since 2015. Known for hand block printed bedsheets, cushion covers and curtains.',
+  paymentMethods: ['cod', 'upi', 'cards'],
+  paymentOtherText: '',
+  paymentSource: 'chips',
+  paymentPlainText: '',
+  returnPolicy:
+    '7 day returns on unused items with original packaging. Refunds go back to the original payment method within 5 working days. No returns on innerwear or customised items.',
+  purchaseInfo:
+    'Order on our website or right here on WhatsApp. Share the product name and your address, and we will confirm price and delivery time before you pay.',
+  deliveryAndShipping:
+    'We deliver across India. Metro cities in 2 to 3 days, everywhere else in 5 to 7 days. Free delivery on orders above Rs 999, otherwise Rs 49.',
+  contactEmail: 'support@aurorahome.com',
+  businessAddress: 'Shop 4, Link Road, Bandra West, Mumbai 400050',
+  businessHours: [
+    { day: 'Mon', closed: false, open: '09:00', close: '18:00' },
+    { day: 'Tue', closed: false, open: '09:00', close: '18:00' },
+    { day: 'Wed', closed: false, open: '09:00', close: '18:00' },
+    { day: 'Thu', closed: false, open: '09:00', close: '18:00' },
+    { day: 'Fri', closed: false, open: '09:00', close: '18:00' },
+    { day: 'Sat', closed: false, open: '10:00', close: '14:00' },
+    { day: 'Sun', closed: true, open: '', close: '' },
+  ],
+  businessHoursEnabled: true,
+}
+
+export const SAMPLE_PAYMENT_TEXT_FROM_ELSEWHERE =
+  'We accept UPI, Google Pay and cash on delivery for orders under Rs 5000.'
+
+export const TONE_PRESETS: {
+  id: ToneId
+  label: string
+  description: string
+}[] = [
+  { id: 'professional', label: 'Professional', description: 'Polished, precise, minimal small talk.' },
+  { id: 'enthusiastic', label: 'Enthusiastic', description: 'Warm and upbeat, still on-topic.' },
+  { id: 'informal', label: 'Informal', description: 'Casual, conversational, brand-friendly.' },
+  { id: 'custom', label: 'Custom', description: 'Write your own tone instructions.' },
+]
+
+// Leads with the languages relevant to this market, in the required order, before the rest of
+// the world's languages alphabetically. Hinglish is deliberately excluded — mixing is handled by
+// the "allow mixed-language replies" checkbox, not a separate language entry.
+export const LANGUAGE_OPTIONS = [
+  'English',
+  'Hindi',
+  'Tamil',
+  'Telugu',
+  'Marathi',
+  'Bengali',
+  'Kannada',
+  'Gujarati',
+  'Malayalam',
+  'Punjabi',
+  'Odia',
+  'Urdu',
+  'Arabic',
+  'Chinese',
+  'Dutch',
+  'French',
+  'German',
+  'Indonesian',
+  'Italian',
+  'Japanese',
+  'Korean',
+  'Portuguese',
+  'Russian',
+  'Spanish',
+  'Thai',
+  'Turkish',
+  'Vietnamese',
+]
+
+
+// ---- Personality and Skills, Section B: custom skills ----
+
+// Placeholder templates for the prototype. `retailSuggested` drives which group ("Suggested for
+// your business" vs "All templates") a card lands in under a retail-type vs services-type
+// business category — see SERVICES_TYPE_CATEGORIES.
+export const SKILL_TEMPLATES: { name: string; instruction: string; retailSuggested: boolean }[] = [
+  {
+    name: 'Handling discount requests',
+    instruction:
+      'When a customer asks for a discount, explain that prices are fixed for [product category], but let them know about any current promotion if one is running.',
+    retailSuggested: true,
+  },
+  {
+    name: 'Out of stock requests',
+    instruction:
+      'When a product is out of stock, apologise, say when it is expected back if known, and offer [a similar product] instead.',
+    retailSuggested: true,
+  },
+  {
+    name: 'Order cancellation requests',
+    instruction:
+      'When a customer wants to cancel an order, check if it has shipped, and if not, cancel it and confirm the refund will be processed within [refund timeframe].',
+    retailSuggested: true,
+  },
+  {
+    name: 'Handling delivery complaints',
+    instruction:
+      'When a customer reports a late or damaged delivery, apologise, ask for the order number, and offer [a replacement or refund] depending on the situation.',
+    retailSuggested: true,
+  },
+  {
+    name: 'Handling warranty questions',
+    instruction:
+      'When a customer asks about warranty, explain that products carry a [warranty period] warranty and ask for their order number.',
+    retailSuggested: false,
+  },
+  {
+    name: 'Angry customer handling',
+    instruction:
+      'When a customer is upset, acknowledge their frustration, apologise for the experience, and offer to connect them with [a person or the support team] if you cannot resolve it.',
+    retailSuggested: false,
+  },
+  {
+    name: 'Asking for reviews',
+    instruction:
+      'After confirming an order is delivered and the customer is happy, ask if they would leave a review on [review platform].',
+    retailSuggested: false,
+  },
+  {
+    name: 'Appointment rescheduling',
+    instruction:
+      'When a customer wants to reschedule, ask for their preferred new date and time, and confirm availability before offering [alternative slots].',
+    retailSuggested: false,
+  },
+]
+
+export const SAMPLE_CUSTOM_SKILLS: { name: string; instruction: string }[] = [
+  {
+    name: 'Handling warranty questions',
+    instruction: 'When a customer asks about warranty, explain that all products carry a 1 year warranty and ask for their order number.',
+  },
+  {
+    name: 'Out of stock requests',
+    instruction: 'When a product is out of stock, apologise, say when it is expected back if known, and offer a similar product.',
+  },
+  {
+    name: 'Handling discount requests',
+    instruction: 'When a customer asks for a discount, explain that prices are fixed, but mention the current loyalty program.',
+  },
+  {
+    name: 'Angry customer handling',
+    instruction: 'When a customer is upset, acknowledge their frustration, apologise for the experience, and offer to connect them with a person.',
+  },
+]
+
+export const USE_CASE_TEMPLATES: {
+  id: string
+  label: string
+  description: string
+  journeys: Array<'support' | 'commerce'>
+  intents: Omit<IntentRow, 'id' | 'fromTemplate'>[]
+}[] = [
+  {
+    id: 'order_tracking',
+    label: 'Order tracking',
+    description: 'Let customers check the status of an existing order.',
+    journeys: ['commerce'],
+    intents: [
+      {
+        name: 'Track order',
+        triggerPhrases: ['where is my order', 'track my order', 'order status'],
+        eligibleStates: ['Order placed', 'Shipped', 'Out for delivery'],
+        action: 'Call: Check order status',
+      },
+    ],
+  },
+  {
+    id: 'returns_refunds',
+    label: 'Returns and refunds',
+    description: 'Guide customers through a return or refund request.',
+    journeys: ['commerce'],
+    intents: [
+      {
+        name: 'Start a return',
+        triggerPhrases: ['i want to return', 'refund my order', 'return this item'],
+        eligibleStates: ['Delivered'],
+        action: 'Reply: Share return policy',
+      },
+    ],
+  },
+  {
+    id: 'address_change',
+    label: 'Address change',
+    description: 'Handle a request to update a delivery address.',
+    journeys: ['commerce'],
+    intents: [
+      {
+        name: 'Change delivery address',
+        triggerPhrases: ['change my address', 'wrong delivery address', 'update shipping address'],
+        eligibleStates: ['Order placed'],
+        action: 'Escalate: Address change needed',
+      },
+    ],
+  },
+  {
+    id: 'product_search',
+    label: 'Product search',
+    description: 'Help customers find a product from the catalog.',
+    journeys: ['commerce'],
+    intents: [
+      {
+        name: 'Find a product',
+        triggerPhrases: ['do you have', 'looking for', 'in stock'],
+        eligibleStates: ['Any'],
+        action: 'Call: Search products',
+      },
+    ],
+  },
+  {
+    id: 'appointment_booking',
+    label: 'Appointment booking',
+    description: 'Let customers book, reschedule, or cancel a visit.',
+    journeys: ['support'],
+    intents: [
+      {
+        name: 'Book an appointment',
+        triggerPhrases: ['book an appointment', 'schedule a visit', 'reschedule'],
+        eligibleStates: ['Any'],
+        action: 'Reply: Share booking link',
+      },
+    ],
+  },
+]
+
+export const CONNECTOR_TOOL_TEMPLATES: Record<Exclude<ConnectorType, null | 'custom_rest' | 'none'>, Omit<ConnectorTool, 'id' | 'enabled' | 'testStatus' | 'lastResponse'>[]> = {
+  shopify: [
+    { name: 'Check order status', description: 'Looks up an order by ID or customer phone number.' },
+    { name: 'Create a cart', description: 'Creates a new cart and returns a checkout link.' },
+    { name: 'Track a shipment', description: 'Returns carrier and tracking details for a shipped order.' },
+  ],
+  woocommerce: [
+    { name: 'Check order status', description: 'Looks up an order by ID or customer phone number.' },
+    { name: 'Track a shipment', description: 'Returns carrier and tracking details for a shipped order.' },
+  ],
+}
+
+export const FOLLOW_UP_INTERVALS: { value: FollowUpInterval; label: string }[] = [
+  { value: 0, label: 'Never follow up' },
+  { value: 300, label: '5 minutes of silence' },
+  { value: 900, label: '15 minutes of silence' },
+  { value: 1800, label: '30 minutes of silence' },
+  { value: 3600, label: '1 hour of silence' },
+  { value: 7200, label: '2 hours of silence' },
+  { value: 28800, label: '8 hours of silence' },
+  { value: 86400, label: '24 hours of silence' },
+]
+
+export const DEFAULT_REPLIES = {
+  greetingReply: "Hi! I'm here to help with orders, returns, and any questions about our products.",
+  wrapUpHelpful: 'Glad I could help. Is there anything else you need?',
+  wrapUpUnhelpful: "I'm sorry I couldn't fully resolve that. I can connect you with a team member if you'd like.",
+  fallbackReply: "I didn't quite catch that. Could you rephrase, or ask about orders, returns, or products?",
+  outOfHoursReply: "Thanks for reaching out. We're currently closed, but I can still help with common questions, and the team will follow up during business hours.",
+  unsupportedMediaReply: "I can't read that file type yet. Could you describe what you need in text?",
+  followUpMessage: "Just checking in, are you still there? Happy to help whenever you're ready.",
+}
+
+export const ALWAYS_PROTECTED_RULES = [
+  'The agent will never claim to be human when directly asked.',
+  'The agent will never request full payment card numbers, passwords, or OTPs in chat.',
+  'The agent will never provide medical, legal, or financial advice beyond what is configured.',
+  'The agent will always honour an explicit request to speak with a person.',
+  'The agent will never disclose another customer\'s data.',
+]
+
+export const MOCK_APPROVERS = ['Priya Sharma', 'Rahul Mehta', 'Ananya Iyer']
+
+export const DEFAULT_HANDOFF_MESSAGE =
+  "You're being connected with a member of our team. They'll be with you shortly."
+
+export const NEVER_SAY_EXAMPLES = [
+  'guaranteed cure',
+  'risk-free investment',
+  'no side effects',
+]
+
+export const INJECTION_PATTERNS = [
+  /ignore (all |any |previous |the )*instructions/i,
+  /you are now/i,
+  /system\s*:/i,
+  /act as (a|an)/i,
+  /disregard (your |the )*(rules|guidelines|prompt|instructions)/i,
+  /reveal (your |the )*(prompt|system prompt|instructions)/i,
+  /pretend (you are|to be)/i,
+]
+
+export function looksLikeInstruction(text: string): boolean {
+  if (!text) return false
+  return INJECTION_PATTERNS.some((pattern) => pattern.test(text))
+}
+
+export const ACCEPTED_DOCUMENT_TYPES = ['.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg', '.csv', '.xlsx']
+export const MAX_DOCUMENT_BYTES = 100_000_000
+
+export function newId(prefix: string): string {
+  return `${prefix}_${Math.random().toString(36).slice(2, 9)}`
+}
+
+// ---- Step 1.3 Knowledge Base ----
+
+// FAQ starter suggestions shown in the empty state, driven by the same "Demo: business category"
+// control used on step 1. Services-type categories (see SERVICES_TYPE_CATEGORIES) get the services
+// set; every other category, including "no category", falls back to the retail set.
+export const FAQ_STARTER_SUGGESTIONS = {
+  retail: [
+    'What is your return policy?',
+    'Do you deliver to my area?',
+    'How do I track my order?',
+    'What payment methods do you accept?',
+  ],
+  services: [
+    'How do I book an appointment?',
+    'What are your prices?',
+    'Can I cancel or reschedule?',
+    'Where are you located?',
+  ],
+}
+
+export const SAMPLE_FAQS: { question: string; answer: string }[] = [
+  { question: 'What is your return policy?', answer: '7 day returns on unused items with original packaging.' },
+  { question: 'Do you deliver to my area?', answer: 'We deliver across India — metro cities in 2 to 3 days, everywhere else in 5 to 7 days.' },
+  { question: 'How do I track my order?', answer: 'Share your order number here and we will look it up for you.' },
+  { question: 'What payment methods do you accept?', answer: 'Cash on delivery, UPI, cards, and net banking.' },
+  { question: 'Do you offer cash on delivery?', answer: 'Yes, cash on delivery is available on all orders under Rs 5000.' },
+  { question: 'Can I change my delivery address after ordering?', answer: 'Yes, as long as the order has not shipped yet. Message us with the new address.' },
+  { question: 'Do you have a physical store?', answer: 'Yes, our store is at Shop 4, Link Road, Bandra West, Mumbai.' },
+  { question: 'What are your store timings?', answer: 'We are open Monday to Saturday, 9am to 6pm.' },
+  { question: 'Is gift wrapping available?', answer: 'Yes, gift wrapping is free on all orders above Rs 999.' },
+  { question: 'Do you ship internationally?', answer: 'Not yet — we currently only deliver within India.' },
+  { question: 'How do I cancel my order?', answer: 'Message us with your order number within 2 hours of placing it and we will cancel it for you.' },
+  { question: 'Do you offer bulk or wholesale pricing?', answer: 'Yes, message us with the quantity you need and we will share a quote.' },
+]
+
+export const SAMPLE_DOCUMENTS: { fileName: string; sizeBytes: number; type: string; daysAgo: number }[] = [
+  { fileName: 'product-catalogue.pdf', sizeBytes: 4_200_000, type: '.pdf', daysAgo: 1 },
+  { fileName: 'returns-policy.pdf', sizeBytes: 340_000, type: '.pdf', daysAgo: 3 },
+  { fileName: 'store-locations.docx', sizeBytes: 88_000, type: '.docx', daysAgo: 12 },
+]
+
+export const SAMPLE_WEBSITES: { url: string; status: 'done' | 'failed'; pagesRead: number; daysAgo: number }[] = [
+  { url: 'https://aurorahome.com', status: 'done', pagesRead: 47, daysAgo: 2 },
+  { url: 'https://aurorahome.com/wholesale', status: 'failed', pagesRead: 0, daysAgo: 1 },
+]
+
+// ---- Step 3 Connections ----
+
+export const CONNECTION_STATUS_META: Record<ConnectionStatus, { label: string; dot: 'success' | 'warning' | 'muted' }> = {
+  working: { label: 'Working', dot: 'success' },
+  waiting_signin: { label: 'Waiting for sign-in', dot: 'warning' },
+  key_rejected: { label: 'Key not accepted', dot: 'warning' },
+  having_problems: { label: 'Having problems', dot: 'warning' },
+  not_tested: { label: 'Not tested yet', dot: 'muted' },
+}
+
+export interface RecipeValue {
+  name: string
+  type: ValueType
+  location: ValueLocation
+  source: ValueSource
+  description: string
+}
+
+export interface RecipeAction {
+  name: string
+  description: string
+  method: ActionMethod
+  path: string
+  values: RecipeValue[]
+  setupSentence: string
+}
+
+export interface ConnectionRecipe {
+  id: string
+  name: string
+  summary: string
+  connectionName: string
+  connectionDescription: string
+  baseUrlPlaceholder: string
+  actions: RecipeAction[]
+}
+
+export const CONNECTION_RECIPES: ConnectionRecipe[] = [
+  {
+    id: 'order_lookup',
+    name: 'Order lookup (store system)',
+    summary: "Look up an order's status and details by its order number.",
+    connectionName: 'Our store system',
+    connectionDescription: 'The store system that holds order records.',
+    baseUrlPlaceholder: 'https://yourstore.example.com',
+    actions: [
+      {
+        name: 'Look up an order',
+        description: 'Use when a customer asks where their order is. Looks up the order by its number and returns its status.',
+        method: 'GET',
+        path: '/orders/{order_number}',
+        values: [
+          { name: 'order_number', type: 'text', location: 'path', source: 'conversation', description: 'The order number, which looks like ORD-12345.' },
+        ],
+        setupSentence: 'Look up an order using the order number a customer gives.',
+      },
+    ],
+  },
+  {
+    id: 'delivery_status',
+    name: 'Delivery status (courier)',
+    summary: 'Check where a delivery is and when it will arrive.',
+    connectionName: 'Our courier',
+    connectionDescription: 'The courier system that tracks shipments.',
+    baseUrlPlaceholder: 'https://api.yourcourier.example.com',
+    actions: [
+      {
+        name: 'Check delivery status',
+        description: 'Use when a customer asks about their delivery. Looks up the shipment by tracking number and returns its status.',
+        method: 'GET',
+        path: '/shipments/{tracking_number}',
+        values: [
+          { name: 'tracking_number', type: 'text', location: 'path', source: 'conversation', description: 'The tracking number the customer shares.' },
+        ],
+        setupSentence: 'Check delivery status using the tracking number a customer gives.',
+      },
+    ],
+  },
+  {
+    id: 'stock_check',
+    name: 'Stock check (inventory)',
+    summary: 'Check whether a product is in stock and how many are left.',
+    connectionName: 'Our inventory system',
+    connectionDescription: 'The system that tracks product stock levels.',
+    baseUrlPlaceholder: 'https://inventory.yourbusiness.example.com',
+    actions: [
+      {
+        name: 'Check stock',
+        description: 'Use when a customer asks if a product is available. Looks up stock by product code and returns how many are left.',
+        method: 'GET',
+        path: '/products/{product_code}/stock',
+        values: [
+          { name: 'product_code', type: 'text', location: 'path', source: 'conversation', description: 'The product code or name the customer mentions.' },
+        ],
+        setupSentence: 'Check stock using the product code a customer mentions.',
+      },
+    ],
+  },
+  {
+    id: 'booking_check',
+    name: 'Booking check (appointments)',
+    summary: "Check an existing appointment's date, time and status.",
+    connectionName: 'Our booking system',
+    connectionDescription: 'The system that holds appointment bookings.',
+    baseUrlPlaceholder: 'https://yourbookings.example.com',
+    actions: [
+      {
+        name: 'Check a booking',
+        description: 'Use when a customer asks about an appointment. Looks up the booking by its reference and returns its details.',
+        method: 'GET',
+        path: '/bookings/{booking_reference}',
+        values: [
+          { name: 'booking_reference', type: 'text', location: 'path', source: 'conversation', description: 'The booking reference the customer gives.' },
+        ],
+        setupSentence: 'Check a booking using the reference number a customer gives.',
+      },
+    ],
+  },
+  {
+    id: 'customer_lookup',
+    name: 'Customer account lookup (CRM)',
+    summary: "Look up a customer's account details from their phone number.",
+    connectionName: 'Our CRM',
+    connectionDescription: 'The customer records system.',
+    baseUrlPlaceholder: 'https://crm.yourbusiness.example.com',
+    actions: [
+      {
+        name: 'Look up a customer',
+        description: "Use at the start of a conversation to recognise a returning customer. Looks up the customer's account by their WhatsApp number.",
+        method: 'GET',
+        path: '/customers/{phone_number}',
+        values: [
+          { name: 'phone_number', type: 'text', location: 'path', source: 'whatsapp_number', description: '' },
+        ],
+        setupSentence: "Look up a customer's account using their WhatsApp number automatically.",
+      },
+    ],
+  },
+  {
+    id: 'lead_capture',
+    name: 'Lead capture (CRM)',
+    summary: "Save a new lead's name and contact details when a customer shows interest.",
+    connectionName: 'Our CRM',
+    connectionDescription: 'The customer records system.',
+    baseUrlPlaceholder: 'https://crm.yourbusiness.example.com',
+    actions: [
+      {
+        name: 'Save a new lead',
+        description: "Use when a customer shows interest in a product or service and shares their name and contact details. Saves them as a new lead.",
+        method: 'POST',
+        path: '/leads',
+        values: [
+          { name: 'customer_name', type: 'text', location: 'body', source: 'conversation', description: "The customer's name." },
+          { name: 'contact_detail', type: 'text', location: 'body', source: 'conversation', description: 'A phone number or email the customer shares.' },
+        ],
+        setupSentence: 'Save a new lead using the name and contact details a customer shares.',
+      },
+    ],
+  },
+  {
+    id: 'payment_status',
+    name: 'Payment status (payments)',
+    summary: 'Check whether a payment or invoice has been received.',
+    connectionName: 'Our payments system',
+    connectionDescription: 'The system that records payments and invoices.',
+    baseUrlPlaceholder: 'https://payments.yourbusiness.example.com',
+    actions: [
+      {
+        name: 'Check payment status',
+        description: 'Use when a customer asks if their payment went through. Looks up the payment by its reference and returns its status.',
+        method: 'GET',
+        path: '/payments/{reference}',
+        values: [
+          { name: 'reference', type: 'text', location: 'path', source: 'conversation', description: 'The payment or invoice reference the customer gives.' },
+        ],
+        setupSentence: 'Check payment status using the reference a customer gives.',
+      },
+    ],
+  },
+  {
+    id: 'abandoned_cart_recovery',
+    name: 'Abandoned cart recovery (store system)',
+    summary: "Check what is still sitting in a customer's cart so you can help them finish checking out.",
+    connectionName: 'Our store system',
+    connectionDescription: 'The store system that holds order records and stock levels.',
+    baseUrlPlaceholder: 'https://yourstore.example.com',
+    actions: [
+      {
+        name: 'Check an abandoned cart',
+        description: 'Use when a customer asks about items they were about to buy. Looks up their cart and returns what is in it.',
+        method: 'GET',
+        path: '/carts/{cart_reference}',
+        values: [
+          { name: 'cart_reference', type: 'text', location: 'path', source: 'conversation', description: 'The cart or checkout reference, if the customer has one.' },
+        ],
+        setupSentence: 'Check an abandoned cart using its reference number.',
+      },
+    ],
+  },
+]
+
+function recipeById(id: string): ConnectionRecipe {
+  const recipe = CONNECTION_RECIPES.find((r) => r.id === id)
+  if (!recipe) throw new Error(`Unknown recipe id: ${id}`)
+  return recipe
+}
+
+export interface SampleConnectionSeed {
+  name: string
+  description: string
+  baseUrl: string
+  demoStatus: ConnectionStatus
+  actions: RecipeAction[]
+  withActivity: boolean
+}
+
+export const SAMPLE_CONNECTIONS: SampleConnectionSeed[] = [
+  {
+    name: 'Our store system',
+    description: 'The store system that holds order records and stock levels.',
+    baseUrl: 'https://yourstore.example.com',
+    demoStatus: 'working',
+    actions: [recipeById('order_lookup').actions[0], recipeById('stock_check').actions[0]],
+    withActivity: true,
+  },
+  {
+    name: 'Our CRM',
+    description: 'The customer records system.',
+    baseUrl: 'https://crm.yourbusiness.example.com',
+    demoStatus: 'key_rejected',
+    actions: [recipeById('customer_lookup').actions[0]],
+    withActivity: false,
+  },
+]
+
+// ---- Connections step: interactive "try a message" preview (see connections-step-spec addendum) ----
+
+/** 2-3 canned reply lines per ready-made setup category, plus a generic fallback for actions that
+ *  don't map to any known category (a custom-built action whose wording doesn't match a keyword). */
+export const CONNECTION_PREVIEW_REPLIES: Record<string, string[]> = {
+  order_lookup: [
+    "Let me check your order... it shipped yesterday and should arrive by Thursday.",
+    "Checking now... your order is being packed and should ship within 24 hours.",
+    "Found it — your order is out for delivery today.",
+  ],
+  delivery_status: [
+    "Let me check... your delivery is on its way and should arrive by tomorrow evening.",
+    "Checking the courier now... it's currently at the local depot, out for delivery today.",
+    "Your delivery was marked as delivered this morning.",
+  ],
+  stock_check: [
+    "Let me check... yes, we have that in stock.",
+    "Checking now... we have a few left in stock.",
+    "That one's currently out of stock, but more is expected next week.",
+  ],
+  booking_check: [
+    "Let me check... your appointment is confirmed for Thursday at 2pm.",
+    "Checking now... you're booked in for tomorrow morning.",
+    "Found your booking — it's confirmed and all set.",
+  ],
+  customer_lookup: [
+    "Let me pull up your account... found you! You've got two previous orders with us.",
+    "Checking your account now... everything looks up to date.",
+    "Found your details — happy to help with anything on your account.",
+  ],
+  lead_capture: [
+    "Thanks for your interest! I've saved your details and someone will follow up shortly.",
+    "Got it — I've noted your details, we'll be in touch soon.",
+    "Thanks! I've passed your details along to the team.",
+  ],
+  payment_status: [
+    "Let me check... your payment went through successfully.",
+    "Checking now... that invoice was paid yesterday.",
+    "Your payment is showing as received on our end.",
+  ],
+  abandoned_cart_recovery: [
+    "Let me check... you still have a couple of items waiting in your cart.",
+    "Checking now... your cart is saved — want help finishing checkout?",
+    "Found your cart — everything's still there whenever you're ready.",
+  ],
+  generic: [
+    "Let me check... yes, that's sorted for you.",
+    "Checking now... all good on that.",
+  ],
+}
+
+/** Trigger words used two ways: matching a customer message to an action, and (for actions on a
+ *  custom-built connection with no recipe origin) guessing which reply category applies. */
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  order_lookup: ['order'],
+  delivery_status: ['delivery', 'shipment', 'shipping', 'tracking', 'courier'],
+  stock_check: ['stock', 'inventory', 'available'],
+  booking_check: ['book', 'booking', 'appointment', 'schedule'],
+  customer_lookup: ['account', 'customer', 'crm'],
+  lead_capture: ['lead', 'interested', 'contact', 'signup'],
+  payment_status: ['payment', 'invoice', 'paid'],
+  abandoned_cart_recovery: ['cart', 'checkout'],
+}
+
+const PREVIEW_STOPWORDS = new Set([
+  'this', 'that', 'have', 'your', 'with', 'from', 'want', 'need', 'does', 'they', 'them',
+  'what', 'when', 'will', 'about', 'there', 'been', 'were', 'which', 'could', 'would',
+  'should', 'also', 'just', 'like', 'please', 'know', 'here', 'still',
+])
+
+function previewMessageKeywords(message: string): string[] {
+  return Array.from(
+    new Set(
+      message
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter((w) => w.length >= 4 && !PREVIEW_STOPWORDS.has(w)),
+    ),
+  )
+}
+
+export interface PreviewActionMatch {
+  action: ConnectionAction
+  connection: Connection
+}
+
+/** Simple keyword matching for the prototype: a message matches an action if any word in the
+ *  message also appears in that action's name or description. */
+export function matchConnectionPreviewMessage(
+  message: string,
+  connections: Connection[],
+  actions: ConnectionAction[],
+): PreviewActionMatch[] {
+  const words = previewMessageKeywords(message)
+  if (words.length === 0) return []
+  const matches: PreviewActionMatch[] = []
+  for (const action of actions) {
+    const connection = connections.find((c) => c.id === action.connectionId)
+    if (!connection) continue
+    const haystack = `${action.name} ${action.description}`.toLowerCase()
+    if (words.some((w) => haystack.includes(w))) matches.push({ action, connection })
+  }
+  return matches
+}
+
+function previewCategoryFor(match: PreviewActionMatch): string {
+  if (match.connection.createdFromRecipe && CONNECTION_PREVIEW_REPLIES[match.connection.createdFromRecipe]) {
+    return match.connection.createdFromRecipe
+  }
+  const haystack = `${match.action.name} ${match.action.description}`.toLowerCase()
+  const found = Object.entries(CATEGORY_KEYWORDS).find(([, keywords]) => keywords.some((k) => haystack.includes(k)))
+  return found?.[0] ?? 'generic'
+}
+
+export function pickConnectionPreviewReply(match: PreviewActionMatch): string {
+  const lines = CONNECTION_PREVIEW_REPLIES[previewCategoryFor(match)] ?? CONNECTION_PREVIEW_REPLIES.generic
+  return lines[Math.floor(Math.random() * lines.length)]
+}
+
+/** A real agent answers from its knowledge base as well as its connections, and that knowledge
+ *  persists across the whole wizard (it's just wizard state), so the try-it preview checks FAQs
+ *  too — matched against the question a customer would actually ask, not the answer text.
+ *
+ *  Whole-word matching, not substring: action matching intentionally treats "book" as matching
+ *  "booking", but FAQ questions are full sentences a customer might quote closely, and substring
+ *  matching there causes false hits between unrelated words that merely share a root — e.g. a
+ *  message word "deliver" substring-matching a different FAQ's "delivery", turning an exact
+ *  question match into a confusing three-way "did you mean". */
+export function matchFaqPreviewMessage(message: string, faqs: FaqRow[]): FaqRow[] {
+  const words = previewMessageKeywords(message)
+  if (words.length === 0) return []
+  return faqs.filter((faq) => {
+    const questionWords = new Set(faq.question.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/))
+    return words.some((w) => questionWords.has(w))
+  })
+}
+
+// ---- Step 1: Rich replies (the system underneath calls these "UI skills") ----
+
+export const RICH_REPLY_TYPE_GALLERY: { type: RichReplyType; name: string; description: string }[] = [
+  { type: 'cta_url', name: 'Button with a link', description: 'One tappable button that opens a web page.' },
+  { type: 'image', name: 'Image', description: 'Sends a picture, with an optional caption.' },
+  { type: 'interactive_list', name: 'Menu of choices', description: 'A tappable list the customer picks one option from.' },
+  { type: 'carousel_url', name: 'Card carousel with links', description: 'Swipeable cards, each with a picture and a link button.' },
+  { type: 'carousel_quick_reply', name: 'Card carousel with quick replies', description: 'Swipeable cards, each with a picture and a tap-to-answer button.' },
+  { type: 'location', name: 'Your location on a map', description: 'Sends a map pin of where you are.' },
+  { type: 'location_request', name: 'Ask for their location', description: 'Asks the customer to share where they are.' },
+  { type: 'flow', name: 'WhatsApp form (Flow)', description: 'Opens a structured form the customer fills in, like a booking or survey.' },
+]
+
+export const RICH_REPLY_TYPE_LABEL: Record<RichReplyType, string> = Object.fromEntries(
+  RICH_REPLY_TYPE_GALLERY.map((t) => [t.type, t.name]),
+) as Record<RichReplyType, string>
+
+/** Canned WhatsApp Flows already "set up on this number" — the prototype has no real Flows API. */
+export const CANNED_FLOWS = ['Book an appointment', 'Delivery feedback']
+
+export function newMenuOption(): MenuOption {
+  return { id: newId('option'), title: '', description: '', group: '' }
+}
+
+export function newCarouselCard(): CarouselCard {
+  return { id: newId('card'), imageUrl: '', cardText: '', buttonLabel: '', link: '' }
+}
+
+export function newApiKeyEntry(): ApiKeyEntry {
+  return { id: newId('key'), value: '', location: 'header', fieldName: '', prefix: '' }
+}
+
+// Plain `Pick` collapses a union into one flat shape (losing the type<->blanks correlation) —
+// distributing over a naked type parameter keeps each variant separate, so the switch below narrows.
+type DistributivePick<T, K extends keyof T> = T extends unknown ? Pick<T, K> : never
+type RichReplyDraft = DistributivePick<RichReply, 'type' | 'trigger' | 'blanks'>
+
+/** Regenerated in full from `blanks` on every save, following the pattern in the system's own
+ *  documentation — this is a build artifact, never parsed back into blanks. Takes the type and
+ *  blanks bundled in one object (not as separate params) so the switch below actually narrows
+ *  `blanks` per case — TypeScript can't link two independent parameters that way. */
+export function compileRichReplySentence(draft: RichReplyDraft): string {
+  const t = draft.trigger.trim() || '…'
+  if (!draft.blanks) return ''
+  switch (draft.type) {
+    case 'cta_url': {
+      const b = draft.blanks
+      return `If ${t}, send a button with body text "${b.messageText}", button label "${b.buttonLabel}", and URL ${b.link}`
+    }
+    case 'image': {
+      const b = draft.blanks
+      const caption = b.caption.trim() ? ` with caption "${b.caption}"` : ''
+      return `If ${t}, send an image at ${b.imageUrl}${caption}`
+    }
+    case 'interactive_list': {
+      const b = draft.blanks
+      const optionsText = b.options
+        .map((o) => (o.description.trim() ? `"${o.title}" (${o.description})` : `"${o.title}"`))
+        .join(', ')
+      return `If ${t}, send a menu with body text "${b.messageText}", button label "${b.menuButtonLabel}", and options: ${optionsText}`
+    }
+    case 'carousel_url': {
+      const b = draft.blanks
+      const cardsText = b.cards
+        .map((c) => `image ${c.imageUrl}, text "${c.cardText}", button label "${c.buttonLabel}", URL ${c.link}`)
+        .join('; ')
+      return `If ${t}, send a card carousel with body text "${b.messageText}" and ${b.cards.length} cards: ${cardsText}`
+    }
+    case 'carousel_quick_reply': {
+      const b = draft.blanks
+      const cardsText = b.cards
+        .map((c) => `image ${c.imageUrl}, text "${c.cardText}", button label "${c.buttonLabel}" that replies with that label`)
+        .join('; ')
+      return `If ${t}, send a card carousel with body text "${b.messageText}" and ${b.cards.length} cards: ${cardsText}`
+    }
+    case 'location': {
+      const b = draft.blanks
+      return `If ${t}, send your location: ${b.placeName}, ${b.address}, at coordinates ${b.latitude}, ${b.longitude}`
+    }
+    case 'location_request': {
+      const b = draft.blanks
+      return `If ${t}, ask the customer to share their location with the message "${b.messageText}"`
+    }
+    case 'flow': {
+      const b = draft.blanks
+      return `If ${t}, open the WhatsApp form "${b.flowName}" with body text "${b.messageText}" and button label "${b.buttonLabel}"`
+    }
+    default:
+      return ''
+  }
+}
+
+const SAMPLE_RR_1_TRIGGER = 'When someone asks where to buy online'
+const SAMPLE_RR_1_BLANKS = {
+  messageText: 'You can order directly from our website.',
+  buttonLabel: 'Shop now',
+  link: 'https://example.com/shop',
+} as const
+
+const SAMPLE_RR_2_TRIGGER = 'When someone asks what we sell'
+const SAMPLE_RR_2_BLANKS = {
+  messageText: "Here's what we offer:",
+  menuButtonLabel: 'See options',
+  groupsEnabled: false,
+  options: [
+    { id: newId('option'), title: 'Candles', description: 'Scented and unscented', group: '' },
+    { id: newId('option'), title: 'Gift sets', description: '', group: '' },
+  ],
+}
+
+export const SAMPLE_RICH_REPLIES: RichReply[] = [
+  {
+    id: 'sample-rr-1',
+    type: 'cta_url',
+    name: 'Product page button',
+    trigger: SAMPLE_RR_1_TRIGGER,
+    enabled: true,
+    createdAt: Date.now(),
+    blanks: SAMPLE_RR_1_BLANKS,
+    instructionSentence: compileRichReplySentence({ type: 'cta_url', trigger: SAMPLE_RR_1_TRIGGER, blanks: SAMPLE_RR_1_BLANKS }),
+  },
+  {
+    id: 'sample-rr-2',
+    type: 'interactive_list',
+    name: 'Product categories menu',
+    trigger: SAMPLE_RR_2_TRIGGER,
+    enabled: false,
+    createdAt: Date.now() - 1000,
+    blanks: SAMPLE_RR_2_BLANKS,
+    instructionSentence: compileRichReplySentence({ type: 'interactive_list', trigger: SAMPLE_RR_2_TRIGGER, blanks: SAMPLE_RR_2_BLANKS }),
+  },
+  {
+    id: 'sample-rr-3',
+    type: 'image',
+    name: 'Product photo (legacy)',
+    trigger: '',
+    enabled: true,
+    createdAt: Date.now() - 2000,
+    blanks: null,
+    instructionSentence: 'If a customer asks to see the product, send an image at https://example.com/product-photo.jpg',
+  },
+]
+
+// ---- Step 4: Safety & handoff ----
+
+/** A small built-in list of common near-variants (plurals, comparative/superlative forms, and a
+ *  short list of close synonyms) for words businesses commonly want to avoid — maintained here
+ *  rather than computed, since generic morphology guesses too wrong too often to be useful. */
+export const WORD_VARIANT_SUGGESTIONS: Record<string, string[]> = {
+  cheap: ['cheaper', 'cheapest'],
+  guarantee: ['guaranteed', 'guarantees'],
+  guaranteed: ['guarantee', 'guarantees'],
+  free: ['freebie', 'freebies'],
+  cure: ['cures', 'cured'],
+  cures: ['cure', 'cured'],
+  safe: ['safer', 'safest'],
+  best: ['better'],
+  discount: ['discounts', 'discounted'],
+  sale: ['sales'],
+  fast: ['faster', 'fastest'],
+  easy: ['easier', 'easiest'],
+  risky: ['riskier', 'riskiest'],
+  promise: ['promised', 'promises'],
+  miracle: ['miraculous'],
+}
+
+/** Suggestions for a just-added word/phrase, excluding anything already in the list
+ *  (case-insensitive) — used to show the "Also add: X, Y?" row, never to add automatically. */
+export function suggestWordVariants(word: string, existing: string[]): string[] {
+  const key = word.toLowerCase().trim()
+  const candidates = WORD_VARIANT_SUGGESTIONS[key] ?? []
+  const existingNorm = new Set(existing.map((w) => w.toLowerCase().trim()))
+  return candidates.filter((c) => !existingNorm.has(c))
+}
+
+export const SAMPLE_NEVER_SAY_WORDS = ['guaranteed', 'cheap', 'risk-free']
+export const SAMPLE_TOPICS_TO_AVOID = ['Comparing us to specific competitors', 'Ongoing legal disputes']
+export const SAMPLE_CUSTOM_HANDOFF_MESSAGE =
+  "Let me get a member of our team to help you with this. They'll be with you shortly."
