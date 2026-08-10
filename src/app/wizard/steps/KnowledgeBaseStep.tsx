@@ -23,6 +23,7 @@ import {
 } from '@/app/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
+import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { InlineError } from '@/app/components/wizard/RetryBanner'
 import {
   ACCEPTED_DOCUMENT_TYPES,
@@ -288,7 +289,10 @@ export function FaqTab({
 
       {showEmptyState ? (
         <div className="space-y-3 rounded-lg border border-border p-4">
-          <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Start with the questions customers ask most</p>
+          <span className="flex items-center gap-1.5">
+            <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Start with the questions customers ask most</p>
+            <InfoTooltip text="Tip: if you filled in Business details on the first tab, you do not need to repeat them here." />
+          </span>
           <div className="flex flex-wrap gap-2">
             {suggestions.map((q) => (
               <Button key={q} type="button" variant="outline" size="sm" onClick={() => startAddRow(q)}>
@@ -296,9 +300,6 @@ export function FaqTab({
               </Button>
             ))}
           </div>
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            Tip: if you filled in Business details on the first tab, you do not need to repeat them here.
-          </p>
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border">
@@ -580,15 +581,15 @@ function FaqImportPanel({
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Import FAQs from CSV</DialogTitle>
+          <span className="flex items-center gap-1.5">
+            <DialogTitle>Import FAQs from CSV</DialogTitle>
+            <InfoTooltip text="Your file needs two columns: question and answer." />
+          </span>
         </DialogHeader>
 
         {stage === 'upload' && (
           <div className="space-y-4">
             <div className="space-y-1">
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                Your file needs two columns: question and answer.
-              </p>
               <button
                 type="button"
                 onClick={() =>
@@ -885,10 +886,12 @@ export function DocumentsTab({
       />
 
       {showEmptyState ? (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-          No documents yet. Good things to upload: your product catalogue, a price list, or your terms and
-          conditions.
-        </p>
+        <span className="flex items-center gap-1.5">
+          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            No documents yet.
+          </p>
+          <InfoTooltip text="Good things to upload: your product catalogue, a price list, or your terms and conditions." />
+        </span>
       ) : (
         <div className="space-y-2">
           {uploading.map((u) => (
@@ -1081,10 +1084,12 @@ export function WebsiteTab({
       </div>
 
       {websites.length === 0 ? (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-          No websites yet. Your main website or help centre is usually the fastest way to give the agent real
-          knowledge.
-        </p>
+        <span className="flex items-center gap-1.5">
+          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            No websites yet.
+          </p>
+          <InfoTooltip text="Your main website or help centre is usually the fastest way to give the agent real knowledge." />
+        </span>
       ) : (
         <div className="space-y-2">
           {websites.map((site) => (

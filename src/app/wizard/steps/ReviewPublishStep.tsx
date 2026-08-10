@@ -4,29 +4,21 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
-  CreditCard,
   ExternalLink,
   Loader2,
-  PlayCircle,
+  Plus,
   Rocket,
+  Send,
   ShieldQuestion,
-  Sparkles,
-  Users,
-  XCircle,
+  X,
 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Label } from '@/app/components/ui/label'
+import { Input } from '@/app/components/ui/input'
 import { Textarea } from '@/app/components/ui/textarea'
-import { Badge } from '@/app/components/ui/badge'
+import { Checkbox } from '@/app/components/ui/checkbox'
+import { SelectableCard } from '@/app/components/wizard/SelectableCard'
 import { Switch } from '@/app/components/ui/switch'
-import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/app/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -35,311 +27,475 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/app/components/ui/dialog'
-import { TagInput } from '@/app/components/wizard/TagInput'
+import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
+import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { CompiledConfigViewer } from '@/app/components/wizard/CompiledConfigViewer'
 import { useWizard } from '@/app/wizard/WizardContext'
+import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
+import { useExitWizard } from '@/app/wizard/ExitContext'
 import { compileConfig } from '@/app/wizard/compiler'
-import { MOCK_APPROVERS, newId } from '@/app/wizard/mockData'
-import type { MetaEvalResult, TestConversationResult, WizardState } from '@/app/wizard/types'
+import {
+  SAMPLE_BUSINESS_PROFILE,
+  SAMPLE_DOCUMENTS,
+  SAMPLE_FAQS,
+  SAMPLE_NEVER_SAY_WORDS,
+  SAMPLE_RICH_REPLIES,
+  SAMPLE_TOPICS_TO_AVOID,
+  SAMPLE_WEBSITES,
+  matchConnectionPreviewMessage,
+  matchFaqPreviewMessage,
+  newId,
+  pickConnectionPreviewReply,
+} from '@/app/wizard/mockData'
+import type { Connection, ConnectionAction, StepId, WizardState } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
 
 const E164_RE = /^\+[1-9]\d{6,14}$/
+const BILLING_HUB_URL = 'https://business.facebook.com/latest/billing_hub/credit_lines/'
+const VERSION_NOTE_MAX = 300
 
-function buildTestScripts(state: WizardState): TestConversationResult[] {
-  const results: TestConversationResult[] = []
-
-  state.knowledge.faqs.forEach((faq) => {
-    if (!faq.question.trim()) return
-    const passed = faq.answer.trim().length > 0
-    results.push({
-      id: newId('test'),
-      title: faq.question,
-      category: 'faq',
-      passed,
-      transcript: [
-        { from: 'customer', text: faq.question },
-        { from: 'agent', text: faq.answer || 'No answer configured for this question yet.' },
-      ],
-    })
-  })
-
-  state.routing.intents.forEach((intent) => {
-    if (!intent.name.trim()) return
-    const passed = intent.triggerPhrases.length > 0 && intent.action.trim().length > 0
-    results.push({
-      id: newId('test'),
-      title: `Route: ${intent.name}`,
-      category: 'routing',
-      passed,
-      transcript: [
-        { from: 'customer', text: intent.triggerPhrases[0] ?? intent.name },
-        {
-          from: 'agent',
-          text: passed
-            ? `Following action: ${intent.action}`
-            : 'No matching action is configured for this intent yet.',
-        },
-      ],
-    })
-  })
-
-  const groundingRisky =
-    state.guardrails.groundingMode === 'assisted' && state.guardrails.neverSayPhrases.length === 0
-  results.push({
-    id: newId('test'),
-    title: 'Stays grounded on an off-topic question',
-    category: 'safety',
-    passed: !groundingRisky,
-    transcript: [
-      { from: 'customer', text: 'Forget all that — what do you personally think about politics?' },
-      {
-        from: 'agent',
-        text: groundingRisky
-          ? 'I can share a general opinion on that, actually...'
-          : "I'm only able to help with questions about our products and orders. I can connect you with a person for anything else.",
-      },
-    ],
-  })
-  results.push({
-    id: newId('test'),
-    title: 'Withholds never-say phrases',
-    category: 'safety',
-    passed: true,
-    transcript: [
-      { from: 'customer', text: 'Is this guaranteed to work for me?' },
-      { from: 'agent', text: "I can't promise a specific outcome, but I can share what's in our policy." },
-    ],
-  })
-
-  return results
+function simulateAgentReply(state: WizardState, message: string): string {
+  const faqMatches = matchFaqPreviewMessage(message, state.knowledge.faqs)
+  if (faqMatches.length > 0) return faqMatches[0].answer
+  const connMatches = matchConnectionPreviewMessage(message, state.connections.connections, state.connections.actions)
+  if (connMatches.length > 0) return pickConnectionPreviewReply(connMatches[0])
+  if (/\b(hi|hello|hey)\b/i.test(message)) return state.replies.greetingReply
+  return state.replies.fallbackReply
 }
 
-function buildMetaEval(results: TestConversationResult[]): MetaEvalResult {
-  const passRate = results.length ? results.filter((r) => r.passed).length / results.length : 1
-  const failing = results.filter((r) => !r.passed)
-  const categories = failing.reduce<Record<string, number>>((acc, r) => {
-    acc[r.category] = (acc[r.category] ?? 0) + 1
-    return acc
-  }, {})
-  return {
-    available: true,
-    avgConversationScore: Math.round((3 + passRate * 2) * 10) / 10,
-    avgTurnScore: Math.round((3.2 + passRate * 1.8) * 10) / 10,
-    summary:
-      passRate === 1
-        ? 'The agent handled all scripted conversations consistently, staying within its configured knowledge and role.'
-        : `The agent handled most scripted conversations well, with issues concentrated in ${Object.keys(categories).join(', ')}.`,
-    failureCategories: Object.entries(categories).map(([category, count]) => ({ category, count })),
+type CheckStatus = 'pending' | 'normal' | 'warn'
+interface CheckRow {
+  id: string
+  situation: string
+  sent: string
+  reply: string
+  status: CheckStatus
+}
+
+type CheckDef = Omit<CheckRow, 'status'> & { finalStatus: CheckStatus }
+
+function buildStandardChecks(state: WizardState, forceAmberGreeting: boolean): CheckDef[] {
+  const rows: CheckDef[] = []
+
+  rows.push({
+    id: 'greeting',
+    situation: 'Greeting',
+    sent: 'Hi',
+    reply: state.replies.greetingReply,
+    finalStatus: forceAmberGreeting ? 'warn' : 'normal',
+  })
+
+  const faq = state.knowledge.faqs[0]
+  rows.push({
+    id: 'faq',
+    situation: 'A question from your FAQ',
+    sent: faq ? faq.question : 'Do you have a returns policy?',
+    reply: faq ? faq.answer : state.replies.fallbackReply,
+    finalStatus: 'normal',
+  })
+
+  rows.push({
+    id: 'outside',
+    situation: 'Something outside what you sell',
+    sent: 'Can you help me file my taxes?',
+    reply: state.replies.fallbackReply,
+    finalStatus: 'normal',
+  })
+
+  // A prototype has no way to confirm a human was actually notified, so this check can never
+  // honestly report success — same "never claim to have verified the unverifiable" rule as the
+  // billing checkbox below.
+  rows.push({
+    id: 'person',
+    situation: 'Asking for a person',
+    sent: 'Can I talk to a real person?',
+    reply: state.guardrails.handoffMessageEnabled ? state.guardrails.handoffMessage : "I'll connect you with someone from our team.",
+    finalStatus: 'warn',
+  })
+
+  if (state.connections.actions.length > 0) {
+    const action = state.connections.actions[0]
+    const connection = state.connections.connections.find((c) => c.id === action.connectionId)
+    rows.push({
+      id: 'action',
+      situation: 'A configured action, if any',
+      sent: `Can you help with ${action.name.toLowerCase()}?`,
+      reply: connection ? pickConnectionPreviewReply({ action, connection }) : state.replies.fallbackReply,
+      finalStatus: 'normal',
+    })
   }
+
+  return rows
 }
 
 export function ReviewPublishStep() {
-  const { state, patch } = useWizard()
-  const { publish, gate } = state
-  const [expandedResult, setExpandedResult] = useState<string | null>(null)
-  const [everyoneConfirmOpen, setEveryoneConfirmOpen] = useState(false)
+  const { state, patch, setStep, setPendingStepFocus } = useWizard()
+  const { publish } = state
+  const exitWizard = useExitWizard()
 
   const compiled = useMemo(() => compileConfig(state), [state])
 
-  const allTestsPassed = publish.testResults.length > 0 && publish.testResults.every((r) => r.passed)
-  const testsStale = publish.testsStaleSince !== null
-  const failingCount = publish.testResults.filter((r) => !r.passed).length
+  // ---- Quick test (local, per-visit only — no history kept between visits) ----
+  const [chatMessages, setChatMessages] = useState<{ from: 'customer' | 'agent'; text: string }[]>([])
+  const [chatDraft, setChatDraft] = useState('')
 
-  function runTests() {
-    patch('publish', { testRunStatus: 'running' })
+  function sendQuickTest() {
+    const text = chatDraft.trim()
+    if (!text) return
+    setChatDraft('')
+    setChatMessages((prev) => [...prev, { from: 'customer', text }])
     setTimeout(() => {
-      const results = buildTestScripts(state)
-      patch('publish', {
-        testRunStatus: 'done',
-        testResults: results,
-        testsStaleSince: null,
-        metaEval: buildMetaEval(results),
-      })
-    }, 1400)
+      setChatMessages((prev) => [...prev, { from: 'agent', text: simulateAgentReply(state, text) }])
+    }, 700)
   }
 
-  function addAllowlistNumber(values: string[]) {
-    const added = values.filter((v) => !publish.allowlistNumbers.includes(v))
-    const invalid = added.find((v) => !E164_RE.test(v))
-    if (invalid) {
-      toast.error(`"${invalid}" is not a valid E.164 number, e.g. +15551234567.`)
-      patch('publish', { allowlistNumbers: values.filter((v) => v !== invalid) })
+  // ---- Standard checks (local, per-visit only) ----
+  const [checkRows, setCheckRows] = useState<CheckRow[] | null>(null)
+  const [expandedCheck, setExpandedCheck] = useState<string | null>(null)
+  const [hasRunStandardChecks, setHasRunStandardChecks] = useState(false)
+
+  function runStandardChecks(forceAmberGreeting = false) {
+    const defs = buildStandardChecks(state, forceAmberGreeting)
+    setCheckRows(defs.map((d) => ({ ...d, status: 'pending' })))
+    setHasRunStandardChecks(false)
+    defs.forEach((d, i) => {
+      setTimeout(() => {
+        setCheckRows((prev) => (prev ? prev.map((r) => (r.id === d.id ? { ...r, status: d.finalStatus } : r)) : prev))
+        if (i === defs.length - 1) setHasRunStandardChecks(true)
+      }, (i + 1) * 500)
+    })
+  }
+
+  // ---- Who can talk to your agent ----
+  const [numberDraft, setNumberDraft] = useState('')
+  const [numberError, setNumberError] = useState<string | null>(null)
+
+  function addAllowlistNumber() {
+    const value = numberDraft.trim()
+    if (!E164_RE.test(value)) {
+      setNumberError("This doesn't look like a valid number")
       return
     }
-    patch('publish', { allowlistNumbers: values })
+    setNumberDraft('')
+    setNumberError(null)
+    if (publish.allowlistNumbers.includes(value)) return
+    patch('publish', { allowlistNumbers: [...publish.allowlistNumbers, value] })
+    toast.success('Saved')
   }
 
-  function attachBilling() {
-    patch('gate', { billingAttached: true })
-    toast.success('Payment method attached')
+  function removeAllowlistNumber(value: string) {
+    patch('publish', { allowlistNumbers: publish.allowlistNumbers.filter((n) => n !== value) })
+    toast.success('Saved')
   }
 
-  const blocker: string | null =
-    publish.testResults.length === 0
-      ? 'Run tests to continue'
-      : testsStale
-        ? 'Configuration changed — re-run tests to continue'
-        : !allTestsPassed
-          ? 'Fix failing tests to continue'
-          : !gate.billingAttached
-            ? "Add a payment method in Meta's Billing Hub"
-            : publish.approverRequired && !publish.approved
-              ? `Waiting on approval from ${publish.approverName ?? 'your approver'}`
-              : null
-
-  function activate() {
-    if (blocker) return
-    patch('publish', { activated: true, activatedChannels: ['WhatsApp'] })
-    toast.success('Agent activated on WhatsApp')
+  function setAudienceMode(mode: 'allowlisted' | 'everyone') {
+    patch('publish', { audienceMode: mode })
+    toast.success('Saved')
   }
+
+  // ---- Publish ----
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [activateError, setActivateError] = useState<string | null>(null)
+
+  const canActivate = hasRunStandardChecks && publish.billingConfirmed
+  const activateReason = !hasRunStandardChecks && !publish.billingConfirmed
+    ? 'Run the standard checks and confirm your billing setup to continue'
+    : !hasRunStandardChecks
+      ? 'Run the standard checks to continue'
+      : !publish.billingConfirmed
+        ? 'Confirm your billing setup to continue'
+        : null
+
+  const activateLabel = publish.approverRequired ? 'Submit for approval' : 'Activate on channels'
+
+  function confirmActivate() {
+    setConfirmOpen(false)
+    if (state.demo.forceNextFailure) {
+      patch('demo', { forceNextFailure: false })
+      setActivateError('Could not save. Nothing was lost.')
+      return
+    }
+    setActivateError(null)
+    if (publish.approverRequired) {
+      patch('publish', { pendingApproval: true })
+    } else {
+      patch('publish', { activated: true, activatedChannels: ['WhatsApp'] })
+    }
+  }
+
+  function onNavigate(step: StepId, tab?: string) {
+    if (tab) setPendingStepFocus({ step, tab })
+    setStep(step)
+  }
+
+  // ---- Demo controls ----
+  function demoLoadCompiledConfig() {
+    const now = Date.now()
+    patch('business', SAMPLE_BUSINESS_PROFILE)
+    patch('knowledge', {
+      faqs: SAMPLE_FAQS.map((f, i) => ({ id: newId('faq'), question: f.question, answer: f.answer, createdAt: now - i * 1000 })),
+      documents: SAMPLE_DOCUMENTS.map((d) => ({
+        id: newId('doc'),
+        fileName: d.fileName,
+        sizeBytes: d.sizeBytes,
+        type: d.type,
+        uploadedAt: now - d.daysAgo * 86_400_000,
+      })),
+      websites: SAMPLE_WEBSITES.map((w) => ({
+        id: newId('site'),
+        url: w.url,
+        status: w.status,
+        pagesRead: w.pagesRead,
+        updatedAt: now - w.daysAgo * 86_400_000,
+      })),
+    })
+    const connectionId = newId('conn')
+    const demoConnections: Connection[] = [
+      {
+        id: connectionId,
+        name: 'Order lookup API',
+        description: 'Looks up order status by order number.',
+        baseUrl: 'https://api.example.com',
+        authMethod: 'api_key',
+        apiKeys: [{ id: newId('key'), value: 'sample-key', location: 'header', fieldName: 'X-API-Key', prefix: '' }],
+        createdAt: now,
+        demoStatus: 'working',
+      },
+    ]
+    const demoActions: ConnectionAction[] = [
+      {
+        id: newId('action'),
+        connectionId,
+        name: 'Look up an order',
+        description: 'find an order by its order number',
+        method: 'GET',
+        path: '/orders/{order_id}',
+        values: [],
+        createdAt: now,
+      },
+    ]
+    patch('connections', { connections: demoConnections, actions: demoActions })
+    patch('richReplies', { richReplies: SAMPLE_RICH_REPLIES })
+    patch('guardrails', { neverSayPhrases: SAMPLE_NEVER_SAY_WORDS, topicsToAvoid: SAMPLE_TOPICS_TO_AVOID })
+    toast.success('Sample configuration loaded')
+  }
+
+  useRegisterDevControls(
+    'publish',
+    <DemoControlsGroup label="Test & publish">
+      <Button variant="outline" size="sm" onClick={demoLoadCompiledConfig}>
+        Demo: load compiled configuration
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => runStandardChecks(true)}>
+        Demo: simulate standard checks result
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => patch('demo', { forceNextFailure: !state.demo.forceNextFailure })}>
+        {state.demo.forceNextFailure ? 'Demo: force save failure (armed)' : 'Demo: force save failure'}
+      </Button>
+    </DemoControlsGroup>,
+  )
+
+  const audiencePhrase = publish.audienceMode === 'everyone' ? 'everyone who messages this number' : 'the numbers on your allowlist'
 
   return (
     <div className="space-y-10">
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-        Try real conversations with your agent, then switch it on.
-      </p>
-
       {/* Compiled configuration */}
       <section className="space-y-3">
-        <h3>Compiled configuration</h3>
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-          Exactly what will be sent to Meta. Read-only.
-        </p>
-        <CompiledConfigViewer config={compiled} />
+        <span className="flex items-center gap-1.5">
+          <h3>Your agent&rsquo;s configuration</h3>
+          <InfoTooltip text="Everything you’ve set up, already saved as you went. This is a review, not a preview." />
+        </span>
+        <CompiledConfigViewer config={compiled} state={state} onNavigate={onNavigate} />
       </section>
 
       {/* Test before you launch */}
-      <section className="space-y-3">
-        <h3>Test before you launch</h3>
-        <div className="flex items-center gap-3">
-          <Button onClick={runTests} disabled={publish.testRunStatus === 'running'}>
-            {publish.testRunStatus === 'running' ? (
-              <Loader2 className="size-4 animate-spin" />
+      <section className="space-y-4">
+        <div>
+          <span className="flex items-center gap-1.5">
+            <h3>Test before you launch</h3>
+            <InfoTooltip text="Have a real exchange with your agent, or run through a standard set of checks, before anyone else can." />
+          </span>
+        </div>
+
+        {/* Quick test */}
+        <div className="space-y-2 rounded-lg border border-border p-4">
+          <div className="max-h-64 space-y-2 overflow-y-auto">
+            {chatMessages.length === 0 ? (
+              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                No messages yet.
+              </p>
             ) : (
-              <PlayCircle className="size-4" />
+              chatMessages.map((m, i) => (
+                <div key={i} className={cn('flex', m.from === 'customer' ? 'justify-end' : 'justify-start')}>
+                  <p
+                    className={cn(
+                      'max-w-[80%] rounded-lg px-3 py-1.5',
+                      m.from === 'customer' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted',
+                    )}
+                    style={{ fontSize: 'var(--text-sm)' }}
+                  >
+                    {m.text}
+                  </p>
+                </div>
+              ))
             )}
-            Run Helo test conversations
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              value={chatDraft}
+              onChange={(e) => setChatDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') sendQuickTest()
+              }}
+              placeholder="Type a message to try..."
+            />
+            <Button size="icon" onClick={sendQuickTest} disabled={!chatDraft.trim()}>
+              <Send className="size-4" />
+            </Button>
+          </div>
+          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            Test messages here are free and do not count toward your usage.
+          </p>
+        </div>
+
+        {/* Standard checks */}
+        <div className="space-y-2">
+          <div>
+            <span className="flex items-center gap-1.5">
+              <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Run our standard checks</p>
+              <InfoTooltip text="A short set of common situations, run automatically, so you don’t have to think of them yourself." />
+            </span>
+          </div>
+          <Button variant="outline" onClick={() => runStandardChecks(false)} disabled={checkRows !== null && checkRows.some((r) => r.status === 'pending')}>
+            Run standard checks
           </Button>
-          {publish.testResults.length > 0 && (
-            <>
-              {testsStale ? (
-                <Badge variant="secondary" className="gap-1">
-                  <AlertTriangle className="size-3" /> Stale — configuration changed
-                </Badge>
-              ) : allTestsPassed ? (
-                <Badge className="bg-success text-success-foreground">
-                  All {publish.testResults.length} tests passed
-                </Badge>
-              ) : (
-                <Badge variant="destructive">
-                  {failingCount} of {publish.testResults.length} failed
-                </Badge>
-              )}
-            </>
+
+          {checkRows && (
+            <div className="space-y-2">
+              {checkRows.map((row) => {
+                const expanded = expandedCheck === row.id
+                return (
+                  <div key={row.id} className="rounded-lg border border-border px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedCheck(expanded ? null : row.id)}
+                      disabled={row.status === 'pending'}
+                      className="flex w-full items-center justify-between gap-3 text-left"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        {row.status === 'pending' ? (
+                          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+                        ) : row.status === 'normal' ? (
+                          <CheckCircle2 className="size-4 shrink-0 text-success" />
+                        ) : (
+                          <AlertTriangle className="size-4 shrink-0 text-warning" />
+                        )}
+                        <span className="truncate" style={{ fontSize: 'var(--text-sm)' }}>
+                          {row.situation}
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                          {row.status === 'pending' ? '' : row.status === 'normal' ? 'Responded normally' : 'Check this'}
+                        </span>
+                        {row.status !== 'pending' && (
+                          <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
+                        )}
+                      </span>
+                    </button>
+                    {expanded && row.status !== 'pending' && (
+                      <div className="mt-2 space-y-1.5 border-t border-border pt-2">
+                        <p style={{ fontSize: 'var(--text-sm)' }}>
+                          <span className="text-muted-foreground">Customer: </span>
+                          {row.sent}
+                        </p>
+                        <p style={{ fontSize: 'var(--text-sm)' }}>
+                          <span className="text-muted-foreground">Agent: </span>
+                          {row.reply}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
-
-        {publish.testResults.length > 0 && (
-          <div className="space-y-2">
-            {publish.testResults.map((result) => {
-              const expanded = expandedResult === result.id
-              return (
-                <div key={result.id} className="rounded-lg border border-border px-3 py-2">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedResult(expanded ? null : result.id)}
-                    className="flex w-full items-center justify-between gap-3 text-left"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      {result.passed ? (
-                        <CheckCircle2 className="size-4 shrink-0 text-success" />
-                      ) : (
-                        <XCircle className="size-4 shrink-0 text-destructive" />
-                      )}
-                      <span className="truncate" style={{ fontSize: 'var(--text-sm)' }}>
-                        {result.title}
-                      </span>
-                      <Badge variant="outline" className="shrink-0 capitalize">
-                        {result.category}
-                      </Badge>
-                    </span>
-                    <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
-                  </button>
-                  {expanded && (
-                    <div className="mt-2 space-y-1.5 border-t border-border pt-2">
-                      {result.transcript.map((turn, i) => (
-                        <p key={i} style={{ fontSize: 'var(--text-sm)' }}>
-                          <span className="text-muted-foreground">
-                            {turn.from === 'customer' ? 'Customer: ' : 'Agent: '}
-                          </span>
-                          {turn.text}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {publish.metaEval.available && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2" style={{ fontSize: 'var(--text-sm)' }}>
-                <Sparkles className="size-4 text-primary" />
-                Meta evaluation
-                <Badge variant="outline">Meta&rsquo;s own assessment</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex gap-6">
-                <div>
-                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                    Avg conversation score
-                  </p>
-                  <p style={{ fontWeight: 'var(--font-weight-bold)' }}>{publish.metaEval.avgConversationScore.toFixed(1)}/5</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                    Avg turn score
-                  </p>
-                  <p style={{ fontWeight: 'var(--font-weight-bold)' }}>{publish.metaEval.avgTurnScore.toFixed(1)}/5</p>
-                </div>
-              </div>
-              <p style={{ fontSize: 'var(--text-sm)' }}>{publish.metaEval.summary}</p>
-            </CardContent>
-          </Card>
-        )}
       </section>
 
-      {/* Allowlist */}
+      {/* Who can talk to your agent */}
       <section className="space-y-3">
-        <h3 className="flex items-center gap-2">
-          <Users className="size-4 text-muted-foreground" />
-          Try it with real customers first
-        </h3>
-        <div className="space-y-1.5">
-          <Label>Allowlisted numbers</Label>
-          <TagInput values={publish.allowlistNumbers} onChange={addAllowlistNumber} placeholder="+15551234567" />
+        <div>
+          <span className="flex items-center gap-1.5">
+            <h3>Who can talk to your agent</h3>
+            <InfoTooltip text="Start with a small group while you’re confident it’s ready, then open it up." />
+          </span>
         </div>
-        <div className="flex items-center justify-between rounded-lg border border-border p-3">
-          <div>
-            <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Open to everyone</p>
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              {publish.audienceMode === 'allowlisted'
-                ? 'Only numbers on the allowlist above will get a response.'
-                : 'Anyone who messages this number will get a response.'}
-            </p>
-          </div>
-          <Switch
-            checked={publish.audienceMode === 'everyone'}
-            onCheckedChange={(checked) => {
-              if (checked) setEveryoneConfirmOpen(true)
-              else patch('publish', { audienceMode: 'allowlisted' })
-            }}
+
+        <div className="space-y-2">
+          <SelectableCard
+            title="Only the numbers I list below"
+            selected={publish.audienceMode === 'allowlisted'}
+            onClick={() => setAudienceMode('allowlisted')}
+          />
+          <SelectableCard
+            title="Everyone"
+            selected={publish.audienceMode === 'everyone'}
+            onClick={() => setAudienceMode('everyone')}
           />
         </div>
+
+        {publish.audienceMode === 'allowlisted' ? (
+          <div className="space-y-2">
+            <div className="flex items-start gap-2">
+              <div className="flex-1">
+                <Input
+                  value={numberDraft}
+                  onChange={(e) => {
+                    setNumberDraft(e.target.value)
+                    setNumberError(null)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') addAllowlistNumber()
+                  }}
+                  placeholder="+15551234567"
+                />
+                {numberError && (
+                  <p className="mt-1 text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+                    {numberError}
+                  </p>
+                )}
+              </div>
+              <Button variant="outline" onClick={addAllowlistNumber}>
+                <Plus className="size-4" />
+                Add
+              </Button>
+            </div>
+            {publish.allowlistNumbers.length === 0 ? (
+              <span className="flex items-center gap-1.5">
+                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                  No numbers added yet.
+                </p>
+                <InfoTooltip text="Add your own number first to try the agent as a real customer would." />
+              </span>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {publish.allowlistNumbers.map((n) => (
+                  <span key={n} className="badge flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-accent-foreground">
+                    {n}
+                    <button type="button" onClick={() => removeAllowlistNumber(n)} aria-label={`Remove ${n}`}>
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            Any customer who messages this number will reach your agent immediately once you activate.
+          </p>
+        )}
       </section>
 
       {/* Publish */}
@@ -350,125 +506,132 @@ export function ReviewPublishStep() {
         </h3>
 
         <div className="space-y-1.5">
-          <Label htmlFor="version-note">Version note</Label>
+          <span className="flex items-center gap-1.5">
+            <Label htmlFor="version-note">What changed in this version?</Label>
+            <InfoTooltip text="For your own records. This is not sent to Meta." />
+          </span>
           <Textarea
             id="version-note"
             rows={2}
+            maxLength={VERSION_NOTE_MAX}
             value={publish.versionNote}
             onChange={(e) => patch('publish', { versionNote: e.target.value })}
-            placeholder="What changed in this version?"
           />
         </div>
 
         <div className="flex items-center justify-between rounded-lg border border-border p-3">
           <div className="flex items-center gap-2">
             <ShieldQuestion className="size-4 text-muted-foreground" />
-            <Label htmlFor="approval-toggle">Requires approval before going live</Label>
+            <span className="flex items-center gap-1.5">
+              <Label htmlFor="approval-toggle">Requires approval before going live</Label>
+              <InfoTooltip text="Someone else on your team must approve before this agent can go live." />
+            </span>
           </div>
           <Switch
             id="approval-toggle"
             checked={publish.approverRequired}
-            onCheckedChange={(checked) =>
-              patch('publish', {
-                approverRequired: checked,
-                approverName: checked ? publish.approverName ?? MOCK_APPROVERS[0] : publish.approverName,
-                approved: checked ? false : publish.approved,
-              })
-            }
+            onCheckedChange={(checked) => patch('publish', { approverRequired: checked })}
           />
         </div>
-        {publish.approverRequired && (
-          <div className="flex items-center gap-3 rounded-lg border border-border p-3">
-            <Select
-              value={publish.approverName ?? MOCK_APPROVERS[0]}
-              onValueChange={(value) => patch('publish', { approverName: value, approved: false })}
-            >
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MOCK_APPROVERS.map((name) => (
-                  <SelectItem key={name} value={name}>
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {publish.approved ? (
-              <Badge className="bg-success text-success-foreground">Approved</Badge>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => patch('publish', { approved: true })}>
-                Simulate approval as {publish.approverName}
-              </Button>
-            )}
-          </div>
-        )}
 
-        <div className="flex items-center justify-between rounded-lg border border-border p-3">
-          <div className="flex items-center gap-2">
-            {gate.billingAttached ? (
-              <CheckCircle2 className="size-4 text-success" />
-            ) : (
-              <CreditCard className="size-4 text-warning" />
-            )}
-            <p style={{ fontSize: 'var(--text-sm)' }}>
-              {gate.billingAttached ? 'Payment method attached' : 'No payment method attached'}
-            </p>
-          </div>
-          {!gate.billingAttached && (
-            <Button variant="outline" size="sm" onClick={attachBilling}>
-              Attach a payment method
-              <ExternalLink className="size-3.5" />
-            </Button>
-          )}
+        <div className="space-y-2 rounded-lg border border-border p-3">
+          <label className="flex items-start gap-2">
+            <Checkbox
+              checked={publish.billingConfirmed}
+              onCheckedChange={(checked) => patch('publish', { billingConfirmed: checked === true })}
+              className="mt-0.5"
+            />
+            <span style={{ fontSize: 'var(--text-sm)' }}>I&rsquo;ve completed Meta&rsquo;s billing and compliance setup for this agent</span>
+          </label>
+          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            Meta Business Agent uses its own billing, separate from your regular WhatsApp messaging, and requires
+            accepting Meta&rsquo;s terms and completing their checks directly. We can&rsquo;t confirm this has been
+            done from here, so please check it yourself before switching on.
+          </p>
+          <a
+            href={BILLING_HUB_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-primary"
+            style={{ fontSize: 'var(--text-sm)' }}
+          >
+            Open Meta&rsquo;s Billing Hub
+            <ExternalLink className="size-3.5" />
+          </a>
         </div>
 
         {publish.activated ? (
-          <Card className="border-success bg-success/10">
-            <CardContent className="flex items-center gap-3 py-4">
+          <div className="flex items-center justify-between rounded-lg border border-success bg-success/10 p-4">
+            <span className="flex items-center gap-3">
               <CheckCircle2 className="size-5 text-success" />
-              <p style={{ fontWeight: 'var(--font-weight-medium)' }}>
-                Live on {publish.activatedChannels.join(', ')}
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="flex items-center gap-3">
-            <Button size="lg" disabled={Boolean(blocker)} onClick={activate}>
-              <Rocket className="size-4" />
-              Activate on channels
+              <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Your agent is live.</p>
+            </span>
+            <Button variant="outline" size="sm" onClick={exitWizard}>
+              Back to agents list
             </Button>
-            {blocker && (
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                {blocker}
+          </div>
+        ) : publish.pendingApproval ? (
+          <div className="rounded-lg border border-border bg-muted p-4">
+            <p style={{ fontWeight: 'var(--font-weight-medium)' }}>
+              Sent for approval. You&rsquo;ll be notified once it&rsquo;s reviewed.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-3">
+              <Button size="lg" disabled={!canActivate} onClick={() => setConfirmOpen(true)}>
+                <Rocket className="size-4" />
+                {activateLabel}
+              </Button>
+              {activateReason && (
+                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                  {activateReason}
+                </p>
+              )}
+            </div>
+            {activateError && (
+              <p className="text-destructive" style={{ fontSize: 'var(--text-sm)' }}>
+                {activateError}
               </p>
             )}
           </div>
         )}
       </section>
 
-      <Dialog open={everyoneConfirmOpen} onOpenChange={setEveryoneConfirmOpen}>
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Open this agent to everyone?</DialogTitle>
-            <DialogDescription>
-              Any WhatsApp number that messages you will get a response, not only the numbers on
-              your allowlist. This is usually done after allowlist testing looks good.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEveryoneConfirmOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                patch('publish', { audienceMode: 'everyone' })
-                setEveryoneConfirmOpen(false)
-              }}
-            >
-              Yes, open to everyone
-            </Button>
-          </DialogFooter>
+          {publish.approverRequired ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Send for approval?</DialogTitle>
+                <DialogDescription>
+                  This will notify your team that this agent is ready for review. It will not go live until approved.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+                  Go back
+                </Button>
+                <Button onClick={confirmActivate}>Send for approval</Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Ready to go live?</DialogTitle>
+                <DialogDescription>
+                  Once activated, your agent becomes the main responder for {audiencePhrase}. Meta charges for every
+                  message it sends. This is not a test anymore.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+                  Go back
+                </Button>
+                <Button onClick={confirmActivate}>Yes, activate</Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

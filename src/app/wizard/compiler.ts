@@ -27,6 +27,7 @@ export interface CompiledConfig {
     followup: { enabled: boolean; followup_interval_in_seconds: number; message: string } | null
     ai_audience: 'ALLOWLISTED_ONLY' | 'EVERYONE'
     never_say_phrases: string[]
+    rollout: { enabled: boolean }
   }
   allowlist: { consumer_phone_number: string }[]
 }
@@ -266,6 +267,7 @@ export function compileConfig(state: WizardState): CompiledConfig {
       ? 'ALLOWLISTED_ONLY'
       : 'EVERYONE') as 'ALLOWLISTED_ONLY' | 'EVERYONE',
     never_say_phrases: state.guardrails.neverSayPhrases,
+    rollout: { enabled: state.publish.activated },
   }
 
   const allowlist = state.publish.allowlistNumbers.map((number) => ({

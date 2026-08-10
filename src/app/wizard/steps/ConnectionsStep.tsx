@@ -2,17 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
   ChevronRight,
-  FlaskConical,
   Loader2,
   MoreHorizontal,
   Plug,
   Send,
 } from 'lucide-react'
+import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { Textarea } from '@/app/components/ui/textarea'
-import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group'
+import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
+import { SelectableCard } from '@/app/components/wizard/SelectableCard'
 import {
   Select,
   SelectContent,
@@ -38,7 +39,10 @@ import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
 import { InlineError } from '@/app/components/wizard/RetryBanner'
 import { TagInput } from '@/app/components/wizard/TagInput'
 import { useWizard } from '@/app/wizard/WizardContext'
+import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
+import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import {
+  ADVANCED_PERSONAS,
   CONNECTION_RECIPES,
   CONNECTION_STATUS_META,
   SAMPLE_CONNECTIONS,
@@ -222,6 +226,10 @@ export function ConnectionsStep() {
   const [pendingDeleteAction, setPendingDeleteAction] = useState<ConnectionAction | null>(null)
   const [rowError, setRowError] = useState<Record<string, string>>({})
 
+  // Set by the setup front door's "Who is this for?" screen — developers and client-setup
+  // personas default to the custom-connection path; everyone else defaults to ready-made.
+  const preferCustom = state.identity.persona !== null && ADVANCED_PERSONAS.includes(state.identity.persona)
+
   function consumeForcedFailure(): boolean {
     if (!state.demo.forceNextFailure) return false
     patch('demo', { forceNextFailure: false })
@@ -324,6 +332,44 @@ export function ConnectionsStep() {
   function updateConnectionDemoStatus(id: string, demoStatus: ConnectionStatus) {
     patch('connections', { connections: connections.map((c) => (c.id === id ? { ...c, demoStatus } : c)) })
   }
+
+  useRegisterDevControls(
+    'connections',
+    <DemoControlsGroup label="Connections">
+      <Button variant="outline" size="sm" onClick={loadSampleConnections}>
+        Load sample connections
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => patch('demo', { forceNextFailure: !state.demo.forceNextFailure })}>
+        {state.demo.forceNextFailure ? 'Force action failure (armed)' : 'Force action failure'}
+      </Button>
+      {connections.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-semi-bold)' }}>
+            Connection status
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            {connections.map((connection) => (
+              <label key={connection.id} className="flex items-center gap-1.5" style={{ fontSize: 'var(--text-xs)' }}>
+                {connection.name}
+                <select
+                  value={connection.demoStatus}
+                  onChange={(e) => updateConnectionDemoStatus(connection.id, e.target.value as ConnectionStatus)}
+                  className="rounded border border-warning bg-warning/10 text-warning-foreground"
+                  style={{ fontSize: 'var(--text-xs)' }}
+                >
+                  {Object.entries(CONNECTION_STATUS_META).map(([id, meta]) => (
+                    <option key={id} value={id}>
+                      {meta.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </DemoControlsGroup>,
+  )
 
   // The quick "Replace key" shortcut (card menu + the key_rejected inline link) replaces the
   // first key in the list — the common case per "most systems need one key". Replacing any
@@ -443,58 +489,23 @@ export function ConnectionsStep() {
         Changes on this page take effect as soon as you make them.
       </p>
 
-      <div className="space-y-3 rounded-lg border border-dashed border-warning bg-warning/5 p-4">
-        <p className="flex items-center gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-semi-bold)' }}>
-          <FlaskConical className="size-3.5" />
-          Demo controls
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={loadSampleConnections}>
-            Load sample connections
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => patch('demo', { forceNextFailure: !state.demo.forceNextFailure })}>
-            {state.demo.forceNextFailure ? 'Force action failure (armed)' : 'Force action failure'}
-          </Button>
-        </div>
-        {connections.length > 0 && (
-          <div className="space-y-1.5">
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-semi-bold)' }}>
-              Connection status
-            </p>
-            <div className="flex flex-wrap items-center gap-3">
-              {connections.map((connection) => (
-                <label key={connection.id} className="flex items-center gap-1.5" style={{ fontSize: 'var(--text-xs)' }}>
-                  {connection.name}
-                  <select
-                    value={connection.demoStatus}
-                    onChange={(e) => updateConnectionDemoStatus(connection.id, e.target.value as ConnectionStatus)}
-                    className="rounded border border-warning bg-warning/10 text-warning-foreground"
-                    style={{ fontSize: 'var(--text-xs)' }}
-                  >
-                    {Object.entries(CONNECTION_STATUS_META).map(([id, meta]) => (
-                      <option key={id} value={id}>
-                        {meta.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
       {connections.length === 0 ? (
         <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border px-6 py-16 text-center">
-          <h3>Connect your agent to your systems</h3>
-          <p className="max-w-md text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-            This lets the agent look things up and take actions for customers, instead of only
-            answering from its knowledge. It needs technical details like web addresses and
-            access keys, so you may want to do this part with your developer.
-          </p>
+          <span className="flex items-center gap-1.5">
+            <h3>Connect your agent to your systems</h3>
+            <InfoTooltip text="This lets the agent look things up and take actions for customers, instead of only answering from its knowledge. It needs technical details like web addresses and access keys, so you may want to do this part with your developer." />
+          </span>
           <div className="flex gap-3">
-            <Button onClick={() => setRecipeGalleryOpen(true)}>Use a ready-made setup</Button>
-            <Button variant="outline" onClick={() => setConnectionForm({ mode: 'add' })}>
+            <Button
+              variant={preferCustom ? 'outline' : 'default'}
+              onClick={() => setRecipeGalleryOpen(true)}
+            >
+              Use a ready-made setup
+            </Button>
+            <Button
+              variant={preferCustom ? 'default' : 'outline'}
+              onClick={() => setConnectionForm({ mode: 'add' })}
+            >
               Build your own connection
             </Button>
           </div>
@@ -509,10 +520,10 @@ export function ConnectionsStep() {
       ) : (
         <div className="space-y-4">
           <div className="flex gap-2">
-            <Button size="sm" onClick={() => setRecipeGalleryOpen(true)}>
+            <Button size="sm" variant={preferCustom ? 'outline' : 'default'} onClick={() => setRecipeGalleryOpen(true)}>
               Use a ready-made setup
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setConnectionForm({ mode: 'add' })}>
+            <Button size="sm" variant={preferCustom ? 'default' : 'outline'} onClick={() => setConnectionForm({ mode: 'add' })}>
               Build your own connection
             </Button>
           </div>
@@ -558,7 +569,11 @@ export function ConnectionsStep() {
       </p>
 
       {recipeGalleryOpen && (
-        <RecipeGalleryDialog onUse={(recipe) => { setRecipeGalleryOpen(false); setRecipeFillFor(recipe) }} onClose={() => setRecipeGalleryOpen(false)} />
+        <RecipeGalleryDialog
+          suggestedIds={state.connections.suggestedRecipeIds}
+          onUse={(recipe) => { setRecipeGalleryOpen(false); setRecipeFillFor(recipe) }}
+          onClose={() => setRecipeGalleryOpen(false)}
+        />
       )}
 
       {recipeFillFor && (
@@ -927,7 +942,21 @@ function ConnectionCard({
 // RECIPE GALLERY
 // ==================================================================================
 
-function RecipeGalleryDialog({ onUse, onClose }: { onUse: (recipe: ConnectionRecipe) => void; onClose: () => void }) {
+function RecipeGalleryDialog({
+  suggestedIds,
+  onUse,
+  onClose,
+}: {
+  suggestedIds: string[]
+  onUse: (recipe: ConnectionRecipe) => void
+  onClose: () => void
+}) {
+  const sortedRecipes = [...CONNECTION_RECIPES].sort((a, b) => {
+    const aSuggested = suggestedIds.includes(a.id) ? 0 : 1
+    const bSuggested = suggestedIds.includes(b.id) ? 0 : 1
+    return aSuggested - bSuggested
+  })
+
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-2xl">
@@ -935,9 +964,16 @@ function RecipeGalleryDialog({ onUse, onClose }: { onUse: (recipe: ConnectionRec
           <DialogTitle>Use a ready-made setup</DialogTitle>
         </DialogHeader>
         <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto">
-          {CONNECTION_RECIPES.map((recipe) => (
+          {sortedRecipes.map((recipe) => (
             <div key={recipe.id} className="space-y-2 rounded-lg border border-border p-3">
-              <p style={{ fontWeight: 'var(--font-weight-medium)' }}>{recipe.name}</p>
+              <div className="flex items-center gap-1.5">
+                <p style={{ fontWeight: 'var(--font-weight-medium)' }}>{recipe.name}</p>
+                {suggestedIds.includes(recipe.id) && (
+                  <Badge variant="outline" className="text-primary">
+                    Suggested for you
+                  </Badge>
+                )}
+              </div>
               <p className="line-clamp-2 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
                 {recipe.summary}
               </p>
@@ -976,11 +1012,11 @@ function RecipeFillDialog({
             <Input id="recipe-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={recipe.baseUrlPlaceholder} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="recipe-api-key">Access key</Label>
+            <span className="flex items-center gap-1.5">
+              <Label htmlFor="recipe-api-key">Access key</Label>
+              <InfoTooltip text="Your developer or your system’s settings page can give you this." />
+            </span>
             <Input id="recipe-api-key" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              Your developer or your system&rsquo;s settings page can give you this.
-            </p>
           </div>
           <div className="space-y-1.5">
             <Label>What this sets up</Label>
@@ -1083,11 +1119,11 @@ function CustomConnectionDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="conn-description">Description</Label>
+            <span className="flex items-center gap-1.5">
+              <Label htmlFor="conn-description">Description</Label>
+              <InfoTooltip text="The agent reads this to understand what this system is for." />
+            </span>
             <Input id="conn-description" value={description} onChange={(e) => setDescription(e.target.value)} />
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              The agent reads this to understand what this system is for.
-            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -1097,16 +1133,15 @@ function CustomConnectionDialog({
 
           <div className="space-y-2">
             <Label>How it authenticates</Label>
-            <RadioGroup value={authMethod} onValueChange={(v) => setAuthMethod(v as typeof authMethod)}>
-              <label className="flex items-center gap-2">
-                <RadioGroupItem value="api_key" id="auth-api-key" />
-                <span style={{ fontSize: 'var(--text-sm)' }}>Access key</span>
-              </label>
+            <div className="space-y-2">
+              <SelectableCard
+                title="Access key"
+                info="Most systems need one key. Add more only if yours specifically requires it."
+                selected={authMethod === 'api_key'}
+                onClick={() => setAuthMethod('api_key')}
+              />
               {authMethod === 'api_key' && (
                 <div className="ml-6 space-y-3">
-                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                    Most systems need one key. Add more only if yours specifically requires it.
-                  </p>
                   <div className="space-y-3">
                     {apiKeyRows.map((row, i) => (
                       <div key={row.id} className="space-y-3 rounded-lg border border-border p-3">
@@ -1197,10 +1232,11 @@ function CustomConnectionDialog({
                 </div>
               )}
 
-              <label className="flex items-center gap-2">
-                <RadioGroupItem value="client_credentials" id="auth-client-credentials" />
-                <span style={{ fontSize: 'var(--text-sm)' }}>Client credentials</span>
-              </label>
+              <SelectableCard
+                title="Client credentials"
+                selected={authMethod === 'client_credentials'}
+                onClick={() => setAuthMethod('client_credentials')}
+              />
               {authMethod === 'client_credentials' && (
                 <div className="ml-6 space-y-3 rounded-lg border border-border p-3">
                   <div className="space-y-1.5">
@@ -1226,17 +1262,13 @@ function CustomConnectionDialog({
                 </div>
               )}
 
-              <label className="flex items-center gap-2">
-                <RadioGroupItem value="none" id="auth-none" />
-                <span style={{ fontSize: 'var(--text-sm)' }}>No authentication</span>
-              </label>
-              {authMethod === 'none' && (
-                <p className="ml-6 flex items-center gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                  <AlertTriangle className="size-3.5 shrink-0" />
-                  Only for systems that are safe to call without any key.
-                </p>
-              )}
-            </RadioGroup>
+              <SelectableCard
+                title="No authentication"
+                info="Only for systems that are safe to call without any key."
+                selected={authMethod === 'none'}
+                onClick={() => setAuthMethod('none')}
+              />
+            </div>
           </div>
         </div>
         <DialogFooter>
@@ -1378,7 +1410,10 @@ function ActionEditorDialog({
               )}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="action-description">When should the agent use this?</Label>
+              <span className="flex items-center gap-1.5">
+                <Label htmlFor="action-description">When should the agent use this?</Label>
+                <InfoTooltip text="Written for the agent, not for you. Describe when to use this action and what it does, e.g. “Use when a customer asks where their order is. Looks up the order by its number and returns its status.”" />
+              </span>
               <Textarea
                 id="action-description"
                 rows={3}
@@ -1387,11 +1422,6 @@ function ActionEditorDialog({
                 placeholder='Use when a customer asks where their order is. Looks up the order by its number and returns its status.'
                 className="bg-input-background shadow-sm"
               />
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                Written for the agent, not for you. Describe when to use this action and what it
-                does, e.g. &ldquo;Use when a customer asks where their order is. Looks up the
-                order by its number and returns its status.&rdquo;
-              </p>
             </div>
           </div>
 
@@ -1413,14 +1443,13 @@ function ActionEditorDialog({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="action-path">Path</Label>
+                <span className="flex items-center gap-1.5">
+                  <Label htmlFor="action-path">Path</Label>
+                  <InfoTooltip text="The part after the base address. Put changing parts in curly brackets, e.g. /orders/{order_number}" />
+                </span>
                 <Input id="action-path" value={editor.path} onChange={(e) => updatePath(e.target.value)} placeholder="/orders/{order_number}" />
               </div>
             </div>
-            <p className="-mt-2 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              The part after the base address. Put changing parts in curly brackets, e.g.
-              /orders/&#123;order_number&#125;
-            </p>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -1525,7 +1554,15 @@ function ValueRow({
       </label>
 
       <div className="space-y-1">
-        <Label className="text-xs">Where it comes from</Label>
+        <span className="flex items-center gap-1.5">
+          <Label className="text-xs">Where it comes from</Label>
+          {value.source === 'whatsapp_number' && (
+            <InfoTooltip text="Great for looking up a customer’s own orders without asking for details." />
+          )}
+          {value.source === 'conversation_memory' && (
+            <InfoTooltip text="Use this when the value was already given earlier, for example an order number the customer mentioned a few messages ago, so the agent does not have to ask again." />
+          )}
+        </span>
         <Select value={value.source} onValueChange={(v) => onChange({ source: v as ActionValue['source'] })}>
           <SelectTrigger className="w-full">
             <SelectValue />
@@ -1537,17 +1574,6 @@ function ValueRow({
             <SelectItem value="conversation_memory">A value from earlier in this conversation</SelectItem>
           </SelectContent>
         </Select>
-        {value.source === 'whatsapp_number' && (
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            Great for looking up a customer&rsquo;s own orders without asking for details.
-          </p>
-        )}
-        {value.source === 'conversation_memory' && (
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            Use this when the value was already given earlier, for example an order number the
-            customer mentioned a few messages ago, so the agent does not have to ask again.
-          </p>
-        )}
         {value.source === 'fixed' && (
           <Input
             value={value.fixedValue ?? ''}
@@ -1560,16 +1586,15 @@ function ValueRow({
 
       {isConversationSourced && (
         <div className="space-y-1">
-          <Label className="text-xs">Description</Label>
+          <span className="flex items-center gap-1.5">
+            <Label className="text-xs">Description</Label>
+            <InfoTooltip text="The agent reads this to know what to take from the conversation. Be specific, e.g. “The order number, which looks like ORD-12345”." />
+          </span>
           <Input
             value={value.description}
             onChange={(e) => onChange({ description: e.target.value })}
             placeholder='e.g. "The order number, which looks like ORD-12345"'
           />
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            The agent reads this to know what to take from the conversation. Be specific, e.g.
-            &ldquo;The order number, which looks like ORD-12345&rdquo;.
-          </p>
           {showDescriptionWarning && missingDescription && (
             <p className="flex items-center gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
               <AlertTriangle className="size-3.5 shrink-0" />

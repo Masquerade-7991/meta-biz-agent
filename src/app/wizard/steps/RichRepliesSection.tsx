@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
 import { InlineError } from '@/app/components/wizard/RetryBanner'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
+import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import {
@@ -575,7 +576,10 @@ function RichReplyEditorDialog({
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="rr-name">Name</Label>
+                <span className="flex items-center gap-1.5">
+                  <Label htmlFor="rr-name">Name</Label>
+                  <InfoTooltip text="Only for you, so you can find it in the list." />
+                </span>
                 <Input
                   id="rr-name"
                   maxLength={MAX_NAME}
@@ -583,13 +587,13 @@ function RichReplyEditorDialog({
                   onChange={(e) => onChange({ ...editor, name: e.target.value })}
                   placeholder="e.g. Product page button"
                 />
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                  Only for you, so you can find it in the list.
-                </p>
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="rr-trigger">When should the agent send this?</Label>
+                <span className="flex items-center gap-1.5">
+                  <Label htmlFor="rr-trigger">When should the agent send this?</Label>
+                  <InfoTooltip text="Written for the agent. Describe the situation, and the agent decides in the moment whether it fits." />
+                </span>
                 <Textarea
                   id="rr-trigger"
                   rows={3}
@@ -599,10 +603,6 @@ function RichReplyEditorDialog({
                   placeholder="e.g. When someone asks where they can buy online"
                   className="bg-input-background shadow-sm"
                 />
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                  Written for the agent. Describe the situation, and the agent decides in the
-                  moment whether it fits.
-                </p>
               </div>
             </div>
 
@@ -661,7 +661,10 @@ function RichReplyBlanksForm({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="rr-button-label">Button label</Label>
+              <span className="flex items-center gap-1.5">
+                <Label htmlFor="rr-button-label">Button label</Label>
+                <InfoTooltip text="Keep it to a word or two. Long labels get cut off on phones." />
+              </span>
               <Input
                 id="rr-button-label"
                 maxLength={MAX_BUTTON_LABEL}
@@ -669,9 +672,6 @@ function RichReplyBlanksForm({
                 onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, buttonLabel: e.target.value } })}
                 placeholder="e.g. Shop now"
               />
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                Keep it to a word or two. Long labels get cut off on phones.
-              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="rr-link">Link</Label>
@@ -690,16 +690,16 @@ function RichReplyBlanksForm({
       return (
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label htmlFor="rr-image-url">Image</Label>
+            <span className="flex items-center gap-1.5">
+              <Label htmlFor="rr-image-url">Image</Label>
+              <InfoTooltip text="A link to a hosted image. Uploading from your computer comes later." />
+            </span>
             <Input
               id="rr-image-url"
               value={editor.blanks.imageUrl}
               onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, imageUrl: e.target.value } })}
               placeholder="Paste a link to the image"
             />
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              A link to a hosted image. Uploading from your computer comes later.
-            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="rr-caption">Caption</Label>
@@ -784,7 +784,10 @@ function RichReplyBlanksForm({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="rr-lat">Map position</Label>
+              <span className="flex items-center gap-1.5">
+                <Label htmlFor="rr-lat">Map position</Label>
+                <InfoTooltip text="Tip: copy these from the share options in any maps app." />
+              </span>
               <div className="grid grid-cols-2 gap-2">
                 <Input
                   id="rr-lat"
@@ -801,9 +804,6 @@ function RichReplyBlanksForm({
                   placeholder="Longitude"
                 />
               </div>
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                Tip: copy these from the share options in any maps app.
-              </p>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -841,7 +841,10 @@ function RichReplyBlanksForm({
     case 'location_request':
       return (
         <div className="space-y-1.5">
-          <Label htmlFor="rr-location-request-message">Message text</Label>
+          <span className="flex items-center gap-1.5">
+            <Label htmlFor="rr-location-request-message">Message text</Label>
+            <InfoTooltip text="The customer always chooses whether to share. The agent should never insist." />
+          </span>
           <Textarea
             id="rr-location-request-message"
             rows={2}
@@ -850,9 +853,6 @@ function RichReplyBlanksForm({
             onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, messageText: e.target.value } })}
             placeholder="e.g. Please share your location so we can check delivery to your area."
           />
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            The customer always chooses whether to share. The agent should never insist.
-          </p>
         </div>
       )
 
@@ -951,15 +951,15 @@ function MenuOptionsEditor({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Option title</Label>
+                <span className="flex items-center gap-1.5">
+                  <Label className="text-xs">Option title</Label>
+                  <InfoTooltip text="Short. This is the line the customer taps." />
+                </span>
                 <Input
                   maxLength={MAX_MENU_OPTION_TITLE}
                   value={option.title}
                   onChange={(e) => onChange(options.map((o) => (o.id === option.id ? { ...o, title: e.target.value } : o)))}
                 />
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                  Short. This is the line the customer taps.
-                </p>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Description</Label>
@@ -1063,17 +1063,15 @@ function CarouselCardsEditor({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Button label</Label>
+                <span className="flex items-center gap-1.5">
+                  <Label className="text-xs">Button label</Label>
+                  {!hasLink && <InfoTooltip text="Tapping this sends the label back as the customer’s answer." />}
+                </span>
                 <Input
                   maxLength={MAX_BUTTON_LABEL}
                   value={card.buttonLabel}
                   onChange={(e) => onChange(cards.map((c) => (c.id === card.id ? { ...c, buttonLabel: e.target.value } : c)))}
                 />
-                {!hasLink && (
-                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                    Tapping this sends the label back as the customer&rsquo;s answer.
-                  </p>
-                )}
               </div>
               {hasLink && (
                 <div className="space-y-1">

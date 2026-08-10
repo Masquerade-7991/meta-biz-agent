@@ -12,7 +12,7 @@ type TabId = 'identity' | 'personality' | 'skills' | 'richReplies'
 // Identity and Personality keep their own save/load state (and nav guard) registered no matter
 // which tab is showing — otherwise switching tabs mid-edit would silently drop unsaved changes.
 export function YourAgentStep() {
-  const { state } = useWizard()
+  const { state, setPendingStepFocus } = useWizard()
   const [activeTab, setActiveTab] = useState<TabId>('identity')
 
   // Arriving here via Safety & handoff's "Customise handoff rules" pre-fills a skill on the
@@ -20,6 +20,15 @@ export function YourAgentStep() {
   useEffect(() => {
     if (state.pendingSkillPrefill) setActiveTab('skills')
   }, [state.pendingSkillPrefill])
+
+  // Arriving here via a "Compiled configuration" link on Test & publish — jump to the tab it named.
+  useEffect(() => {
+    if (state.pendingStepFocus?.step === 'agent' && state.pendingStepFocus.tab) {
+      setActiveTab(state.pendingStepFocus.tab as TabId)
+      setPendingStepFocus(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.pendingStepFocus])
 
   return (
     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>

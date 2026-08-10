@@ -33,6 +33,7 @@ export function createInitialState(): WizardState {
       exclusionsOpen: false,
       exclusions: '',
       avatarDataUrl: null,
+      persona: null,
     },
     business: {
       businessDescription: '',
@@ -90,6 +91,7 @@ export function createInitialState(): WizardState {
       connections: [],
       actions: [],
       activity: [],
+      suggestedRecipeIds: [],
     },
     guardrails: {
       groundingMode: 'strict',
@@ -113,8 +115,8 @@ export function createInitialState(): WizardState {
     publish: {
       versionNote: '',
       approverRequired: false,
-      approverName: null,
-      approved: false,
+      pendingApproval: false,
+      billingConfirmed: false,
       testRunStatus: 'idle',
       testResults: [],
       testsStaleSince: null,
@@ -152,6 +154,7 @@ export function createInitialState(): WizardState {
       demo: 0,
     },
     pendingSkillPrefill: null,
+    pendingStepFocus: null,
   }
 }
 
@@ -163,6 +166,7 @@ type Action =
   | { type: 'SET_STEP_COMPLETE'; step: StepId; complete: boolean }
   | { type: 'INVALIDATE_TESTS' }
   | { type: 'SET_PENDING_SKILL_PREFILL'; value: WizardState['pendingSkillPrefill'] }
+  | { type: 'SET_PENDING_STEP_FOCUS'; value: WizardState['pendingStepFocus'] }
   | { type: 'RESET' }
 
 // Slices whose edits bump lastEditedAt and can mark saved tests stale. `gate` and `demo` are
@@ -211,6 +215,8 @@ function reducer(state: WizardState, action: Action): WizardState {
       }
     case 'SET_PENDING_SKILL_PREFILL':
       return { ...state, pendingSkillPrefill: action.value }
+    case 'SET_PENDING_STEP_FOCUS':
+      return { ...state, pendingStepFocus: action.value }
     case 'RESET':
       return createInitialState()
     default:
@@ -236,6 +242,7 @@ interface WizardContextValue {
   setStep: (step: StepId) => void
   setStepComplete: (step: StepId, complete: boolean) => void
   setPendingSkillPrefill: (value: WizardState['pendingSkillPrefill']) => void
+  setPendingStepFocus: (value: WizardState['pendingStepFocus']) => void
   resetWizard: () => void
 }
 
@@ -256,6 +263,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
       setStep: (step) => dispatch({ type: 'SET_STEP', step }),
       setStepComplete: (step, complete) => dispatch({ type: 'SET_STEP_COMPLETE', step, complete }),
       setPendingSkillPrefill: (value) => dispatch({ type: 'SET_PENDING_SKILL_PREFILL', value }),
+      setPendingStepFocus: (value) => dispatch({ type: 'SET_PENDING_STEP_FOCUS', value }),
       resetWizard: () => dispatch({ type: 'RESET' }),
     }),
     [state],

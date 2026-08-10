@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react'
 import { ArrowLeft, ArrowRight, LogOut } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
-import { StepNav } from './StepNav'
-import { DevControlsButton } from './DevControlsButton'
+import { Stepper } from './Stepper'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useNavigationGuard } from '@/app/wizard/NavigationGuardContext'
 import { STEP_ORDER } from '@/app/wizard/mockData'
@@ -63,7 +62,7 @@ export function WizardShell({ children, onExit }: { children: ReactNode; onExit:
             {state.identity.agentName.trim() || 'Untitled agent'}
           </p>
           <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            Step {currentMeta.index} of {STEP_ORDER.length}
+            Step {currentMeta.index} of {STEP_ORDER.length} · {currentMeta.label}
           </span>
         </div>
         <div className="flex items-center gap-4">
@@ -78,46 +77,41 @@ export function WizardShell({ children, onExit }: { children: ReactNode; onExit:
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <StepNav />
+        <nav className="w-64 shrink-0 border-r border-sidebar-border bg-sidebar px-6 py-10">
+          <Stepper />
+        </nav>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <main className="flex-1 overflow-y-auto">
-            <div className="mx-auto w-full max-w-[820px] px-6 py-10">
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                Step {currentMeta.index}
-              </p>
-              <h2 className="mt-1">{currentMeta.label}</h2>
-              <div className="mt-8">{children}</div>
-            </div>
-          </main>
-
-          <footer className="flex shrink-0 items-center justify-between border-t border-border bg-card px-6 py-3">
-            <div className="flex items-center gap-3">
-              <Button variant="outline" onClick={handleBack} disabled={isFirst || pending}>
-                <ArrowLeft className="size-4" />
-                Back
-              </Button>
-              <DevControlsButton />
-            </div>
-            <div className="flex items-center gap-3">
-              {splitSaveNote && (
-                <span className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                  {splitSaveNote}
-                </span>
-              )}
-              <Button variant="ghost" onClick={handleSaveAndClose} disabled={pending}>
-                Save and close
-              </Button>
-              {!isLast && (
-                <Button onClick={handleNext} disabled={!canProceed || pending}>
-                  Next
-                  <ArrowRight className="size-4" />
-                </Button>
-              )}
-            </div>
-          </footer>
-        </div>
+        <main className="flex-1 overflow-y-auto bg-muted">
+          <div className="mx-auto w-full max-w-[820px] px-6 py-10">
+            <div className="rounded-lg border border-border bg-card p-8">{children}</div>
+          </div>
+        </main>
       </div>
+
+      <footer className="flex shrink-0 items-center justify-between border-t border-border bg-card px-6 py-3">
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={handleBack} disabled={isFirst || pending}>
+            <ArrowLeft className="size-4" />
+            Back
+          </Button>
+        </div>
+        <div className="flex items-center gap-3">
+          {splitSaveNote && (
+            <span className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              {splitSaveNote}
+            </span>
+          )}
+          <Button variant="ghost" onClick={handleSaveAndClose} disabled={pending}>
+            Save and close
+          </Button>
+          {!isLast && (
+            <Button onClick={handleNext} disabled={!canProceed || pending}>
+              Next
+              <ArrowRight className="size-4" />
+            </Button>
+          )}
+        </div>
+      </footer>
     </div>
   )
 }

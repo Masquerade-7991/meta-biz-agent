@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
 import { InlineError } from '@/app/components/wizard/RetryBanner'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
+import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { SAMPLE_CUSTOM_SKILLS, SERVICES_TYPE_CATEGORIES, SKILL_TEMPLATES, newId } from '@/app/wizard/mockData'
@@ -249,11 +250,12 @@ export function SkillsSection() {
 
       {skillCount === 0 && !skillEditor ? (
         <div className="space-y-3 rounded-lg border border-border p-4 text-center">
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-            No custom skills yet, and most agents do not need any. The controls in the Personality tab cover tone,
-            languages and length. When there is a specific situation you want handled your way, like warranty
-            questions or discount requests, start from a template or add your own.
-          </p>
+          <span className="flex items-center justify-center gap-1.5">
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              No custom skills yet, and most agents do not need any.
+            </p>
+            <InfoTooltip text="The controls in the Personality tab cover tone, languages and length. When there is a specific situation you want handled your way, like warranty questions or discount requests, start from a template or add your own." />
+          </span>
           <Button variant="outline" onClick={() => setTemplatesOpen(true)}>
             Choose from templates
           </Button>
@@ -400,7 +402,10 @@ function SkillEditorCard({
   return (
     <div className="space-y-3 rounded-lg border border-border p-4">
       <div className="space-y-1.5">
-        <Label htmlFor="skill-name">Skill name</Label>
+        <span className="flex items-center gap-1.5">
+          <Label htmlFor="skill-name">Skill name</Label>
+          <InfoTooltip text="A short name so you can find it later." />
+        </span>
         <Input
           id="skill-name"
           autoFocus
@@ -409,12 +414,12 @@ function SkillEditorCard({
           onChange={(e) => onChange({ ...editor, name: e.target.value })}
           placeholder="e.g. Handling warranty questions"
         />
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-          A short name so you can find it later.
-        </p>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="skill-instruction">Instruction</Label>
+        <span className="flex items-center gap-1.5">
+          <Label htmlFor="skill-instruction">Instruction</Label>
+          <InfoTooltip text="Write what the agent should do in plain language. One situation per skill works best." />
+        </span>
         <Textarea
           id="skill-instruction"
           rows={5}
@@ -424,10 +429,7 @@ function SkillEditorCard({
           placeholder="Describe the situation and what the agent should do. e.g. When a customer asks about warranty, explain that all products carry a 1 year warranty. Ask for their order number and offer to connect them to a person for claims."
           className="bg-input-background shadow-sm"
         />
-        <div className="flex items-center justify-between">
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            Write what the agent should do in plain language. One situation per skill works best.
-          </p>
+        <div className="flex items-center justify-end">
           {editor.instruction.length > 1600 && (
             <span className="shrink-0 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
               {editor.instruction.length}/{MAX_SKILL_INSTRUCTION}

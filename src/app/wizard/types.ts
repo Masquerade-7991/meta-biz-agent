@@ -34,6 +34,10 @@ export interface GateState {
 }
 
 // ---- Step 1.1 Agent Identity ----
+/** Set by the setup front door's "Who is this for?" screen — a light preference, Helo-side only,
+ *  never sent to Meta. See mockData.ts's PERSONA_OPTIONS/ADVANCED_PERSONAS for what it affects. */
+export type PersonaId = 'owner' | 'support_ops' | 'client_setup' | 'developer' | 'exploring'
+
 export interface IdentityState {
   agentName: string
   companyName: string
@@ -42,6 +46,7 @@ export interface IdentityState {
   exclusionsOpen: boolean
   exclusions: string
   avatarDataUrl: string | null
+  persona: PersonaId | null
 }
 
 // ---- Step 1.2 Business Profile ----
@@ -394,6 +399,10 @@ export interface ConnectionsPageState {
   connections: Connection[]
   actions: ConnectionAction[]
   activity: ActivityLogRow[]
+  /** Recipe ids flagged by the setup front door as matching a capability the user picked there —
+   *  shown with a "Suggested for you" badge and sorted first in the recipe gallery. Never creates
+   *  a connection on its own; real credentials are still required. */
+  suggestedRecipeIds: string[]
 }
 
 // ---- Step 1.7 Guardrails ----
@@ -441,8 +450,14 @@ export interface MetaEvalResult {
 export interface PublishState {
   versionNote: string
   approverRequired: boolean
-  approverName: string | null
-  approved: boolean
+  /** Set by "Submit for approval" on this screen (Helo-side only, never sent to Meta). */
+  pendingApproval: boolean
+  /** Self-ticked by the user on this screen — we cannot verify Meta billing/compliance setup
+   *  from here, so this is an honest checkbox, never an automatic status check. */
+  billingConfirmed: boolean
+  /** Kept for AgentsListPage.tsx's existing status/eval-score columns, but no longer written to
+   *  by this screen — the new "standard checks" run is local, per-visit UI state (see
+   *  ReviewPublishStep.tsx), not persisted wizard state. */
   testRunStatus: 'idle' | 'running' | 'done'
   testResults: TestConversationResult[]
   testsStaleSince: number | null
@@ -476,9 +491,17 @@ export interface WizardState {
    *  Kept outside the slice system so it never marks saved tests stale — it's pure UI intent,
    *  not agent configuration. */
   pendingSkillPrefill: { name: string; instruction: string } | null
+  /** Cross-step navigation signal: the Test & publish step's "Compiled configuration" tabs link
+   *  back to the step (and, where that step has its own inner tabs, the specific tab) that owns
+   *  each piece of read-only data shown there. Kept outside the slice system for the same reason
+   *  as pendingSkillPrefill above — pure UI intent, not agent configuration. */
+  pendingStepFocus: { step: StepId; tab?: string } | null
 }
 
-export type SliceKey = Exclude<keyof WizardState, 'currentStep' | 'completedSteps' | 'lastEditedAt' | 'pendingSkillPrefill'>
+export type SliceKey = Exclude<
+  keyof WizardState,
+  'currentStep' | 'completedSteps' | 'lastEditedAt' | 'pendingSkillPrefill' | 'pendingStepFocus'
+>
 
 // ---- AI Agents listing (Helo-side summary of a configured agent instance) ----
 export type AgentRolloutStatus = 'live' | 'needs_testing' | 'draft' | 'paused'

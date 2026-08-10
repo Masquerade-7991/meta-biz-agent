@@ -71,18 +71,30 @@ function statusBadge(status: AgentRolloutStatus) {
   }
 }
 
-export function AgentsListPage({ onOpenBuilder }: { onOpenBuilder: () => void }) {
+export function AgentsListPage({
+  onOpenBuilder,
+  onAgentCreated,
+}: {
+  onOpenBuilder: () => void
+  onAgentCreated: () => void
+}) {
   const { state, patch, setStep, resetWizard } = useWizard()
   const [modalOpen, setModalOpen] = useState(false)
   const [createdAgents, setCreatedAgents] = useState<AgentInstanceSummary[]>(loadCreatedAgents)
 
-  function addCreatedAgent(agent: AgentInstanceSummary) {
-    setCreatedAgents((prev) => {
-      const next = [agent, ...prev]
-      persistCreatedAgents(next)
-      return next
+  // A brand new agent skips the agents table entirely and goes straight into the setup front
+  // door — "Open configuration" for an EXISTING draft row still goes straight to the wizard via
+  // openAgentConfiguration below, unaffected.
+  function handleAgentCreated(agent: AgentInstanceSummary) {
+    resetWizard()
+    patch('identity', { agentName: agent.name, companyName: agent.companyName })
+    patch('gate', {
+      gatePassed: true,
+      selectedPhoneNumber: agent.phoneNumber,
+      selectedWabaName: agent.companyName,
     })
     toast.success(`${agent.name} created`)
+    onAgentCreated()
   }
 
   function removeCreatedAgent(id: string) {
@@ -326,7 +338,7 @@ export function AgentsListPage({ onOpenBuilder }: { onOpenBuilder: () => void })
       <CreateAgentModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onCreate={addCreatedAgent}
+        onCreate={handleAgentCreated}
         existingAgentNames={rows.map((r) => r.name)}
       />
     </>

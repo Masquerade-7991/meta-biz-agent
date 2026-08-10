@@ -3,6 +3,7 @@ import { Button } from '@/app/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { LoadFailedBanner, LoadingIndicator } from '@/app/components/wizard/RetryBanner'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
+import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { SAMPLE_DOCUMENTS, SAMPLE_FAQS, SAMPLE_WEBSITES, newId } from '@/app/wizard/mockData'
@@ -15,12 +16,21 @@ type TabId = 'business' | 'faq' | 'documents' | 'website'
 const IMMEDIATE_SAVE_LINE = 'Changes on this page take effect as soon as you make them.'
 
 export function KnowledgeStep() {
-  const { state, patch } = useWizard()
+  const { state, patch, setPendingStepFocus } = useWizard()
   const { knowledge, business } = state
   const category = state.demo.businessCategory
 
   const [activeTab, setActiveTab] = useState<TabId>('business')
   const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'failed'>('loading')
+
+  // Arriving here via a "Compiled configuration" link on Test & publish — jump to the tab it named.
+  useEffect(() => {
+    if (state.pendingStepFocus?.step === 'knowledge' && state.pendingStepFocus.tab) {
+      setActiveTab(state.pendingStepFocus.tab as TabId)
+      setPendingStepFocus(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.pendingStepFocus])
 
   // Governs FAQ, Documents and Website only — Business details manages its own load/save
   // lifecycle internally (see BusinessProfileStep), unchanged from the Business Profile spec.
@@ -130,12 +140,15 @@ export function KnowledgeStep() {
       )}
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
-        <TabsList>
-          <TabsTrigger value="business">Business details</TabsTrigger>
-          <TabsTrigger value="faq">FAQ ({faqCount})</TabsTrigger>
-          <TabsTrigger value="documents">Documents ({docCount})</TabsTrigger>
-          <TabsTrigger value="website">Website ({siteCount})</TabsTrigger>
-        </TabsList>
+        <div className="flex items-center gap-1.5">
+          <TabsList>
+            <TabsTrigger value="business">Business details</TabsTrigger>
+            <TabsTrigger value="faq">FAQ ({faqCount})</TabsTrigger>
+            <TabsTrigger value="documents">Documents ({docCount})</TabsTrigger>
+            <TabsTrigger value="website">Website ({siteCount})</TabsTrigger>
+          </TabsList>
+          <InfoTooltip text="Everything here is optional. The other tabs cover FAQs, documents and websites." />
+        </div>
 
         {/* forceMount + CSS-hidden (not Radix's default unmount-when-inactive) so Business
             details keeps its own guard registered and its load/save state alive regardless of

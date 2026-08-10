@@ -21,12 +21,15 @@ import {
   DialogTitle,
 } from '@/app/components/ui/dialog'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
+import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
+import { StatusAccent } from '@/app/components/wizard/StatusAccent'
 import { UnsavedChangesDialog } from '@/app/components/wizard/UnsavedChangesDialog'
 import { LoadFailedBanner, LoadingIndicator, SaveFailedBanner, SavingIndicator } from '@/app/components/wizard/RetryBanner'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { useSaveOnNextSection } from '@/app/wizard/useSaveOnNextSection'
 import {
+  ADVANCED_PERSONAS,
   DEFAULT_BUSINESS_HOURS,
   PAYMENT_METHOD_OPTIONS,
   SAMPLE_BUSINESS_PROFILE,
@@ -47,19 +50,22 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const POLICY_COPY = {
   returnPolicy: {
     label: 'Return policy',
-    placeholder: 'Your returns window, what can and cannot be returned, and how refunds are issued.',
+    placeholder: 'e.g. 7 day returns, unused items only',
+    helper: 'Your returns window, what can and cannot be returned, and how refunds are issued.',
     example:
       '7 day returns on unused items with original packaging. Refunds go back to the original payment method within 5 working days. No returns on innerwear or customised items.',
   },
   purchaseInfo: {
     label: 'How customers buy or book',
-    placeholder: 'The steps a customer takes to place an order or make a booking with you.',
+    placeholder: 'e.g. Order on our website or WhatsApp',
+    helper: 'The steps a customer takes to place an order or make a booking with you.',
     example:
       'Order on our website or right here on WhatsApp. Share the product name and your address, and we will confirm price and delivery time before you pay.',
   },
   deliveryAndShipping: {
     label: 'Delivery and shipping',
-    placeholder: 'Where you deliver, how long it takes, and what it costs.',
+    placeholder: 'e.g. 2 to 5 days across India',
+    helper: 'Where you deliver, how long it takes, and what it costs.',
     example:
       'We deliver across India. Metro cities in 2 to 3 days, everywhere else in 5 to 7 days. Free delivery on orders above Rs 999, otherwise Rs 49.',
   },
@@ -103,15 +109,6 @@ export function hasAnyBusinessDetails(business: BusinessState): boolean {
 
 function getClearedFields(saved: BusinessState, current: BusinessState): string[] {
   return Object.keys(FIELD_LABELS).filter((key) => !isFieldEmpty(key, saved) && isFieldEmpty(key, current)).map((key) => FIELD_LABELS[key])
-}
-
-function StatusLine({ provided }: { provided: boolean }) {
-  return (
-    <p className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-      <span className={cn('size-1.5 shrink-0 rounded-full', provided ? 'bg-success' : 'bg-muted-foreground/50')} />
-      {provided ? 'Provided' : 'Not provided yet'}
-    </p>
-  )
 }
 
 function AssembledBox({ text, warning }: { text: string; warning?: string | null }) {
@@ -191,10 +188,13 @@ export function BusinessProfileStep() {
   const [emailTouched, setEmailTouched] = useState(false)
   const emailInvalid = emailTouched && business.contactEmail.trim().length > 0 && !EMAIL_RE.test(business.contactEmail)
 
+  // Personas who asked for more control up front (setup front door, Screen 1) see these examples
+  // already expanded, instead of tucked behind "See an example".
+  const advancedDefault = state.identity.persona !== null && ADVANCED_PERSONAS.includes(state.identity.persona)
   const [exampleOpen, setExampleOpen] = useState<Record<PolicyKey, boolean>>({
-    returnPolicy: false,
-    purchaseInfo: false,
-    deliveryAndShipping: false,
+    returnPolicy: advancedDefault,
+    purchaseInfo: advancedDefault,
+    deliveryAndShipping: advancedDefault,
   })
   const [pendingExample, setPendingExample] = useState<{ key: PolicyKey; text: string } | null>(null)
 
@@ -323,16 +323,12 @@ export function BusinessProfileStep() {
         This tab saves when you press Next or Save and close.
       </p>
 
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-        Everything here is optional. The other tabs cover FAQs, documents and websites.
-      </p>
-
       {saveStatus === 'saving' && <SavingIndicator />}
       {loading && <LoadingIndicator label="Loading your saved details" />}
 
-      <div className={cn('space-y-10', loading && 'pointer-events-none opacity-50')} aria-hidden={loading}>
+      <div className={cn('space-y-12', loading && 'pointer-events-none opacity-50')} aria-hidden={loading}>
         {/* Section 1 */}
-        <section className="space-y-6">
+        <section className="space-y-8">
           <div className="space-y-1">
             <h3>About your business</h3>
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
@@ -340,31 +336,33 @@ export function BusinessProfileStep() {
             </p>
           </div>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="business-description">Business description</Label>
-              {business.businessDescription.length > 400 && (
-                <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                  {business.businessDescription.length}/{MAX_DESCRIPTION}
+          <StatusAccent filled={!isFieldEmpty('businessDescription', business)}>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Label htmlFor="business-description">Business description</Label>
+                  <InfoTooltip text="Background about the business. What the agent does is set in step 1, Your agent. What you sell, who you serve, and anything customers often ask about." />
                 </span>
-              )}
+                {business.businessDescription.length > 400 && (
+                  <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                    {business.businessDescription.length}/{MAX_DESCRIPTION}
+                  </span>
+                )}
+              </div>
+              <Textarea
+                id="business-description"
+                rows={4}
+                maxLength={MAX_DESCRIPTION}
+                disabled={loading}
+                value={business.businessDescription}
+                onChange={(e) => patch('business', { businessDescription: e.target.value })}
+                placeholder="e.g. We sell handmade candles and home fragrance"
+                className="bg-input-background shadow-sm"
+              />
             </div>
-            <Textarea
-              id="business-description"
-              rows={4}
-              maxLength={MAX_DESCRIPTION}
-              disabled={loading}
-              value={business.businessDescription}
-              onChange={(e) => patch('business', { businessDescription: e.target.value })}
-              placeholder="What you sell, who you serve, and anything customers often ask about."
-              className="bg-input-background shadow-sm"
-            />
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              Background about the business. What the agent does is set in step 1, Your agent.
-            </p>
-            <StatusLine provided={!isFieldEmpty('businessDescription', business)} />
-          </div>
+          </StatusAccent>
 
+          <StatusAccent filled={!isFieldEmpty('paymentMethods', business)}>
           <div className="space-y-1.5">
             <Label>Payment methods</Label>
 
@@ -419,14 +417,14 @@ export function BusinessProfileStep() {
                 {business.paymentMethods.length > 0 && paymentSentence && <AssembledBox text={paymentSentence} />}
               </>
             )}
-            <StatusLine provided={!isFieldEmpty('paymentMethods', business)} />
           </div>
+          </StatusAccent>
         </section>
 
         <Separator />
 
         {/* Section 2 */}
-        <section className="space-y-6">
+        <section className="space-y-8">
           <div className="space-y-1">
             <h3>Your policies</h3>
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
@@ -445,44 +443,48 @@ export function BusinessProfileStep() {
                     <Separator className="flex-1" />
                   </div>
                 )}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor={key}>{copy.label}</Label>
-                    {business[key].length > 800 && (
-                      <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                        {business[key].length}/{MAX_POLICY}
+                <StatusAccent filled={!isFieldEmpty(key, business)}>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Label htmlFor={key}>{copy.label}</Label>
+                        <InfoTooltip text={copy.helper} />
                       </span>
+                      {business[key].length > 800 && (
+                        <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                          {business[key].length}/{MAX_POLICY}
+                        </span>
+                      )}
+                    </div>
+                    <Textarea
+                      id={key}
+                      rows={3}
+                      maxLength={MAX_POLICY}
+                      disabled={loading}
+                      value={business[key]}
+                      onChange={(e) => patch('business', { [key]: e.target.value })}
+                      placeholder={copy.placeholder}
+                      className="bg-input-background shadow-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setExampleOpen((prev) => ({ ...prev, [key]: !prev[key] }))}
+                      className="flex items-center gap-1 text-primary"
+                      style={{ fontSize: 'var(--text-xs)' }}
+                    >
+                      <ChevronDown className={cn('size-3.5 transition-transform', exampleOpen[key] && 'rotate-180')} />
+                      See an example
+                    </button>
+                    {exampleOpen[key] && (
+                      <div className="space-y-2 rounded-lg bg-muted p-3">
+                        <p style={{ fontSize: 'var(--text-sm)' }}>{copy.example}</p>
+                        <Button size="sm" variant="outline" onClick={() => requestApplyExample(key, copy.example)}>
+                          Use this example
+                        </Button>
+                      </div>
                     )}
                   </div>
-                  <Textarea
-                    id={key}
-                    rows={3}
-                    maxLength={MAX_POLICY}
-                    disabled={loading}
-                    value={business[key]}
-                    onChange={(e) => patch('business', { [key]: e.target.value })}
-                    placeholder={copy.placeholder}
-                    className="bg-input-background shadow-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setExampleOpen((prev) => ({ ...prev, [key]: !prev[key] }))}
-                    className="flex items-center gap-1 text-primary"
-                    style={{ fontSize: 'var(--text-xs)' }}
-                  >
-                    <ChevronDown className={cn('size-3.5 transition-transform', exampleOpen[key] && 'rotate-180')} />
-                    See an example
-                  </button>
-                  {exampleOpen[key] && (
-                    <div className="space-y-2 rounded-lg bg-muted p-3">
-                      <p style={{ fontSize: 'var(--text-sm)' }}>{copy.example}</p>
-                      <Button size="sm" variant="outline" onClick={() => requestApplyExample(key, copy.example)}>
-                        Use this example
-                      </Button>
-                    </div>
-                  )}
-                  <StatusLine provided={!isFieldEmpty(key, business)} />
-                </div>
+                </StatusAccent>
               </Fragment>
             )
           })}
@@ -491,7 +493,7 @@ export function BusinessProfileStep() {
         <Separator />
 
         {/* Section 3 */}
-        <section className="space-y-6">
+        <section className="space-y-8">
           <div className="space-y-1">
             <h3>How customers reach you</h3>
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
@@ -499,52 +501,53 @@ export function BusinessProfileStep() {
             </p>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="contact-email">Contact email</Label>
-            <Input
-              id="contact-email"
-              type="email"
-              disabled={loading}
-              value={business.contactEmail}
-              aria-invalid={emailInvalid}
-              onChange={(e) => patch('business', { contactEmail: e.target.value })}
-              onBlur={() => setEmailTouched(true)}
-              placeholder="support@yourbusiness.com"
-            />
-            {emailInvalid && (
-              <p className="text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                This does not look like an email address
-              </p>
-            )}
-            <StatusLine provided={!isFieldEmpty('contactEmail', business)} />
-          </div>
+          <StatusAccent filled={!isFieldEmpty('contactEmail', business)}>
+            <div className="space-y-1.5">
+              <Label htmlFor="contact-email">Contact email</Label>
+              <Input
+                id="contact-email"
+                type="email"
+                disabled={loading}
+                value={business.contactEmail}
+                aria-invalid={emailInvalid}
+                onChange={(e) => patch('business', { contactEmail: e.target.value })}
+                onBlur={() => setEmailTouched(true)}
+                placeholder="support@yourbusiness.com"
+              />
+              {emailInvalid && (
+                <p className="text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  This does not look like an email address
+                </p>
+              )}
+            </div>
+          </StatusAccent>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="business-address">Business address</Label>
-            <Textarea
-              id="business-address"
-              rows={2}
-              maxLength={MAX_ADDRESS}
-              disabled={loading}
-              value={business.businessAddress}
-              onChange={(e) => patch('business', { businessAddress: e.target.value })}
-              placeholder="Where your business is located, if customers can visit or send things there."
-              className="bg-input-background shadow-sm"
-            />
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              Written the way you would say it to a customer, for example &ldquo;Shop 4, Link Road,
-              Bandra West, Mumbai 400050&rdquo;.
-            </p>
-            <StatusLine provided={!isFieldEmpty('businessAddress', business)} />
-          </div>
+          <StatusAccent filled={!isFieldEmpty('businessAddress', business)}>
+            <div className="space-y-1.5">
+              <span className="flex items-center gap-1.5">
+                <Label htmlFor="business-address">Business address</Label>
+                <InfoTooltip text="Written the way you would say it to a customer, for example “Shop 4, Link Road, Bandra West, Mumbai 400050”. Where your business is located, if customers can visit or send things there." />
+              </span>
+              <Textarea
+                id="business-address"
+                rows={2}
+                maxLength={MAX_ADDRESS}
+                disabled={loading}
+                value={business.businessAddress}
+                onChange={(e) => patch('business', { businessAddress: e.target.value })}
+                placeholder="e.g. Shop 4, Link Road, Bandra West"
+                className="bg-input-background shadow-sm"
+              />
+            </div>
+          </StatusAccent>
 
+          <StatusAccent filled={!isFieldEmpty('businessHours', business)}>
           <div className="space-y-3">
             <div>
-              <Label>Business hours</Label>
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                These are your business hours, not the agent&rsquo;s. The agent is available at all
-                times.
-              </p>
+              <span className="flex items-center gap-1.5">
+                <Label>Business hours</Label>
+                <InfoTooltip text="These are your business hours, not the agent’s. The agent is available at all times." />
+              </span>
             </div>
 
             {!hoursExpanded ? (
@@ -633,8 +636,8 @@ export function BusinessProfileStep() {
                 </button>
               </div>
             )}
-            <StatusLine provided={!isFieldEmpty('businessHours', business)} />
           </div>
+          </StatusAccent>
         </section>
       </div>
 

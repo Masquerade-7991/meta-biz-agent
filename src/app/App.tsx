@@ -4,8 +4,11 @@ import { TooltipProvider } from '@/app/components/ui/tooltip'
 import { WizardProvider, useWizard } from '@/app/wizard/WizardContext'
 import { NavigationGuardProvider } from '@/app/wizard/NavigationGuardContext'
 import { DevControlsProvider } from '@/app/wizard/DevControlsContext'
+import { ExitProvider } from '@/app/wizard/ExitContext'
 import { WizardShell } from '@/app/components/wizard/WizardShell'
+import { DevControlsButton } from '@/app/components/wizard/DevControlsButton'
 import { GateScreen } from '@/app/components/GateScreen'
+import { SetupFrontDoor } from '@/app/components/SetupFrontDoor'
 import { ProductShell } from '@/app/components/shell/ProductShell'
 import { YourAgentStep } from '@/app/wizard/steps/YourAgentStep'
 import { KnowledgeStep } from '@/app/wizard/steps/KnowledgeStep'
@@ -32,27 +35,33 @@ function AgentBuilderFlow({ onExitToShell }: { onExitToShell: () => void }) {
   const StepComponent = STEP_COMPONENTS[state.currentStep]
 
   return (
-    <NavigationGuardProvider>
-      <DevControlsProvider>
+    <ExitProvider onExit={onExitToShell}>
+      <NavigationGuardProvider>
         <WizardShell onExit={onExitToShell}>
           <StepComponent />
         </WizardShell>
-      </DevControlsProvider>
-    </NavigationGuardProvider>
+      </NavigationGuardProvider>
+    </ExitProvider>
   )
 }
 
 export default function App() {
-  const [view, setView] = useState<'shell' | 'agent-flow'>('shell')
+  const [view, setView] = useState<'shell' | 'setup' | 'agent-flow'>('shell')
 
   return (
     <WizardProvider>
       <TooltipProvider>
-        {view === 'shell' ? (
-          <ProductShell onOpenAgentBuilder={() => setView('agent-flow')} />
-        ) : (
-          <AgentBuilderFlow onExitToShell={() => setView('shell')} />
-        )}
+        <DevControlsProvider>
+          {view === 'shell' && (
+            <ProductShell
+              onOpenAgentBuilder={() => setView('agent-flow')}
+              onAgentCreated={() => setView('setup')}
+            />
+          )}
+          {view === 'setup' && <SetupFrontDoor onFinish={() => setView('agent-flow')} />}
+          {view === 'agent-flow' && <AgentBuilderFlow onExitToShell={() => setView('shell')} />}
+          <DevControlsButton />
+        </DevControlsProvider>
         <Toaster />
       </TooltipProvider>
     </WizardProvider>

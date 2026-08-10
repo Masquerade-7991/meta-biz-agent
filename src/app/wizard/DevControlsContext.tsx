@@ -44,17 +44,24 @@ function useDevControls() {
  *
  *  `node` is a fresh JSX object every render, so registering it directly would make the effect's
  *  dependency array change every render and loop forever. Instead we register a stable getter
- *  (backed by a ref) once per mount, and read the ref's latest value only when the panel opens. */
+ *  (backed by a ref) once per mount, and read the ref's latest value only when the panel opens.
+ *
+ *  The effect also re-fires when `node`'s presence (null vs not) flips, not just on `id` change.
+ *  A component that's always mounted (e.g. a dialog that toggles its controls between `open ?
+ *  <Group/> : null`) never re-registers otherwise, so the panel — which only re-renders when the
+ *  registry itself changes — would keep showing stale (often empty) content after the toggle.
+ *  Keying on the boolean, not `node` itself, keeps this from re-firing on every render. */
 export function useRegisterDevControls(id: string, node: ReactNode | null) {
   const { register } = useDevControls()
   const nodeRef = useRef(node)
   nodeRef.current = node
+  const hasNode = node !== null
 
   useEffect(() => {
-    register(id, () => nodeRef.current)
+    register(id, hasNode ? () => nodeRef.current : null)
     return () => register(id, null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [register, id])
+  }, [register, id, hasNode])
 }
 
 export function useDevControlsEntries() {

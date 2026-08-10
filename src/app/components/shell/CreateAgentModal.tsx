@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   Clock,
   ExternalLink,
-  FlaskConical,
   Info,
   Loader2,
   RefreshCw,
@@ -28,6 +27,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/app/components/ui/select'
+import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
+import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
+import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { newId } from '@/app/wizard/mockData'
 import type { AgentInstanceSummary } from '@/app/wizard/types'
 
@@ -121,6 +123,30 @@ export function CreateAgentModal({
   const [forcedOutcome, setForcedOutcome] = useState<ForcedOutcome>('ready')
   const nameInputRef = useRef<HTMLInputElement>(null)
 
+  useRegisterDevControls(
+    'create-agent-modal',
+    open ? (
+      <DemoControlsGroup label="Create agent">
+        <label htmlFor="demo-force-result" className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+          Demo: force result
+        </label>
+        <select
+          id="demo-force-result"
+          value={forcedOutcome}
+          onChange={(e) => setForcedOutcome(e.target.value as ForcedOutcome)}
+          className="rounded border border-border bg-background"
+          style={{ fontSize: 'var(--text-xs)' }}
+        >
+          <option value="ready">Ready</option>
+          <option value="not_available">Not available</option>
+          <option value="our_error">Our error (400/401/404)</option>
+          <option value="meta_busy">Meta busy (429)</option>
+          <option value="meta_down">Meta down (500)</option>
+        </select>
+      </DemoControlsGroup>
+    ) : null,
+  )
+
   const wabas = MOCK_WABA_DIRECTORY
   const selectedWaba = wabas.find((w) => w.id === wabaId) ?? null
   const phoneNumbers = selectedWaba?.phoneNumbers ?? []
@@ -213,27 +239,7 @@ export function CreateAgentModal({
   return (
     <Dialog open={open} onOpenChange={(next) => !next && handleClose()}>
       <DialogContent className="sm:max-w-[520px]">
-        <div className="absolute left-4 top-4 flex items-center gap-1.5 rounded-md border border-dashed border-warning bg-warning/10 px-2 py-1">
-          <FlaskConical className="size-3 text-warning-foreground" />
-          <label htmlFor="demo-force-result" className="text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            Demo: force result
-          </label>
-          <select
-            id="demo-force-result"
-            value={forcedOutcome}
-            onChange={(e) => setForcedOutcome(e.target.value as ForcedOutcome)}
-            className="rounded border border-warning bg-background text-warning-foreground"
-            style={{ fontSize: 'var(--text-xs)' }}
-          >
-            <option value="ready">Ready</option>
-            <option value="not_available">Not available</option>
-            <option value="our_error">Our error (400/401/404)</option>
-            <option value="meta_busy">Meta busy (429)</option>
-            <option value="meta_down">Meta down (500)</option>
-          </select>
-        </div>
-
-        <DialogHeader className="mt-8">
+        <DialogHeader>
           <DialogTitle>Create an AI agent</DialogTitle>
           <DialogDescription>
             Name it, pick the number it will answer on, then check that Meta allows it.
@@ -242,7 +248,10 @@ export function CreateAgentModal({
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="agent-name-modal">Agent name</Label>
+            <span className="flex items-center gap-1.5">
+              <Label htmlFor="agent-name-modal">Agent name</Label>
+              <InfoTooltip text="This is only for you. Customers never see it." />
+            </span>
             <Input
               id="agent-name-modal"
               ref={nameInputRef}
@@ -252,9 +261,6 @@ export function CreateAgentModal({
               onChange={(e) => setAgentName(e.target.value)}
               placeholder="Support agent"
             />
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              This is only for you. Customers never see it.
-            </p>
             {nameError && (
               <p className="text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
                 {nameError}

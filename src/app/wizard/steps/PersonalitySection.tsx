@@ -5,6 +5,7 @@ import { Button } from '@/app/components/ui/button'
 import { Separator } from '@/app/components/ui/separator'
 import { SegmentedControl } from '@/app/components/wizard/SegmentedControl'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
+import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { LoadFailedBanner, LoadingIndicator, SaveFailedBanner, SavingIndicator } from '@/app/components/wizard/RetryBanner'
 import { UnsavedChangesDialog } from '@/app/components/wizard/UnsavedChangesDialog'
 import { LanguageMultiSelect, LanguageSelect } from '@/app/components/wizard/LanguageCombobox'
@@ -132,7 +133,10 @@ export function PersonalitySection() {
 
       <div className={cn('space-y-6', section.loading && 'pointer-events-none opacity-50')} aria-hidden={section.loading}>
         <div className="space-y-3">
-          <Label>Tone</Label>
+          <span className="flex items-center gap-1.5">
+            <Label>Tone</Label>
+            <InfoTooltip text="Words the agent must never use are set in step 4, Safety & handoff." />
+          </span>
           <div className="grid grid-cols-2 gap-3">
             {TONE_PRESETS.map((preset) => {
               const active = personalization.tone === preset.id
@@ -162,6 +166,17 @@ export function PersonalitySection() {
 
           {personalization.tone === 'custom' && (
             <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Label htmlFor="custom-tone">Custom tone</Label>
+                  <InfoTooltip text="Describe how the agent should sound, not instructions to it. Keep it in plain English." />
+                </span>
+                {personalization.customToneInstructions.length > 200 && (
+                  <span className="shrink-0 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                    {personalization.customToneInstructions.length}/{MAX_CUSTOM_TONE}
+                  </span>
+                )}
+              </div>
               <Textarea
                 id="custom-tone"
                 rows={3}
@@ -171,16 +186,6 @@ export function PersonalitySection() {
                 placeholder="e.g. Friendly and reassuring, like a helpful neighbour. Patient with confused customers."
                 className="bg-input-background shadow-sm"
               />
-              <div className="flex items-center justify-between">
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                  Describe how the agent should sound, not instructions to it. Keep it in plain English.
-                </p>
-                {personalization.customToneInstructions.length > 200 && (
-                  <span className="shrink-0 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                    {personalization.customToneInstructions.length}/{MAX_CUSTOM_TONE}
-                  </span>
-                )}
-              </div>
             </div>
           )}
 
@@ -200,45 +205,35 @@ export function PersonalitySection() {
               </span>
             </label>
           </div>
-
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            Words the agent must never use are set in step 4, Safety &amp; handoff.
-          </p>
         </div>
 
         <Separator />
 
         <div className="space-y-2">
-          <Label>Answer length</Label>
+          <span className="flex items-center gap-1.5">
+            <Label>Answer length</Label>
+            <InfoTooltip text="Longer answers cost slightly more per message, since Meta charges by the amount of text generated. Detailed suits complex products. For most businesses, Concise or Standard reads best on WhatsApp." />
+          </span>
           <SegmentedControl options={ANSWER_LENGTHS} value={personalization.answerLength} onChange={(id) => patch('personalization', { answerLength: id })} />
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            Longer answers cost slightly more per message, since Meta charges by the amount of text generated.
-          </p>
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            Detailed suits complex products. For most businesses, Concise or Standard reads best on WhatsApp.
-          </p>
         </div>
 
         <Separator />
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Default language</Label>
+            <span className="flex items-center gap-1.5">
+              <Label>Default language</Label>
+              <InfoTooltip text="The language the agent uses unless a customer writes in another configured language." />
+            </span>
             <LanguageSelect options={LANGUAGE_OPTIONS} value={personalization.defaultLanguage} onChange={changeDefaultLanguage} />
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              The language the agent uses unless a customer writes in another configured language.
-            </p>
           </div>
 
           <div className="space-y-4 rounded-lg border border-border p-4">
             <div className="flex items-center justify-between gap-4">
-              <div>
+              <span className="flex items-center gap-1.5">
                 <Label htmlFor="match-language">Match customer&rsquo;s language automatically</Label>
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                  Only applies within the languages configured above, not any language the model could theoretically
-                  produce.
-                </p>
-              </div>
+                <InfoTooltip text="Only applies within the languages configured above, not any language the model could theoretically produce. You can test your agent in each language before going live, in step 5." />
+              </span>
               <Switch
                 id="match-language"
                 checked={personalization.matchCustomerLanguage}
@@ -279,10 +274,6 @@ export function PersonalitySection() {
               )}
             </div>
           </div>
-
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            You can test your agent in each language before going live, in step 5.
-          </p>
         </div>
       </div>
 

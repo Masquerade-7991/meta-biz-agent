@@ -14,6 +14,7 @@ import type {
   FollowUpInterval,
   IntentRow,
   MenuOption,
+  PersonaId,
   RichReply,
   RichReplyType,
   StepMeta,
@@ -1016,3 +1017,149 @@ export const SAMPLE_NEVER_SAY_WORDS = ['guaranteed', 'cheap', 'risk-free']
 export const SAMPLE_TOPICS_TO_AVOID = ['Comparing us to specific competitors', 'Ongoing legal disputes']
 export const SAMPLE_CUSTOM_HANDOFF_MESSAGE =
   "Let me get a member of our team to help you with this. They'll be with you shortly."
+
+// ---- Shared category signal-matching mechanism ----
+// Fixed, known list of things an agent can help with. Every composed sentence — whether from a
+// business category default, a scanned document, or the setup front door's capability cards — is
+// built only from these fragments. Nothing here is freely generated. Used by AgentIdentityStep's
+// "Suggest for X" button and by the setup front door's role/description pre-fill.
+export const SIGNAL_LIBRARY = {
+  browse_products: 'browse products',
+  check_stock: 'check stock',
+  track_orders: 'track orders',
+  start_return: 'start a return or exchange',
+  book_appointments: 'book appointments',
+  check_availability: 'check availability',
+  services_pricing: 'answer questions about our services and pricing',
+  browse_menu: 'browse the menu',
+  todays_specials: "check today's specials",
+  place_order: 'place an order',
+  store_hours: 'find store hours',
+  health_billing: 'get answers to common health and billing questions',
+} as const
+
+export type SignalId = keyof typeof SIGNAL_LIBRARY
+
+export const CATEGORY_SUGGESTIONS: Record<string, SignalId[]> = {
+  Retail: ['browse_products', 'check_stock', 'track_orders', 'start_return'],
+  Services: ['book_appointments', 'check_availability', 'services_pricing'],
+  'Food and Beverage': ['browse_menu', 'todays_specials', 'place_order', 'store_hours'],
+  Health: ['book_appointments', 'health_billing'],
+  'E-commerce': ['browse_products', 'track_orders', 'start_return'],
+}
+
+export const BUSINESS_CATEGORY_OPTIONS = ['Retail', 'Services', 'Food and Beverage', 'Health', 'E-commerce', 'No category']
+
+export function composeSentence(signalIds: SignalId[]): string {
+  const fragments = signalIds.map((id) => SIGNAL_LIBRARY[id])
+  if (fragments.length === 0) return ''
+  if (fragments.length === 1) return `Helps customers ${fragments[0]}.`
+  if (fragments.length === 2) return `Helps customers ${fragments[0]} and ${fragments[1]}.`
+  const head = fragments.slice(0, -1).join(', ')
+  const tail = fragments[fragments.length - 1]
+  return `Helps customers ${head}, and ${tail}.`
+}
+
+// Same honesty rule as composeSentence above: a fixed sentence per category, never freely
+// generated. Used by the setup front door to pre-fill Business details' description field.
+const BUSINESS_DESCRIPTION_TEMPLATES: Record<string, string> = {
+  Retail: 'We sell products and help customers browse, order, and manage returns.',
+  Services: 'We provide bookable services and help customers schedule appointments and get pricing information.',
+  'Food and Beverage': 'We serve food and drink and help customers browse the menu, check specials, and place orders.',
+  Health: 'We provide health services and help patients book appointments and answer billing questions.',
+  'E-commerce': 'We sell products online and help customers browse, track orders, and manage returns.',
+}
+
+export function composeBusinessDescription(category: string): string {
+  return BUSINESS_DESCRIPTION_TEMPLATES[category] ?? ''
+}
+
+// ---- Setup front door ----
+
+export const PERSONA_OPTIONS: { id: PersonaId; title: string; helper: string }[] = [
+  { id: 'owner', title: 'I run the business', helper: 'Show me the simple path first' },
+  { id: 'support_ops', title: 'I handle support or operations', helper: 'Show me the day to day setup' },
+  { id: 'client_setup', title: "I'm setting this up for a client", helper: 'Show me everything, I know my way around' },
+  { id: 'developer', title: "I'm a developer", helper: 'Show me the technical options up front' },
+  { id: 'exploring', title: 'Just exploring', helper: "Keep it light, I'll dig in later" },
+]
+
+/** Personas who want more control up front — Connections defaults to the custom-connection path
+ *  and advanced fields default open, rather than tucked behind their "advanced" links. */
+export const ADVANCED_PERSONAS: PersonaId[] = ['client_setup', 'developer']
+
+export interface CapabilityCard {
+  id: string
+  title: string
+  helper: string
+  /** Contributes to the role-sentence composed by composeSentence, on top of the category default. */
+  signalId?: SignalId
+  /** Which FAQ_STARTER_SUGGESTIONS bucket this capability draws its starter questions from. */
+  faqBucket?: 'retail' | 'services'
+  /** Which CONNECTION_RECIPES id gets flagged "Suggested for you" when this capability is picked. */
+  recipeId?: string
+}
+
+const RETAIL_CAPABILITY_CARDS: CapabilityCard[] = [
+  {
+    id: 'answer_questions',
+    title: 'Answer common questions',
+    helper: 'Starter FAQ questions and a knowledge section ready to fill in',
+    faqBucket: 'retail',
+  },
+  {
+    id: 'track_orders',
+    title: 'Track orders',
+    helper: 'A ready-made connection to your order system, once you add your details',
+    signalId: 'track_orders',
+    recipeId: 'order_lookup',
+  },
+  {
+    id: 'check_stock',
+    title: 'Check stock',
+    helper: 'A ready-made connection to your inventory, once you add your details',
+    signalId: 'check_stock',
+    recipeId: 'stock_check',
+  },
+  {
+    id: 'delivery_returns',
+    title: 'Explain delivery and returns',
+    helper: 'Starter fields ready to fill in on your business details',
+    signalId: 'start_return',
+  },
+]
+
+const SERVICES_CAPABILITY_CARDS: CapabilityCard[] = [
+  {
+    id: 'answer_questions',
+    title: 'Answer common questions',
+    helper: 'Starter FAQ questions and a knowledge section ready to fill in',
+    faqBucket: 'services',
+  },
+  {
+    id: 'book_appointments',
+    title: 'Book appointments',
+    helper: 'A ready-made connection to your booking system, once you add your details',
+    signalId: 'book_appointments',
+    recipeId: 'booking_check',
+  },
+  {
+    id: 'answer_pricing',
+    title: 'Answer questions about pricing',
+    helper: 'Starter FAQ questions about your pricing, ready to fill in',
+    signalId: 'services_pricing',
+    faqBucket: 'services',
+  },
+  {
+    id: 'delivery_returns',
+    title: 'Explain delivery and returns',
+    helper: 'Starter fields ready to fill in on your business details',
+    signalId: 'start_return',
+  },
+]
+
+/** Same binary category logic already used for FAQ starters and the Business Profile layout —
+ *  see SERVICES_TYPE_CATEGORIES. */
+export function getCapabilityCards(category: string): CapabilityCard[] {
+  return SERVICES_TYPE_CATEGORIES.includes(category) ? SERVICES_CAPABILITY_CARDS : RETAIL_CAPABILITY_CARDS
+}

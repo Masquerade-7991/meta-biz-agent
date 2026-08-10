@@ -4,12 +4,13 @@ import { Label } from '@/app/components/ui/label'
 import { Input } from '@/app/components/ui/input'
 import { Textarea } from '@/app/components/ui/textarea'
 import { Button } from '@/app/components/ui/button'
-import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { TagInput } from '@/app/components/wizard/TagInput'
 import { UnsavedChangesDialog } from '@/app/components/wizard/UnsavedChangesDialog'
 import { InlineError, LoadFailedBanner, SaveFailedBanner, SavingIndicator, LoadingIndicator } from '@/app/components/wizard/RetryBanner'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
+import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
+import { SelectableCard } from '@/app/components/wizard/SelectableCard'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { useNavigationGuard, useRegisterNavGuard, type NavIntent } from '@/app/wizard/NavigationGuardContext'
@@ -214,11 +215,14 @@ export function SafetyHandoffStep() {
       {saveStatus === 'saving' && <SavingIndicator />}
       {loading && <LoadingIndicator label="Loading your saved choices" />}
 
-      <div className={cn('space-y-10', loading && 'pointer-events-none opacity-50')} aria-hidden={loading}>
+      <div className={cn('space-y-12', loading && 'pointer-events-none opacity-50')} aria-hidden={loading}>
         {/* Section 1: What the agent avoids */}
-        <section className="space-y-4">
+        <section className="space-y-6">
           <div>
-            <h3>What the agent avoids</h3>
+            <span className="flex items-center gap-1.5">
+              <h3>What the agent avoids</h3>
+              <InfoTooltip text="Both of these become instructions the agent follows. They guide it strongly, but they are instructions, not a filter that blocks a message after it is written." />
+            </span>
             <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
               Two ways to guide the agent away from things it should not say or discuss.
             </p>
@@ -234,16 +238,14 @@ export function SafetyHandoffStep() {
             onChange={(values) => patch('guardrails', { topicsToAvoid: values })}
             disabled={loading}
           />
-
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            Both of these become instructions the agent follows. They guide it strongly, but they
-            are instructions, not a filter that blocks a message after it is written.
-          </p>
         </section>
 
         {/* Section 2: When a person takes over */}
-        <section className="space-y-4">
-          <h3>When a person takes over</h3>
+        <section className="space-y-6">
+          <span className="flex items-center gap-1.5">
+            <h3>When a person takes over</h3>
+            <InfoTooltip text="Once a conversation is handed over, your team picks it up from your usual inbox. That part is not set up in this wizard." />
+          </span>
 
           <div className="space-y-3 rounded-lg bg-muted p-4">
             <p style={{ fontSize: 'var(--text-sm)' }}>
@@ -263,24 +265,19 @@ export function SafetyHandoffStep() {
 
           <div className="space-y-2">
             <Label>What the agent says when it hands over</Label>
-            <RadioGroup
-              value={state.guardrails.handoffMessageEnabled ? 'custom' : 'standard'}
-              onValueChange={(v) => patch('guardrails', { handoffMessageEnabled: v === 'custom' })}
-            >
-              <label className="flex items-start gap-2">
-                <RadioGroupItem value="standard" id="handoff-standard" className="mt-0.5" disabled={loading} />
-                <span>
-                  <span style={{ fontSize: 'var(--text-sm)' }}>Meta&rsquo;s standard message</span>
-                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                    A ready-made message, shown in the customer&rsquo;s own language automatically.
-                  </p>
-                </span>
-              </label>
-              <label className="flex items-start gap-2">
-                <RadioGroupItem value="custom" id="handoff-custom" className="mt-0.5" disabled={loading} />
-                <span style={{ fontSize: 'var(--text-sm)' }}>Write my own message</span>
-              </label>
-            </RadioGroup>
+            <div className="space-y-2">
+              <SelectableCard
+                title="Meta’s standard message"
+                helper="A ready-made message, shown in the customer’s own language automatically."
+                selected={!state.guardrails.handoffMessageEnabled}
+                onClick={() => patch('guardrails', { handoffMessageEnabled: false })}
+              />
+              <SelectableCard
+                title="Write my own message"
+                selected={state.guardrails.handoffMessageEnabled}
+                onClick={() => patch('guardrails', { handoffMessageEnabled: true })}
+              />
+            </div>
 
             {state.guardrails.handoffMessageEnabled && (
               <div className="ml-6 space-y-1.5">
@@ -307,15 +304,10 @@ export function SafetyHandoffStep() {
               </div>
             )}
           </div>
-
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            Once a conversation is handed over, your team picks it up from your usual inbox. That
-            part is not set up in this wizard.
-          </p>
         </section>
 
         {/* Section 3: Following up with quiet customers */}
-        <section className="space-y-4">
+        <section className="space-y-6">
           <div>
             <h3>Following up with quiet customers</h3>
             <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
@@ -325,7 +317,10 @@ export function SafetyHandoffStep() {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Follow up after</Label>
+            <span className="flex items-center gap-1.5">
+              <Label>Follow up after</Label>
+              <InfoTooltip text="Most businesses that use this choose 30 minutes to 1 hour. Shorter can feel pushy, longer may be too late to be useful." />
+            </span>
             <Select
               value={String(state.replies.followUpInterval)}
               onValueChange={(v) => {
@@ -345,10 +340,6 @@ export function SafetyHandoffStep() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              Most businesses that use this choose 30 minutes to 1 hour. Shorter can feel pushy,
-              longer may be too late to be useful.
-            </p>
           </div>
 
           {state.replies.followUpInterval !== 0 && (
@@ -357,7 +348,10 @@ export function SafetyHandoffStep() {
                 Follow-up messages are charged the same way as any other message the agent sends.
               </p>
               <div className="space-y-1.5">
-                <Label htmlFor="followup-message">What the agent sends</Label>
+                <span className="flex items-center gap-1.5">
+                  <Label htmlFor="followup-message">What the agent sends</Label>
+                  <InfoTooltip text="Kept short and low pressure works best for a check-in message." />
+                </span>
                 <Textarea
                   id="followup-message"
                   rows={2}
@@ -367,9 +361,6 @@ export function SafetyHandoffStep() {
                   className="bg-input-background shadow-sm"
                   disabled={loading}
                 />
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                  Kept short and low pressure works best for a check-in message.
-                </p>
               </div>
             </>
           )}
@@ -423,11 +414,10 @@ function WordsToAvoidField({
 
   return (
     <div className="space-y-1.5">
-      <Label>Specific words or phrases</Label>
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-        The agent is instructed never to use these. This does not depend on capital letters, so
-        adding &ldquo;cheap&rdquo; also covers &ldquo;Cheap&rdquo; and &ldquo;CHEAP&rdquo;.
-      </p>
+      <span className="flex items-center gap-1.5">
+        <Label>Specific words or phrases</Label>
+        <InfoTooltip text="The agent is instructed never to use these. This does not depend on capital letters, so adding “cheap” also covers “Cheap” and “CHEAP”." />
+      </span>
       <TagInput
         values={values}
         onChange={handleChange}
@@ -447,9 +437,12 @@ function WordsToAvoidField({
         </div>
       )}
       {values.length === 0 && (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-          No words added. The agent has no specific words it has been told to avoid.
-        </p>
+        <span className="flex items-center gap-1.5">
+          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            No words added.
+          </p>
+          <InfoTooltip text="The agent has no specific words it has been told to avoid." />
+        </span>
       )}
     </div>
   )
@@ -481,11 +474,10 @@ function TopicsToAvoidField({
 
   return (
     <div className="space-y-1.5">
-      <Label>Topics to avoid</Label>
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-        Broader than a specific word. The agent reads each topic and uses its judgement about what
-        counts, so it is not exact the way words above are.
-      </p>
+      <span className="flex items-center gap-1.5">
+        <Label>Topics to avoid</Label>
+        <InfoTooltip text="Broader than a specific word. The agent reads each topic and uses its judgement about what counts, so it is not exact the way words above are." />
+      </span>
       {values.length === 0 ? (
         <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
           No topics added.

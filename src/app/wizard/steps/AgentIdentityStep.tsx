@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { AlertCircle, AlertTriangle, FileText, Info, Loader2 } from 'lucide-react'
+import { AlertCircle, AlertTriangle, FileText, Loader2 } from 'lucide-react'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { Textarea } from '@/app/components/ui/textarea'
@@ -15,9 +15,17 @@ import {
   DialogTitle,
 } from '@/app/components/ui/dialog'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
+import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
-import { looksLikeInstruction } from '@/app/wizard/mockData'
+import {
+  BUSINESS_CATEGORY_OPTIONS,
+  CATEGORY_SUGGESTIONS,
+  SIGNAL_LIBRARY,
+  composeSentence,
+  looksLikeInstruction,
+  type SignalId,
+} from '@/app/wizard/mockData'
 
 const MAX_NAME = 60
 const MAX_ROLE = 250
@@ -37,52 +45,12 @@ const ROLE_EXAMPLES = [
   },
 ]
 
-// Fixed, known list of things an agent can help with. Every composed sentence — whether from a
-// business category default or a scanned document — is built only from these fragments. Nothing
-// here is freely generated.
-const SIGNAL_LIBRARY = {
-  browse_products: 'browse products',
-  check_stock: 'check stock',
-  track_orders: 'track orders',
-  start_return: 'start a return or exchange',
-  book_appointments: 'book appointments',
-  check_availability: 'check availability',
-  services_pricing: 'answer questions about our services and pricing',
-  browse_menu: 'browse the menu',
-  todays_specials: "check today's specials",
-  place_order: 'place an order',
-  store_hours: 'find store hours',
-  health_billing: 'get answers to common health and billing questions',
-} as const
-
-type SignalId = keyof typeof SIGNAL_LIBRARY
-
-const CATEGORY_SUGGESTIONS: Record<string, SignalId[]> = {
-  Retail: ['browse_products', 'check_stock', 'track_orders', 'start_return'],
-  Services: ['book_appointments', 'check_availability', 'services_pricing'],
-  'Food and Beverage': ['browse_menu', 'todays_specials', 'place_order', 'store_hours'],
-  Health: ['book_appointments', 'health_billing'],
-  'E-commerce': ['browse_products', 'track_orders', 'start_return'],
-}
-
-const DEMO_CATEGORY_OPTIONS = ['Retail', 'Services', 'Food and Beverage', 'Health', 'E-commerce', 'No category']
-
 const ACCEPTED_DOC_EXTENSIONS = ['.txt', '.pdf', '.docx']
 const MAX_DOC_BYTES = 5 * 1024 * 1024
 
 const DOCUMENT_NOTE = `We will read this document and look for things your agent could help with, like order tracking or booking appointments. This only fills the box below, it does not give your agent access to the document. To let your agent actually use a document as a reference, add it in the Knowledge step instead.`
 
 const NO_SIGNALS_MESSAGE = 'We could not find enough in this document to suggest a description. Try writing it yourself, or use one of the example buttons above.'
-
-function composeSentence(signalIds: SignalId[]): string {
-  const fragments = signalIds.map((id) => SIGNAL_LIBRARY[id])
-  if (fragments.length === 0) return ''
-  if (fragments.length === 1) return `Helps customers ${fragments[0]}.`
-  if (fragments.length === 2) return `Helps customers ${fragments[0]} and ${fragments[1]}.`
-  const head = fragments.slice(0, -1).join(', ')
-  const tail = fragments[fragments.length - 1]
-  return `Helps customers ${head}, and ${tail}.`
-}
 
 function trimToLimit(text: string, limit: number): string {
   if (text.length <= limit) return text
@@ -141,7 +109,7 @@ export function AgentIdentityStep() {
         className="rounded border border-border bg-background"
         style={{ fontSize: 'var(--text-xs)' }}
       >
-        {DEMO_CATEGORY_OPTIONS.map((option) => (
+        {BUSINESS_CATEGORY_OPTIONS.map((option) => (
           <option key={option} value={option}>
             {option}
           </option>
@@ -216,7 +184,10 @@ export function AgentIdentityStep() {
     <div className="space-y-8">
       <div className="max-w-sm space-y-2">
         <div className="flex items-center justify-between">
-          <Label htmlFor="agent-name">Agent name</Label>
+          <span className="flex items-center gap-1.5">
+            <Label htmlFor="agent-name">Agent name</Label>
+            <InfoTooltip text="This is only for you. Customers never see it." />
+          </span>
           {identity.agentName.length > 50 && (
             <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
               {identity.agentName.length}/{MAX_NAME}
@@ -231,9 +202,6 @@ export function AgentIdentityStep() {
           onChange={(e) => patch('identity', { agentName: e.target.value })}
           placeholder="e.g. Aria"
         />
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-          This is only for you. Customers never see it.
-        </p>
         {nameError && (
           <p className="flex items-center gap-1 text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
             <AlertCircle className="size-3.5" /> {nameError}
@@ -245,13 +213,12 @@ export function AgentIdentityStep() {
 
       <div className="space-y-4">
         <div className="space-y-1">
-          <Label htmlFor="agent-role" style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-weight-bold)' }}>
-            What does this agent do for customers?
-          </Label>
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-            Describe what your agent helps customers with. This shapes how it behaves in every
-            conversation, so take a moment to get it right.
-          </p>
+          <span className="flex items-center gap-1.5">
+            <Label htmlFor="agent-role" style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-weight-bold)' }}>
+              What does this agent do for customers?
+            </Label>
+            <InfoTooltip text="Describe what your agent helps customers with. This shapes how it behaves in every conversation, so take a moment to get it right. Write this as a description of what your agent does, not as instructions to it. Keep it in plain English and avoid technical terms." />
+          </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -361,11 +328,6 @@ export function AgentIdentityStep() {
           </div>
         </div>
 
-        <p className="flex items-start gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-          <Info className="mt-0.5 size-3.5 shrink-0" />
-          Write this as a description of what your agent does, not as instructions to it. Keep it
-          in plain English and avoid technical terms.
-        </p>
       </div>
 
       {/* Document upload explanation note */}
