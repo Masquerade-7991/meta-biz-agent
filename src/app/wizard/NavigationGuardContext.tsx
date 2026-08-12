@@ -46,8 +46,8 @@ export function useNavigationGuard() {
   return ctx
 }
 
-/** A step registers a guard for as long as it's mounted. WizardShell consults it before Back,
- *  Next, Save and close, or Exit actually navigate away from that step. */
+/** A section registers a guard for as long as it's mounted. AgentStudioShell consults it before a
+ *  sidebar switch or Exit actually navigates away from that section. */
 export function useRegisterNavGuard(guard: NavGuard | null) {
   const { registerGuard } = useNavigationGuard()
   useEffect(() => {

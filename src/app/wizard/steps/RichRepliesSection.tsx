@@ -386,7 +386,7 @@ export function RichRepliesSection() {
       {deleteError && <InlineError message={deleteError} onRetry={() => setDeleteError(null)} />}
 
       {replyCount === 0 ? (
-        <div className="space-y-3 rounded-lg border border-border p-4 text-center">
+        <div className="space-y-3 rounded-lg border border-border bg-accent p-4 text-center">
           <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
             No rich replies yet. These make the agent&rsquo;s answers feel like a real WhatsApp
             business: a button to your website, a photo of a product, or a menu of choices. Add

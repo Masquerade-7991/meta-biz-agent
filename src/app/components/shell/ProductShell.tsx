@@ -8,9 +8,11 @@ import { NAV_ITEMS, type NavId } from '@/app/nav'
 export function ProductShell({
   onOpenAgentBuilder,
   onAgentCreated,
+  onOpenAgentActivity,
 }: {
   onOpenAgentBuilder: () => void
   onAgentCreated: () => void
+  onOpenAgentActivity: () => void
 }) {
   const [active, setActive] = useState<NavId>('ai-agents')
 
@@ -19,7 +21,13 @@ export function ProductShell({
   function renderContent() {
     switch (active) {
       case 'ai-agents':
-        return <AgentsListPage onOpenBuilder={onOpenAgentBuilder} onAgentCreated={onAgentCreated} />
+        return (
+          <AgentsListPage
+            onOpenBuilder={onOpenAgentBuilder}
+            onAgentCreated={onAgentCreated}
+            onOpenActivity={onOpenAgentActivity}
+          />
+        )
       default:
         return <PlaceholderPage item={activeItem} />
     }

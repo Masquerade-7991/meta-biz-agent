@@ -1,5 +1,7 @@
 import type {
   ActionMethod,
+  AgentEventStatus,
+  AgentEventTypeDef,
   BusinessHourRow,
   BusinessState,
   ApiKeyEntry,
@@ -23,6 +25,7 @@ import type {
   ValueSource,
   ValueType,
   WabaNumber,
+  WizardState,
 } from './types'
 
 export const STEP_ORDER: StepMeta[] = [
@@ -820,6 +823,21 @@ export function pickConnectionPreviewReply(match: PreviewActionMatch): string {
   return lines[Math.floor(Math.random() * lines.length)]
 }
 
+/** Single canonical "what would the agent say" simulator, shared by the Preview page and the
+ *  Simulations standard-checks runner — checks knowledge (FAQs) first, then connections/tools,
+ *  then falls back to a greeting or the configured fallback reply. No real system is contacted. */
+export function simulateAgentReply(
+  state: Pick<WizardState, 'knowledge' | 'connections' | 'replies'>,
+  message: string,
+): string {
+  const faqMatches = matchFaqPreviewMessage(message, state.knowledge.faqs)
+  if (faqMatches.length > 0) return faqMatches[0].answer
+  const connMatches = matchConnectionPreviewMessage(message, state.connections.connections, state.connections.actions)
+  if (connMatches.length > 0) return pickConnectionPreviewReply(connMatches[0])
+  if (/\b(hi|hello|hey)\b/i.test(message)) return state.replies.greetingReply
+  return state.replies.fallbackReply
+}
+
 /** A real agent answers from its knowledge base as well as its connections, and that knowledge
  *  persists across the whole wizard (it's just wizard state), so the try-it preview checks FAQs
  *  too — matched against the question a customer would actually ask, not the answer text.
@@ -1163,3 +1181,59 @@ const SERVICES_CAPABILITY_CARDS: CapabilityCard[] = [
 export function getCapabilityCards(category: string): CapabilityCard[] {
   return SERVICES_TYPE_CATEGORIES.includes(category) ? SERVICES_CAPABILITY_CARDS : RETAIL_CAPABILITY_CARDS
 }
+
+// ---- Agent Activity page ----
+
+/** Meta's six real status values for a submitted business event, mapped to plain words. Never
+ *  invented values — this is the full set the platform returns. */
+export const AGENT_EVENT_STATUS_META: Record<AgentEventStatus, { label: string; tone: 'success' | 'warning' | 'muted' | 'destructive' }> = {
+  request_received: { label: 'Received', tone: 'muted' },
+  processing: { label: 'Processing', tone: 'muted' },
+  sent: { label: 'Sent', tone: 'success' },
+  success: { label: 'Delivered', tone: 'success' },
+  failed: { label: 'Failed', tone: 'destructive' },
+  skipped: { label: 'Skipped', tone: 'warning' },
+}
+
+export function formatFullTimestamp(timestamp: number): string {
+  return new Date(timestamp).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+}
+
+export function newWebhookUrl(): string {
+  return `https://hooks.helo.ai/agent-events/${Math.random().toString(36).slice(2, 10)}`
+}
+
+export function newSecretKey(): string {
+  return `whsec_${Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`
+}
+
+export function buildDeveloperEventsChecklist(webhookUrl: string, secretKey: string, eventTypes: AgentEventTypeDef[]): string {
+  return [
+    'To send business events to our agent, please share this with your developer:',
+    `- Webhook endpoint: ${webhookUrl}`,
+    `- Secret key: ${secretKey}`,
+    eventTypes.length > 0
+      ? `- Event types we expect: ${eventTypes.map((t) => t.name).join(', ')}`
+      : '- Event types we expect: none defined yet',
+    '- Sign every request with the secret key so we can verify it came from you',
+  ].join('\n')
+}
+
+export const SAMPLE_AGENT_EVENT_TYPES: { name: string; description: string }[] = [
+  { name: 'payment_received', description: 'A customer completed payment for their order.' },
+  { name: 'document_verified', description: 'A submitted document passed verification.' },
+]
+
+export const SAMPLE_QUALITY_CHECK_RUN: { situation: string; sent: string; reply: string; status: 'normal' | 'warn' }[] = [
+  { situation: 'Greeting', sent: 'Hi', reply: 'Hi there! How can I help you today?', status: 'normal' },
+  { situation: 'A question from your FAQ', sent: 'What is your return policy?', reply: '7 day returns on unused items with original packaging.', status: 'normal' },
+  { situation: 'Something outside what you sell', sent: 'Can you help me file my taxes?', reply: "That's outside what I can help with here.", status: 'normal' },
+  { situation: 'Asking for a person', sent: 'Can I talk to a real person?', reply: "I'll connect you with someone from our team.", status: 'warn' },
+]

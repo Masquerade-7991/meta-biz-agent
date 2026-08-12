@@ -59,7 +59,7 @@ interface SafetySnapshot {
 }
 
 export function SafetyHandoffStep() {
-  const { state, patch, setStep, setPendingSkillPrefill } = useWizard()
+  const { state, patch, setSection, setPendingSkillPrefill } = useWizard()
 
   function currentSnapshot(): SafetySnapshot {
     return {
@@ -156,7 +156,7 @@ export function SafetyHandoffStep() {
     const ok = await runGuard('save')
     if (!ok) return
     setPendingSkillPrefill({ name: 'Handoff rules', instruction: HANDOFF_RULES_PREFILL })
-    setStep('agent')
+    setSection('skills')
   }
 
   function loadSampleSettings() {

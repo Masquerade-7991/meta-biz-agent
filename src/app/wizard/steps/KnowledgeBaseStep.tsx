@@ -288,7 +288,7 @@ export function FaqTab({
       )}
 
       {showEmptyState ? (
-        <div className="space-y-3 rounded-lg border border-border p-4">
+        <div className="space-y-3 rounded-lg border border-border bg-accent p-4">
           <span className="flex items-center gap-1.5">
             <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Start with the questions customers ask most</p>
             <InfoTooltip text="Tip: if you filled in Business details on the first tab, you do not need to repeat them here." />
@@ -886,12 +886,14 @@ export function DocumentsTab({
       />
 
       {showEmptyState ? (
-        <span className="flex items-center gap-1.5">
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-            No documents yet.
-          </p>
-          <InfoTooltip text="Good things to upload: your product catalogue, a price list, or your terms and conditions." />
-        </span>
+        <div className="rounded-lg bg-accent p-4">
+          <span className="flex items-center gap-1.5">
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              No documents yet.
+            </p>
+            <InfoTooltip text="Good things to upload: your product catalogue, a price list, or your terms and conditions." />
+          </span>
+        </div>
       ) : (
         <div className="space-y-2">
           {uploading.map((u) => (
@@ -1084,12 +1086,14 @@ export function WebsiteTab({
       </div>
 
       {websites.length === 0 ? (
-        <span className="flex items-center gap-1.5">
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-            No websites yet.
-          </p>
-          <InfoTooltip text="Your main website or help centre is usually the fastest way to give the agent real knowledge." />
-        </span>
+        <div className="rounded-lg bg-accent p-4">
+          <span className="flex items-center gap-1.5">
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              No websites yet.
+            </p>
+            <InfoTooltip text="Your main website or help centre is usually the fastest way to give the agent real knowledge." />
+          </span>
+        </div>
       ) : (
         <div className="space-y-2">
           {websites.map((site) => (

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import {
+  Activity,
   Archive,
   ArrowRight,
   Bot,
@@ -74,11 +75,13 @@ function statusBadge(status: AgentRolloutStatus) {
 export function AgentsListPage({
   onOpenBuilder,
   onAgentCreated,
+  onOpenActivity,
 }: {
   onOpenBuilder: () => void
   onAgentCreated: () => void
+  onOpenActivity: () => void
 }) {
-  const { state, patch, setStep, resetWizard } = useWizard()
+  const { state, patch, setSection, resetWizard } = useWizard()
   const [modalOpen, setModalOpen] = useState(false)
   const [createdAgents, setCreatedAgents] = useState<AgentInstanceSummary[]>(loadCreatedAgents)
 
@@ -169,10 +172,17 @@ export function AgentsListPage({
       return
     }
     switch (action) {
+      case 'activity':
+        setSection('activity')
+        onOpenActivity()
+        break
       case 'compiled':
+        setSection('overview')
+        onOpenBuilder()
+        break
       case 'test':
       case 'allowlist':
-        setStep('publish')
+        setSection('publish')
         onOpenBuilder()
         break
       default:
@@ -299,6 +309,9 @@ export function AgentsListPage({
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => handleAction(agent, 'open')}>
                             <SquarePen /> Open configuration
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleAction(agent, 'activity')}>
+                            <Activity /> View activity
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleAction(agent, 'compiled')}>
                             <FileCode2 /> View compiled configuration

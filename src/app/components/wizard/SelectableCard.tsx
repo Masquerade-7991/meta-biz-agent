@@ -14,12 +14,15 @@ export function SelectableCard({
   info,
   selected,
   onClick,
+  large,
 }: {
   title: string
   helper?: string
   info?: string
   selected: boolean
   onClick: () => void
+  /** Front-door-only: bigger padding for the one-decision-at-a-time setup screens. */
+  large?: boolean
 }) {
   function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -35,7 +38,8 @@ export function SelectableCard({
       onClick={onClick}
       onKeyDown={handleKeyDown}
       className={cn(
-        'flex w-full cursor-pointer items-start justify-between gap-3 rounded-lg border p-3 text-left transition-colors',
+        'flex w-full cursor-pointer items-start justify-between gap-3 rounded-lg border text-left transition-colors',
+        large ? 'p-4' : 'p-3',
         selected ? 'border-primary bg-accent' : 'border-border hover:border-primary/50',
       )}
     >

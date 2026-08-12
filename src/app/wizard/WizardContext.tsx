@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react'
-import type { SliceKey, StepId, WizardState } from './types'
+import type { SliceKey, StepId, StudioSectionId, WizardState } from './types'
 import { DEFAULT_BUSINESS_HOURS, DEFAULT_REPLIES } from './mockData'
 
 const STORAGE_KEY = 'meta-agent-wizard-state-v1'
@@ -132,6 +132,17 @@ export function createInitialState(): WizardState {
       activated: false,
       activatedChannels: [],
     },
+    qualityChecks: {
+      runs: [],
+    },
+    agentEvents: {
+      configured: false,
+      webhookUrl: '',
+      secretKey: '',
+      secretRevealed: false,
+      eventTypes: [],
+      events: [],
+    },
     demo: {
       businessCategory: 'Retail',
       forceNextFailure: false,
@@ -151,10 +162,13 @@ export function createInitialState(): WizardState {
       guardrails: 0,
       replies: 0,
       publish: 0,
+      qualityChecks: 0,
+      agentEvents: 0,
       demo: 0,
     },
     pendingSkillPrefill: null,
     pendingStepFocus: null,
+    currentSection: 'overview',
   }
 }
 
@@ -164,6 +178,7 @@ type Action =
   | { type: 'PATCH_SLICE'; slice: SliceKey; patch: Updater<SliceKey> }
   | { type: 'SET_STEP'; step: StepId }
   | { type: 'SET_STEP_COMPLETE'; step: StepId; complete: boolean }
+  | { type: 'SET_SECTION'; section: StudioSectionId }
   | { type: 'INVALIDATE_TESTS' }
   | { type: 'SET_PENDING_SKILL_PREFILL'; value: WizardState['pendingSkillPrefill'] }
   | { type: 'SET_PENDING_STEP_FOCUS'; value: WizardState['pendingStepFocus'] }
@@ -203,6 +218,8 @@ function reducer(state: WizardState, action: Action): WizardState {
     }
     case 'SET_STEP':
       return { ...state, currentStep: action.step }
+    case 'SET_SECTION':
+      return { ...state, currentSection: action.section }
     case 'SET_STEP_COMPLETE':
       return {
         ...state,
@@ -241,6 +258,7 @@ interface WizardContextValue {
   patch: <K extends SliceKey>(slice: K, patch: Updater<K>) => void
   setStep: (step: StepId) => void
   setStepComplete: (step: StepId, complete: boolean) => void
+  setSection: (section: StudioSectionId) => void
   setPendingSkillPrefill: (value: WizardState['pendingSkillPrefill']) => void
   setPendingStepFocus: (value: WizardState['pendingStepFocus']) => void
   resetWizard: () => void
@@ -262,6 +280,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'PATCH_SLICE', slice, patch: patch as Updater<SliceKey> }),
       setStep: (step) => dispatch({ type: 'SET_STEP', step }),
       setStepComplete: (step, complete) => dispatch({ type: 'SET_STEP_COMPLETE', step, complete }),
+      setSection: (section) => dispatch({ type: 'SET_SECTION', section }),
       setPendingSkillPrefill: (value) => dispatch({ type: 'SET_PENDING_SKILL_PREFILL', value }),
       setPendingStepFocus: (value) => dispatch({ type: 'SET_PENDING_STEP_FOCUS', value }),
       resetWizard: () => dispatch({ type: 'RESET' }),

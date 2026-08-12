@@ -5,25 +5,11 @@ import { WizardProvider, useWizard } from '@/app/wizard/WizardContext'
 import { NavigationGuardProvider } from '@/app/wizard/NavigationGuardContext'
 import { DevControlsProvider } from '@/app/wizard/DevControlsContext'
 import { ExitProvider } from '@/app/wizard/ExitContext'
-import { WizardShell } from '@/app/components/wizard/WizardShell'
+import { AgentStudioShell } from '@/app/components/shell/AgentStudioShell'
 import { DevControlsButton } from '@/app/components/wizard/DevControlsButton'
 import { GateScreen } from '@/app/components/GateScreen'
 import { SetupFrontDoor } from '@/app/components/SetupFrontDoor'
 import { ProductShell } from '@/app/components/shell/ProductShell'
-import { YourAgentStep } from '@/app/wizard/steps/YourAgentStep'
-import { KnowledgeStep } from '@/app/wizard/steps/KnowledgeStep'
-import { ConnectionsStep } from '@/app/wizard/steps/ConnectionsStep'
-import { SafetyHandoffStep } from '@/app/wizard/steps/SafetyHandoffStep'
-import { ReviewPublishStep } from '@/app/wizard/steps/ReviewPublishStep'
-import type { StepId } from '@/app/wizard/types'
-
-const STEP_COMPONENTS: Record<StepId, () => React.ReactElement> = {
-  agent: YourAgentStep,
-  knowledge: KnowledgeStep,
-  connections: ConnectionsStep,
-  safety: SafetyHandoffStep,
-  publish: ReviewPublishStep,
-}
 
 function AgentBuilderFlow({ onExitToShell }: { onExitToShell: () => void }) {
   const { state } = useWizard()
@@ -32,14 +18,10 @@ function AgentBuilderFlow({ onExitToShell }: { onExitToShell: () => void }) {
     return <GateScreen onBack={onExitToShell} />
   }
 
-  const StepComponent = STEP_COMPONENTS[state.currentStep]
-
   return (
     <ExitProvider onExit={onExitToShell}>
       <NavigationGuardProvider>
-        <WizardShell onExit={onExitToShell}>
-          <StepComponent />
-        </WizardShell>
+        <AgentStudioShell onExit={onExitToShell} />
       </NavigationGuardProvider>
     </ExitProvider>
   )
@@ -56,6 +38,7 @@ export default function App() {
             <ProductShell
               onOpenAgentBuilder={() => setView('agent-flow')}
               onAgentCreated={() => setView('setup')}
+              onOpenAgentActivity={() => setView('agent-flow')}
             />
           )}
           {view === 'setup' && <SetupFrontDoor onFinish={() => setView('agent-flow')} />}

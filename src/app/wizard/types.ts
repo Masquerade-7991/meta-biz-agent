@@ -1,5 +1,20 @@
 export type StepId = 'agent' | 'knowledge' | 'connections' | 'safety' | 'publish'
 
+// ---- Agent studio shell (persistent sidebar, free navigation instead of a forced stepper) ----
+// Parallel to StepId above: StepId still drives the per-slice save-on-Next/pendingStepFocus
+// machinery, while StudioSectionId drives which studio page is showing. See studioNav.ts.
+export type StudioSectionId =
+  | 'overview'
+  | 'identity'
+  | 'personality'
+  | 'skills'
+  | 'richReplies'
+  | 'knowledge'
+  | 'connections'
+  | 'safety'
+  | 'publish'
+  | 'activity'
+
 export interface StepMeta {
   id: StepId
   index: number
@@ -468,6 +483,57 @@ export interface PublishState {
   activatedChannels: string[]
 }
 
+// ---- Agent Activity page: quality checks history ----
+// A frozen copy of a past Test & publish standard-checks run, so the Agent Activity page can list
+// history without ever calling Meta's Agent Eval endpoint. 'pending' never appears here — only
+// finished runs are recorded.
+export interface QualityCheckItem {
+  id: string
+  situation: string
+  sent: string
+  reply: string
+  status: 'normal' | 'warn'
+}
+
+export interface QualityCheckRun {
+  id: string
+  timestamp: number
+  items: QualityCheckItem[]
+}
+
+export interface QualityChecksState {
+  runs: QualityCheckRun[]
+}
+
+// ---- Agent Activity page: inbound business events (Agent Event) ----
+export interface AgentEventTypeDef {
+  id: string
+  name: string
+  description: string
+}
+
+/** Meta's real status values for a submitted event, polled by agentEventId. */
+export type AgentEventStatus = 'request_received' | 'processing' | 'sent' | 'success' | 'failed' | 'skipped'
+
+export interface AgentEventRow {
+  id: string
+  agentEventId: string
+  eventType: string
+  status: AgentEventStatus
+  timestamp: number
+  errorMessage?: string
+  skippedReason?: string
+}
+
+export interface AgentEventsState {
+  configured: boolean
+  webhookUrl: string
+  secretKey: string
+  secretRevealed: boolean
+  eventTypes: AgentEventTypeDef[]
+  events: AgentEventRow[]
+}
+
 export interface WizardState {
   gate: GateState
   currentStep: StepId
@@ -483,6 +549,8 @@ export interface WizardState {
   guardrails: GuardrailsState
   replies: RepliesState
   publish: PublishState
+  qualityChecks: QualityChecksState
+  agentEvents: AgentEventsState
   demo: DemoState
   /** Keyed by data slice (not step) — several steps now span more than one slice. */
   lastEditedAt: Record<SliceKey, number>
@@ -496,11 +564,18 @@ export interface WizardState {
    *  each piece of read-only data shown there. Kept outside the slice system for the same reason
    *  as pendingSkillPrefill above — pure UI intent, not agent configuration. */
   pendingStepFocus: { step: StepId; tab?: string } | null
+  /** Which studio sidebar page is showing. Pure UI navigation state, not agent configuration. */
+  currentSection: StudioSectionId
 }
 
 export type SliceKey = Exclude<
   keyof WizardState,
-  'currentStep' | 'completedSteps' | 'lastEditedAt' | 'pendingSkillPrefill' | 'pendingStepFocus'
+  | 'currentStep'
+  | 'completedSteps'
+  | 'lastEditedAt'
+  | 'pendingSkillPrefill'
+  | 'pendingStepFocus'
+  | 'currentSection'
 >
 
 // ---- AI Agents listing (Helo-side summary of a configured agent instance) ----

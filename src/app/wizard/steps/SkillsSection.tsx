@@ -249,7 +249,7 @@ export function SkillsSection() {
       )}
 
       {skillCount === 0 && !skillEditor ? (
-        <div className="space-y-3 rounded-lg border border-border p-4 text-center">
+        <div className="space-y-3 rounded-lg border border-border bg-accent p-4 text-center">
           <span className="flex items-center justify-center gap-1.5">
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
               No custom skills yet, and most agents do not need any.

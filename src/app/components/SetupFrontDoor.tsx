@@ -72,7 +72,7 @@ function ScreenPersona({ onSelect }: { onSelect: (id: PersonaId) => void }) {
           This just helps us show you the right things first. You can explore everything either way.
         </p>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {PERSONA_OPTIONS.map((option) => (
           <SelectableCard
             key={option.id}
@@ -80,6 +80,7 @@ function ScreenPersona({ onSelect }: { onSelect: (id: PersonaId) => void }) {
             helper={option.helper}
             selected={false}
             onClick={() => onSelect(option.id)}
+            large
           />
         ))}
       </div>
@@ -231,7 +232,7 @@ function ScreenCapabilities({
           later.
         </p>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {cards.map((card) => (
           <SelectableCard
             key={card.id}
@@ -239,6 +240,7 @@ function ScreenCapabilities({
             helper={card.helper}
             selected={selectedIds.includes(card.id)}
             onClick={() => onToggle(card.id)}
+            large
           />
         ))}
       </div>
@@ -431,8 +433,8 @@ export function SetupFrontDoor({ onFinish }: { onFinish: () => void }) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted px-6 py-10">
-      <div className="w-full max-w-xl space-y-6 rounded-lg border border-border bg-card p-8">
+    <div className="flex min-h-screen items-center justify-center bg-accent px-6 py-10">
+      <div className="w-full max-w-xl space-y-6 rounded-lg border border-border bg-card p-12">
         <div className="flex items-center justify-between">
           <div className="flex gap-1.5" aria-hidden>
             {Array.from({ length: TOTAL_SCREENS }).map((_, i) => (

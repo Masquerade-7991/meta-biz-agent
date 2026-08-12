@@ -6,6 +6,8 @@ export interface SkillDoc {
   description: string
   skill: string
   channel: 'whatsapp'
+  /** Layer 1 (fixed, Helo-authored) vs Layer 2 (user-authored via buildCustomSkills). */
+  managed: boolean
 }
 
 export interface CompiledConfig {
@@ -53,6 +55,7 @@ function buildIdentitySkill(state: WizardState): SkillDoc {
     description: 'Apply at the start of every new conversation, before any other skill.',
     skill: lines.join('\n'),
     channel: 'whatsapp',
+    managed: true,
   }
 }
 
@@ -100,6 +103,7 @@ function buildCommunicationStyleSkill(state: WizardState): SkillDoc {
     description: 'Apply to every outgoing message to set tone, formatting, and length.',
     skill: lines.join('\n'),
     channel: 'whatsapp',
+    managed: true,
   }
 }
 
@@ -124,6 +128,7 @@ function buildCapabilityDisclaimerSkill(state: WizardState): SkillDoc | null {
     description: 'Apply when a customer asks for something outside your configured tools.',
     skill: lines.join('\n'),
     channel: 'whatsapp',
+    managed: true,
   }
 }
 
@@ -155,6 +160,7 @@ function buildIntentRouterSkill(state: WizardState): SkillDoc {
     description: 'Apply when deciding which conversation path a customer message belongs to.',
     skill: lines.join('\n'),
     channel: 'whatsapp',
+    managed: true,
   }
 }
 
@@ -191,6 +197,7 @@ function buildSystemRepliesSkill(state: WizardState): SkillDoc {
     description: 'Apply for greetings, wrap-ups, fallbacks, and unsupported input.',
     skill: lines.join('\n'),
     channel: 'whatsapp',
+    managed: true,
   }
 }
 
@@ -209,6 +216,7 @@ function buildGroundingSkill(state: WizardState): SkillDoc {
     description: 'Apply to every response to control how much the agent may improvise.',
     skill: lines.join('\n'),
     channel: 'whatsapp',
+    managed: true,
   }
 }
 
@@ -219,6 +227,7 @@ function buildCustomSkills(state: WizardState): SkillDoc[] {
     description: `Custom skill: ${skill.name}.`,
     skill: skill.instruction,
     channel: 'whatsapp',
+    managed: false,
   }))
 }
 

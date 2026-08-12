@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
@@ -29,11 +29,9 @@ import {
 } from '@/app/components/ui/dialog'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
-import { CompiledConfigViewer } from '@/app/components/wizard/CompiledConfigViewer'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { useExitWizard } from '@/app/wizard/ExitContext'
-import { compileConfig } from '@/app/wizard/compiler'
 import {
   SAMPLE_BUSINESS_PROFILE,
   SAMPLE_DOCUMENTS,
@@ -47,7 +45,7 @@ import {
   newId,
   pickConnectionPreviewReply,
 } from '@/app/wizard/mockData'
-import type { Connection, ConnectionAction, StepId, WizardState } from '@/app/wizard/types'
+import type { Connection, ConnectionAction, WizardState } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
 
 const E164_RE = /^\+[1-9]\d{6,14}$/
@@ -129,11 +127,9 @@ function buildStandardChecks(state: WizardState, forceAmberGreeting: boolean): C
 }
 
 export function ReviewPublishStep() {
-  const { state, patch, setStep, setPendingStepFocus } = useWizard()
+  const { state, patch } = useWizard()
   const { publish } = state
   const exitWizard = useExitWizard()
-
-  const compiled = useMemo(() => compileConfig(state), [state])
 
   // ---- Quick test (local, per-visit only — no history kept between visits) ----
   const [chatMessages, setChatMessages] = useState<{ from: 'customer' | 'agent'; text: string }[]>([])
@@ -223,11 +219,6 @@ export function ReviewPublishStep() {
     }
   }
 
-  function onNavigate(step: StepId, tab?: string) {
-    if (tab) setPendingStepFocus({ step, tab })
-    setStep(step)
-  }
-
   // ---- Demo controls ----
   function demoLoadCompiledConfig() {
     const now = Date.now()
@@ -299,15 +290,6 @@ export function ReviewPublishStep() {
 
   return (
     <div className="space-y-10">
-      {/* Compiled configuration */}
-      <section className="space-y-3">
-        <span className="flex items-center gap-1.5">
-          <h3>Your agent&rsquo;s configuration</h3>
-          <InfoTooltip text="Everything you’ve set up, already saved as you went. This is a review, not a preview." />
-        </span>
-        <CompiledConfigViewer config={compiled} state={state} onNavigate={onNavigate} />
-      </section>
-
       {/* Test before you launch */}
       <section className="space-y-4">
         <div>
