@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, ChevronDown, FileText } from 'lucide-react'
+import { AlertTriangle, FileText, Info } from 'lucide-react'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { Textarea } from '@/app/components/ui/textarea'
 import { Button } from '@/app/components/ui/button'
 import { Separator } from '@/app/components/ui/separator'
+import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover'
 import {
   Select,
   SelectContent,
@@ -22,7 +23,6 @@ import {
 } from '@/app/components/ui/dialog'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
-import { StatusAccent } from '@/app/components/wizard/StatusAccent'
 import { UnsavedChangesDialog } from '@/app/components/wizard/UnsavedChangesDialog'
 import { LoadFailedBanner, LoadingIndicator, SaveFailedBanner, SavingIndicator } from '@/app/components/wizard/RetryBanner'
 import { useWizard } from '@/app/wizard/WizardContext'
@@ -130,6 +130,43 @@ function AssembledBox({ text, warning }: { text: string; warning?: string | null
   )
 }
 
+/** Merges a field's (i) helper text and its "see an example" affordance into one click-triggered
+ *  popover — a tooltip can't reliably host the clickable "Use this example" button inside it. */
+function PolicyHelpPopover({
+  helper,
+  example,
+  onUseExample,
+  defaultOpen,
+}: {
+  helper: string
+  example: string
+  onUseExample: () => void
+  defaultOpen?: boolean
+}) {
+  return (
+    <Popover defaultOpen={defaultOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground"
+          aria-label="More information"
+        >
+          <Info className="size-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 space-y-3" side="top" align="start">
+        <p style={{ fontSize: 'var(--text-sm)' }}>{helper}</p>
+        <div className="space-y-2 rounded-lg bg-muted p-3">
+          <p style={{ fontSize: 'var(--text-sm)' }}>{example}</p>
+          <Button size="sm" variant="outline" onClick={onUseExample}>
+            Use this example
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 export function BusinessProfileStep() {
   const { state, patch } = useWizard()
   const { business } = state
@@ -188,14 +225,9 @@ export function BusinessProfileStep() {
   const [emailTouched, setEmailTouched] = useState(false)
   const emailInvalid = emailTouched && business.contactEmail.trim().length > 0 && !EMAIL_RE.test(business.contactEmail)
 
-  // Personas who asked for more control up front (setup front door, Screen 1) see these examples
-  // already expanded, instead of tucked behind "See an example".
+  // Personas who asked for more control up front (setup front door, Screen 1) see each field's
+  // helper popover already open, instead of requiring a click to reach it.
   const advancedDefault = state.identity.persona !== null && ADVANCED_PERSONAS.includes(state.identity.persona)
-  const [exampleOpen, setExampleOpen] = useState<Record<PolicyKey, boolean>>({
-    returnPolicy: advancedDefault,
-    purchaseInfo: advancedDefault,
-    deliveryAndShipping: advancedDefault,
-  })
   const [pendingExample, setPendingExample] = useState<{ key: PolicyKey; text: string } | null>(null)
 
   function requestApplyExample(key: PolicyKey, text: string) {
@@ -319,50 +351,41 @@ export function BusinessProfileStep() {
         <SaveFailedBanner message="We could not save your details. Nothing has been lost." onRetry={() => void performSave()} />
       )}
 
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-        This tab saves when you press Next or Save and close.
-      </p>
-
       {saveStatus === 'saving' && <SavingIndicator />}
       {loading && <LoadingIndicator label="Loading your saved details" />}
 
-      <div className={cn('space-y-12', loading && 'pointer-events-none opacity-50')} aria-hidden={loading}>
+      <div className={cn('space-y-10', loading && 'pointer-events-none opacity-50')} aria-hidden={loading}>
         {/* Section 1 */}
-        <section className="space-y-8">
-          <div className="space-y-1">
+        <section className="space-y-6">
+          <span className="flex items-center gap-1.5">
             <h3>About your business</h3>
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-              General background the agent can draw on in any conversation.
-            </p>
+            <InfoTooltip text="General background the agent can draw on in any conversation." />
+          </span>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Label htmlFor="business-description">Business description</Label>
+                <InfoTooltip text="Background about the business. What the agent does is set in step 1, Your agent. What you sell, who you serve, and anything customers often ask about." />
+              </span>
+              {business.businessDescription.length > 400 && (
+                <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  {business.businessDescription.length}/{MAX_DESCRIPTION}
+                </span>
+              )}
+            </div>
+            <Textarea
+              id="business-description"
+              rows={4}
+              maxLength={MAX_DESCRIPTION}
+              disabled={loading}
+              value={business.businessDescription}
+              onChange={(e) => patch('business', { businessDescription: e.target.value })}
+              placeholder="e.g. We sell handmade candles and home fragrance"
+              className="bg-input-background shadow-sm"
+            />
           </div>
 
-          <StatusAccent filled={!isFieldEmpty('businessDescription', business)}>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Label htmlFor="business-description">Business description</Label>
-                  <InfoTooltip text="Background about the business. What the agent does is set in step 1, Your agent. What you sell, who you serve, and anything customers often ask about." />
-                </span>
-                {business.businessDescription.length > 400 && (
-                  <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                    {business.businessDescription.length}/{MAX_DESCRIPTION}
-                  </span>
-                )}
-              </div>
-              <Textarea
-                id="business-description"
-                rows={4}
-                maxLength={MAX_DESCRIPTION}
-                disabled={loading}
-                value={business.businessDescription}
-                onChange={(e) => patch('business', { businessDescription: e.target.value })}
-                placeholder="e.g. We sell handmade candles and home fragrance"
-                className="bg-input-background shadow-sm"
-              />
-            </div>
-          </StatusAccent>
-
-          <StatusAccent filled={!isFieldEmpty('paymentMethods', business)}>
           <div className="space-y-1.5">
             <Label>Payment methods</Label>
 
@@ -418,19 +441,14 @@ export function BusinessProfileStep() {
               </>
             )}
           </div>
-          </StatusAccent>
         </section>
 
-        <Separator />
-
         {/* Section 2 */}
-        <section className="space-y-8">
-          <div className="space-y-1">
+        <section className="space-y-6">
+          <span className="flex items-center gap-1.5">
             <h3>Your policies</h3>
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-              Fill in what applies to your business. Skip what does not.
-            </p>
-          </div>
+            <InfoTooltip text="Fill in what applies to your business. Skip what does not." />
+          </span>
 
           {policyOrder.map((key, i) => {
             const copy = POLICY_COPY[key]
@@ -443,105 +461,82 @@ export function BusinessProfileStep() {
                     <Separator className="flex-1" />
                   </div>
                 )}
-                <StatusAccent filled={!isFieldEmpty(key, business)}>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <Label htmlFor={key}>{copy.label}</Label>
-                        <InfoTooltip text={copy.helper} />
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Label htmlFor={key}>{copy.label}</Label>
+                      <PolicyHelpPopover
+                        helper={copy.helper}
+                        example={copy.example}
+                        defaultOpen={advancedDefault}
+                        onUseExample={() => requestApplyExample(key, copy.example)}
+                      />
+                    </span>
+                    {business[key].length > 800 && (
+                      <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                        {business[key].length}/{MAX_POLICY}
                       </span>
-                      {business[key].length > 800 && (
-                        <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                          {business[key].length}/{MAX_POLICY}
-                        </span>
-                      )}
-                    </div>
-                    <Textarea
-                      id={key}
-                      rows={3}
-                      maxLength={MAX_POLICY}
-                      disabled={loading}
-                      value={business[key]}
-                      onChange={(e) => patch('business', { [key]: e.target.value })}
-                      placeholder={copy.placeholder}
-                      className="bg-input-background shadow-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setExampleOpen((prev) => ({ ...prev, [key]: !prev[key] }))}
-                      className="flex items-center gap-1 text-primary"
-                      style={{ fontSize: 'var(--text-xs)' }}
-                    >
-                      <ChevronDown className={cn('size-3.5 transition-transform', exampleOpen[key] && 'rotate-180')} />
-                      See an example
-                    </button>
-                    {exampleOpen[key] && (
-                      <div className="space-y-2 rounded-lg bg-muted p-3">
-                        <p style={{ fontSize: 'var(--text-sm)' }}>{copy.example}</p>
-                        <Button size="sm" variant="outline" onClick={() => requestApplyExample(key, copy.example)}>
-                          Use this example
-                        </Button>
-                      </div>
                     )}
                   </div>
-                </StatusAccent>
+                  <Textarea
+                    id={key}
+                    rows={3}
+                    maxLength={MAX_POLICY}
+                    disabled={loading}
+                    value={business[key]}
+                    onChange={(e) => patch('business', { [key]: e.target.value })}
+                    placeholder={copy.placeholder}
+                    className="bg-input-background shadow-sm"
+                  />
+                </div>
               </Fragment>
             )
           })}
         </section>
 
-        <Separator />
-
         {/* Section 3 */}
-        <section className="space-y-8">
-          <div className="space-y-1">
+        <section className="space-y-6">
+          <span className="flex items-center gap-1.5">
             <h3>How customers reach you</h3>
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-              Contact and location details the agent can share with customers.
-            </p>
+            <InfoTooltip text="Contact and location details the agent can share with customers." />
+          </span>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="contact-email">Contact email</Label>
+            <Input
+              id="contact-email"
+              type="email"
+              disabled={loading}
+              value={business.contactEmail}
+              aria-invalid={emailInvalid}
+              onChange={(e) => patch('business', { contactEmail: e.target.value })}
+              onBlur={() => setEmailTouched(true)}
+              placeholder="support@yourbusiness.com"
+            />
+            {emailInvalid && (
+              <p className="text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                This does not look like an email address
+              </p>
+            )}
           </div>
 
-          <StatusAccent filled={!isFieldEmpty('contactEmail', business)}>
-            <div className="space-y-1.5">
-              <Label htmlFor="contact-email">Contact email</Label>
-              <Input
-                id="contact-email"
-                type="email"
-                disabled={loading}
-                value={business.contactEmail}
-                aria-invalid={emailInvalid}
-                onChange={(e) => patch('business', { contactEmail: e.target.value })}
-                onBlur={() => setEmailTouched(true)}
-                placeholder="support@yourbusiness.com"
-              />
-              {emailInvalid && (
-                <p className="text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                  This does not look like an email address
-                </p>
-              )}
-            </div>
-          </StatusAccent>
+          <div className="space-y-1.5">
+            <span className="flex items-center gap-1.5">
+              <Label htmlFor="business-address">Business address</Label>
+              <InfoTooltip text="Written the way you would say it to a customer, for example “Shop 4, Link Road, Bandra West, Mumbai 400050”. Where your business is located, if customers can visit or send things there." />
+            </span>
+            <Textarea
+              id="business-address"
+              rows={2}
+              maxLength={MAX_ADDRESS}
+              disabled={loading}
+              value={business.businessAddress}
+              onChange={(e) => patch('business', { businessAddress: e.target.value })}
+              placeholder="e.g. Shop 4, Link Road, Bandra West"
+              className="bg-input-background shadow-sm"
+            />
+          </div>
 
-          <StatusAccent filled={!isFieldEmpty('businessAddress', business)}>
-            <div className="space-y-1.5">
-              <span className="flex items-center gap-1.5">
-                <Label htmlFor="business-address">Business address</Label>
-                <InfoTooltip text="Written the way you would say it to a customer, for example “Shop 4, Link Road, Bandra West, Mumbai 400050”. Where your business is located, if customers can visit or send things there." />
-              </span>
-              <Textarea
-                id="business-address"
-                rows={2}
-                maxLength={MAX_ADDRESS}
-                disabled={loading}
-                value={business.businessAddress}
-                onChange={(e) => patch('business', { businessAddress: e.target.value })}
-                placeholder="e.g. Shop 4, Link Road, Bandra West"
-                className="bg-input-background shadow-sm"
-              />
-            </div>
-          </StatusAccent>
-
-          <StatusAccent filled={!isFieldEmpty('businessHours', business)}>
           <div className="space-y-3">
             <div>
               <span className="flex items-center gap-1.5">
@@ -637,7 +632,6 @@ export function BusinessProfileStep() {
               </div>
             )}
           </div>
-          </StatusAccent>
         </section>
       </div>
 

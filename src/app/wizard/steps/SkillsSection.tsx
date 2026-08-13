@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, ChevronRight, Loader2, Plus, Upload } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Loader2, MessageSquare, Plus, Upload } from 'lucide-react'
 import { Label } from '@/app/components/ui/label'
 import { Input } from '@/app/components/ui/input'
 import { Textarea } from '@/app/components/ui/textarea'
@@ -211,20 +211,37 @@ export function SkillsSection() {
   }
 
   return (
-    <div className="space-y-4">
-      {skillCount > 0 && (
-        <div>
-          <span className={cn('caption', skillCount >= SKILL_COUNT_WARNING_THRESHOLD ? 'text-warning-foreground' : 'text-muted-foreground')}>
-            {skillCount} custom skill{skillCount === 1 ? '' : 's'}
-          </span>
-          {skillCount >= SKILL_COUNT_WARNING_THRESHOLD && (
-            <p className="mt-1 max-w-md text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              Many overlapping skills can make the agent inconsistent. Fewer, clearer skills work better than many
-              small ones.
-            </p>
-          )}
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        {skillCount > 0 ? (
+          <div>
+            <span className={cn(skillCount >= SKILL_COUNT_WARNING_THRESHOLD ? 'text-warning-foreground' : 'text-muted-foreground')} style={{ fontSize: 'var(--text-sm)' }}>
+              {skillCount} custom skill{skillCount === 1 ? '' : 's'}
+            </span>
+            {skillCount >= SKILL_COUNT_WARNING_THRESHOLD && (
+              <p className="mt-1 max-w-md text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                Many overlapping skills can make the agent inconsistent. Fewer, clearer skills work better than many
+                small ones.
+              </p>
+            )}
+          </div>
+        ) : (
+          <span />
+        )}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setTemplatesOpen(true)}>
+            Choose from templates
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setSkillImportOpen(true)}>
+            <Upload className="size-3.5" />
+            Import skills from CSV
+          </Button>
+          <Button size="sm" onClick={() => startAddSkill()} disabled={!!skillEditor}>
+            <Plus className="size-3.5" />
+            Add a skill
+          </Button>
         </div>
-      )}
+      </div>
 
       {personalization.lastSkillImport && (
         <div className="flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2">
@@ -273,7 +290,10 @@ export function SkillsSection() {
                 ref={(el) => {
                   skillRowRefs.current[skill.id] = el
                 }}
-                className={cn('rounded-lg border border-border transition-colors', highlightSkillId === skill.id && 'bg-accent')}
+                className={cn(
+                  'rounded-lg border border-border transition-colors hover:bg-accent',
+                  highlightSkillId === skill.id && 'bg-accent',
+                )}
               >
                 <div className="flex items-start gap-2 px-3 py-2.5">
                   <button
@@ -281,6 +301,7 @@ export function SkillsSection() {
                     onClick={() => setExpandedSkillId(expanded ? null : skill.id)}
                     className="flex min-w-0 flex-1 items-start gap-2 text-left"
                   >
+                    <MessageSquare className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                     <ChevronRight className={cn('mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-90')} />
                     <div className="min-w-0 flex-1">
                       <p style={{ fontWeight: 'var(--font-weight-medium)' }}>{skill.name}</p>
@@ -293,7 +314,7 @@ export function SkillsSection() {
                     <Button size="sm" variant="ghost" onClick={() => startEditSkill(skill)}>
                       Edit
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setPendingDeleteSkillId(skill.id)}>
+                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setPendingDeleteSkillId(skill.id)}>
                       Delete
                     </Button>
                   </div>
@@ -318,20 +339,6 @@ export function SkillsSection() {
           })}
         </div>
       )}
-
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={() => startAddSkill()} disabled={!!skillEditor}>
-          <Plus className="size-3.5" />
-          Add a skill
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setTemplatesOpen(true)}>
-          Choose from templates
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setSkillImportOpen(true)}>
-          <Upload className="size-3.5" />
-          Import skills from CSV
-        </Button>
-      </div>
 
       <ConfirmDialog
         open={pendingDeleteSkillId !== null}

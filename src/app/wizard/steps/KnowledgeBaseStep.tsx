@@ -13,6 +13,7 @@ import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { Progress } from '@/app/components/ui/progress'
+import { Textarea } from '@/app/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table'
 import {
   Dialog,
@@ -22,6 +23,13 @@ import {
   DialogTitle,
 } from '@/app/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/app/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { InlineError } from '@/app/components/wizard/RetryBanner'
@@ -985,6 +993,22 @@ function normalizeUrl(url: string): string {
   return url.replace(/\/$/, '').toLowerCase()
 }
 
+const SUBPAGE_SEGMENTS = [
+  'about', 'contact', 'products', 'services', 'faq', 'blog', 'pricing',
+  'support', 'returns', 'shipping', 'privacy-policy', 'terms', 'careers',
+  'reviews', 'help', 'locations', 'gallery', 'testimonials', 'catalog', 'store',
+]
+
+/** Fake sub-level navigation paths for a crawled site, one per page the mock crawl "read". */
+export function generateFakeSubpages(baseUrl: string, count: number): string[] {
+  const root = baseUrl.replace(/\/$/, '')
+  return Array.from({ length: count }, (_, i) => {
+    const segment = SUBPAGE_SEGMENTS[i % SUBPAGE_SEGMENTS.length]
+    const suffix = i >= SUBPAGE_SEGMENTS.length ? `-${Math.floor(i / SUBPAGE_SEGMENTS.length) + 1}` : ''
+    return `${root}/${segment}${suffix}`
+  })
+}
+
 export function WebsiteTab({
   websites,
   loading,
@@ -1001,6 +1025,7 @@ export function WebsiteTab({
   const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null)
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({})
   const [whyOpen, setWhyOpen] = useState<Record<string, boolean>>({})
+  const [bulkOpen, setBulkOpen] = useState(false)
 
   function runFakeCrawl(id: string, shouldFail: boolean) {
     setTimeout(() => {
@@ -1008,15 +1033,28 @@ export function WebsiteTab({
     }, 1500)
     setTimeout(() => {
       patchKnowledge((prev) => ({
-        websites: prev.websites.map((w) =>
-          w.id === id
-            ? shouldFail
-              ? { ...w, status: 'failed', updatedAt: Date.now() }
-              : { ...w, status: 'done', pagesRead: 20 + Math.floor(Math.random() * 70), updatedAt: Date.now() }
-            : w,
-        ),
+        websites: prev.websites.map((w) => {
+          if (w.id !== id) return w
+          if (shouldFail) return { ...w, status: 'failed', updatedAt: Date.now() }
+          const pagesRead = 20 + Math.floor(Math.random() * 70)
+          return { ...w, status: 'done', pagesRead, subpages: generateFakeSubpages(w.url, pagesRead), updatedAt: Date.now() }
+        }),
       }))
     }, 9500)
+  }
+
+  function addWebsites(urls: string[]) {
+    const now = Date.now()
+    const newSites: WebsiteSource[] = urls.map((url, i) => ({
+      id: newId('site'),
+      url,
+      status: 'waiting',
+      pagesRead: 0,
+      subpages: [],
+      updatedAt: now - i,
+    }))
+    patchKnowledge((prev) => ({ websites: [...newSites, ...prev.websites] }))
+    newSites.forEach((site) => runFakeCrawl(site.id, consumeForcedFailure()))
   }
 
   function handleAdd() {
@@ -1032,10 +1070,8 @@ export function WebsiteTab({
       return
     }
     setInputError(null)
-    const id = newId('site')
-    patchKnowledge((prev) => ({ websites: [{ id, url, status: 'waiting', pagesRead: 0, updatedAt: Date.now() }, ...prev.websites] }))
     setUrlInput('')
-    runFakeCrawl(id, consumeForcedFailure())
+    addWebsites([url])
   }
 
   function handleReread(id: string) {
@@ -1082,6 +1118,10 @@ export function WebsiteTab({
         <Button onClick={handleAdd} disabled={!urlInput.trim()}>
           <Globe className="size-4" />
           Add website
+        </Button>
+        <Button variant="outline" onClick={() => setBulkOpen(true)}>
+          <Upload className="size-4" />
+          Bulk add
         </Button>
       </div>
 
@@ -1133,6 +1173,30 @@ export function WebsiteTab({
                 {site.status === 'failed' && <span>Could not read this site</span>}
               </div>
 
+              {site.status === 'done' && site.subpages.length > 0 && (
+                <div className="mt-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button type="button" className="flex items-center gap-1 text-primary" style={{ fontSize: 'var(--text-xs)' }}>
+                        <ChevronDown className="size-3.5" />
+                        View pages ({site.subpages.length})
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="max-h-80 w-96 overflow-y-auto">
+                      <DropdownMenuLabel className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                        Sub-pages found under this site
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {site.subpages.map((path) => (
+                        <div key={path} className="truncate px-2 py-1 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                          {path}
+                        </div>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
+
               {site.status === 'failed' && (
                 <div className="mt-2">
                   <button
@@ -1172,6 +1236,170 @@ export function WebsiteTab({
         onConfirm={confirmRemove}
         onCancel={() => setPendingRemoveId(null)}
       />
+
+      {bulkOpen && (
+        <WebsiteBulkImportDialog
+          existingWebsites={websites}
+          onImport={addWebsites}
+          onClose={() => setBulkOpen(false)}
+        />
+      )}
     </div>
+  )
+}
+
+// ---- Bulk website import ----
+
+interface WebsiteReviewRow {
+  url: string
+  lineNumber: number
+}
+interface WebsiteSkippedRow {
+  lineNumber: number
+  reason: string
+}
+
+function parseWebsiteLines(raw: string): string[] {
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.split(',')[0].trim().replace(/^"|"$/g, ''))
+    .filter((line) => line.length > 0)
+}
+
+function buildWebsiteReview(lines: string[], existingWebsites: WebsiteSource[]) {
+  const toImport: WebsiteReviewRow[] = []
+  const skipped: WebsiteSkippedRow[] = []
+  const seenInBatch = new Set<string>()
+  lines.forEach((raw, i) => {
+    const lineNumber = i + 1
+    if (/^(url|website|address)$/i.test(raw)) return // a lone header cell, not a URL
+    let url = raw
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`
+    if (!isWebsiteShapeValid(url)) {
+      skipped.push({ lineNumber, reason: 'Not a valid website address' })
+      return
+    }
+    const norm = normalizeUrl(url)
+    if (seenInBatch.has(norm)) {
+      skipped.push({ lineNumber, reason: 'Duplicate in this list' })
+      return
+    }
+    if (existingWebsites.some((w) => normalizeUrl(w.url) === norm)) {
+      skipped.push({ lineNumber, reason: 'Already in your list' })
+      return
+    }
+    seenInBatch.add(norm)
+    toImport.push({ url, lineNumber })
+  })
+  return { toImport, skipped }
+}
+
+function WebsiteBulkImportDialog({
+  existingWebsites,
+  onImport,
+  onClose,
+}: {
+  existingWebsites: WebsiteSource[]
+  onImport: (urls: string[]) => void
+  onClose: () => void
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [text, setText] = useState('')
+  const [review, setReview] = useState<{ toImport: WebsiteReviewRow[]; skipped: WebsiteSkippedRow[] } | null>(null)
+  const [problemsOpen, setProblemsOpen] = useState(false)
+
+  function handleFile(file: File) {
+    const reader = new FileReader()
+    reader.onload = () => setText(String(reader.result ?? ''))
+    reader.readAsText(file)
+  }
+
+  function handleContinue() {
+    setReview(buildWebsiteReview(parseWebsiteLines(text), existingWebsites))
+  }
+
+  function handleImport() {
+    if (!review || review.toImport.length === 0) return
+    onImport(review.toImport.map((r) => r.url))
+    onClose()
+  }
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <span className="flex items-center gap-1.5">
+            <DialogTitle>Bulk add websites</DialogTitle>
+            <InfoTooltip text="Paste one web address per line, or upload a .csv or .txt file." />
+          </span>
+        </DialogHeader>
+
+        {!review ? (
+          <div className="space-y-3">
+            <Textarea
+              rows={8}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder={'https://yourbusiness.com\nhttps://yourbusiness.com/faq\nhttps://yourbusiness.com/returns'}
+              className="bg-input-background shadow-sm"
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.txt"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (file) handleFile(file)
+              }}
+            />
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+              <Upload className="size-4" />
+              Upload a .csv or .txt file
+            </Button>
+            <DialogFooter>
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button onClick={handleContinue} disabled={!text.trim()}>
+                Continue
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p style={{ fontSize: 'var(--text-sm)' }}>{review.toImport.length} will be added</p>
+            {review.skipped.length > 0 && (
+              <div>
+                <p className="flex items-center gap-2 text-warning-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                  {review.skipped.length} have problems and will be skipped
+                  <button type="button" onClick={() => setProblemsOpen((v) => !v)} className="text-primary underline">
+                    View problems
+                  </button>
+                </p>
+                {problemsOpen && (
+                  <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-muted p-3" style={{ fontSize: 'var(--text-xs)' }}>
+                    {review.skipped.map((s) => (
+                      <li key={s.lineNumber}>
+                        Line {s.lineNumber}: {s.reason}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button onClick={handleImport} disabled={review.toImport.length === 0}>
+                Add {review.toImport.length} websites
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }

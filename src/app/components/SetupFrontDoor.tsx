@@ -11,6 +11,7 @@ import {
 } from '@/app/components/ui/select'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { SelectableCard } from '@/app/components/wizard/SelectableCard'
+import { generateFakeSubpages } from '@/app/wizard/steps/KnowledgeBaseStep'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { useWizard } from '@/app/wizard/WizardContext'
 import {
@@ -360,7 +361,7 @@ export function SetupFrontDoor({ onFinish }: { onFinish: () => void }) {
       const id = newId('site')
       const shouldFail = state.demo.forceNextFailure
       if (shouldFail) patch('demo', { forceNextFailure: false })
-      const newSite: WebsiteSource = { id, url: websiteUrl, status: 'waiting', pagesRead: 0, updatedAt: Date.now() }
+      const newSite: WebsiteSource = { id, url: websiteUrl, status: 'waiting', pagesRead: 0, subpages: [], updatedAt: Date.now() }
       patch('knowledge', (prev) => ({ websites: [newSite, ...prev.websites] }))
       setTimeout(() => {
         patch('knowledge', (prev) => ({
@@ -369,13 +370,12 @@ export function SetupFrontDoor({ onFinish }: { onFinish: () => void }) {
       }, 1500)
       setTimeout(() => {
         patch('knowledge', (prev) => ({
-          websites: prev.websites.map((w) =>
-            w.id === id
-              ? shouldFail
-                ? { ...w, status: 'failed', updatedAt: Date.now() }
-                : { ...w, status: 'done', pagesRead: 20 + Math.floor(Math.random() * 70), updatedAt: Date.now() }
-              : w,
-          ),
+          websites: prev.websites.map((w) => {
+            if (w.id !== id) return w
+            if (shouldFail) return { ...w, status: 'failed', updatedAt: Date.now() }
+            const pagesRead = 20 + Math.floor(Math.random() * 70)
+            return { ...w, status: 'done', pagesRead, subpages: generateFakeSubpages(w.url, pagesRead), updatedAt: Date.now() }
+          }),
         }))
       }, 9500)
     }
@@ -397,10 +397,6 @@ export function SetupFrontDoor({ onFinish }: { onFinish: () => void }) {
 
     // Ensure the category signal actually carries through to Knowledge's FAQ starters etc.
     if (displayCategory) patch('demo', { businessCategory: displayCategory })
-
-    // 5. Flag matching Connections recipes as suggested — never creates a connection outright.
-    const recipeIds = [...new Set(selectedCards.map((c) => c.recipeId).filter((r): r is string => Boolean(r)))]
-    if (recipeIds.length > 0) patch('connections', { suggestedRecipeIds: recipeIds })
 
     onFinish()
   }

@@ -2,7 +2,7 @@ import { Label } from '@/app/components/ui/label'
 import { Textarea } from '@/app/components/ui/textarea'
 import { Switch } from '@/app/components/ui/switch'
 import { Button } from '@/app/components/ui/button'
-import { Separator } from '@/app/components/ui/separator'
+import { Badge } from '@/app/components/ui/badge'
 import { SegmentedControl } from '@/app/components/wizard/SegmentedControl'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
@@ -131,10 +131,10 @@ export function PersonalitySection() {
       {section.saveStatus === 'saving' && <SavingIndicator />}
       {section.loading && <LoadingIndicator label="Loading your saved choices" />}
 
-      <div className={cn('space-y-6', section.loading && 'pointer-events-none opacity-50')} aria-hidden={section.loading}>
+      <div className={cn('space-y-10', section.loading && 'pointer-events-none opacity-50')} aria-hidden={section.loading}>
         <div className="space-y-3">
           <span className="flex items-center gap-1.5">
-            <Label>Tone</Label>
+            <h4>Tone</h4>
             <InfoTooltip text="Words the agent must never use are set in step 4, Safety & handoff." />
           </span>
           <div className="grid grid-cols-2 gap-3">
@@ -189,7 +189,7 @@ export function PersonalitySection() {
             </div>
           )}
 
-          <div className="space-y-3 pt-1">
+          <div className="space-y-6 pt-1">
             <div className="space-y-1.5">
               <Label>Emoji use</Label>
               <SegmentedControl options={EMOJI_OPTIONS} value={personalization.emojiUse} onChange={(id) => patch('personalization', { emojiUse: id })} />
@@ -207,22 +207,21 @@ export function PersonalitySection() {
           </div>
         </div>
 
-        <Separator />
-
         <div className="space-y-2">
           <span className="flex items-center gap-1.5">
-            <Label>Answer length</Label>
+            <h4>Answer length</h4>
             <InfoTooltip text="Longer answers cost slightly more per message, since Meta charges by the amount of text generated. Detailed suits complex products. For most businesses, Concise or Standard reads best on WhatsApp." />
           </span>
           <SegmentedControl options={ANSWER_LENGTHS} value={personalization.answerLength} onChange={(id) => patch('personalization', { answerLength: id })} />
         </div>
 
-        <Separator />
-
         <div className="space-y-4">
           <div className="space-y-1.5">
             <span className="flex items-center gap-1.5">
-              <Label>Default language</Label>
+              <h4>Default language</h4>
+              <Badge variant="secondary" className="text-muted-foreground">
+                Recognised by Meta
+              </Badge>
               <InfoTooltip text="The language the agent uses unless a customer writes in another configured language." />
             </span>
             <LanguageSelect options={LANGUAGE_OPTIONS} value={personalization.defaultLanguage} onChange={changeDefaultLanguage} />

@@ -1,19 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/app/components/ui/button'
+import { Badge } from '@/app/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { LoadFailedBanner, LoadingIndicator } from '@/app/components/wizard/RetryBanner'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
-import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { SAMPLE_DOCUMENTS, SAMPLE_FAQS, SAMPLE_WEBSITES, newId } from '@/app/wizard/mockData'
 import { BusinessProfileStep, hasAnyBusinessDetails } from './BusinessProfileStep'
-import { DocumentsTab, FaqTab, WebsiteTab } from './KnowledgeBaseStep'
+import { DocumentsTab, FaqTab, WebsiteTab, generateFakeSubpages } from './KnowledgeBaseStep'
 import type { FaqRow } from '@/app/wizard/types'
 
 type TabId = 'business' | 'faq' | 'documents' | 'website'
-
-const IMMEDIATE_SAVE_LINE = 'Changes on this page take effect as soon as you make them.'
 
 export function KnowledgeStep() {
   const { state, patch, setPendingStepFocus } = useWizard()
@@ -71,6 +69,7 @@ export function KnowledgeStep() {
         url: w.url,
         status: w.status,
         pagesRead: w.pagesRead,
+        subpages: w.status === 'done' ? generateFakeSubpages(w.url, w.pagesRead) : [],
         updatedAt: now - w.daysAgo * 86_400_000,
       })),
     })
@@ -116,10 +115,6 @@ export function KnowledgeStep() {
 
   return (
     <div className="space-y-4">
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-        Everything your agent can draw on when answering customers.
-      </p>
-
       {loadStatus === 'loading' ? (
         <LoadingIndicator label="Loading your knowledge base" />
       ) : allEmpty ? (
@@ -140,15 +135,27 @@ export function KnowledgeStep() {
       )}
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
-        <div className="flex items-center gap-1.5">
-          <TabsList>
-            <TabsTrigger value="business">Business details</TabsTrigger>
-            <TabsTrigger value="faq">FAQ ({faqCount})</TabsTrigger>
-            <TabsTrigger value="documents">Documents ({docCount})</TabsTrigger>
-            <TabsTrigger value="website">Website ({siteCount})</TabsTrigger>
-          </TabsList>
-          <InfoTooltip text="Everything here is optional. The other tabs cover FAQs, documents and websites." />
-        </div>
+        <TabsList>
+          <TabsTrigger value="business">Business details</TabsTrigger>
+          <TabsTrigger value="faq" className="gap-1.5">
+            FAQ
+            <Badge variant="secondary" className="text-muted-foreground">
+              {faqCount}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="documents" className="gap-1.5">
+            Documents
+            <Badge variant="secondary" className="text-muted-foreground">
+              {docCount}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="website" className="gap-1.5">
+            Website
+            <Badge variant="secondary" className="text-muted-foreground">
+              {siteCount}
+            </Badge>
+          </TabsTrigger>
+        </TabsList>
 
         {/* forceMount + CSS-hidden (not Radix's default unmount-when-inactive) so Business
             details keeps its own guard registered and its load/save state alive regardless of
@@ -158,9 +165,6 @@ export function KnowledgeStep() {
         </TabsContent>
 
         <TabsContent value="faq" className="mt-4 space-y-3">
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            {IMMEDIATE_SAVE_LINE}
-          </p>
           {loadStatus === 'failed' ? (
             <LoadFailedBanner message="We could not load what is saved here." onRetry={retryLoad} />
           ) : (
@@ -176,9 +180,6 @@ export function KnowledgeStep() {
         </TabsContent>
 
         <TabsContent value="documents" className="mt-4 space-y-3">
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            {IMMEDIATE_SAVE_LINE}
-          </p>
           {loadStatus === 'failed' ? (
             <LoadFailedBanner message="We could not load what is saved here." onRetry={retryLoad} />
           ) : (
@@ -192,9 +193,6 @@ export function KnowledgeStep() {
         </TabsContent>
 
         <TabsContent value="website" className="mt-4 space-y-3">
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            {IMMEDIATE_SAVE_LINE}
-          </p>
           {loadStatus === 'failed' ? (
             <LoadFailedBanner message="We could not load what is saved here." onRetry={retryLoad} />
           ) : (

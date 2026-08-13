@@ -29,6 +29,7 @@ import {
 } from '@/app/components/ui/dialog'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
+import { generateFakeSubpages } from './KnowledgeBaseStep'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { useExitWizard } from '@/app/wizard/ExitContext'
@@ -237,6 +238,7 @@ export function ReviewPublishStep() {
         url: w.url,
         status: w.status,
         pagesRead: w.pagesRead,
+        subpages: w.status === 'done' ? generateFakeSubpages(w.url, w.pagesRead) : [],
         updatedAt: now - w.daysAgo * 86_400_000,
       })),
     })

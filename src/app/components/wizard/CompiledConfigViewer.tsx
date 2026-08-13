@@ -85,12 +85,12 @@ export function CompiledConfigViewer({
         <TabsTrigger value="allowlist">Allowlist ({config.allowlist.length})</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="skills" className="space-y-4">
+      <TabsContent value="skills" className="mt-4 space-y-4">
         <SkillGroup title="Managed by Helo" icon={Lock} skills={config.skills.filter((s) => s.managed)} />
         <SkillGroup title="Your custom skills" icon={Pencil} skills={config.skills.filter((s) => !s.managed)} />
       </TabsContent>
 
-      <TabsContent value="business_info">
+      <TabsContent value="business_info" className="mt-4">
         <FieldTable
           rows={[
             { label: 'Business description', value: config.business_info.business_description },
@@ -105,7 +105,7 @@ export function CompiledConfigViewer({
         />
       </TabsContent>
 
-      <TabsContent value="knowledge">
+      <TabsContent value="knowledge" className="mt-4">
         <TableExtended>
           <TableExtendedBody>
             <TableExtendedRow>
@@ -136,7 +136,7 @@ export function CompiledConfigViewer({
         </TableExtended>
       </TabsContent>
 
-      <TabsContent value="connections">
+      <TabsContent value="connections" className="mt-4">
         {connections.connections.length === 0 ? (
           <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
             No connections yet.
@@ -172,7 +172,7 @@ export function CompiledConfigViewer({
         )}
       </TabsContent>
 
-      <TabsContent value="rich_replies">
+      <TabsContent value="rich_replies" className="mt-4">
         {richReplies.richReplies.length === 0 ? (
           <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
             No rich replies yet.
@@ -203,7 +203,7 @@ export function CompiledConfigViewer({
         )}
       </TabsContent>
 
-      <TabsContent value="settings">
+      <TabsContent value="settings" className="mt-4">
         <FieldTable
           rows={[
             {
@@ -222,7 +222,7 @@ export function CompiledConfigViewer({
         />
       </TabsContent>
 
-      <TabsContent value="allowlist">
+      <TabsContent value="allowlist" className="mt-4">
         {config.allowlist.length === 0 ? (
           <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
             No allowlist entries yet.

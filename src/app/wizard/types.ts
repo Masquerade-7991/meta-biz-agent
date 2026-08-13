@@ -138,6 +138,8 @@ export interface WebsiteSource {
   status: WebsiteStatus
   pagesRead: number
   updatedAt: number
+  /** Sub-level navigation paths found under this URL once the crawl finishes. */
+  subpages: string[]
 }
 
 export interface KnowledgeState {
@@ -414,10 +416,72 @@ export interface ConnectionsPageState {
   connections: Connection[]
   actions: ConnectionAction[]
   activity: ActivityLogRow[]
-  /** Recipe ids flagged by the setup front door as matching a capability the user picked there —
-   *  shown with a "Suggested for you" badge and sorted first in the recipe gallery. Never creates
-   *  a connection on its own; real credentials are still required. */
-  suggestedRecipeIds: string[]
+}
+
+// ---- Connections tab: Integrations sub-tab ----
+// A catalog card's real auth pattern — mirrors the three-way distinction already built into the
+// Connections tab's custom setup form (api key / client credentials / none), named for what this
+// tab actually shows the user rather than reusing that union directly, since "direct credentials"
+// (e.g. PostgreSQL host/user/password) isn't the same shape as "no authentication".
+export type IntegrationAuthPattern = 'oauth' | 'api_key' | 'direct_credentials'
+
+export interface IntegrationTool {
+  name: string
+  description: string
+}
+
+export interface IntegrationAuthField {
+  id: string
+  label: string
+  type: 'text' | 'password'
+  placeholder?: string
+}
+
+export interface IntegrationDef {
+  id: string
+  name: string
+  category: string
+  authPattern: IntegrationAuthPattern
+  description: string
+  setupSteps: string[]
+  tools: IntegrationTool[]
+  /** What the user actually types in before connecting: empty for a pure OAuth redirect (nothing
+   *  to enter), one or more fields for api_key/direct_credentials, or a pre-redirect field an
+   *  OAuth integration still needs (Shopify's store domain, entered before the vendor redirect). */
+  authFields: IntegrationAuthField[]
+}
+
+export interface InstalledIntegration {
+  integrationId: string
+  installedAt: number
+  /** Installing and connecting are two different actions — this stays null until the user
+   *  completes a separate Connect step, even though the integration already shows as installed.
+   *  A plausible stand-in for what this integration would show once connected — a store domain
+   *  for commerce tools, an account/workspace name for CRMs, databases, and the rest. */
+  connectedAs: string | null
+  connectedAt: number | null
+}
+
+export interface IntegrationsState {
+  installed: InstalledIntegration[]
+}
+
+// ---- Connections tab: MCP sub-tab ----
+export interface McpDiscoveredTool {
+  name: string
+  description: string
+  enabled: boolean
+}
+
+export interface McpServerConnection {
+  serverUrl: string
+  hasAccessKey: boolean
+  connectedAt: number
+  tools: McpDiscoveredTool[]
+}
+
+export interface McpState {
+  connection: McpServerConnection | null
 }
 
 // ---- Step 1.7 Guardrails ----
@@ -546,6 +610,8 @@ export interface WizardState {
   routing: RoutingState
   connectors: ConnectorsState
   connections: ConnectionsPageState
+  integrations: IntegrationsState
+  mcp: McpState
   guardrails: GuardrailsState
   replies: RepliesState
   publish: PublishState

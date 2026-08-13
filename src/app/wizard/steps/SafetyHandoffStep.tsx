@@ -218,15 +218,10 @@ export function SafetyHandoffStep() {
       <div className={cn('space-y-12', loading && 'pointer-events-none opacity-50')} aria-hidden={loading}>
         {/* Section 1: What the agent avoids */}
         <section className="space-y-6">
-          <div>
-            <span className="flex items-center gap-1.5">
-              <h3>What the agent avoids</h3>
-              <InfoTooltip text="Both of these become instructions the agent follows. They guide it strongly, but they are instructions, not a filter that blocks a message after it is written." />
-            </span>
-            <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-              Two ways to guide the agent away from things it should not say or discuss.
-            </p>
-          </div>
+          <span className="flex items-center gap-1.5">
+            <h3>What the agent avoids</h3>
+            <InfoTooltip text="Two ways to guide the agent away from things it should not say or discuss. Both of these become instructions the agent follows. They guide it strongly, but they are instructions, not a filter that blocks a message after it is written." />
+          </span>
 
           <WordsToAvoidField
             values={state.guardrails.neverSayPhrases}
@@ -268,7 +263,7 @@ export function SafetyHandoffStep() {
             <div className="space-y-2">
               <SelectableCard
                 title="Meta’s standard message"
-                helper="A ready-made message, shown in the customer’s own language automatically."
+                info="A ready-made message, shown in the customer’s own language automatically."
                 selected={!state.guardrails.handoffMessageEnabled}
                 onClick={() => patch('guardrails', { handoffMessageEnabled: false })}
               />
@@ -308,13 +303,10 @@ export function SafetyHandoffStep() {
 
         {/* Section 3: Following up with quiet customers */}
         <section className="space-y-6">
-          <div>
+          <span className="flex items-center gap-1.5">
             <h3>Following up with quiet customers</h3>
-            <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-              If a customer goes quiet mid-conversation, the agent can send one message to check
-              back in.
-            </p>
-          </div>
+            <InfoTooltip text="If a customer goes quiet mid-conversation, the agent can send one message to check back in." />
+          </span>
 
           <div className="space-y-1.5">
             <span className="flex items-center gap-1.5">

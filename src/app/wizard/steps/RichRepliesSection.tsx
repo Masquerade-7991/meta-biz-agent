@@ -367,13 +367,10 @@ export function RichRepliesSection() {
 
   return (
     <div className="space-y-4">
-      <div>
+      <span className="flex items-center gap-1.5">
         <h3>Rich replies</h3>
-        <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-          Optional. Buttons, images, menus and more, sent instead of a plain text answer when they
-          fit. Changes here take effect as soon as you save each one.
-        </p>
-      </div>
+        <InfoTooltip text="Optional. Buttons, images, menus and more, sent instead of a plain text answer when they fit. Changes here take effect as soon as you save each one." />
+      </span>
 
       {replyCount > 0 && replyCount >= RICH_REPLY_COUNT_WARNING_THRESHOLD && (
         <p className="flex items-center gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>

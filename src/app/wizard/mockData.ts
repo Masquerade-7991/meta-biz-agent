@@ -14,6 +14,7 @@ import type {
   Day,
   FaqRow,
   FollowUpInterval,
+  IntegrationDef,
   IntentRow,
   MenuOption,
   PersonaId,
@@ -504,6 +505,267 @@ export interface ConnectionRecipe {
   baseUrlPlaceholder: string
   actions: RecipeAction[]
 }
+
+// ---- Connections tab: Integrations sub-tab catalog ----
+// Fifteen tools across four named categories (CRM, database and data, commerce, documentation)
+// plus payments, support, and logistics — kept from the original pass since both are genuinely
+// common needs for Helo's Retail and Services client base. Each entry's authPattern and setup
+// steps reflect how that real vendor's API actually works, not a single copy-pasted OAuth
+// template: Salesforce/HubSpot/Zoho/Google/Notion/Shopify redirect to the vendor's own login;
+// self-hosted or dashboard-issued tools (WooCommerce, Magento, Razorpay, Stripe, Zendesk,
+// Shiprocket, Airtable) generate a key the user pastes in; PostgreSQL takes connection details
+// directly since there's no vendor to redirect to or key to generate.
+export const INTEGRATION_CATALOG: IntegrationDef[] = [
+  {
+    id: 'salesforce',
+    authFields: [],
+    name: 'Salesforce',
+    category: 'CRM',
+    authPattern: 'oauth',
+    description: 'Let your agent look up contacts, check case status, and create leads directly in your Salesforce org.',
+    setupSteps: ['Click Install Integration', 'Sign in to Salesforce', 'Approve access for Helo'],
+    tools: [
+      { name: 'Find Contact', description: 'search by name, email, or phone' },
+      { name: 'Create Lead', description: 'capture a new lead from the conversation' },
+      { name: 'Get Case Status', description: 'check an existing support case' },
+      { name: 'Update Opportunity', description: 'add a note or change stage on a deal' },
+    ],
+  },
+  {
+    id: 'hubspot',
+    authFields: [],
+    name: 'HubSpot',
+    category: 'CRM',
+    authPattern: 'oauth',
+    description: 'Let your agent find contacts, log new leads, and open support tickets in HubSpot.',
+    setupSteps: ['Click Install Integration', 'Sign in to HubSpot', 'Approve access for Helo'],
+    tools: [
+      { name: 'Find Contact', description: 'search the CRM by name or email' },
+      { name: 'Create Contact', description: 'add a new contact from the conversation' },
+      { name: 'Get Deal', description: 'check the stage of an existing deal' },
+      { name: 'Create Support Ticket', description: 'log a new ticket' },
+    ],
+  },
+  {
+    id: 'zoho_crm',
+    authFields: [],
+    name: 'Zoho CRM',
+    category: 'CRM',
+    authPattern: 'oauth',
+    description: 'Let your agent search leads, capture new ones, and check deal progress in Zoho CRM.',
+    setupSteps: ['Click Install Integration', 'Sign in to Zoho', 'Approve access for Helo'],
+    tools: [
+      { name: 'Search Lead', description: 'find an existing lead' },
+      { name: 'Create Lead', description: 'capture a new one from the conversation' },
+      { name: 'Get Contact', description: 'retrieve contact details' },
+      { name: 'Update Deal Stage', description: 'move a deal forward' },
+    ],
+  },
+  {
+    id: 'airtable',
+    authFields: [{ id: 'token', label: 'Personal access token', type: 'password' }],
+    name: 'Airtable',
+    category: 'Database and data',
+    authPattern: 'api_key',
+    description: 'Let your agent look up, add, and update records in your Airtable bases.',
+    setupSteps: [
+      'Click Install Integration',
+      'Generate a personal access token in your Airtable account settings',
+      'Paste it in and choose which base to connect',
+    ],
+    tools: [
+      { name: 'List Records', description: 'browse a table' },
+      { name: 'Get Record', description: 'retrieve one record by ID' },
+      { name: 'Search Records', description: 'find records matching a value' },
+      { name: 'Create Record', description: 'add a new row' },
+      { name: 'Update Record', description: 'change an existing one' },
+    ],
+  },
+  {
+    // ponytail: deliberately no general-purpose query tool here — free-form customer text turned
+    // into raw SQL by the agent is a real injection/data-exposure risk. Scoped lookups only. When
+    // this becomes a real integration, setup should also ask which tables/columns are allowed
+    // before any tool is enabled — not built in this prototype pass.
+    id: 'postgresql',
+    authFields: [
+      { id: 'host', label: 'Host', type: 'text', placeholder: 'db.yourbusiness.com' },
+      { id: 'port', label: 'Port', type: 'text', placeholder: '5432' },
+      { id: 'database', label: 'Database name', type: 'text' },
+      { id: 'username', label: 'Username', type: 'text' },
+      { id: 'password', label: 'Password', type: 'password' },
+    ],
+    name: 'PostgreSQL',
+    category: 'Database and data',
+    authPattern: 'direct_credentials',
+    description: 'Let your agent look up information stored in your own database.',
+    setupSteps: ['Click Install Integration', 'Enter your database host, port, name, and a username and password', 'Test the connection'],
+    tools: [
+      { name: 'Look Up Record', description: 'find one record by a known field, for example an order number or customer ID' },
+      { name: 'Search a Table', description: 'find records matching a value in one named table' },
+      { name: 'Get Table Structure', description: 'see what fields a table has' },
+    ],
+  },
+  {
+    id: 'google_sheets',
+    authFields: [],
+    name: 'Google Sheets',
+    category: 'Database and data',
+    authPattern: 'oauth',
+    description: 'Let your agent read and update rows in a spreadsheet, a common lightweight way small businesses track orders or inventory.',
+    setupSteps: ['Click Install Integration', 'Sign in to Google', 'Choose which spreadsheet to connect'],
+    tools: [
+      { name: 'Search Rows', description: 'find rows matching a value' },
+      { name: 'Get Row', description: 'retrieve one row by its position or a key value' },
+      { name: 'Append Row', description: 'add a new row' },
+      { name: 'Update Row', description: 'change an existing one' },
+    ],
+  },
+  {
+    id: 'shopify',
+    authFields: [{ id: 'domain', label: 'Store domain', type: 'text', placeholder: 'yourstore.myshopify.com' }],
+    name: 'Shopify',
+    category: 'Commerce',
+    authPattern: 'oauth',
+    description: 'Let your agent look up products, check stock, and manage carts directly from your Shopify store.',
+    setupSteps: ['Click Install Integration', 'Enter your store domain', 'Authorise access'],
+    tools: [
+      { name: 'Search Products', description: 'search the catalog by keyword' },
+      { name: 'Get Product', description: 'retrieve a product by name or ID' },
+      { name: 'Check Stock', description: 'check current stock for a product' },
+      { name: 'Create Cart', description: 'start a cart for a customer' },
+    ],
+  },
+  {
+    id: 'woocommerce',
+    authFields: [
+      { id: 'key', label: 'Consumer key', type: 'password' },
+      { id: 'secret', label: 'Consumer secret', type: 'password' },
+    ],
+    name: 'WooCommerce',
+    category: 'Commerce',
+    authPattern: 'api_key',
+    description: 'Let your agent look up products, check order status, and answer stock questions for your WooCommerce store.',
+    setupSteps: ['Click Install Integration', 'Generate a REST API key pair in your WordPress WooCommerce settings', 'Paste the key and secret in'],
+    tools: [
+      { name: 'Search Products', description: 'search the catalog' },
+      { name: 'Get Product', description: 'retrieve product details' },
+      { name: 'Check Stock', description: 'check current stock' },
+      { name: 'Get Order Status', description: 'look up an order by number' },
+    ],
+  },
+  {
+    id: 'magento',
+    authFields: [{ id: 'token', label: 'Integration token', type: 'password' }],
+    name: 'Magento',
+    category: 'Commerce',
+    authPattern: 'api_key',
+    description: 'Let your agent search products, check inventory, and answer order questions for your Magento store.',
+    setupSteps: ['Click Install Integration', 'Generate an integration token in your Magento admin panel', 'Paste it in'],
+    tools: [
+      { name: 'Search Products', description: 'search the catalog' },
+      { name: 'Get Product Details', description: 'retrieve full product information' },
+      { name: 'Check Inventory', description: 'check current stock' },
+      { name: 'Get Order Status', description: 'look up an order by number' },
+    ],
+  },
+  {
+    id: 'google_docs',
+    authFields: [],
+    name: 'Google Docs',
+    category: 'Documentation',
+    authPattern: 'oauth',
+    description: "Let your agent search and read from documents you've written, for example an FAQ or a policy document kept outside this wizard.",
+    setupSteps: ['Click Install Integration', 'Sign in to Google', 'Choose which documents or folder to connect'],
+    tools: [
+      { name: 'Search Documents', description: 'find documents by title or content' },
+      { name: 'Get Document Contents', description: 'retrieve the text of one document' },
+    ],
+  },
+  {
+    id: 'notion',
+    authFields: [],
+    name: 'Notion',
+    category: 'Documentation',
+    authPattern: 'oauth',
+    description: 'Let your agent search and read pages from your Notion workspace.',
+    setupSteps: ['Click Install Integration', 'Sign in to Notion', 'Choose which pages or workspace to share'],
+    tools: [
+      { name: 'Search Pages', description: 'find pages by title or content' },
+      { name: 'Get Page Contents', description: 'retrieve the text of one page' },
+    ],
+  },
+  {
+    id: 'razorpay',
+    authFields: [
+      { id: 'keyId', label: 'Key ID', type: 'text' },
+      { id: 'keySecret', label: 'Key secret', type: 'password' },
+    ],
+    name: 'Razorpay',
+    category: 'Payments',
+    authPattern: 'api_key',
+    description: 'Let your agent check payment and refund status for customer orders.',
+    setupSteps: ['Click Install Integration', 'Generate a key ID and key secret in your Razorpay dashboard', 'Paste them in'],
+    tools: [
+      { name: 'Get Payment Status', description: 'check whether a payment succeeded' },
+      { name: 'Get Order Details', description: 'retrieve order and payment information' },
+      { name: 'Get Refund Status', description: 'check on a refund already issued' },
+    ],
+  },
+  {
+    id: 'stripe',
+    authFields: [{ id: 'secretKey', label: 'Secret key', type: 'password' }],
+    name: 'Stripe',
+    category: 'Payments',
+    authPattern: 'api_key',
+    description: 'Let your agent check payment status and look up customer billing details.',
+    setupSteps: ['Click Install Integration', 'Generate a secret key in your Stripe dashboard', 'Paste it in'],
+    tools: [
+      { name: 'Get Payment Status', description: 'check whether a charge succeeded' },
+      { name: 'Get Customer', description: 'retrieve billing details' },
+      { name: 'Get Invoice', description: 'look up an invoice by ID' },
+    ],
+  },
+  {
+    id: 'zendesk',
+    authFields: [
+      { id: 'subdomain', label: 'Zendesk subdomain', type: 'text', placeholder: 'acmecorp' },
+      { id: 'token', label: 'API token', type: 'password' },
+    ],
+    name: 'Zendesk',
+    category: 'Support',
+    authPattern: 'api_key',
+    description: 'Let your agent check ticket status and log new support requests.',
+    setupSteps: ['Click Install Integration', 'Generate an API token in your Zendesk admin settings', 'Enter your subdomain and paste the token in'],
+    tools: [
+      { name: 'Search Tickets', description: 'find tickets by customer or keyword' },
+      { name: 'Get Ticket Status', description: 'check where a ticket stands' },
+      { name: 'Create Ticket', description: 'open a new one from the conversation' },
+      { name: 'Add Comment to Ticket', description: 'update an existing one' },
+    ],
+  },
+  {
+    id: 'shiprocket',
+    authFields: [
+      { id: 'email', label: 'Account email', type: 'text' },
+      { id: 'password', label: 'Account password', type: 'password' },
+    ],
+    name: 'Shiprocket',
+    category: 'Logistics',
+    authPattern: 'api_key',
+    description: 'Let your agent track shipments and answer delivery questions.',
+    setupSteps: ['Click Install Integration', 'Enter your Shiprocket account email and password to generate an access token', 'Confirm the connection'],
+    tools: [
+      { name: 'Track Shipment', description: 'get current status by tracking number' },
+      { name: 'Get Shipping Rate', description: 'estimate delivery cost and time' },
+      { name: 'Get Order Status', description: 'check where an order stands in fulfilment' },
+    ],
+  },
+]
+
+// Curated public MCP servers relevant to this audience — content is a later decision (see the
+// Connections redesign spec), left empty so the gallery section renders structurally ready to
+// populate without fabricating specific server URLs here.
+export const KNOWN_MCP_SERVERS: { name: string; description: string; url: string }[] = []
 
 export const CONNECTION_RECIPES: ConnectionRecipe[] = [
   {
@@ -1114,8 +1376,6 @@ export interface CapabilityCard {
   signalId?: SignalId
   /** Which FAQ_STARTER_SUGGESTIONS bucket this capability draws its starter questions from. */
   faqBucket?: 'retail' | 'services'
-  /** Which CONNECTION_RECIPES id gets flagged "Suggested for you" when this capability is picked. */
-  recipeId?: string
 }
 
 const RETAIL_CAPABILITY_CARDS: CapabilityCard[] = [
@@ -1130,14 +1390,12 @@ const RETAIL_CAPABILITY_CARDS: CapabilityCard[] = [
     title: 'Track orders',
     helper: 'A ready-made connection to your order system, once you add your details',
     signalId: 'track_orders',
-    recipeId: 'order_lookup',
   },
   {
     id: 'check_stock',
     title: 'Check stock',
     helper: 'A ready-made connection to your inventory, once you add your details',
     signalId: 'check_stock',
-    recipeId: 'stock_check',
   },
   {
     id: 'delivery_returns',
@@ -1159,7 +1417,6 @@ const SERVICES_CAPABILITY_CARDS: CapabilityCard[] = [
     title: 'Book appointments',
     helper: 'A ready-made connection to your booking system, once you add your details',
     signalId: 'book_appointments',
-    recipeId: 'booking_check',
   },
   {
     id: 'answer_pricing',

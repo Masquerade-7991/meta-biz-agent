@@ -5,7 +5,6 @@ import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { Textarea } from '@/app/components/ui/textarea'
 import { Button } from '@/app/components/ui/button'
-import { Separator } from '@/app/components/ui/separator'
 import {
   Dialog,
   DialogContent,
@@ -209,32 +208,23 @@ export function AgentIdentityStep() {
         )}
       </div>
 
-      <Separator />
-
       <div className="space-y-4">
         <div className="space-y-1">
           <span className="flex items-center gap-1.5">
-            <Label htmlFor="agent-role" style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-weight-bold)' }}>
-              What does this agent do for customers?
-            </Label>
+            <h4 id="agent-role-label">What does this agent do for customers?</h4>
             <InfoTooltip text="Describe what your agent helps customers with. This shapes how it behaves in every conversation, so take a moment to get it right. Write this as a description of what your agent does, not as instructions to it. Keep it in plain English and avoid technical terms." />
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
           {category ? (
             <>
               <Button type="button" variant="outline" size="sm" onClick={handleCategorySuggestion}>
                 Suggest for {category}
               </Button>
-              <button
-                type="button"
-                onClick={() => setShowOtherExamples((v) => !v)}
-                className="text-primary"
-                style={{ fontSize: 'var(--text-sm)' }}
-              >
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowOtherExamples((v) => !v)}>
                 Show other examples
-              </button>
+              </Button>
             </>
           ) : (
             ROLE_EXAMPLES.map((example) => (
@@ -250,19 +240,21 @@ export function AgentIdentityStep() {
             ))
           )}
 
-          <Button type="button" variant="outline" size="sm" onClick={handleDocumentButtonClick} disabled={docStatus === 'reading'}>
-            <FileText className="size-3.5" />
-            Draft from a document
-          </Button>
-          {docStatus === 'reading' ? (
-            <span className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              <Loader2 className="size-3.5 animate-spin" /> Reading your document&hellip;
-            </span>
-          ) : (
-            <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              Reads a document and suggests a starting point below
-            </span>
-          )}
+          <div className="space-y-1">
+            <Button type="button" variant="outline" size="sm" onClick={handleDocumentButtonClick} disabled={docStatus === 'reading'}>
+              <FileText className="size-3.5" />
+              Draft from a document
+            </Button>
+            {docStatus === 'reading' ? (
+              <span className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <Loader2 className="size-3.5 animate-spin" /> Reading your document&hellip;
+              </span>
+            ) : (
+              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                Reads a document and suggests a starting point below
+              </p>
+            )}
+          </div>
         </div>
 
         {category && showOtherExamples && (
@@ -304,13 +296,14 @@ export function AgentIdentityStep() {
           )}
           <Textarea
             id="agent-role"
-            rows={8}
+            rows={5}
             maxLength={MAX_ROLE}
             value={identity.agentRole}
             aria-invalid={Boolean(roleError)}
+            aria-labelledby="agent-role-label"
             onChange={(e) => handleRoleTextareaChange(e.target.value)}
             placeholder="e.g. Helps customers track orders, browse products, and start a return"
-            className="min-h-56 resize-none bg-input-background text-base shadow-sm"
+            className="resize-none bg-input-background text-base shadow-sm"
           />
           <div className="flex items-center justify-between">
             {roleError ? (

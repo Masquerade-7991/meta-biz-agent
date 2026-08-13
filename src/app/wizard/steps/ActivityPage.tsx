@@ -84,12 +84,10 @@ function QualityChecksSection({ runs, onGoToTestPublish }: { runs: QualityCheckR
 
   return (
     <section className="space-y-3">
-      <div>
+      <span className="flex items-center gap-1.5">
         <h3>Quality checks</h3>
-        <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-          Results from the standard checks run on the Test &amp; publish step.
-        </p>
-      </div>
+        <InfoTooltip text="Results from the standard checks run on the Test & publish step." />
+      </span>
 
       {sorted.length === 0 ? (
         <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
@@ -152,12 +150,10 @@ function ConnectorActivitySection({
 
   return (
     <section className="space-y-3">
-      <div>
+      <span className="flex items-center gap-1.5">
         <h3>Connector activity</h3>
-        <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-          Recent calls across every connection this agent has.
-        </p>
-      </div>
+        <InfoTooltip text="Recent calls across every connection this agent has." />
+      </span>
 
       {connections.length === 0 ? (
         <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>

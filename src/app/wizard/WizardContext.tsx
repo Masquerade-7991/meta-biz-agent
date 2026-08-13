@@ -91,7 +91,12 @@ export function createInitialState(): WizardState {
       connections: [],
       actions: [],
       activity: [],
-      suggestedRecipeIds: [],
+    },
+    integrations: {
+      installed: [],
+    },
+    mcp: {
+      connection: null,
     },
     guardrails: {
       groundingMode: 'strict',
@@ -159,6 +164,8 @@ export function createInitialState(): WizardState {
       routing: 0,
       connectors: 0,
       connections: 0,
+      integrations: 0,
+      mcp: 0,
       guardrails: 0,
       replies: 0,
       publish: 0,
@@ -195,6 +202,8 @@ const EDITABLE_SLICES: SliceKey[] = [
   'routing',
   'connectors',
   'connections',
+  'integrations',
+  'mcp',
   'guardrails',
   'replies',
 ]
@@ -241,13 +250,21 @@ function reducer(state: WizardState, action: Action): WizardState {
   }
 }
 
+/** Fields added to persisted slices after a user's browser already had saved state need a
+ *  default here — otherwise old localStorage data loads with that field missing and crashes
+ *  whatever first reads it, since TypeScript's shape guarantee doesn't apply to parsed JSON. */
+function migrateKnowledge(knowledge: WizardState['knowledge'] | undefined): WizardState['knowledge'] | undefined {
+  if (!knowledge?.websites) return knowledge
+  return { ...knowledge, websites: knowledge.websites.map((w) => ({ ...w, subpages: w.subpages ?? [] })) }
+}
+
 function loadInitialState(): WizardState {
   if (typeof window === 'undefined') return createInitialState()
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return createInitialState()
     const parsed = JSON.parse(raw) as WizardState
-    return { ...createInitialState(), ...parsed }
+    return { ...createInitialState(), ...parsed, knowledge: migrateKnowledge(parsed.knowledge) ?? createInitialState().knowledge }
   } catch {
     return createInitialState()
   }

@@ -7,13 +7,15 @@ import {
   Plug,
   Send,
 } from 'lucide-react'
-import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { Textarea } from '@/app/components/ui/textarea'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { SelectableCard } from '@/app/components/wizard/SelectableCard'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
+import { IntegrationsTab } from './IntegrationsTab'
+import { McpTab } from './McpTab'
 import {
   Select,
   SelectContent,
@@ -42,8 +44,6 @@ import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import {
-  ADVANCED_PERSONAS,
-  CONNECTION_RECIPES,
   CONNECTION_STATUS_META,
   SAMPLE_CONNECTIONS,
   matchConnectionPreviewMessage,
@@ -51,7 +51,6 @@ import {
   newApiKeyEntry,
   newId,
   pickConnectionPreviewReply,
-  type ConnectionRecipe,
   type RecipeAction,
 } from '@/app/wizard/mockData'
 import type {
@@ -77,6 +76,14 @@ const TYPE_OPTIONS: { id: ValueType; label: string }[] = [
 const ACTION_COUNT_WARNING_THRESHOLD = 6
 
 // ---- Pure helpers ----
+
+/** Whether a connection, as just defined, already has a usable credential — otherwise it's a
+ *  shell waiting on a separate Connect step. 'none' has nothing to provide, so it's always ready. */
+function hasWorkingCredential(connection: Pick<Connection, 'authMethod' | 'apiKeys' | 'clientSecret'>): boolean {
+  if (connection.authMethod === 'none') return true
+  if (connection.authMethod === 'client_credentials') return Boolean(connection.clientSecret?.trim())
+  return Boolean(connection.apiKeys && connection.apiKeys.length > 0 && connection.apiKeys.every((k) => k.value.trim()))
+}
 
 function domainFromUrl(url: string): string {
   try {
@@ -211,24 +218,50 @@ function StatusDot({ status }: { status: ConnectionStatus }) {
 // MAIN STEP
 // ==================================================================================
 
+const CONNECTIONS_FOOTER_NOTE =
+  'Your agent automatically tells customers what it can and cannot do, based on everything connected here. You can tell it when to prefer a specific action in step 1’s custom skills, for example "Always look up the real order status rather than guessing."'
+
 export function ConnectionsStep() {
+  return (
+    <Tabs defaultValue="integrations">
+      <TabsList>
+        <TabsTrigger value="integrations">Integrations</TabsTrigger>
+        <TabsTrigger value="connections">Custom</TabsTrigger>
+        <TabsTrigger value="mcp">MCP</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="integrations" forceMount className="mt-4 data-[state=inactive]:hidden">
+        <IntegrationsTab />
+      </TabsContent>
+      <TabsContent value="connections" forceMount className="mt-4 data-[state=inactive]:hidden">
+        <ConnectionsTabContent />
+      </TabsContent>
+      <TabsContent value="mcp" forceMount className="mt-4 data-[state=inactive]:hidden">
+        <McpTab />
+      </TabsContent>
+
+      <div className="mt-4 flex items-center gap-1.5">
+        <InfoTooltip text={CONNECTIONS_FOOTER_NOTE} />
+        <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+          What your agent can do
+        </span>
+      </div>
+    </Tabs>
+  )
+}
+
+function ConnectionsTabContent() {
   const { state, patch } = useWizard()
   const { connections, actions, activity } = state.connections
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [recipeGalleryOpen, setRecipeGalleryOpen] = useState(false)
   const [connectionForm, setConnectionForm] = useState<{ mode: 'add' } | { mode: 'edit'; connection: Connection } | null>(null)
-  const [recipeFillFor, setRecipeFillFor] = useState<ConnectionRecipe | null>(null)
   const [actionEditor, setActionEditor] = useState<ActionEditorState>(null)
   const [testingAction, setTestingAction] = useState<ConnectionAction | null>(null)
   const [activityFor, setActivityFor] = useState<Connection | null>(null)
   const [pendingDeleteConnectionId, setPendingDeleteConnectionId] = useState<string | null>(null)
   const [pendingDeleteAction, setPendingDeleteAction] = useState<ConnectionAction | null>(null)
   const [rowError, setRowError] = useState<Record<string, string>>({})
-
-  // Set by the setup front door's "Who is this for?" screen — developers and client-setup
-  // personas default to the custom-connection path; everyone else defaults to ready-made.
-  const preferCustom = state.identity.persona !== null && ADVANCED_PERSONAS.includes(state.identity.persona)
 
   function consumeForcedFailure(): boolean {
     if (!state.demo.forceNextFailure) return false
@@ -293,29 +326,6 @@ export function ConnectionsStep() {
     return actions.filter((a) => a.connectionId === connectionId)
   }
 
-  function createConnectionFromRecipe(recipe: ConnectionRecipe, baseUrl: string, apiKey: string) {
-    const now = Date.now()
-    const connectionId = newId('conn')
-    const newConnection: Connection = {
-      id: connectionId,
-      name: recipe.connectionName,
-      description: recipe.connectionDescription,
-      baseUrl,
-      authMethod: 'api_key',
-      apiKeys: [{ id: newId('key'), value: apiKey, location: 'header', fieldName: 'X-API-Key', prefix: '' }],
-      createdFromRecipe: recipe.id,
-      createdAt: now,
-      demoStatus: 'not_tested',
-    }
-    const newActions = recipe.actions.map((a, i) => recipeActionToAction(a, connectionId, newId('action'), now - i))
-    patch('connections', {
-      connections: [...connections, newConnection],
-      actions: [...actions, ...newActions],
-    })
-    setRecipeFillFor(null)
-    setExpandedId(connectionId)
-  }
-
   function saveCustomConnection(connection: Omit<Connection, 'id' | 'createdAt' | 'demoStatus'>) {
     if (connectionForm?.mode === 'edit') {
       const id = connectionForm.connection.id
@@ -323,7 +333,10 @@ export function ConnectionsStep() {
       setConnectionForm(null)
       return
     }
-    const newConnection: Connection = { ...connection, id: newId('conn'), createdAt: Date.now(), demoStatus: 'not_tested' }
+    // Defining a connection and actually connecting it are two different actions — a shell saved
+    // without a working credential yet waits for a separate Connect step, same as Integrations.
+    const demoStatus: ConnectionStatus = hasWorkingCredential(connection) ? 'not_tested' : 'waiting_signin'
+    const newConnection: Connection = { ...connection, id: newId('conn'), createdAt: Date.now(), demoStatus }
     patch('connections', { connections: [...connections, newConnection] })
     setConnectionForm(null)
     setExpandedId(newConnection.id)
@@ -331,6 +344,21 @@ export function ConnectionsStep() {
 
   function updateConnectionDemoStatus(id: string, demoStatus: ConnectionStatus) {
     patch('connections', { connections: connections.map((c) => (c.id === id ? { ...c, demoStatus } : c)) })
+  }
+
+  // Provides the missing credential for a connection that's waiting to be connected — the
+  // Connect step, separate from having defined the connection at all.
+  function connectConnection(id: string, value: string) {
+    const shouldFail = consumeForcedFailure()
+    patch('connections', {
+      connections: connections.map((c) => {
+        if (c.id !== id) return c
+        if (shouldFail) return { ...c, demoStatus: 'key_rejected' }
+        if (c.authMethod === 'client_credentials') return { ...c, clientSecret: value, demoStatus: 'not_tested' }
+        const keys = c.apiKeys && c.apiKeys.length > 0 ? c.apiKeys : [newApiKeyEntry()]
+        return { ...c, apiKeys: [{ ...keys[0], value }, ...keys.slice(1)], demoStatus: 'not_tested' }
+      }),
+    })
   }
 
   useRegisterDevControls(
@@ -485,48 +513,22 @@ export function ConnectionsStep() {
 
   return (
     <div className="space-y-6">
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-        Changes on this page take effect as soon as you make them.
-      </p>
-
       {connections.length === 0 ? (
-        <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border px-6 py-16 text-center">
+        <div className="flex flex-col items-center gap-4 px-6 py-16 text-center">
           <span className="flex items-center gap-1.5">
             <h3>Connect your agent to your systems</h3>
             <InfoTooltip text="This lets the agent look things up and take actions for customers, instead of only answering from its knowledge. It needs technical details like web addresses and access keys, so you may want to do this part with your developer." />
           </span>
-          <div className="flex gap-3">
-            <Button
-              variant={preferCustom ? 'outline' : 'default'}
-              onClick={() => setRecipeGalleryOpen(true)}
-            >
-              Use a ready-made setup
-            </Button>
-            <Button
-              variant={preferCustom ? 'default' : 'outline'}
-              onClick={() => setConnectionForm({ mode: 'add' })}
-            >
-              Build your own connection
-            </Button>
-          </div>
-          <p className="max-w-md text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            Not sure which one? Start with a ready-made setup. It only asks for your web address
-            and an access key.
-          </p>
+          <Button onClick={() => setConnectionForm({ mode: 'add' })}>Build your own connection</Button>
           <button type="button" className="text-primary" style={{ fontSize: 'var(--text-sm)' }} disabled>
             Skip this step
           </button>
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex gap-2">
-            <Button size="sm" variant={preferCustom ? 'outline' : 'default'} onClick={() => setRecipeGalleryOpen(true)}>
-              Use a ready-made setup
-            </Button>
-            <Button size="sm" variant={preferCustom ? 'default' : 'outline'} onClick={() => setConnectionForm({ mode: 'add' })}>
-              Build your own connection
-            </Button>
-          </div>
+          <Button size="sm" onClick={() => setConnectionForm({ mode: 'add' })}>
+            Build your own connection
+          </Button>
 
           <div className="space-y-3">
             {connections.map((connection) => (
@@ -546,6 +548,7 @@ export function ConnectionsStep() {
                 onEditConnection={() => setConnectionForm({ mode: 'edit', connection })}
                 onDeleteConnection={() => setPendingDeleteConnectionId(connection.id)}
                 onReplaceKey={(key) => replaceKey(connection.id, key)}
+                onConnect={(value) => connectConnection(connection.id, value)}
                 rowError={rowError}
                 onClearRowError={(id) => setRowError((prev) => ({ ...prev, [id]: '' }))}
               />
@@ -556,28 +559,6 @@ export function ConnectionsStep() {
 
       {connections.length > 0 && (
         <TryItSection connections={connections} actions={actions} faqs={state.knowledge.faqs} />
-      )}
-
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-        Your agent automatically tells customers what it can and cannot do, based on what you set
-        up here.
-      </p>
-
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-        Tip: you can tell the agent when to prefer an action in step 1&rsquo;s custom skills, e.g.
-        &ldquo;Always look up the real order status rather than guessing.&rdquo;
-      </p>
-
-      {recipeGalleryOpen && (
-        <RecipeGalleryDialog
-          suggestedIds={state.connections.suggestedRecipeIds}
-          onUse={(recipe) => { setRecipeGalleryOpen(false); setRecipeFillFor(recipe) }}
-          onClose={() => setRecipeGalleryOpen(false)}
-        />
-      )}
-
-      {recipeFillFor && (
-        <RecipeFillDialog recipe={recipeFillFor} onCreate={createConnectionFromRecipe} onClose={() => setRecipeFillFor(null)} />
       )}
 
       {connectionForm && (
@@ -773,6 +754,7 @@ function ConnectionCard({
   onEditConnection,
   onDeleteConnection,
   onReplaceKey,
+  onConnect,
   rowError,
   onClearRowError,
 }: {
@@ -788,11 +770,14 @@ function ConnectionCard({
   onEditConnection: () => void
   onDeleteConnection: () => void
   onReplaceKey: (key: string) => void
+  onConnect: (value: string) => void
   rowError: Record<string, string>
   onClearRowError: (id: string) => void
 }) {
   const [replaceKeyOpen, setReplaceKeyOpen] = useState(false)
   const [newKey, setNewKey] = useState('')
+  const [connectOpen, setConnectOpen] = useState(false)
+  const [connectValue, setConnectValue] = useState('')
 
   return (
     <div className="rounded-lg border border-border">
@@ -811,6 +796,24 @@ function ConnectionCard({
               <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
                 {actions.length} action{actions.length === 1 ? '' : 's'}: {actions.map((a) => a.name).join(', ')}
               </p>
+            )}
+            {connection.demoStatus === 'waiting_signin' && (
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  This connection is defined but not connected yet.
+                </p>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setConnectOpen(true)
+                  }}
+                  className="text-primary"
+                  style={{ fontSize: 'var(--text-xs)' }}
+                >
+                  Connect
+                </button>
+              </div>
             )}
             {connection.demoStatus === 'key_rejected' && (
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -859,7 +862,11 @@ function ConnectionCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={onEditConnection}>Edit connection</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setReplaceKeyOpen(true)}>Replace key</DropdownMenuItem>
+              {connection.demoStatus === 'waiting_signin' ? (
+                <DropdownMenuItem onClick={() => setConnectOpen(true)}>Connect</DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => setReplaceKeyOpen(true)}>Replace key</DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={onDeleteConnection} className="text-destructive">
                 Delete
               </DropdownMenuItem>
@@ -922,119 +929,85 @@ function ConnectionCard({
         </div>
       )}
 
-      <ConfirmDialog
+      <CredentialPromptDialog
         open={replaceKeyOpen}
         title="Replace the access key?"
         description="The old key stops working as soon as you save the new one."
+        label="New access key"
         confirmLabel="Save"
+        value={newKey}
+        onChange={setNewKey}
         onConfirm={() => {
           onReplaceKey(newKey)
           setNewKey('')
           setReplaceKeyOpen(false)
         }}
-        onCancel={() => setReplaceKeyOpen(false)}
+        onCancel={() => {
+          setNewKey('')
+          setReplaceKeyOpen(false)
+        }}
+      />
+
+      <CredentialPromptDialog
+        open={connectOpen}
+        title={`Connect ${connection.name}?`}
+        description="Provide the credential your system issued so the agent can start using this connection."
+        label={connection.authMethod === 'client_credentials' ? 'Client secret' : 'Access key'}
+        confirmLabel="Connect"
+        value={connectValue}
+        onChange={setConnectValue}
+        onConfirm={() => {
+          onConnect(connectValue)
+          setConnectValue('')
+          setConnectOpen(false)
+        }}
+        onCancel={() => {
+          setConnectValue('')
+          setConnectOpen(false)
+        }}
       />
     </div>
   )
 }
 
-// ==================================================================================
-// RECIPE GALLERY
-// ==================================================================================
-
-function RecipeGalleryDialog({
-  suggestedIds,
-  onUse,
-  onClose,
+function CredentialPromptDialog({
+  open,
+  title,
+  description,
+  label,
+  confirmLabel,
+  value,
+  onChange,
+  onConfirm,
+  onCancel,
 }: {
-  suggestedIds: string[]
-  onUse: (recipe: ConnectionRecipe) => void
-  onClose: () => void
+  open: boolean
+  title: string
+  description: string
+  label: string
+  confirmLabel: string
+  value: string
+  onChange: (value: string) => void
+  onConfirm: () => void
+  onCancel: () => void
 }) {
-  const sortedRecipes = [...CONNECTION_RECIPES].sort((a, b) => {
-    const aSuggested = suggestedIds.includes(a.id) ? 0 : 1
-    const bSuggested = suggestedIds.includes(b.id) ? 0 : 1
-    return aSuggested - bSuggested
-  })
-
   return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Use a ready-made setup</DialogTitle>
-        </DialogHeader>
-        <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto">
-          {sortedRecipes.map((recipe) => (
-            <div key={recipe.id} className="space-y-2 rounded-lg border border-border p-3">
-              <div className="flex items-center gap-1.5">
-                <p style={{ fontWeight: 'var(--font-weight-medium)' }}>{recipe.name}</p>
-                {suggestedIds.includes(recipe.id) && (
-                  <Badge variant="outline" className="text-primary">
-                    Suggested for you
-                  </Badge>
-                )}
-              </div>
-              <p className="line-clamp-2 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                {recipe.summary}
-              </p>
-              <Button size="sm" variant="outline" onClick={() => onUse(recipe)}>
-                Use this
-              </Button>
-            </div>
-          ))}
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function RecipeFillDialog({
-  recipe,
-  onCreate,
-  onClose,
-}: {
-  recipe: ConnectionRecipe
-  onCreate: (recipe: ConnectionRecipe, baseUrl: string, apiKey: string) => void
-  onClose: () => void
-}) {
-  const [baseUrl, setBaseUrl] = useState(recipe.baseUrlPlaceholder)
-  const [apiKey, setApiKey] = useState('')
-
-  return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
+    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{recipe.name}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="recipe-base-url">Web address of your system</Label>
-            <Input id="recipe-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={recipe.baseUrlPlaceholder} />
-          </div>
-          <div className="space-y-1.5">
-            <span className="flex items-center gap-1.5">
-              <Label htmlFor="recipe-api-key">Access key</Label>
-              <InfoTooltip text="Your developer or your system’s settings page can give you this." />
-            </span>
-            <Input id="recipe-api-key" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>What this sets up</Label>
-            <ul className="space-y-1 rounded-lg bg-muted p-3">
-              {recipe.actions.map((a) => (
-                <li key={a.name} className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                  {a.setupSentence}
-                </li>
-              ))}
-            </ul>
-          </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="credential-prompt-value">{label}</Label>
+          <Input id="credential-prompt-value" type="password" autoFocus value={value} onChange={(e) => onChange(e.target.value)} />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button onClick={() => onCreate(recipe, baseUrl.trim() || recipe.baseUrlPlaceholder, apiKey)} disabled={!baseUrl.trim()}>
-            Create connection
+          <Button onClick={onConfirm} disabled={!value.trim()}>
+            {confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
