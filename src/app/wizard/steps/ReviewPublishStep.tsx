@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
-  ExternalLink,
   Loader2,
   Plus,
   Rocket,
@@ -16,9 +15,9 @@ import { Button } from '@/app/components/ui/button'
 import { Label } from '@/app/components/ui/label'
 import { Input } from '@/app/components/ui/input'
 import { Textarea } from '@/app/components/ui/textarea'
-import { Checkbox } from '@/app/components/ui/checkbox'
 import { SelectableCard } from '@/app/components/wizard/SelectableCard'
 import { Switch } from '@/app/components/ui/switch'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import {
   Dialog,
   DialogContent,
@@ -50,7 +49,6 @@ import type { Connection, ConnectionAction, WizardState } from '@/app/wizard/typ
 import { cn } from '@/app/lib/utils'
 
 const E164_RE = /^\+[1-9]\d{6,14}$/
-const BILLING_HUB_URL = 'https://business.facebook.com/latest/billing_hub/credit_lines/'
 const VERSION_NOTE_MAX = 300
 
 function simulateAgentReply(state: WizardState, message: string): string {
@@ -194,14 +192,8 @@ export function ReviewPublishStep() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [activateError, setActivateError] = useState<string | null>(null)
 
-  const canActivate = hasRunStandardChecks && publish.billingConfirmed
-  const activateReason = !hasRunStandardChecks && !publish.billingConfirmed
-    ? 'Run the standard checks and confirm your billing setup to continue'
-    : !hasRunStandardChecks
-      ? 'Run the standard checks to continue'
-      : !publish.billingConfirmed
-        ? 'Confirm your billing setup to continue'
-        : null
+  const canActivate = hasRunStandardChecks
+  const activateReason = !hasRunStandardChecks ? 'Run the standard checks to continue' : null
 
   const activateLabel = publish.approverRequired ? 'Submit for approval' : 'Activate on channels'
 
@@ -297,114 +289,133 @@ export function ReviewPublishStep() {
         <div>
           <span className="flex items-center gap-1.5">
             <h3>Test before you launch</h3>
-            <InfoTooltip text="Have a real exchange with your agent, or run through a standard set of checks, before anyone else can." />
+            <InfoTooltip text="Test messages here are free and do not count toward your usage." />
           </span>
         </div>
 
-        {/* Quick test */}
-        <div className="space-y-2 rounded-lg border border-border p-4">
-          <div className="max-h-64 space-y-2 overflow-y-auto">
-            {chatMessages.length === 0 ? (
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                No messages yet.
-              </p>
-            ) : (
-              chatMessages.map((m, i) => (
-                <div key={i} className={cn('flex', m.from === 'customer' ? 'justify-end' : 'justify-start')}>
-                  <p
-                    className={cn(
-                      'max-w-[80%] rounded-lg px-3 py-1.5',
-                      m.from === 'customer' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted',
-                    )}
-                    style={{ fontSize: 'var(--text-sm)' }}
-                  >
-                    {m.text}
+        <Tabs defaultValue="testing">
+          <TabsList>
+            <TabsTrigger value="testing">Testing</TabsTrigger>
+            <TabsTrigger value="eval">Eval</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="testing" className="space-y-4 pt-3">
+            {/* Quick test */}
+            <div className="space-y-2 rounded-lg border border-border p-4">
+              <div className="max-h-64 space-y-2 overflow-y-auto">
+                {chatMessages.length === 0 ? (
+                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                    No messages yet.
                   </p>
-                </div>
-              ))
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Input
-              value={chatDraft}
-              onChange={(e) => setChatDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') sendQuickTest()
-              }}
-              placeholder="Type a message to try..."
-            />
-            <Button size="icon" onClick={sendQuickTest} disabled={!chatDraft.trim()}>
-              <Send className="size-4" />
-            </Button>
-          </div>
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            Test messages here are free and do not count toward your usage.
-          </p>
-        </div>
-
-        {/* Standard checks */}
-        <div className="space-y-2">
-          <div>
-            <span className="flex items-center gap-1.5">
-              <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Run our standard checks</p>
-              <InfoTooltip text="A short set of common situations, run automatically, so you don’t have to think of them yourself." />
-            </span>
-          </div>
-          <Button variant="outline" onClick={() => runStandardChecks(false)} disabled={checkRows !== null && checkRows.some((r) => r.status === 'pending')}>
-            Run standard checks
-          </Button>
-
-          {checkRows && (
-            <div className="space-y-2">
-              {checkRows.map((row) => {
-                const expanded = expandedCheck === row.id
-                return (
-                  <div key={row.id} className="rounded-lg border border-border px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedCheck(expanded ? null : row.id)}
-                      disabled={row.status === 'pending'}
-                      className="flex w-full items-center justify-between gap-3 text-left"
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        {row.status === 'pending' ? (
-                          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
-                        ) : row.status === 'normal' ? (
-                          <CheckCircle2 className="size-4 shrink-0 text-success" />
-                        ) : (
-                          <AlertTriangle className="size-4 shrink-0 text-warning" />
+                ) : (
+                  chatMessages.map((m, i) => (
+                    <div key={i} className={cn('flex', m.from === 'customer' ? 'justify-end' : 'justify-start')}>
+                      <p
+                        className={cn(
+                          'max-w-[80%] rounded-lg px-3 py-1.5',
+                          m.from === 'customer' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted',
                         )}
-                        <span className="truncate" style={{ fontSize: 'var(--text-sm)' }}>
-                          {row.situation}
-                        </span>
-                      </span>
-                      <span className="flex shrink-0 items-center gap-2">
-                        <span className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                          {row.status === 'pending' ? '' : row.status === 'normal' ? 'Responded normally' : 'Check this'}
-                        </span>
-                        {row.status !== 'pending' && (
-                          <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
-                        )}
-                      </span>
-                    </button>
-                    {expanded && row.status !== 'pending' && (
-                      <div className="mt-2 space-y-1.5 border-t border-border pt-2">
-                        <p style={{ fontSize: 'var(--text-sm)' }}>
-                          <span className="text-muted-foreground">Customer: </span>
-                          {row.sent}
-                        </p>
-                        <p style={{ fontSize: 'var(--text-sm)' }}>
-                          <span className="text-muted-foreground">Agent: </span>
-                          {row.reply}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                        style={{ fontSize: 'var(--text-sm)' }}
+                      >
+                        {m.text}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={chatDraft}
+                  onChange={(e) => setChatDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') sendQuickTest()
+                  }}
+                  placeholder="Type a message to try..."
+                />
+                <Button size="icon" onClick={sendQuickTest} disabled={!chatDraft.trim()}>
+                  <Send className="size-4" />
+                </Button>
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Standard checks */}
+            <div className="space-y-2">
+              <div>
+                <span className="flex items-center gap-1.5">
+                  <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Run our standard checks</p>
+                  <InfoTooltip text="A short set of common situations, run automatically, so you don’t have to think of them yourself." />
+                </span>
+              </div>
+              <Button variant="outline" onClick={() => runStandardChecks(false)} disabled={checkRows !== null && checkRows.some((r) => r.status === 'pending')}>
+                Run standard checks
+              </Button>
+
+              {checkRows && (
+                <div className="space-y-2">
+                  {checkRows.map((row) => {
+                    const expanded = expandedCheck === row.id
+                    return (
+                      <div key={row.id} className="rounded-lg border border-border px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedCheck(expanded ? null : row.id)}
+                          disabled={row.status === 'pending'}
+                          className="flex w-full items-center justify-between gap-3 text-left"
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            {row.status === 'pending' ? (
+                              <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+                            ) : row.status === 'normal' ? (
+                              <CheckCircle2 className="size-4 shrink-0 text-success" />
+                            ) : (
+                              <AlertTriangle className="size-4 shrink-0 text-warning" />
+                            )}
+                            <span className="truncate" style={{ fontSize: 'var(--text-sm)' }}>
+                              {row.situation}
+                            </span>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-2">
+                            <span className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                              {row.status === 'pending' ? '' : row.status === 'normal' ? 'Responded normally' : 'Check this'}
+                            </span>
+                            {row.status !== 'pending' && (
+                              <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
+                            )}
+                          </span>
+                        </button>
+                        {expanded && row.status !== 'pending' && (
+                          <div className="mt-2 space-y-1.5 border-t border-border pt-2">
+                            <p style={{ fontSize: 'var(--text-sm)' }}>
+                              <span className="text-muted-foreground">Customer: </span>
+                              {row.sent}
+                            </p>
+                            <p style={{ fontSize: 'var(--text-sm)' }}>
+                              <span className="text-muted-foreground">Agent: </span>
+                              {row.reply}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="eval" className="space-y-2 pt-3">
+            <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Eval</p>
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              Deeper, scored testing across many scenarios at once, showing an average score and where the
+              agent most often struggles.
+            </p>
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              This isn&rsquo;t available yet. Meta lets us run eval scenarios and see the results, but doesn&rsquo;t
+              yet document a way to create the scenarios ourselves, so there&rsquo;s nothing here for it to run
+              against. We&rsquo;ll turn this on as soon as that&rsquo;s possible.
+            </p>
+          </TabsContent>
+        </Tabs>
       </section>
 
       {/* Who can talk to your agent */}
@@ -516,32 +527,6 @@ export function ReviewPublishStep() {
             checked={publish.approverRequired}
             onCheckedChange={(checked) => patch('publish', { approverRequired: checked })}
           />
-        </div>
-
-        <div className="space-y-2 rounded-lg border border-border p-3">
-          <label className="flex items-start gap-2">
-            <Checkbox
-              checked={publish.billingConfirmed}
-              onCheckedChange={(checked) => patch('publish', { billingConfirmed: checked === true })}
-              className="mt-0.5"
-            />
-            <span style={{ fontSize: 'var(--text-sm)' }}>I&rsquo;ve completed Meta&rsquo;s billing and compliance setup for this agent</span>
-          </label>
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            Meta Business Agent uses its own billing, separate from your regular WhatsApp messaging, and requires
-            accepting Meta&rsquo;s terms and completing their checks directly. We can&rsquo;t confirm this has been
-            done from here, so please check it yourself before switching on.
-          </p>
-          <a
-            href={BILLING_HUB_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-primary"
-            style={{ fontSize: 'var(--text-sm)' }}
-          >
-            Open Meta&rsquo;s Billing Hub
-            <ExternalLink className="size-3.5" />
-          </a>
         </div>
 
         {publish.activated ? (

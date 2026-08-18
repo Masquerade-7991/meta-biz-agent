@@ -121,7 +121,6 @@ export function createInitialState(): WizardState {
       versionNote: '',
       approverRequired: false,
       pendingApproval: false,
-      billingConfirmed: false,
       testRunStatus: 'idle',
       testResults: [],
       testsStaleSince: null,

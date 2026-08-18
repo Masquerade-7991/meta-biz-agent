@@ -531,9 +531,6 @@ export interface PublishState {
   approverRequired: boolean
   /** Set by "Submit for approval" on this screen (Helo-side only, never sent to Meta). */
   pendingApproval: boolean
-  /** Self-ticked by the user on this screen — we cannot verify Meta billing/compliance setup
-   *  from here, so this is an honest checkbox, never an automatic status check. */
-  billingConfirmed: boolean
   /** Kept for AgentsListPage.tsx's existing status/eval-score columns, but no longer written to
    *  by this screen — the new "standard checks" run is local, per-visit UI state (see
    *  ReviewPublishStep.tsx), not persisted wizard state. */

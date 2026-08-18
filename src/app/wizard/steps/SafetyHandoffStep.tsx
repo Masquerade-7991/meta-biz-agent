@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, ShieldCheck } from 'lucide-react'
 import { Label } from '@/app/components/ui/label'
 import { Input } from '@/app/components/ui/input'
 import { Textarea } from '@/app/components/ui/textarea'
 import { Button } from '@/app/components/ui/button'
+import { Badge } from '@/app/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { TagInput } from '@/app/components/wizard/TagInput'
 import { UnsavedChangesDialog } from '@/app/components/wizard/UnsavedChangesDialog'
 import { InlineError, LoadFailedBanner, SaveFailedBanner, SavingIndicator, LoadingIndicator } from '@/app/components/wizard/RetryBanner'
@@ -21,8 +23,10 @@ import {
   SAMPLE_TOPICS_TO_AVOID,
   suggestWordVariants,
 } from '@/app/wizard/mockData'
-import type { FollowUpInterval } from '@/app/wizard/types'
+import type { FollowUpInterval, GuardrailsState } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
+
+type TabId = 'avoids' | 'handoff' | 'followup'
 
 const MAX_WORD_PHRASES = 50
 const MAX_WORD_LENGTH = 60
@@ -50,6 +54,7 @@ should try again or offer an alternative before involving a person.`
 // and gate navigation with a single combined dirty-check, mirroring useSaveOnNextSection's
 // behaviour but spanning two slices instead of one.
 interface SafetySnapshot {
+  groundingMode: GuardrailsState['groundingMode']
   neverSayPhrases: string[]
   topicsToAvoid: string[]
   handoffMessageEnabled: boolean
@@ -60,9 +65,11 @@ interface SafetySnapshot {
 
 export function SafetyHandoffStep() {
   const { state, patch, setSection, setPendingSkillPrefill } = useWizard()
+  const [activeTab, setActiveTab] = useState<TabId>('avoids')
 
   function currentSnapshot(): SafetySnapshot {
     return {
+      groundingMode: state.guardrails.groundingMode,
       neverSayPhrases: state.guardrails.neverSayPhrases,
       topicsToAvoid: state.guardrails.topicsToAvoid,
       handoffMessageEnabled: state.guardrails.handoffMessageEnabled,
@@ -195,6 +202,8 @@ export function SafetyHandoffStep() {
   )
 
   const hasMultipleLanguages = state.personalization.additionalLanguages.length > 0 || state.demo.simulateMultipleLanguages
+  const avoidsCount = state.guardrails.neverSayPhrases.length + state.guardrails.topicsToAvoid.length
+  const followUpOn = state.replies.followUpInterval !== 0
 
   return (
     <div className="space-y-6">
@@ -215,148 +224,208 @@ export function SafetyHandoffStep() {
       {saveStatus === 'saving' && <SavingIndicator />}
       {loading && <LoadingIndicator label="Loading your saved choices" />}
 
-      <div className={cn('space-y-12', loading && 'pointer-events-none opacity-50')} aria-hidden={loading}>
-        {/* Section 1: What the agent avoids */}
-        <section className="space-y-6">
-          <span className="flex items-center gap-1.5">
-            <h3>What the agent avoids</h3>
-            <InfoTooltip text="Two ways to guide the agent away from things it should not say or discuss. Both of these become instructions the agent follows. They guide it strongly, but they are instructions, not a filter that blocks a message after it is written." />
-          </span>
+      <div className={cn(loading && 'pointer-events-none opacity-50')} aria-hidden={loading}>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
+          <TabsList>
+            <TabsTrigger value="avoids" className="gap-1.5">
+              What the agent avoids
+              {avoidsCount > 0 && (
+                <Badge variant="secondary" className="text-muted-foreground">
+                  {avoidsCount}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="handoff">When a person takes over</TabsTrigger>
+            <TabsTrigger value="followup" className="gap-1.5">
+              Following up with quiet customers
+              {followUpOn && (
+                <Badge variant="secondary" className="text-muted-foreground">
+                  On
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
 
-          <WordsToAvoidField
-            values={state.guardrails.neverSayPhrases}
-            onChange={(values) => patch('guardrails', { neverSayPhrases: values })}
-          />
-
-          <TopicsToAvoidField
-            values={state.guardrails.topicsToAvoid}
-            onChange={(values) => patch('guardrails', { topicsToAvoid: values })}
-            disabled={loading}
-          />
-        </section>
-
-        {/* Section 2: When a person takes over */}
-        <section className="space-y-6">
-          <span className="flex items-center gap-1.5">
-            <h3>When a person takes over</h3>
-            <InfoTooltip text="Once a conversation is handed over, your team picks it up from your usual inbox. That part is not set up in this wizard." />
-          </span>
-
-          <div className="space-y-3 rounded-lg bg-muted p-4">
-            <p style={{ fontSize: 'var(--text-sm)' }}>
-              <span style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>This happens automatically.</span>{' '}
-              Your agent hands the conversation to a person on its own, when it is unsure, when
-              something seems wrong, or when the customer asks for one. You cannot turn this off
-              from here. What you can control below is what the agent says at that moment.
+          {/* forceMount + CSS-hidden (not Radix's default unmount-when-inactive) so every tab's
+              fields keep patching the shared guardrails/replies slices no matter which tab is
+              showing — otherwise switching tabs mid-edit would silently drop unsaved changes. */}
+          <TabsContent value="avoids" forceMount className="mt-6 space-y-6 data-[state=inactive]:hidden">
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              Ways to guide the agent away from things it should not say or discuss. These become
+              instructions the agent follows strongly, not a filter that blocks a message after it
+              is written.
             </p>
-            <p style={{ fontSize: 'var(--text-sm)' }}>
-              Want more control over exactly when this happens? You can add specific rules for
-              your business.
-            </p>
-            <Button size="sm" variant="outline" onClick={customiseHandoffRules}>
-              Customise handoff rules
-            </Button>
-          </div>
 
-          <div className="space-y-2">
-            <Label>What the agent says when it hands over</Label>
-            <div className="space-y-2">
-              <SelectableCard
-                title="Meta’s standard message"
-                info="A ready-made message, shown in the customer’s own language automatically."
-                selected={!state.guardrails.handoffMessageEnabled}
-                onClick={() => patch('guardrails', { handoffMessageEnabled: false })}
-              />
-              <SelectableCard
-                title="Write my own message"
-                selected={state.guardrails.handoffMessageEnabled}
-                onClick={() => patch('guardrails', { handoffMessageEnabled: true })}
-              />
+            <div className="space-y-1.5">
+              <span className="flex items-center gap-1.5">
+                <Label>How much the agent can improvise</Label>
+                <InfoTooltip text="Strict keeps every answer grounded in what you've configured, and hands off to a person rather than guessing. Assisted allows some natural conversation within its role." />
+              </span>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <SelectableCard
+                  title="Strict"
+                  helper="Only answers from what you've told it, otherwise asks a person."
+                  selected={state.guardrails.groundingMode === 'strict'}
+                  onClick={() => patch('guardrails', { groundingMode: 'strict' })}
+                />
+                <SelectableCard
+                  title="Assisted"
+                  helper="Some natural conversation allowed within its role."
+                  selected={state.guardrails.groundingMode === 'assisted'}
+                  onClick={() => patch('guardrails', { groundingMode: 'assisted' })}
+                />
+              </div>
             </div>
 
-            {state.guardrails.handoffMessageEnabled && (
-              <div className="ml-6 space-y-1.5">
-                <Textarea
-                  id="handoff-message"
-                  rows={2}
-                  maxLength={MAX_CUSTOM_HANDOFF}
-                  value={state.guardrails.handoffMessage}
-                  onChange={(e) => patch('guardrails', { handoffMessage: e.target.value })}
-                  placeholder="e.g. Let me get a member of our team to help you with this. They'll be with you shortly."
-                  className="bg-input-background shadow-sm"
-                  disabled={loading}
-                />
-                {hasMultipleLanguages && (
-                  <p className="flex items-start gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                    Your agent replies in more than one language, but this message is sent exactly
-                    as written, in this one language, no matter which language the customer was
-                    using. Meta&rsquo;s standard message adjusts to the customer&rsquo;s language
-                    automatically. If most of your customers write in a language other than the
-                    one you type here, the standard message may serve them better.
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        </section>
+            <WordsToAvoidField
+              values={state.guardrails.neverSayPhrases}
+              onChange={(values) => patch('guardrails', { neverSayPhrases: values })}
+            />
 
-        {/* Section 3: Following up with quiet customers */}
-        <section className="space-y-6">
-          <span className="flex items-center gap-1.5">
-            <h3>Following up with quiet customers</h3>
-            <InfoTooltip text="If a customer goes quiet mid-conversation, the agent can send one message to check back in." />
-          </span>
-
-          <div className="space-y-1.5">
-            <span className="flex items-center gap-1.5">
-              <Label>Follow up after</Label>
-              <InfoTooltip text="Most businesses that use this choose 30 minutes to 1 hour. Shorter can feel pushy, longer may be too late to be useful." />
-            </span>
-            <Select
-              value={String(state.replies.followUpInterval)}
-              onValueChange={(v) => {
-                const interval = Number(v) as FollowUpInterval
-                patch('replies', { followUpInterval: interval, followUpEnabled: interval !== 0 })
-              }}
+            <TopicsToAvoidField
+              values={state.guardrails.topicsToAvoid}
+              onChange={(values) => patch('guardrails', { topicsToAvoid: values })}
               disabled={loading}
-            >
-              <SelectTrigger className="w-full max-w-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FOLLOW_UP_INTERVALS.map((opt) => (
-                  <SelectItem key={opt.value} value={String(opt.value)}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+            />
 
-          {state.replies.followUpInterval !== 0 && (
-            <>
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                Follow-up messages are charged the same way as any other message the agent sends.
+            <div className="space-y-2 rounded-lg bg-muted p-4">
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="size-4 text-muted-foreground" />
+                <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>Always protected</p>
+              </span>
+              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                These hold no matter what you configure above.
               </p>
-              <div className="space-y-1.5">
-                <span className="flex items-center gap-1.5">
-                  <Label htmlFor="followup-message">What the agent sends</Label>
-                  <InfoTooltip text="Kept short and low pressure works best for a check-in message." />
-                </span>
-                <Textarea
-                  id="followup-message"
-                  rows={2}
-                  maxLength={MAX_FOLLOWUP_MESSAGE}
-                  value={state.replies.followUpMessage}
-                  onChange={(e) => patch('replies', { followUpMessage: e.target.value })}
-                  className="bg-input-background shadow-sm"
-                  disabled={loading}
+              <ul className="list-disc space-y-1 pl-5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <li>Never claims to be a human when a customer directly asks.</li>
+                <li>Never shares one customer&rsquo;s personal details with another.</li>
+                <li>Never states medical, legal, or financial advice as certain fact.</li>
+              </ul>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="handoff" forceMount className="mt-6 space-y-6 data-[state=inactive]:hidden">
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              Once a conversation is handed over, your team picks it up from your usual inbox.
+              That part is not set up in this wizard.
+            </p>
+
+            <div className="space-y-3 rounded-lg bg-muted p-4">
+              <p style={{ fontSize: 'var(--text-sm)' }}>
+                <span style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>This happens automatically.</span>{' '}
+                Your agent hands the conversation to a person on its own, when it is unsure, when
+                something seems wrong, or when the customer asks for one. You cannot turn this off
+                from here. What you can control below is what the agent says at that moment.
+              </p>
+              <p style={{ fontSize: 'var(--text-sm)' }}>
+                Want more control over exactly when this happens? You can add specific rules for
+                your business.
+              </p>
+              <Button size="sm" variant="outline" onClick={customiseHandoffRules}>
+                Customise handoff rules
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <Label>What the agent says when it hands over</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <SelectableCard
+                  title="Meta’s standard message"
+                  info="A ready-made message, shown in the customer’s own language automatically."
+                  selected={!state.guardrails.handoffMessageEnabled}
+                  onClick={() => patch('guardrails', { handoffMessageEnabled: false })}
+                />
+                <SelectableCard
+                  title="Write my own message"
+                  selected={state.guardrails.handoffMessageEnabled}
+                  onClick={() => patch('guardrails', { handoffMessageEnabled: true })}
                 />
               </div>
-            </>
-          )}
-        </section>
+
+              {state.guardrails.handoffMessageEnabled && (
+                <div className="space-y-1.5">
+                  <Textarea
+                    id="handoff-message"
+                    rows={2}
+                    maxLength={MAX_CUSTOM_HANDOFF}
+                    value={state.guardrails.handoffMessage}
+                    onChange={(e) => patch('guardrails', { handoffMessage: e.target.value })}
+                    placeholder="e.g. Let me get a member of our team to help you with this. They'll be with you shortly."
+                    className="bg-input-background shadow-sm"
+                    disabled={loading}
+                  />
+                  {hasMultipleLanguages && (
+                    <p className="flex items-start gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                      Your agent replies in more than one language, but this message is sent
+                      exactly as written, in this one language, no matter which language the
+                      customer was using. Meta&rsquo;s standard message adjusts to the
+                      customer&rsquo;s language automatically. If most of your customers write in
+                      a language other than the one you type here, the standard message may serve
+                      them better.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="followup" forceMount className="mt-6 space-y-6 data-[state=inactive]:hidden">
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              If a customer goes quiet mid-conversation, the agent can send one message to check
+              back in.
+            </p>
+
+            <div className="space-y-1.5">
+              <span className="flex items-center gap-1.5">
+                <Label>Follow up after</Label>
+                <InfoTooltip text="Most businesses that use this choose 30 minutes to 1 hour. Shorter can feel pushy, longer may be too late to be useful." />
+              </span>
+              <Select
+                value={String(state.replies.followUpInterval)}
+                onValueChange={(v) => {
+                  const interval = Number(v) as FollowUpInterval
+                  patch('replies', { followUpInterval: interval, followUpEnabled: interval !== 0 })
+                }}
+                disabled={loading}
+              >
+                <SelectTrigger className="w-full max-w-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FOLLOW_UP_INTERVALS.map((opt) => (
+                    <SelectItem key={opt.value} value={String(opt.value)}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {followUpOn && (
+              <>
+                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  Follow-up messages are charged the same way as any other message the agent sends.
+                </p>
+                <div className="space-y-1.5">
+                  <span className="flex items-center gap-1.5">
+                    <Label htmlFor="followup-message">What the agent sends</Label>
+                    <InfoTooltip text="Kept short and low pressure works best for a check-in message." />
+                  </span>
+                  <Textarea
+                    id="followup-message"
+                    rows={2}
+                    maxLength={MAX_FOLLOWUP_MESSAGE}
+                    value={state.replies.followUpMessage}
+                    onChange={(e) => patch('replies', { followUpMessage: e.target.value })}
+                    className="bg-input-background shadow-sm"
+                    disabled={loading}
+                  />
+                </div>
+              </>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
 
       <UnsavedChangesDialog open={unsavedDialogOpen} onResolve={resolveUnsaved} />
