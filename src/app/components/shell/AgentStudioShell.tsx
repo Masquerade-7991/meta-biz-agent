@@ -7,26 +7,24 @@ import { STUDIO_GROUP_LABEL, STUDIO_NAV_SECTIONS } from '@/app/wizard/studioNav'
 import type { StudioSectionId } from '@/app/wizard/types'
 import { OverviewPage } from '@/app/wizard/steps/OverviewPage'
 import { AgentIdentityStep } from '@/app/wizard/steps/AgentIdentityStep'
-import { PersonalitySection } from '@/app/wizard/steps/PersonalitySection'
-import { SkillsSection } from '@/app/wizard/steps/SkillsSection'
-import { RichRepliesSection } from '@/app/wizard/steps/RichRepliesSection'
+import { AbilitiesStep } from '@/app/wizard/steps/AbilitiesStep'
 import { KnowledgeStep } from '@/app/wizard/steps/KnowledgeStep'
 import { ConnectionsStep } from '@/app/wizard/steps/ConnectionsStep'
 import { SafetyHandoffStep } from '@/app/wizard/steps/SafetyHandoffStep'
-import { ReviewPublishStep } from '@/app/wizard/steps/ReviewPublishStep'
+import { TestEvalStep } from '@/app/wizard/steps/TestEvalStep'
+import { PublishStep } from '@/app/wizard/steps/PublishStep'
 import { ActivityPage } from '@/app/wizard/steps/ActivityPage'
 import { cn } from '@/app/lib/utils'
 
 const SECTION_COMPONENTS: Record<StudioSectionId, () => React.ReactElement> = {
   overview: OverviewPage,
   identity: AgentIdentityStep,
-  personality: PersonalitySection,
-  skills: SkillsSection,
-  richReplies: RichRepliesSection,
+  abilities: AbilitiesStep,
   knowledge: KnowledgeStep,
   connections: ConnectionsStep,
   safety: SafetyHandoffStep,
-  publish: ReviewPublishStep,
+  testEval: TestEvalStep,
+  publish: PublishStep,
   activity: ActivityPage,
 }
 
@@ -34,8 +32,8 @@ const GROUPS = ['build', 'deploy', 'monitor'] as const
 
 // The agent builder's chrome: a persistent left sidebar with free navigation between every
 // section, replacing the old forced-order stepper. Content stays organised the way this app's
-// own wizard already modeled it (Identity, Personality, Skills, Rich replies, Knowledge,
-// Connections, Safety & handoff, Test & publish, Activity) — just no longer gated by Back/Next.
+// own wizard already modeled it (Identity, Abilities, Knowledge, Connections, Safety & handoff,
+// Test & Eval, Publish, Activity) — just no longer gated by Back/Next.
 export function AgentStudioShell({ onExit }: { onExit: () => void }) {
   const { state, setSection } = useWizard()
   const { runGuard, pending } = useNavigationGuard()

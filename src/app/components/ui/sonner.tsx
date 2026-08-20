@@ -11,6 +11,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme="light"
+      // Demo controls now own bottom-right (see DevControlsButton) — keep toasts on the other side.
+      position="bottom-left"
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,

@@ -12,13 +12,12 @@ import type { StepId, StudioSectionId } from '@/app/wizard/types'
 // stays label-only, so this lives here rather than on the shared STUDIO_NAV_SECTIONS entry.
 const SECTION_BLURB: Partial<Record<StudioSectionId, string>> = {
   identity: 'Name and role',
-  personality: 'Tone and language',
-  skills: 'Custom skills',
-  richReplies: 'Buttons, images, menus',
+  abilities: 'Personality, skills, rich replies',
   knowledge: 'FAQs, docs, website',
   connections: 'Other systems',
   safety: 'Words and handoff',
-  publish: 'Test and go live',
+  testEval: 'Try it and run checks',
+  publish: 'Go live',
   activity: 'Health and logs',
 }
 
@@ -38,7 +37,8 @@ export function OverviewPage() {
       return
     }
     if (step === 'agent' && tab === 'richReplies') {
-      setSection('richReplies')
+      setPendingStepFocus({ step, tab })
+      setSection('abilities')
       return
     }
     const bySection: Partial<Record<StepId, StudioSectionId>> = {

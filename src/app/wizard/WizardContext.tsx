@@ -135,6 +135,7 @@ export function createInitialState(): WizardState {
       audienceMode: 'allowlisted',
       activated: false,
       activatedChannels: [],
+      standardChecksRun: false,
     },
     qualityChecks: {
       runs: [],
@@ -263,7 +264,13 @@ function loadInitialState(): WizardState {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return createInitialState()
     const parsed = JSON.parse(raw) as WizardState
-    return { ...createInitialState(), ...parsed, knowledge: migrateKnowledge(parsed.knowledge) ?? createInitialState().knowledge }
+    const defaults = createInitialState()
+    return {
+      ...defaults,
+      ...parsed,
+      knowledge: migrateKnowledge(parsed.knowledge) ?? defaults.knowledge,
+      publish: { ...defaults.publish, ...parsed.publish },
+    }
   } catch {
     return createInitialState()
   }

@@ -5,11 +5,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/pop
 import { useDevControlsEntries } from '@/app/wizard/DevControlsContext'
 
 /** The single, app-wide demo-controls panel. Rendered once at the app root, fixed to the true
- *  bottom-left of the viewport — not the wizard's own footer, which spans full width and already
- *  carries the Back button at its own bottom-left inset, so this sits above that bar rather than
- *  beside it to guarantee no overlap. Always visible, collapsed by default; its contents swap
+ *  bottom-right of the viewport (toasts use bottom-left, see components/ui/sonner.tsx, so the two
+ *  floating layers never overlap). Always visible, collapsed by default; its contents swap
  *  silently to match whichever screen is currently registering controls. Hidden below a reasonable
  *  desktop width, since this is prototype-only tooling that never needs to work on a narrow screen.
+ *  Trigger and panel use the app's own Button/Popover primitives with no colour overrides, so this
+ *  reads as part of the product rather than as a debug overlay bolted on top of it.
  *  z-[60] outranks the Dialog overlay/content's z-50, and pointer-events-auto overrides the
  *  `body.style.pointerEvents = 'none'` that Radix's DismissableLayer applies while a Dialog with
  *  disableOutsidePointerEvents (e.g. Create Agent) is open — without it, this panel would inherit
@@ -26,25 +27,20 @@ export function DevControlsButton() {
   const [open, setOpen] = useState(false)
 
   return (
-    <div data-demo-panel className="pointer-events-auto fixed bottom-20 left-4 z-[60] hidden lg:block">
+    <div data-demo-panel className="pointer-events-auto fixed right-6 bottom-6 z-[60] hidden lg:block">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Demo controls"
-            className="rounded-full border-warning bg-warning/10 text-warning-foreground hover:bg-warning/20"
-          >
+          <Button variant="outline" size="icon" aria-label="Demo controls" className="rounded-full shadow-md">
             <FlaskConical className="size-4" />
           </Button>
         </PopoverTrigger>
         <PopoverContent
           data-demo-panel
-          align="start"
+          align="end"
           side="top"
           onInteractOutside={(event) => event.preventDefault()}
           onFocusOutside={(event) => event.preventDefault()}
-          className="pointer-events-auto z-[60] w-96 space-y-4 border-dashed border-warning bg-warning/5"
+          className="pointer-events-auto z-[60] w-96 space-y-4"
         >
           {rendered.length === 0 ? (
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>

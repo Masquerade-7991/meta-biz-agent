@@ -1,5 +1,6 @@
 import type {
   ActionMethod,
+  AgentEventRow,
   AgentEventStatus,
   AgentEventTypeDef,
   BusinessHourRow,
@@ -1441,15 +1442,20 @@ export function getCapabilityCards(category: string): CapabilityCard[] {
 
 // ---- Agent Activity page ----
 
-/** Meta's six real status values for a submitted business event, mapped to plain words. Never
- *  invented values — this is the full set the platform returns. */
-export const AGENT_EVENT_STATUS_META: Record<AgentEventStatus, { label: string; tone: 'success' | 'warning' | 'muted' | 'destructive' }> = {
-  request_received: { label: 'Received', tone: 'muted' },
-  processing: { label: 'Processing', tone: 'muted' },
-  sent: { label: 'Sent', tone: 'success' },
-  success: { label: 'Delivered', tone: 'success' },
-  failed: { label: 'Failed', tone: 'destructive' },
-  skipped: { label: 'Skipped', tone: 'warning' },
+/** Meta's six real status values for a submitted business event, mapped to plain words and a
+ *  Badge treatment. Never invented values — this is the full set the platform returns.
+ *
+ *  `sent` and `success` are genuinely different terminal-ish states (see agent-activity-page-spec
+ *  override, section 1), not a redundant pair — so they get visually distinct success tones:
+ *  `sent` a lighter tint ("dispatched, not yet confirmed"), `success` the full solid tone
+ *  ("confirmed delivered"), rather than collapsing them into one look. */
+export const AGENT_EVENT_STATUS_META: Record<AgentEventStatus, { label: string; badgeVariant: 'secondary' | 'destructive'; badgeClassName?: string }> = {
+  request_received: { label: 'Received', badgeVariant: 'secondary' },
+  processing: { label: 'Processing', badgeVariant: 'secondary' },
+  sent: { label: 'Sent', badgeVariant: 'secondary', badgeClassName: 'bg-success/15 text-success' },
+  success: { label: 'Delivered', badgeVariant: 'secondary', badgeClassName: 'bg-success text-success-foreground' },
+  failed: { label: 'Failed', badgeVariant: 'destructive' },
+  skipped: { label: 'Skipped', badgeVariant: 'secondary', badgeClassName: 'bg-warning text-warning-foreground' },
 }
 
 export function formatFullTimestamp(timestamp: number): string {
@@ -1461,6 +1467,41 @@ export function formatFullTimestamp(timestamp: number): string {
     minute: '2-digit',
     hour12: true,
   })
+}
+
+/** Table "Time" column: relative within the last day, short absolute after that — never shows a
+ *  year, since these are recent operational events, not historical records. */
+export function formatEventTime(timestamp: number): string {
+  const diffMin = Math.floor((Date.now() - timestamp) / 60_000)
+  if (diffMin < 1) return 'Just now'
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`
+  return new Date(timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+}
+
+/** Detail panel's "Received" / "Last updated" — same short-absolute shape as formatEventTime but
+ *  always absolute and down to the second, since this is where the precise time actually matters. */
+export function formatEventTimestampPrecise(timestamp: number): string {
+  return new Date(timestamp).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  })
+}
+
+/** "Took 16 seconds" — a real, honestly computed duration between two real timestamps, never
+ *  invented latency. */
+export function formatDuration(ms: number): string {
+  const seconds = Math.max(0, Math.round(ms / 1000))
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? '' : 's'}`
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`
+  const hours = Math.round(minutes / 60)
+  return `${hours} hour${hours === 1 ? '' : 's'}`
 }
 
 export function newWebhookUrl(): string {
@@ -1486,7 +1527,90 @@ export function buildDeveloperEventsChecklist(webhookUrl: string, secretKey: str
 export const SAMPLE_AGENT_EVENT_TYPES: { name: string; description: string }[] = [
   { name: 'payment_received', description: 'A customer completed payment for their order.' },
   { name: 'document_verified', description: 'A submitted document passed verification.' },
+  { name: 'shipping_update', description: 'An order changed shipping status.' },
+  { name: 'refund_issued', description: 'A refund was processed for an order.' },
+  { name: 'appointment_reminder', description: 'An upcoming appointment needs a reminder sent.' },
 ]
+
+const SAMPLE_EVENT_RECIPIENTS = ['+91 98765 43210', '+91 91234 56789', '+91 90000 11122', '+91 99887 76655', '+91 90011 22334']
+
+const SAMPLE_FAILURE_REASONS = ['Signature verification failed.', "Could not reach the customer's conversation.", 'The payload was missing a required field.']
+const SAMPLE_SKIP_REASONS = ['The conversation was already closed.', 'No matching customer found for this recipient.', 'This event arrived after the conversation window closed.']
+
+/** One event-type's flavour text and a sample payload shape, for building a demo log that reads
+ *  as real traffic rather than "Sample event 7". Weighted toward payment_received, same as most
+ *  live agents actually see — not a flat/uniform distribution, so the "most common event types"
+ *  chart has something real to show. */
+const SAMPLE_EVENT_DEFS: { eventType: string; weight: number; describe: () => string; payload: () => string }[] = [
+  {
+    eventType: 'payment_received',
+    weight: 10,
+    describe: () => `Payment confirmed for order ${1000 + Math.floor(Math.random() * 9000)}`,
+    payload: () => JSON.stringify({ order_id: String(1000 + Math.floor(Math.random() * 9000)), amount: (Math.random() * 5000).toFixed(2), currency: 'INR' }),
+  },
+  {
+    eventType: 'document_verified',
+    weight: 6,
+    describe: () => 'Identity document verified',
+    payload: () => JSON.stringify({ document_type: 'aadhaar', result: 'pass' }),
+  },
+  {
+    eventType: 'shipping_update',
+    weight: 6,
+    describe: () => 'Order shipped',
+    payload: () => `order_id=${1000 + Math.floor(Math.random() * 9000)};carrier=Delhivery;status=in_transit`,
+  },
+  {
+    eventType: 'refund_issued',
+    weight: 4,
+    describe: () => `Refund issued for order ${1000 + Math.floor(Math.random() * 9000)}`,
+    payload: () => JSON.stringify({ order_id: String(1000 + Math.floor(Math.random() * 9000)), refund_amount: (Math.random() * 2000).toFixed(2) }),
+  },
+  {
+    eventType: 'appointment_reminder',
+    weight: 4,
+    describe: () => 'Appointment reminder due tomorrow',
+    payload: () => `appointment_id=apt_${Math.random().toString(36).slice(2, 8)};when=tomorrow_10am`,
+  },
+]
+
+/** ~30 events across all six real statuses, several real event types, spread over a two-week
+ *  window — enough for every chart in the monitoring view to render meaningfully, per the demo
+ *  controls this feature calls for. */
+export function buildSampleAgentEventLog(): AgentEventRow[] {
+  const typePool = SAMPLE_EVENT_DEFS.flatMap((def) => Array(def.weight).fill(def))
+  // 30 slots across the six real statuses — success dominant (the common case), with at least a
+  // few of the other five so every status renders somewhere in the sample.
+  const statusPool: AgentEventStatus[] = [
+    ...Array(13).fill('success'),
+    ...Array(4).fill('sent'),
+    ...Array(4).fill('processing'),
+    ...Array(3).fill('request_received'),
+    ...Array(3).fill('failed'),
+    ...Array(3).fill('skipped'),
+  ]
+
+  const now = Date.now()
+  return statusPool.map((status, i) => {
+    const def = typePool[i % typePool.length]
+    const createdAt = now - Math.floor(Math.random() * 14 * 86_400_000) - Math.floor(Math.random() * 86_400_000)
+    const processedMs = status === 'request_received' ? 0 : Math.floor(2_000 + Math.random() * 60_000)
+    const row: AgentEventRow = {
+      id: newId('aevent'),
+      agentEventId: newId('meta_evt'),
+      eventType: def.eventType,
+      description: def.describe(),
+      to: SAMPLE_EVENT_RECIPIENTS[Math.floor(Math.random() * SAMPLE_EVENT_RECIPIENTS.length)],
+      status,
+      createdAt,
+      updatedAt: createdAt + processedMs,
+      payload: def.payload(),
+    }
+    if (status === 'failed') row.errorMessage = SAMPLE_FAILURE_REASONS[Math.floor(Math.random() * SAMPLE_FAILURE_REASONS.length)]
+    if (status === 'skipped') row.skippedReason = SAMPLE_SKIP_REASONS[Math.floor(Math.random() * SAMPLE_SKIP_REASONS.length)]
+    return row
+  })
+}
 
 export const SAMPLE_QUALITY_CHECK_RUN: { situation: string; sent: string; reply: string; status: 'normal' | 'warn' }[] = [
   { situation: 'Greeting', sent: 'Hi', reply: 'Hi there! How can I help you today?', status: 'normal' },

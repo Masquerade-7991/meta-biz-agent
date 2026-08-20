@@ -6,12 +6,11 @@ export type StepId = 'agent' | 'knowledge' | 'connections' | 'safety' | 'publish
 export type StudioSectionId =
   | 'overview'
   | 'identity'
-  | 'personality'
-  | 'skills'
-  | 'richReplies'
+  | 'abilities'
   | 'knowledge'
   | 'connections'
   | 'safety'
+  | 'testEval'
   | 'publish'
   | 'activity'
 
@@ -533,7 +532,7 @@ export interface PublishState {
   pendingApproval: boolean
   /** Kept for AgentsListPage.tsx's existing status/eval-score columns, but no longer written to
    *  by this screen — the new "standard checks" run is local, per-visit UI state (see
-   *  ReviewPublishStep.tsx), not persisted wizard state. */
+   *  TestEvalStep.tsx), not persisted wizard state. */
   testRunStatus: 'idle' | 'running' | 'done'
   testResults: TestConversationResult[]
   testsStaleSince: number | null
@@ -542,6 +541,10 @@ export interface PublishState {
   audienceMode: 'allowlisted' | 'everyone'
   activated: boolean
   activatedChannels: string[]
+  /** Real, persisted agent state (not derived from page presence): has the standard checks
+   *  battery been run at least once, on Test & Eval, regardless of pass/fail outcome. Set the
+   *  moment that battery completes; read by the separate Publish page to gate Activate. */
+  standardChecksRun: boolean
 }
 
 // ---- Agent Activity page: quality checks history ----
@@ -580,8 +583,18 @@ export interface AgentEventRow {
   id: string
   agentEventId: string
   eventType: string
+  /** The real, human-readable `event.description` field. */
+  description: string
+  /** The real `to` field — a phone number, shown unmasked (see the allowlist for precedent). */
+  to: string
   status: AgentEventStatus
-  timestamp: number
+  /** Real `created_at`, ISO 8601 on the wire, kept as epoch ms here like every other timestamp
+   *  field in this app. */
+  createdAt: number
+  /** Real `updated_at` — moves forward each time the status changes. */
+  updatedAt: number
+  /** Real, opaque `payload` string passed through as-is. May or may not parse as JSON. */
+  payload: string
   errorMessage?: string
   skippedReason?: string
 }

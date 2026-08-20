@@ -2,13 +2,12 @@ import {
   Activity,
   BadgeCheck,
   BrainCircuit,
+  FlaskConical,
   LayoutGrid,
-  MessageSquareText,
   Plug,
   Rocket,
   ShieldAlert,
   Sparkles,
-  Wand2,
   type LucideIcon,
 } from 'lucide-react'
 import type { StudioSectionId } from './types'
@@ -32,12 +31,11 @@ export const STUDIO_GROUP_LABEL: Record<'build' | 'deploy' | 'monitor', string> 
 export const STUDIO_NAV_SECTIONS: StudioNavItem[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'identity', label: 'Identity', icon: BadgeCheck, group: 'build' },
-  { id: 'personality', label: 'Personality', icon: Sparkles, group: 'build' },
-  { id: 'skills', label: 'Skills', icon: Wand2, group: 'build' },
-  { id: 'richReplies', label: 'Rich replies', icon: MessageSquareText, group: 'build' },
+  { id: 'abilities', label: 'Abilities', icon: Sparkles, group: 'build' },
   { id: 'knowledge', label: 'Knowledge', icon: BrainCircuit, group: 'build' },
   { id: 'connections', label: 'Connections', icon: Plug, group: 'build' },
   { id: 'safety', label: 'Safety & handoff', icon: ShieldAlert, group: 'build' },
-  { id: 'publish', label: 'Test & publish', icon: Rocket, group: 'deploy' },
+  { id: 'testEval', label: 'Test & Eval', icon: FlaskConical, group: 'deploy' },
+  { id: 'publish', label: 'Publish', icon: Rocket, group: 'deploy' },
   { id: 'activity', label: 'Activity', icon: Activity, group: 'monitor' },
 ]

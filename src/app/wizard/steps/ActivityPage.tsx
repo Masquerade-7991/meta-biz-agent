@@ -11,11 +11,12 @@ import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
+import { InboundEventsMonitor } from './InboundEventsMonitor'
 import {
-  AGENT_EVENT_STATUS_META,
   SAMPLE_AGENT_EVENT_TYPES,
   SAMPLE_QUALITY_CHECK_RUN,
   buildDeveloperEventsChecklist,
+  buildSampleAgentEventLog,
   formatFullTimestamp,
   newId,
   newSecretKey,
@@ -24,6 +25,7 @@ import {
 import type {
   ActivityLogRow,
   AgentEventRow,
+  AgentEventStatus,
   AgentEventTypeDef,
   AgentEventsState,
   ConnectionsPageState,
@@ -86,14 +88,14 @@ function QualityChecksSection({ runs, onGoToTestPublish }: { runs: QualityCheckR
     <section className="space-y-3">
       <span className="flex items-center gap-1.5">
         <h3>Quality checks</h3>
-        <InfoTooltip text="Results from the standard checks run on the Test & publish step." />
+        <InfoTooltip text="Results from the standard checks run on the Test & Eval step." />
       </span>
 
       {sorted.length === 0 ? (
         <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
           No checks run yet. Run the standard checks from{' '}
           <button type="button" onClick={onGoToTestPublish} className="text-primary underline underline-offset-2">
-            Test &amp; publish
+            Test &amp; Eval
           </button>{' '}
           to see results here.
         </p>
@@ -227,44 +229,6 @@ function ConnectorActivitySection({
 // ==================================================================================
 // INBOUND BUSINESS EVENTS
 // ==================================================================================
-
-function AgentEventRowView({ row }: { row: AgentEventRow }) {
-  const [expanded, setExpanded] = useState(false)
-  const meta = AGENT_EVENT_STATUS_META[row.status]
-  const reason = row.status === 'failed' ? row.errorMessage : row.status === 'skipped' ? row.skippedReason : null
-  const expandable = (row.status === 'failed' || row.status === 'skipped') && !!reason
-
-  return (
-    <div className="rounded-md border border-border">
-      <button
-        type="button"
-        onClick={() => expandable && setExpanded((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left"
-      >
-        <span className="flex items-center gap-3" style={{ fontSize: 'var(--text-sm)' }}>
-          <span className="text-muted-foreground">{formatFullTimestamp(row.timestamp)}</span>
-          <code style={{ fontSize: 'var(--text-xs)' }}>{row.eventType}</code>
-        </span>
-        <span
-          className={cn(
-            meta.tone === 'success' && 'text-success',
-            meta.tone === 'destructive' && 'text-destructive',
-            meta.tone === 'warning' && 'text-warning-foreground',
-            meta.tone === 'muted' && 'text-muted-foreground',
-          )}
-          style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-medium)' }}
-        >
-          {meta.label}
-        </span>
-      </button>
-      {expandable && expanded && (
-        <p className="mx-3 mb-2 rounded-md bg-muted p-2" style={{ fontSize: 'var(--text-xs)' }}>
-          {reason}
-        </p>
-      )}
-    </div>
-  )
-}
 
 function InboundEventsSetupDialog({
   agentEvents,
@@ -421,7 +385,6 @@ function InboundEventsSection({
   onAddSkillForEvent: () => void
 }) {
   const [setupOpen, setSetupOpen] = useState(false)
-  const sortedEvents = [...agentEvents.events].sort((a, b) => b.timestamp - a.timestamp)
 
   return (
     <section className="space-y-4">
@@ -460,20 +423,7 @@ function InboundEventsSection({
         </button>
       </p>
 
-      <div className="space-y-2">
-        <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Recent events</p>
-        {sortedEvents.length === 0 ? (
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-            No events received yet.
-          </p>
-        ) : (
-          <div className="space-y-1">
-            {sortedEvents.map((row) => (
-              <AgentEventRowView key={row.id} row={row} />
-            ))}
-          </div>
-        )}
-      </div>
+      <InboundEventsMonitor events={agentEvents.events} />
 
       {setupOpen && (
         <InboundEventsSetupDialog
@@ -500,7 +450,7 @@ export function ActivityPage() {
   const { state, patch, setSection, setPendingSkillPrefill } = useWizard()
 
   function goToTestPublish() {
-    setSection('publish')
+    setSection('testEval')
   }
 
   function goToConnections() {
@@ -512,7 +462,7 @@ export function ActivityPage() {
       name: 'Business event handling',
       instruction: 'When a business event of type [event type] arrives, [describe what the agent should say or do].',
     })
-    setSection('skills')
+    setSection('abilities')
   }
 
   function demoLoadSampleActivity() {
@@ -579,50 +529,50 @@ export function ActivityPage() {
       state.agentEvents.eventTypes.length > 0
         ? state.agentEvents.eventTypes
         : SAMPLE_AGENT_EVENT_TYPES.map((t) => ({ id: newId('etype'), ...t }))
-    const sampleEvents: AgentEventRow[] = [
-      { id: newId('aevent'), agentEventId: newId('meta_evt'), eventType: 'payment_received', status: 'success', timestamp: now - 3_600_000 },
-      {
-        id: newId('aevent'),
-        agentEventId: newId('meta_evt'),
-        eventType: 'document_verified',
-        status: 'failed',
-        timestamp: now - 5_400_000,
-        errorMessage: 'Signature verification failed.',
-      },
-    ]
-    patch('agentEvents', { configured: true, webhookUrl, secretKey, eventTypes, events: [...sampleEvents, ...state.agentEvents.events] })
+    patch('agentEvents', { configured: true, webhookUrl, secretKey, eventTypes, events: [...buildSampleAgentEventLog(), ...state.agentEvents.events] })
 
     toast.success('Sample activity loaded')
   }
 
-  function demoSimulateEventStates() {
-    const now = Date.now()
+  // One event arrives as `request_received` and, over a few seconds, walks forward through the
+  // real lifecycle to a terminal status — for reviewing the table and detail panel's real-time
+  // feel rather than a static snapshot. Each step reads the latest state via patch's updater form,
+  // since the earlier steps are still pending in setTimeout when this function returns.
+  function demoSimulateLiveEvent() {
     const webhookUrl = state.agentEvents.webhookUrl || newWebhookUrl()
     const secretKey = state.agentEvents.secretKey || newSecretKey()
-    const rows: AgentEventRow[] = [
-      { id: newId('aevent'), agentEventId: newId('meta_evt'), eventType: 'payment_received', status: 'request_received', timestamp: now - 10_000 },
-      { id: newId('aevent'), agentEventId: newId('meta_evt'), eventType: 'payment_received', status: 'processing', timestamp: now - 30_000 },
-      { id: newId('aevent'), agentEventId: newId('meta_evt'), eventType: 'payment_received', status: 'sent', timestamp: now - 60_000 },
-      { id: newId('aevent'), agentEventId: newId('meta_evt'), eventType: 'document_verified', status: 'success', timestamp: now - 120_000 },
-      {
-        id: newId('aevent'),
-        agentEventId: newId('meta_evt'),
-        eventType: 'document_verified',
-        status: 'failed',
-        timestamp: now - 180_000,
-        errorMessage: 'Signature verification failed.',
-      },
-      {
-        id: newId('aevent'),
-        agentEventId: newId('meta_evt'),
-        eventType: 'payment_received',
-        status: 'skipped',
-        timestamp: now - 240_000,
-        skippedReason: 'The conversation was already closed.',
-      },
-    ]
-    patch('agentEvents', { configured: true, webhookUrl, secretKey, events: rows })
-    toast.success('Simulated all six event states')
+    const id = newId('aevent')
+    const createdAt = Date.now()
+    const orderId = String(1000 + Math.floor(Math.random() * 9000))
+    const newRow: AgentEventRow = {
+      id,
+      agentEventId: newId('meta_evt'),
+      eventType: 'payment_received',
+      description: `Payment confirmed for order ${orderId}`,
+      to: '+91 98765 43210',
+      status: 'request_received',
+      createdAt,
+      updatedAt: createdAt,
+      payload: JSON.stringify({ order_id: orderId, amount: '1499.00', currency: 'INR' }),
+    }
+    patch('agentEvents', (prev) => ({ configured: true, webhookUrl, secretKey, events: [newRow, ...prev.events] }))
+
+    function advanceTo(status: AgentEventStatus, delayMs: number, extra?: Partial<AgentEventRow>) {
+      setTimeout(() => {
+        patch('agentEvents', (prev) => ({
+          events: prev.events.map((row) => (row.id === id ? { ...row, status, updatedAt: Date.now(), ...extra } : row)),
+        }))
+      }, delayMs)
+    }
+
+    advanceTo('processing', 900)
+    advanceTo('sent', 1900)
+    const terminalRoll = Math.random()
+    if (terminalRoll < 0.7) advanceTo('success', 3000)
+    else if (terminalRoll < 0.85) advanceTo('failed', 3000, { errorMessage: 'Signature verification failed.' })
+    else advanceTo('skipped', 3000, { skippedReason: 'The conversation was already closed.' })
+
+    toast.success('Simulating a live event arriving…')
   }
 
   useRegisterDevControls(
@@ -631,8 +581,8 @@ export function ActivityPage() {
       <Button variant="outline" size="sm" onClick={demoLoadSampleActivity}>
         Demo: load sample activity
       </Button>
-      <Button variant="outline" size="sm" onClick={demoSimulateEventStates}>
-        Demo: simulate inbound event states
+      <Button variant="outline" size="sm" onClick={demoSimulateLiveEvent}>
+        Demo: simulate live event arriving
       </Button>
     </DemoControlsGroup>,
   )

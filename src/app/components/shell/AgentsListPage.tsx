@@ -181,6 +181,9 @@ export function AgentsListPage({
         onOpenBuilder()
         break
       case 'test':
+        setSection('testEval')
+        onOpenBuilder()
+        break
       case 'allowlist':
         setSection('publish')
         onOpenBuilder()

@@ -163,7 +163,7 @@ export function SafetyHandoffStep() {
     const ok = await runGuard('save')
     if (!ok) return
     setPendingSkillPrefill({ name: 'Handoff rules', instruction: HANDOFF_RULES_PREFILL })
-    setSection('skills')
+    setSection('abilities')
   }
 
   function loadSampleSettings() {
