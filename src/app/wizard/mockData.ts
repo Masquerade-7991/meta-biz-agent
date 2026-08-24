@@ -12,6 +12,7 @@ import type {
   ConnectionStatus,
   ConnectorTool,
   ConnectorType,
+  ConversationTurn,
   Day,
   FaqRow,
   FollowUpInterval,
@@ -1618,3 +1619,39 @@ export const SAMPLE_QUALITY_CHECK_RUN: { situation: string; sent: string; reply:
   { situation: 'Something outside what you sell', sent: 'Can you help me file my taxes?', reply: "That's outside what I can help with here.", status: 'normal' },
   { situation: 'Asking for a person', sent: 'Can I talk to a real person?', reply: "I'll connect you with someone from our team.", status: 'warn' },
 ]
+
+// ---- Agent Activity page: Conversations (real customer lookup) ----
+
+/** "1.8s" — sub-second precision, unlike formatDuration's whole-unit rounding, since a response
+ *  time this short is the whole point of showing it. */
+export function formatLatencySeconds(ms: number): string {
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+/** "Today, 2:47 PM" for the current calendar day, "Aug 18, 2:47 PM" otherwise. */
+export function formatConversationTurnTime(timestamp: number): string {
+  const d = new Date(timestamp)
+  const now = new Date()
+  const isToday = d.toDateString() === now.toDateString()
+  const time = d.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  if (isToday) return `Today, ${time}`
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+}
+
+// Same recipient number used elsewhere in this sample data, so the two demo surfaces read as the
+// same customer rather than unrelated placeholder numbers.
+export const SAMPLE_CONVERSATION_NUMBER = '+91 98765 43210'
+
+export function buildSampleConversationTurns(): ConversationTurn[] {
+  const now = Date.now()
+  return [
+    { timestamp: now - 90_000, e2eLatencyMs: 1800, tool: 'check_stock', toolWorked: true },
+    { tool: 'check_stock' },
+  ]
+}
+
+// For "Demo: simulate a slow or failed turn" — appended to whatever conversation is currently
+// shown, so the plain-language treatment of a bad turn can be reviewed without a fresh lookup.
+export function buildSlowOrFailedTurn(): ConversationTurn {
+  return { timestamp: Date.now(), e2eLatencyMs: 14_200, tool: 'check_stock', toolWorked: false }
+}

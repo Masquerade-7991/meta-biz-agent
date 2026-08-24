@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Loader2, XCircle } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
@@ -58,12 +58,23 @@ function initialCardState(): CardState {
   return { status: 'idle', stage: 'simulation', result: null, rerunning: false, viewingConversation: false, showFailureDetails: false }
 }
 
+type CasesStatus = 'idle' | 'loading' | 'loaded'
+
 export function EvalTab() {
-  const [cards, setCards] = useState<Record<string, CardState>>(() =>
-    Object.fromEntries(EVAL_SCENARIOS.map((s) => [s.id, initialCardState()])),
-  )
+  // Nothing renders until the real GET /cases call is made — this mirrors the real endpoint,
+  // which lists a client's eval scenarios on demand rather than something the wizard already has.
+  const [casesStatus, setCasesStatus] = useState<CasesStatus>('idle')
+  const [cards, setCards] = useState<Record<string, CardState>>({})
   // Per-scenario run tokens, so a stale "Run again" from an earlier click can't clobber a newer one.
   const tokensRef = useRef<Record<string, number>>({})
+
+  function pullEvalCases() {
+    setCasesStatus('loading')
+    setTimeout(() => {
+      setCards(Object.fromEntries(EVAL_SCENARIOS.map((s) => [s.id, initialCardState()])))
+      setCasesStatus('loaded')
+    }, 700)
+  }
 
   useEffect(() => {
     const tokens = tokensRef.current
@@ -125,33 +136,38 @@ export function EvalTab() {
         ]),
       ),
     )
+    setCasesStatus('loaded')
   }
 
   useRegisterDevControls(
     'eval',
     <DemoControlsGroup label="Evaluation">
+      <Button variant="outline" size="sm" onClick={pullEvalCases}>
+        Demo: pull eval cases now
+      </Button>
       <Button variant="outline" size="sm" onClick={demoLoadAllCompleted}>
         Demo: load all as previously completed
       </Button>
-      {EVAL_SCENARIOS.map((s) => (
-        <div key={s.id} className="flex flex-wrap items-center gap-1.5">
-          <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            {s.title}:
-          </span>
-          <Button variant="outline" size="sm" onClick={() => startEval(s.id)}>
-            Run
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => demoComplete(s.id, true)}>
-            Complete, strong
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => demoComplete(s.id, false)}>
-            Complete, weak
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => demoFail(s.id)}>
-            Fail
-          </Button>
-        </div>
-      ))}
+      {casesStatus === 'loaded' &&
+        EVAL_SCENARIOS.map((s) => (
+          <div key={s.id} className="flex flex-wrap items-center gap-1.5">
+            <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              {s.title}:
+            </span>
+            <Button variant="outline" size="sm" onClick={() => startEval(s.id)}>
+              Run
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => demoComplete(s.id, true)}>
+              Complete, strong
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => demoComplete(s.id, false)}>
+              Complete, weak
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => demoFail(s.id)}>
+              Fail
+            </Button>
+          </div>
+        ))}
     </DemoControlsGroup>,
   )
 
@@ -164,22 +180,42 @@ export function EvalTab() {
         </p>
       </div>
 
-      <div className="space-y-3">
-        {EVAL_SCENARIOS.map((scenario) => (
-          <EvalCard
-            key={scenario.id}
-            scenario={scenario}
-            card={cards[scenario.id]}
-            onStart={() => startEval(scenario.id)}
-            onToggleConversation={() =>
-              patchCard(scenario.id, { viewingConversation: !cards[scenario.id].viewingConversation })
-            }
-            onToggleFailureDetails={() =>
-              patchCard(scenario.id, { showFailureDetails: !cards[scenario.id].showFailureDetails })
-            }
-          />
-        ))}
-      </div>
+      {casesStatus === 'idle' && (
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-10 text-center">
+          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            No eval cases loaded yet.
+          </p>
+          <Button onClick={pullEvalCases}>Pull eval cases</Button>
+        </div>
+      )}
+
+      {casesStatus === 'loading' && (
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-10 text-center">
+          <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            Pulling eval cases&hellip;
+          </p>
+        </div>
+      )}
+
+      {casesStatus === 'loaded' && (
+        <div className="space-y-3">
+          {EVAL_SCENARIOS.map((scenario) => (
+            <EvalCard
+              key={scenario.id}
+              scenario={scenario}
+              card={cards[scenario.id]}
+              onStart={() => startEval(scenario.id)}
+              onToggleConversation={() =>
+                patchCard(scenario.id, { viewingConversation: !cards[scenario.id].viewingConversation })
+              }
+              onToggleFailureDetails={() =>
+                patchCard(scenario.id, { showFailureDetails: !cards[scenario.id].showFailureDetails })
+              }
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

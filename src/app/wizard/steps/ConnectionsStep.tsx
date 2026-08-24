@@ -15,7 +15,6 @@ import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { SelectableCard } from '@/app/components/wizard/SelectableCard'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { IntegrationsTab } from './IntegrationsTab'
-import { McpTab } from './McpTab'
 import {
   Select,
   SelectContent,
@@ -225,9 +224,8 @@ export function ConnectionsStep() {
   return (
     <Tabs defaultValue="integrations">
       <TabsList>
-        <TabsTrigger value="integrations">Integrations</TabsTrigger>
+        <TabsTrigger value="integrations">Native</TabsTrigger>
         <TabsTrigger value="connections">Custom</TabsTrigger>
-        <TabsTrigger value="mcp">MCP</TabsTrigger>
       </TabsList>
 
       <TabsContent value="integrations" forceMount className="mt-4 data-[state=inactive]:hidden">
@@ -235,9 +233,6 @@ export function ConnectionsStep() {
       </TabsContent>
       <TabsContent value="connections" forceMount className="mt-4 data-[state=inactive]:hidden">
         <ConnectionsTabContent />
-      </TabsContent>
-      <TabsContent value="mcp" forceMount className="mt-4 data-[state=inactive]:hidden">
-        <McpTab />
       </TabsContent>
 
       <div className="mt-4 flex items-center gap-1.5">

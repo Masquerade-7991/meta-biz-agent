@@ -608,6 +608,21 @@ export interface AgentEventsState {
   events: AgentEventRow[]
 }
 
+// ---- Agent Activity page: Conversations (real customer lookup) ----
+// Meta's conversation-lookup endpoint returns operational metadata about each turn, never the
+// words either side actually said — no field in its schema carries that. `timestamp` and
+// `e2eLatencyMs` are documented as present only "if available," and a tool's outcome is only
+// knowable when the real `status` field is present, so all three stay optional here rather than
+// getting a fallback value that would misrepresent what the API actually returned.
+export interface ConversationTurn {
+  timestamp?: number
+  e2eLatencyMs?: number
+  /** Name of the one tool/action this turn used, if any — never the full ordered `steps` array. */
+  tool?: string
+  /** Only set when the real `status` field was present on that tool call. */
+  toolWorked?: boolean
+}
+
 export interface WizardState {
   gate: GateState
   currentStep: StepId

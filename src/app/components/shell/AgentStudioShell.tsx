@@ -110,7 +110,7 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
                 </Avatar>
               )}
             </div>
-            {state.currentSection === 'overview' ? (
+            {state.currentSection === 'overview' || state.currentSection === 'publish' ? (
               <ActiveComponent />
             ) : (
               <div className="rounded-lg border border-border bg-card p-8">

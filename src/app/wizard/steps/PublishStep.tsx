@@ -102,20 +102,22 @@ export function PublishStep() {
           </span>
         </div>
 
-        <div className="space-y-2">
+        <div className="grid gap-2 sm:grid-cols-2">
           <SelectableCard
             title="Only the numbers I list below"
+            helper="Recommended for testing"
             selected={publish.audienceMode === 'allowlisted'}
             onClick={() => setAudienceMode('allowlisted')}
           />
           <SelectableCard
             title="Everyone"
+            info="Any customer who messages this number will reach your agent immediately once you activate."
             selected={publish.audienceMode === 'everyone'}
             onClick={() => setAudienceMode('everyone')}
           />
         </div>
 
-        {publish.audienceMode === 'allowlisted' ? (
+        {publish.audienceMode === 'allowlisted' && (
           <div className="space-y-2">
             <div className="flex items-start gap-2">
               <div className="flex-1">
@@ -141,14 +143,7 @@ export function PublishStep() {
                 Add
               </Button>
             </div>
-            {publish.allowlistNumbers.length === 0 ? (
-              <span className="flex items-center gap-1.5">
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                  No numbers added yet.
-                </p>
-                <InfoTooltip text="Add your own number first to try the agent as a real customer would." />
-              </span>
-            ) : (
+            {publish.allowlistNumbers.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {publish.allowlistNumbers.map((n) => (
                   <span key={n} className="badge flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-accent-foreground">
@@ -161,10 +156,6 @@ export function PublishStep() {
               </div>
             )}
           </div>
-        ) : (
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-            Any customer who messages this number will reach your agent immediately once you activate.
-          </p>
         )}
       </section>
 
@@ -181,6 +172,7 @@ export function PublishStep() {
             maxLength={VERSION_NOTE_MAX}
             value={publish.versionNote}
             onChange={(e) => patch('publish', { versionNote: e.target.value })}
+            placeholder="e.g. Added a connection to Shopify, updated the tone"
           />
         </div>
 

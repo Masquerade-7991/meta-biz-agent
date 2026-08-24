@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { AlertTriangle, CheckCircle2, ChevronDown, Plus, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Plus, Search, X } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
@@ -14,10 +14,15 @@ import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { InboundEventsMonitor } from './InboundEventsMonitor'
 import {
   SAMPLE_AGENT_EVENT_TYPES,
+  SAMPLE_CONVERSATION_NUMBER,
   SAMPLE_QUALITY_CHECK_RUN,
   buildDeveloperEventsChecklist,
   buildSampleAgentEventLog,
+  buildSampleConversationTurns,
+  buildSlowOrFailedTurn,
+  formatConversationTurnTime,
   formatFullTimestamp,
+  formatLatencySeconds,
   newId,
   newSecretKey,
   newWebhookUrl,
@@ -29,6 +34,7 @@ import type {
   AgentEventTypeDef,
   AgentEventsState,
   ConnectionsPageState,
+  ConversationTurn,
   QualityCheckItem,
   QualityCheckRun,
 } from '@/app/wizard/types'
@@ -187,7 +193,17 @@ function ConnectorActivitySection({
               No connector activity yet.
             </p>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-2">
+              <div className="flex items-center gap-5">
+                <span style={{ fontSize: 'var(--text-sm)' }}>
+                  <span className="text-muted-foreground">Worked: </span>
+                  <span style={{ fontWeight: 'var(--font-weight-medium)' }}>{rows.filter((r) => r.outcome === 'worked').length}</span>
+                </span>
+                <span style={{ fontSize: 'var(--text-sm)' }}>
+                  <span className="text-muted-foreground">Failed: </span>
+                  <span style={{ fontWeight: 'var(--font-weight-medium)' }}>{rows.filter((r) => r.outcome === 'failed').length}</span>
+                </span>
+              </div>
               {rows.map((row) => {
                 const connection = connections.find((c) => c.id === row.connectionId)
                 const expanded = expandedId === row.id
@@ -440,6 +456,108 @@ function InboundEventsSection({
 }
 
 // ==================================================================================
+// CONVERSATIONS
+// ==================================================================================
+
+type ConversationLookupStatus = 'idle' | 'loading' | 'found' | 'not_found'
+
+/** Precomputes each turn's display time in one pass: the turn's own timestamp when Meta actually
+ *  returned one, otherwise `~` plus the last turn that did have one — never an invented time,
+ *  since `timestamp` is documented as present only "if available." */
+function turnDisplayTimes(turns: ConversationTurn[]): (string | null)[] {
+  let lastKnown: string | null = null
+  return turns.map((turn) => {
+    if (turn.timestamp !== undefined) {
+      lastKnown = formatConversationTurnTime(turn.timestamp)
+      return lastKnown
+    }
+    return lastKnown ? `~${lastKnown}` : null
+  })
+}
+
+function ConversationTurnRow({ turn, displayTime }: { turn: ConversationTurn; displayTime: string | null }) {
+  return (
+    <div className="space-y-0.5">
+      {displayTime && (
+        <p style={{ fontSize: 'var(--text-sm)' }}>
+          <span className="text-muted-foreground">{displayTime}</span>
+          {turn.e2eLatencyMs !== undefined && (
+            <span className="text-muted-foreground"> &middot; Responded in {formatLatencySeconds(turn.e2eLatencyMs)}</span>
+          )}
+        </p>
+      )}
+      {turn.tool && (
+        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          Used: {turn.tool}
+          {turn.toolWorked === true && ' — worked'}
+          {turn.toolWorked === false && " — this didn't work"}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function ConversationsSection({
+  numberDraft,
+  onNumberDraftChange,
+  status,
+  turns,
+  onLookup,
+}: {
+  numberDraft: string
+  onNumberDraftChange: (value: string) => void
+  status: ConversationLookupStatus
+  turns: ConversationTurn[]
+  onLookup: () => void
+}) {
+  const displayTimes = turnDisplayTimes(turns)
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3>Conversations</h3>
+        <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          Look up a customer&rsquo;s real conversation with your agent.
+        </p>
+      </div>
+
+      <div className="flex items-end gap-2">
+        <div className="max-w-xs flex-1 space-y-1.5">
+          <Label htmlFor="convo-number">Customer&rsquo;s WhatsApp number</Label>
+          <Input
+            id="convo-number"
+            value={numberDraft}
+            onChange={(e) => onNumberDraftChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onLookup()
+            }}
+            placeholder="+15551234567"
+          />
+        </div>
+        <Button variant="outline" onClick={onLookup} disabled={!numberDraft.trim() || status === 'loading'}>
+          {status === 'loading' ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
+          Look up
+        </Button>
+      </div>
+
+      {status === 'not_found' && (
+        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          No conversation found for this number.
+        </p>
+      )}
+
+      {status === 'found' && (
+        <div className="space-y-3 rounded-lg border border-border p-4">
+          {turns.map((turn, i) => (
+            <ConversationTurnRow key={i} turn={turn} displayTime={displayTimes[i]} />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+// ==================================================================================
 // PAGE
 // ==================================================================================
 
@@ -448,6 +566,30 @@ function InboundEventsSection({
 // sidebar instead of a separate Configure/Activity toggle screen.
 export function ActivityPage() {
   const { state, patch, setSection, setPendingSkillPrefill } = useWizard()
+
+  // ---- Conversations: real customer lookup, local to this visit only, not wizard config ----
+  const [convoNumberDraft, setConvoNumberDraft] = useState('')
+  const [convoStatus, setConvoStatus] = useState<ConversationLookupStatus>('idle')
+  const [convoTurns, setConvoTurns] = useState<ConversationTurn[]>([])
+
+  function normalizePhone(value: string): string {
+    return value.replace(/[^\d+]/g, '')
+  }
+
+  function lookupConversation() {
+    const query = convoNumberDraft.trim()
+    if (!query) return
+    setConvoStatus('loading')
+    setTimeout(() => {
+      if (normalizePhone(query) === normalizePhone(SAMPLE_CONVERSATION_NUMBER)) {
+        setConvoTurns(buildSampleConversationTurns())
+        setConvoStatus('found')
+      } else {
+        setConvoTurns([])
+        setConvoStatus('not_found')
+      }
+    }, 700)
+  }
 
   function goToTestPublish() {
     setSection('testEval')
@@ -531,7 +673,20 @@ export function ActivityPage() {
         : SAMPLE_AGENT_EVENT_TYPES.map((t) => ({ id: newId('etype'), ...t }))
     patch('agentEvents', { configured: true, webhookUrl, secretKey, eventTypes, events: [...buildSampleAgentEventLog(), ...state.agentEvents.events] })
 
+    setConvoNumberDraft(SAMPLE_CONVERSATION_NUMBER)
+    setConvoTurns(buildSampleConversationTurns())
+    setConvoStatus('found')
+
     toast.success('Sample activity loaded')
+  }
+
+  // Appends one slow, failed-tool-call turn to whatever conversation is currently shown, seeding
+  // the sample conversation first if none has been looked up yet — for reviewing how that line
+  // reads in plain language without a fresh lookup.
+  function demoSimulateSlowOrFailedTurn() {
+    setConvoNumberDraft((prev) => prev || SAMPLE_CONVERSATION_NUMBER)
+    setConvoTurns((prev) => [...(prev.length > 0 ? prev : buildSampleConversationTurns()), buildSlowOrFailedTurn()])
+    setConvoStatus('found')
   }
 
   // One event arrives as `request_received` and, over a few seconds, walks forward through the
@@ -584,6 +739,9 @@ export function ActivityPage() {
       <Button variant="outline" size="sm" onClick={demoSimulateLiveEvent}>
         Demo: simulate live event arriving
       </Button>
+      <Button variant="outline" size="sm" onClick={demoSimulateSlowOrFailedTurn}>
+        Demo: simulate a slow or failed turn
+      </Button>
     </DemoControlsGroup>,
   )
 
@@ -595,6 +753,13 @@ export function ActivityPage() {
         agentEvents={state.agentEvents}
         onPatch={(p) => patch('agentEvents', p)}
         onAddSkillForEvent={addSkillForEvent}
+      />
+      <ConversationsSection
+        numberDraft={convoNumberDraft}
+        onNumberDraftChange={setConvoNumberDraft}
+        status={convoStatus}
+        turns={convoTurns}
+        onLookup={lookupConversation}
       />
     </div>
   )
