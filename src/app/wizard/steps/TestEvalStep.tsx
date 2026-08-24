@@ -203,7 +203,7 @@ export function TestEvalStep() {
     <Tabs defaultValue="testing">
       <TabsList>
         <TabsTrigger value="testing">Testing</TabsTrigger>
-        <TabsTrigger value="eval">Eval</TabsTrigger>
+        <TabsTrigger value="eval">Evaluation</TabsTrigger>
       </TabsList>
 
       <TabsContent value="testing" className="space-y-4 pt-3">

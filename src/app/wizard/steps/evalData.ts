@@ -1,9 +1,11 @@
-// Demo data for the Eval tab, grounded field for field in Meta's Agent Eval schema:
+// Demo data for the Evaluation tab, grounded field for field in Meta's Agent Eval schema:
 // BizAIEvalCaseResponse (scenario, categories, max_turns, success_criteria), the run Progress
 // object (completed, total, current_stage), the run Error object (code, message,
-// failed_case_ids), and BizAIEvalDetailResponse (avg_conversation_score, avg_turn_score,
-// summary, highlights, top_failure_categories, per-conversation transcripts). Meta doesn't yet
-// document a way to author eval scenarios, so everything below is illustrative, not a real run.
+// failed_case_ids), BizAIEvalDetailResponse (per_turn_labels, reasons, transcript), and
+// BizAIEvalSummaryResponse (avg_conversation_score, summary, top_failure_categories) — the last
+// one scoped per scenario here since each card runs and reports on a single case, not a batch.
+// Meta doesn't yet document a way to author eval scenarios, so everything below is illustrative,
+// not a real run.
 
 export type EvalCategory = 'Ordering' | 'Escalation' | 'Knowledge' | 'Boundaries' | 'Actions'
 
@@ -97,19 +99,15 @@ export const EVAL_SCENARIOS: EvalScenario[] = [
   },
 ]
 
-// Meta's schema documents per_turn_labels only as "JSON array of per-turn label integers," with
-// no further definition of what the integers mean. These mockups read it as three states — a
-// clean pass, a partial concern, and a clear failure — since that maps cleanly onto the paired
-// `reasons` field's own category/score/description shape. If the real integer scheme turns out
-// to carry more or fewer states once confirmed, this three-state mapping is the first thing to
-// revisit, not a foundational assumption the rest of this tab depends on.
-export type TurnStatus = 'check' | 'warn' | 'fail'
-
-export interface TurnResult {
-  turn: number
-  status: TurnStatus
+// Meta's schema documents `reasons` as a real, typed field: a JSON array of
+// {category, score, description, recommended_actions} objects per evaluation. Unlike
+// per_turn_labels (an array of integers with no defined meaning), this is grounded in the
+// actual API contract, so it's the basis for the per-conversation breakdown below.
+export interface EvalReason {
+  category: string
+  score: number
   description: string
-  recommended?: string
+  recommendedAction?: string
 }
 
 export interface TranscriptLine {
@@ -117,32 +115,41 @@ export interface TranscriptLine {
   text: string
 }
 
+// Each card is now a single-case run, so what used to be one shared batch summary
+// (avg_conversation_score, summary) is one instance per scenario instead — the same
+// BizAIEvalSummaryResponse fields, just scoped to a job of one case.
 export interface EvalConversationResult {
   scenarioId: string
   score: number
+  summary: string
   transcript: TranscriptLine[]
-  turns: TurnResult[]
+  reasons: EvalReason[]
 }
 
 export const EVAL_RESULTS: EvalConversationResult[] = [
   {
     scenarioId: 'order-status',
     score: 5,
+    summary: 'Asked for the order number, used a real lookup action, and gave a specific delivery date.',
     transcript: [
       { from: 'customer', text: "Where's my order?" },
       { from: 'agent', text: 'I can check that for you, could I get your order number?' },
       { from: 'customer', text: 'ORD-48213' },
       { from: 'agent', text: 'Found it, your order shipped yesterday and is expected to arrive by Thursday.' },
     ],
-    turns: [
-      { turn: 1, status: 'check', description: 'Correctly asked for the order number rather than guessing' },
-      { turn: 2, status: 'check', description: 'Used a real connected action to look up the order' },
-      { turn: 3, status: 'check', description: 'Gave a specific, useful answer' },
+    reasons: [
+      {
+        category: 'Order lookup',
+        score: 5,
+        description: 'Correctly asked for the order number rather than guessing, then used a real connected action to look it up.',
+      },
+      { category: 'Answer quality', score: 5, description: 'Gave a specific, useful answer instead of a generic response.' },
     ],
   },
   {
     scenarioId: 'angry-delay',
     score: 3,
+    summary: "The agent acknowledged the delay but did not offer to hand off when the customer's frustration was clear.",
     transcript: [
       { from: 'customer', text: "My order was supposed to arrive Tuesday, it's Friday." },
       { from: 'agent', text: "I'm sorry about the delay, let me look into this for you." },
@@ -151,61 +158,78 @@ export const EVAL_RESULTS: EvalConversationResult[] = [
       { from: 'customer', text: "That's not good enough, I want to speak to someone." },
       { from: 'agent', text: 'I understand. Your order is in transit and should arrive within 2 days.' },
     ],
-    turns: [
-      { turn: 1, status: 'check', description: 'Acknowledged the delay appropriately' },
-      { turn: 2, status: 'check', description: 'Gave a specific status update rather than a generic apology' },
-      { turn: 3, status: 'warn', description: "Did not recognise the customer's repeated, escalating frustration" },
+    reasons: [
       {
-        turn: 4,
-        status: 'fail',
-        description: 'Customer explicitly asked for a person and the agent did not hand off',
-        recommended:
-          'This is the clearest single fix available from this run: adjust the handoff-timing skill so an explicit request for a person is always honoured immediately, regardless of what else the agent was about to say.',
+        category: 'Tone handling',
+        score: 4,
+        description: 'Acknowledged the delay and gave a specific status update rather than a generic apology.',
+      },
+      {
+        category: 'Escalation recognition',
+        score: 2,
+        description:
+          "Did not recognise the customer's repeated, escalating frustration, and did not hand off when the customer explicitly asked for a person.",
+        recommendedAction:
+          'Adjust the handoff-timing skill so an explicit request for a person is always honoured immediately, regardless of what else the agent was about to say.',
       },
     ],
   },
   {
     scenarioId: 'ambiguous-product',
     score: 4,
+    summary: 'Asked a clarifying question before answering, and only stated facts present in Knowledge.',
     transcript: [
       { from: 'customer', text: 'Does the jacket run warm?' },
       { from: 'agent', text: 'We have a couple of jackets, could you tell me which one you mean, or what you’ll be wearing it for?' },
       { from: 'customer', text: 'The waterproof one' },
       { from: 'agent', text: 'The Trailhead waterproof jacket is insulated and rated for cold, wet weather — it runs warm.' },
     ],
-    turns: [
-      { turn: 1, status: 'check', description: 'Asked a clarifying question rather than guessing which product' },
-      { turn: 2, status: 'check', description: 'Answered using a detail actually present in Knowledge' },
-      { turn: 3, status: 'warn', description: 'Took one extra turn to disambiguate versus the fastest possible path' },
+    reasons: [
+      {
+        category: 'Clarifying questions',
+        score: 4,
+        description: 'Asked a clarifying question rather than guessing which product, though it took one extra turn versus the fastest possible path.',
+        recommendedAction: 'Adding a line to the knowledge-handling skill about asking before guessing',
+      },
+      { category: 'Knowledge accuracy', score: 5, description: 'Answered using a detail actually present in Knowledge.' },
     ],
   },
   {
     scenarioId: 'discount-request',
     score: 5,
+    summary: 'Held its pricing boundary and redirected to a real, configured alternative.',
     transcript: [
       { from: 'customer', text: 'Can you give me 20% off?' },
       { from: 'agent', text: "I can't offer a custom discount, but you're welcome to join our loyalty programme for ongoing perks." },
     ],
-    turns: [
-      { turn: 1, status: 'check', description: "Did not invent or offer a discount outside configured policy" },
-      { turn: 2, status: 'check', description: 'Redirected politely to a real, configured alternative' },
+    reasons: [
+      {
+        category: 'Pricing boundaries',
+        score: 5,
+        description: 'Did not invent or offer a discount outside configured policy, and redirected politely to a real, configured alternative.',
+      },
     ],
   },
   {
     scenarioId: 'off-topic',
     score: 5,
+    summary: 'Declined the off-topic request cleanly and redirected back to what it can help with.',
     transcript: [
       { from: 'customer', text: 'Can you help me file my taxes?' },
       { from: 'agent', text: "That's outside what I can help with here, but I'm happy to help with anything about our products or orders." },
     ],
-    turns: [
-      { turn: 1, status: 'check', description: 'Declined politely rather than attempting to answer' },
-      { turn: 2, status: 'check', description: 'Redirected back to what it can actually help with' },
+    reasons: [
+      {
+        category: 'Scope boundaries',
+        score: 5,
+        description: 'Declined politely rather than attempting to answer, and redirected back to what it can actually help with.',
+      },
     ],
   },
   {
     scenarioId: 'stock-purchase',
     score: 2,
+    summary: "Correctly checked stock, but missed the customer's purchase intent and lost context afterward.",
     transcript: [
       { from: 'customer', text: 'Do you have the blue one in medium?' },
       { from: 'agent', text: 'Let me check... yes, we have 3 left in Medium, Blue.' },
@@ -214,70 +238,28 @@ export const EVAL_RESULTS: EvalConversationResult[] = [
       { from: 'customer', text: '...I just said I want to buy it' },
       { from: 'agent', text: "I'm not able to process orders directly, but I can help with product questions." },
     ],
-    turns: [
-      { turn: 1, status: 'check', description: 'Correctly used the stock check action' },
-      { turn: 2, status: 'check', description: 'Gave a specific, accurate answer' },
+    reasons: [
+      { category: 'Action usage', score: 5, description: 'Correctly used the stock check action and gave a specific, accurate answer.' },
       {
-        turn: 3,
-        status: 'warn',
-        description: 'Failed to recognise clear purchase intent',
-        recommended:
-          'Review how "I\'ll take it" and similar phrases are handled — the agent should move toward checkout or a connected purchase action rather than asking a generic follow-up question.',
+        category: 'Purchase intent recognition',
+        score: 2,
+        description: 'Failed to recognise clear purchase intent ("I\'ll take it") and did not move toward checkout.',
+        recommendedAction:
+          'Review how phrases like "I\'ll take it" are handled — the agent should move toward checkout or a connected purchase action rather than asking a generic follow-up question.',
       },
       {
-        turn: 4,
-        status: 'fail',
-        description: 'Lost the product context from earlier in the conversation entirely',
-        recommended:
-          "Check whether the stock check action's description is being carried forward correctly across turns, this looks like a context-handling gap rather than a knowledge gap.",
+        category: 'Context retention',
+        score: 1,
+        description: 'Lost the product context from earlier in the conversation entirely.',
+        recommendedAction:
+          "Check whether the stock check action's description is being carried forward correctly across turns — this looks like a context-handling gap rather than a knowledge gap.",
       },
     ],
   },
 ]
 
-export interface FailureCategoryRow {
-  category: string
-  caseCount: number
-  recommendedAction: string
-  /** Only set when the recommended-action text names something this UI can confidently and
-   *  specifically resolve to a real place in the product. A wrong link is worse than no link, so
-   *  everything else renders as plain text with no link, never a best-guess destination. */
-  linkSection?: 'connections'
-  linkLabel?: string
-}
-
-export const EVAL_FAILURE_CATEGORIES: FailureCategoryRow[] = [
-  {
-    category: 'Handoff timing',
-    caseCount: 2,
-    recommendedAction: 'Adjusting the custom skill governing when to hand off',
-  },
-  {
-    category: 'Clarifying ambiguous questions',
-    caseCount: 1,
-    recommendedAction: 'Adding a line to the knowledge-handling skill about asking before guessing',
-  },
-  {
-    category: 'Carrying context across turns',
-    caseCount: 1,
-    recommendedAction: "Reviewing the stock check action's description so its result is easier for the agent to reuse",
-    linkSection: 'connections',
-    linkLabel: 'Open Connections',
-  },
-]
-
-export const EVAL_SUMMARY =
-  'The agent handles routine order and stock questions well, correctly using connected actions rather than guessing. It responds inconsistently when customers express frustration, sometimes escalating too early, sometimes not escalating at all. It held its pricing boundary correctly in every discount scenario tested.'
-
-export const EVAL_HIGHLIGHTS: string[] = [
-  'Correctly identified and used a real action for both order and stock lookups, in every scenario that required one',
-  'Never fabricated a product detail not present in Knowledge',
-  'Held pricing boundaries correctly in the discount scenario',
-  'Declined the off-topic request cleanly, without becoming argumentative or over-apologetic',
-]
-
-// Headline scores are Meta's real 1-5 fields (avg_conversation_score, avg_turn_score). The band
-// labels below are Helo's own addition for readability, not something Meta returns.
+// Headline scores are Meta's real 1-5 field (avg_conversation_score). The band labels below are
+// Helo's own addition for readability, not something Meta returns.
 export interface ScoreBand {
   label: string
   min: number
@@ -295,9 +277,20 @@ export function scoreBandLabel(score: number): string {
   return SCORE_BANDS.find((b) => score >= b.min)?.label ?? 'Poor'
 }
 
-export const EVAL_HEADLINE_SCORES = { avgConversationScore: 4.2, avgTurnScore: 4.5 }
-export const EVAL_HEADLINE_SCORES_LOW = { avgConversationScore: 2.1, avgTurnScore: 2.3 }
-
-// The scenario a demoed run fails on, in both the partial-failure and full-failure demo states —
-// kept as one constant so both demos tell a consistent story.
-export const DEMO_FAILING_SCENARIO_ID = 'angry-delay'
+// Demo-only: derives a weak result from a scenario's real curated result, for the "complete
+// [scenario], weak result" dev control, so a bad outcome doesn't need a hand-authored twin of
+// every scenario.
+export function deriveWeakResult(result: EvalConversationResult): EvalConversationResult {
+  return {
+    ...result,
+    score: Math.max(1, result.score - 2),
+    reasons: result.reasons.map((r) => {
+      const score = Math.max(1, r.score - 2)
+      return {
+        ...r,
+        score,
+        recommendedAction: r.recommendedAction ?? (score <= 3 ? 'Review this interaction to find the underlying cause.' : undefined),
+      }
+    }),
+  }
+}
