@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import {
   AlertTriangle,
+  Ban,
   ChevronRight,
+  KeyRound,
   Loader2,
   MoreHorizontal,
   Plug,
-  Send,
+  ShieldCheck,
 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
@@ -45,11 +47,8 @@ import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import {
   CONNECTION_STATUS_META,
   SAMPLE_CONNECTIONS,
-  matchConnectionPreviewMessage,
-  matchFaqPreviewMessage,
   newApiKeyEntry,
   newId,
-  pickConnectionPreviewReply,
   type RecipeAction,
 } from '@/app/wizard/mockData'
 import type {
@@ -59,7 +58,6 @@ import type {
   Connection,
   ConnectionAction,
   ConnectionStatus,
-  FaqRow,
   ValueLocation,
   ValueType,
 } from '@/app/wizard/types'
@@ -552,10 +550,6 @@ function ConnectionsTabContent() {
         </div>
       )}
 
-      {connections.length > 0 && (
-        <TryItSection connections={connections} actions={actions} faqs={state.knowledge.faqs} />
-      )}
-
       {connectionForm && (
         <CustomConnectionDialog
           initial={connectionForm.mode === 'edit' ? connectionForm.connection : undefined}
@@ -610,126 +604,6 @@ function recipeActionToAction(recipeAction: RecipeAction, connectionId: string, 
     values: recipeAction.values.map((v) => ({ ...v, id: newId('value'), required: v.location === 'path' })),
     createdAt,
   }
-}
-
-// ==================================================================================
-// TRY IT — relocated from the (now-removed) live preview panel. Same honesty framing, same
-// single/multi/no-match logic, same simulated-result discipline. Only the container changed:
-// this component naturally unmounts (clearing its state) when the user leaves the step, since
-// it now lives inside ConnectionsStep instead of a persistent sibling panel.
-// ==================================================================================
-
-const TRY_IT_NO_MATCH_REPLY =
-  "I don't have anything set up for that yet. Try asking about one of your configured actions, or add a new one below."
-
-function joinWithOr(items: string[]): string {
-  if (items.length === 1) return items[0]
-  if (items.length === 2) return `${items[0]} or ${items[1]}`
-  return `${items.slice(0, -1).join(', ')}, or ${items[items.length - 1]}`
-}
-
-function TryItSection({
-  connections,
-  actions,
-  faqs,
-}: {
-  connections: Connection[]
-  actions: ConnectionAction[]
-  faqs: FaqRow[]
-}) {
-  const [messages, setMessages] = useState<{ from: 'customer' | 'agent'; text: string }[]>([])
-  const [input, setInput] = useState('')
-  const [typing, setTyping] = useState(false)
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    }
-  }, [])
-
-  function sendMessage() {
-    const text = input.trim()
-    if (!text) return
-    setMessages((prev) => [...prev, { from: 'customer', text }])
-    setInput('')
-    setTyping(true)
-    timeoutRef.current = setTimeout(() => {
-      const actionMatches = matchConnectionPreviewMessage(text, connections, actions)
-      const faqMatches = matchFaqPreviewMessage(text, faqs)
-      const totalMatches = actionMatches.length + faqMatches.length
-      let reply: string
-      if (totalMatches === 0) {
-        reply = TRY_IT_NO_MATCH_REPLY
-      } else if (totalMatches === 1) {
-        reply = faqMatches.length === 1 ? faqMatches[0].answer : pickConnectionPreviewReply(actionMatches[0])
-      } else {
-        const names = Array.from(new Set([...faqMatches.map((f) => f.question), ...actionMatches.map((m) => m.action.name)]))
-        reply = `I can check a few things here. Did you mean ${joinWithOr(names)}?`
-      }
-      setTyping(false)
-      setMessages((prev) => [...prev, { from: 'agent', text: reply }])
-    }, 1000)
-  }
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <h3>Try it</h3>
-        <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-          Type a message the way a customer would, and see how your connections respond.
-        </p>
-      </div>
-      <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card">
-        <div className="flex max-h-72 min-h-24 flex-col gap-2 overflow-y-auto p-3">
-          {messages.length === 0 && !typing && (
-            <p className="text-center text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              Nothing sent yet.
-            </p>
-          )}
-          {messages.map((message, i) => (
-            <div key={i} className={cn('flex', message.from === 'customer' ? 'justify-start' : 'justify-end')}>
-              <div
-                className={cn(
-                  'max-w-[75%] rounded-xl px-3 py-2',
-                  message.from === 'customer'
-                    ? 'rounded-bl-sm bg-muted text-foreground'
-                    : 'rounded-br-sm bg-accent text-accent-foreground',
-                )}
-              >
-                <p style={{ fontSize: 'var(--text-sm)' }}>{message.text}</p>
-              </div>
-            </div>
-          ))}
-          {typing && (
-            <div className="flex justify-end">
-              <div className="max-w-[75%] animate-pulse rounded-xl rounded-br-sm bg-accent px-3 py-2 text-accent-foreground">
-                <p style={{ fontSize: 'var(--text-sm)' }}>...</p>
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2 border-t border-border p-2">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') sendMessage()
-            }}
-            placeholder="e.g. Do you have this in stock?"
-            className="h-9"
-          />
-          <Button size="icon-sm" onClick={sendMessage} disabled={!input.trim()}>
-            <Send className="size-3.5" />
-          </Button>
-        </div>
-      </div>
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-        This uses your real connections with simulated results. No real system is contacted, and
-        no customer sees this.
-      </p>
-    </div>
-  )
 }
 
 // ==================================================================================
@@ -1081,32 +955,43 @@ function CustomConnectionDialog({
             </button>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="conn-name">Name</Label>
-            <Input id="conn-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Our store system" />
-          </div>
+          <div className="space-y-3">
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-semi-bold)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+              Basics
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="conn-name">Name</Label>
+              <Input id="conn-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Our store system" />
+            </div>
 
-          <div className="space-y-1.5">
-            <span className="flex items-center gap-1.5">
-              <Label htmlFor="conn-description">Description</Label>
-              <InfoTooltip text="The agent reads this to understand what this system is for." />
-            </span>
-            <Input id="conn-description" value={description} onChange={(e) => setDescription(e.target.value)} />
-          </div>
+            <div className="space-y-1.5">
+              <span className="flex items-center gap-1.5">
+                <Label htmlFor="conn-description">Description</Label>
+                <InfoTooltip text="The agent reads this to understand what this system is for." />
+              </span>
+              <Input id="conn-description" value={description} onChange={(e) => setDescription(e.target.value)} />
+            </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="conn-base-url">Base web address</Label>
-            <Input id="conn-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com" aria-invalid={baseUrl.length > 0 && !urlValid} />
+            <div className="space-y-1.5">
+              <Label htmlFor="conn-base-url">Base web address</Label>
+              <Input id="conn-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com" aria-invalid={baseUrl.length > 0 && !urlValid} />
+              {baseUrl.length > 0 && !urlValid && (
+                <InlineError message="Must start with https://" />
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">
-            <Label>How it authenticates</Label>
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-semi-bold)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+              Authentication
+            </p>
             <div className="space-y-2">
               <SelectableCard
                 title="Access key"
                 info="Most systems need one key. Add more only if yours specifically requires it."
                 selected={authMethod === 'api_key'}
                 onClick={() => setAuthMethod('api_key')}
+                icon={KeyRound}
               />
               {authMethod === 'api_key' && (
                 <div className="ml-6 space-y-3">
@@ -1204,6 +1089,7 @@ function CustomConnectionDialog({
                 title="Client credentials"
                 selected={authMethod === 'client_credentials'}
                 onClick={() => setAuthMethod('client_credentials')}
+                icon={ShieldCheck}
               />
               {authMethod === 'client_credentials' && (
                 <div className="ml-6 space-y-3 rounded-lg border border-border p-3">
@@ -1235,6 +1121,7 @@ function CustomConnectionDialog({
                 info="Only for systems that are safe to call without any key."
                 selected={authMethod === 'none'}
                 onClick={() => setAuthMethod('none')}
+                icon={Ban}
               />
             </div>
           </div>

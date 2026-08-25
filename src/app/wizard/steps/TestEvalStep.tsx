@@ -118,8 +118,8 @@ export function TestEvalStep() {
   }
 
   // ---- Standard checks (local per-visit rows, but "has this run at least once" is real,
-  // persisted agent state — see standardChecksRun on PublishState — since the separate Publish
-  // page needs to read it even after a visitor navigates away and comes back later.) ----
+  // persisted agent state — see standardChecksRun on PublishState. Publish no longer gates
+  // Activate on this, but the flag itself is still recorded.) ----
   const [checkRows, setCheckRows] = useState<CheckRow[] | null>(null)
   const [expandedCheck, setExpandedCheck] = useState<string | null>(null)
 

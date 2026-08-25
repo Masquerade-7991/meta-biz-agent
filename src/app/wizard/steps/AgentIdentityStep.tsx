@@ -15,8 +15,11 @@ import {
 } from '@/app/components/ui/dialog'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
+import { SaveButton } from '@/app/components/wizard/SaveButton'
+import { LoadFailedBanner, LoadingIndicator, SaveFailedBanner, SavingIndicator } from '@/app/components/wizard/RetryBanner'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
+import { useSaveOnNextSection } from '@/app/wizard/useSaveOnNextSection'
 import {
   BUSINESS_CATEGORY_OPTIONS,
   CATEGORY_SUGGESTIONS,
@@ -25,6 +28,7 @@ import {
   looksLikeInstruction,
   type SignalId,
 } from '@/app/wizard/mockData'
+import { cn } from '@/app/lib/utils'
 
 const MAX_NAME = 60
 const MAX_ROLE = 250
@@ -73,6 +77,7 @@ function pickRandomSignals(): SignalId[] {
 export function AgentIdentityStep() {
   const { state, patch } = useWizard()
   const { identity } = state
+  const section = useSaveOnNextSection('identity')
   const [pendingApply, setPendingApply] = useState<{ text: string; fromDocument: boolean } | null>(null)
   const [showOtherExamples, setShowOtherExamples] = useState(false)
   const demoCategory = state.demo.businessCategory
@@ -114,6 +119,17 @@ export function AgentIdentityStep() {
           </option>
         ))}
       </select>
+      <Button variant="outline" size="sm" onClick={section.simulateLoadFailure}>
+        Force load failure
+      </Button>
+      <label className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        <input
+          type="checkbox"
+          checked={section.forceSaveFailure}
+          onChange={(e) => section.setForceSaveFailure(e.target.checked)}
+        />
+        Force save failure
+      </label>
     </DemoControlsGroup>,
   )
 
@@ -180,7 +196,24 @@ export function AgentIdentityStep() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      <div className="flex items-center justify-end">
+        <SaveButton dirty={section.dirty} saving={section.saveStatus === 'saving'} onSave={section.performSave} />
+      </div>
+
+      {section.loadStatus === 'failed' && (
+        <LoadFailedBanner
+          message="We could not load your saved choices. Anything you save now will replace them."
+          onRetry={section.retryLoad}
+        />
+      )}
+      {section.saveStatus === 'failed' && (
+        <SaveFailedBanner message="We could not save your changes. Nothing has been lost." onRetry={() => void section.performSave()} />
+      )}
+      {section.saveStatus === 'saving' && <SavingIndicator />}
+      {section.loading && <LoadingIndicator label="Loading your saved choices" />}
+
+    <div className={cn('space-y-8', section.loading && 'pointer-events-none opacity-50')} aria-hidden={section.loading}>
       <div className="max-w-sm space-y-2">
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1.5">
@@ -322,6 +355,7 @@ export function AgentIdentityStep() {
         </div>
 
       </div>
+    </div>
 
       {/* Document upload explanation note */}
       <Dialog open={noteOpen} onOpenChange={setNoteOpen}>

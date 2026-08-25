@@ -95,9 +95,9 @@ export function CompiledConfigViewer({
           rows={[
             { label: 'Business description', value: config.business_info.business_description },
             { label: 'Payment methods', value: config.business_info.payment_method },
-            { label: 'Return policy', value: config.business_info.return_policy },
+            { label: 'Cancellations & refunds', value: config.business_info.return_policy },
             { label: 'Purchase info', value: config.business_info.purchase_info },
-            { label: 'Delivery and shipping', value: config.business_info.delivery_and_shipping },
+            { label: 'Delivery or fulfilment', value: config.business_info.delivery_and_shipping },
             { label: 'Contact email', value: config.business_info.contact_info.email },
             { label: 'Hours of operation', value: config.business_info.contact_info.hours_of_operation },
             { label: 'Business address', value: config.business_info.contact_info.address },

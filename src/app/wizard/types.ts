@@ -494,6 +494,7 @@ export interface GuardrailsState {
 
 // ---- Step 1.8 System Replies ----
 export type FollowUpInterval = 0 | 300 | 900 | 1800 | 3600 | 7200 | 28800 | 86400
+export type FollowUpMaxAttempts = 1 | 2 | 3
 
 export interface RepliesState {
   greetingReply: string
@@ -506,6 +507,10 @@ export interface RepliesState {
   followUpEnabled: boolean
   followUpInterval: FollowUpInterval
   followUpMessage: string
+  /** How many times the agent retries before it stops trying to bring a quiet customer back. */
+  followUpMaxAttempts: FollowUpMaxAttempts
+  /** Only send follow-ups within business hours, so a quiet customer isn't messaged at 3am. */
+  followUpRespectHours: boolean
 }
 
 // ---- Step 1.9 Review, Test, Publish ----
@@ -526,10 +531,6 @@ export interface MetaEvalResult {
 }
 
 export interface PublishState {
-  versionNote: string
-  approverRequired: boolean
-  /** Set by "Submit for approval" on this screen (Helo-side only, never sent to Meta). */
-  pendingApproval: boolean
   /** Kept for AgentsListPage.tsx's existing status/eval-score columns, but no longer written to
    *  by this screen — the new "standard checks" run is local, per-visit UI state (see
    *  TestEvalStep.tsx), not persisted wizard state. */
@@ -541,9 +542,15 @@ export interface PublishState {
   audienceMode: 'allowlisted' | 'everyone'
   activated: boolean
   activatedChannels: string[]
-  /** Real, persisted agent state (not derived from page presence): has the standard checks
-   *  battery been run at least once, on Test & Eval, regardless of pass/fail outcome. Set the
-   *  moment that battery completes; read by the separate Publish page to gate Activate. */
+  /** Set from the Stop button on this page, or the listing's 3-dot menu. Stopping turns
+   *  `activated` back off (the same real rollout.enabled lever a never-activated agent uses) —
+   *  this flag exists only so the listing can tell "stopped" apart from "never launched" and
+   *  show red instead of blue. Cleared by Resume, which turns `activated` back on. */
+  stopped: boolean
+  /** Real, persisted agent state: has the standard checks battery been run at least once, on
+   *  Test & Eval, regardless of pass/fail outcome. Set the moment that battery completes. No
+   *  longer read by Publish to gate Activate — that precondition was Helo's own invention, with
+   *  no basis in Meta's platform, and was removed. */
   standardChecksRun: boolean
 }
 

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, ShieldCheck, X } from 'lucide-react'
 import { Label } from '@/app/components/ui/label'
 import { Input } from '@/app/components/ui/input'
 import { Textarea } from '@/app/components/ui/textarea'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
+import { Switch } from '@/app/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { TagInput } from '@/app/components/wizard/TagInput'
@@ -12,18 +13,20 @@ import { UnsavedChangesDialog } from '@/app/components/wizard/UnsavedChangesDial
 import { InlineError, LoadFailedBanner, SaveFailedBanner, SavingIndicator, LoadingIndicator } from '@/app/components/wizard/RetryBanner'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
+import { SaveButton } from '@/app/components/wizard/SaveButton'
 import { SelectableCard } from '@/app/components/wizard/SelectableCard'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { useNavigationGuard, useRegisterNavGuard, type NavIntent } from '@/app/wizard/NavigationGuardContext'
 import {
+  FOLLOW_UP_ATTEMPT_OPTIONS,
   FOLLOW_UP_INTERVALS,
   SAMPLE_CUSTOM_HANDOFF_MESSAGE,
   SAMPLE_NEVER_SAY_WORDS,
   SAMPLE_TOPICS_TO_AVOID,
   suggestWordVariants,
 } from '@/app/wizard/mockData'
-import type { FollowUpInterval, GuardrailsState } from '@/app/wizard/types'
+import type { FollowUpInterval, FollowUpMaxAttempts, GuardrailsState } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
 
 type TabId = 'avoids' | 'handoff' | 'followup'
@@ -61,6 +64,8 @@ interface SafetySnapshot {
   handoffMessage: string
   followUpInterval: FollowUpInterval
   followUpMessage: string
+  followUpMaxAttempts: FollowUpMaxAttempts
+  followUpRespectHours: boolean
 }
 
 export function SafetyHandoffStep() {
@@ -76,6 +81,8 @@ export function SafetyHandoffStep() {
       handoffMessage: state.guardrails.handoffMessage,
       followUpInterval: state.replies.followUpInterval,
       followUpMessage: state.replies.followUpMessage,
+      followUpMaxAttempts: state.replies.followUpMaxAttempts,
+      followUpRespectHours: state.replies.followUpRespectHours,
     }
   }
 
@@ -156,6 +163,9 @@ export function SafetyHandoffStep() {
   const { runGuard } = useNavigationGuard()
 
   const loading = loadStatus === 'loading'
+  // Same combined-slice comparison guard() uses — all three tabs share one saved snapshot, so
+  // each tab's Save button reflects the whole step's dirty state, not just its own fields.
+  const dirty = savedSnapshot !== null && JSON.stringify(savedSnapshot) !== JSON.stringify(currentSnapshot())
 
   async function customiseHandoffRules() {
     // Same save-or-warn discipline as Back/Next — this button navigates away from the page too,
@@ -174,7 +184,7 @@ export function SafetyHandoffStep() {
       handoffMessageEnabled: true,
       handoffMessage: SAMPLE_CUSTOM_HANDOFF_MESSAGE,
     })
-    patch('replies', { followUpInterval: 1800, followUpEnabled: true })
+    patch('replies', { followUpInterval: 1800, followUpEnabled: true, followUpMaxAttempts: 2 })
   }
 
   useRegisterDevControls(
@@ -249,11 +259,13 @@ export function SafetyHandoffStep() {
           {/* forceMount + CSS-hidden (not Radix's default unmount-when-inactive) so every tab's
               fields keep patching the shared guardrails/replies slices no matter which tab is
               showing — otherwise switching tabs mid-edit would silently drop unsaved changes. */}
-          <TabsContent value="avoids" forceMount className="mt-6 space-y-6 data-[state=inactive]:hidden">
+          <TabsContent value="avoids" forceMount className="mt-6 space-y-7 data-[state=inactive]:hidden">
+            <div className="flex items-center justify-end">
+              <SaveButton dirty={dirty} saving={saveStatus === 'saving'} onSave={performSave} />
+            </div>
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-              Ways to guide the agent away from things it should not say or discuss. These become
-              instructions the agent follows strongly, not a filter that blocks a message after it
-              is written.
+              These become instructions the agent follows strongly, not a filter that blocks a
+              message after it&rsquo;s written.
             </p>
 
             <div className="space-y-1.5">
@@ -288,42 +300,36 @@ export function SafetyHandoffStep() {
               disabled={loading}
             />
 
-            <div className="space-y-2 rounded-lg bg-muted p-4">
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck className="size-4 text-muted-foreground" />
-                <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>Always protected</p>
-              </span>
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                These hold no matter what you configure above.
+            <div className="flex items-start gap-2.5">
+              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <span style={{ fontWeight: 'var(--font-weight-medium)' }}>Always protected</span>{' '}
+                &mdash; no matter what you configure above, the agent never claims to be human
+                when directly asked, never shares one customer&rsquo;s details with another, and
+                never states medical, legal, or financial advice as certain fact.
               </p>
-              <ul className="list-disc space-y-1 pl-5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                <li>Never claims to be a human when a customer directly asks.</li>
-                <li>Never shares one customer&rsquo;s personal details with another.</li>
-                <li>Never states medical, legal, or financial advice as certain fact.</li>
-              </ul>
             </div>
           </TabsContent>
 
-          <TabsContent value="handoff" forceMount className="mt-6 space-y-6 data-[state=inactive]:hidden">
+          <TabsContent value="handoff" forceMount className="mt-6 space-y-7 data-[state=inactive]:hidden">
+            <div className="flex items-center justify-end">
+              <SaveButton dirty={dirty} saving={saveStatus === 'saving'} onSave={performSave} />
+            </div>
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-              Once a conversation is handed over, your team picks it up from your usual inbox.
-              That part is not set up in this wizard.
+              Once handed over, your team picks the conversation up from your usual inbox —
+              that part isn&rsquo;t set up in this wizard.
             </p>
 
-            <div className="space-y-3 rounded-lg bg-muted p-4">
+            <div className="space-y-2 rounded-lg bg-muted p-3">
               <p style={{ fontSize: 'var(--text-sm)' }}>
-                <span style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>This happens automatically.</span>{' '}
-                Your agent hands the conversation to a person on its own, when it is unsure, when
-                something seems wrong, or when the customer asks for one. You cannot turn this off
-                from here. What you can control below is what the agent says at that moment.
+                <span style={{ fontWeight: 'var(--font-weight-medium)' }}>This happens automatically</span>{' '}
+                &mdash; the agent hands off when it&rsquo;s unsure, something seems wrong, or the
+                customer asks for a person, and this can&rsquo;t be turned off. Below, you control
+                what it says at that moment.
               </p>
-              <p style={{ fontSize: 'var(--text-sm)' }}>
-                Want more control over exactly when this happens? You can add specific rules for
-                your business.
-              </p>
-              <Button size="sm" variant="outline" onClick={customiseHandoffRules}>
-                Customise handoff rules
-              </Button>
+              <button type="button" onClick={customiseHandoffRules} className="text-primary" style={{ fontSize: 'var(--text-xs)' }}>
+                Customise handoff rules for your business
+              </button>
             </div>
 
             <div className="space-y-2">
@@ -357,12 +363,8 @@ export function SafetyHandoffStep() {
                   {hasMultipleLanguages && (
                     <p className="flex items-start gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
                       <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                      Your agent replies in more than one language, but this message is sent
-                      exactly as written, in this one language, no matter which language the
-                      customer was using. Meta&rsquo;s standard message adjusts to the
-                      customer&rsquo;s language automatically. If most of your customers write in
-                      a language other than the one you type here, the standard message may serve
-                      them better.
+                      This is sent exactly as written, in this one language — Meta&rsquo;s
+                      standard message adapts to the customer&rsquo;s language instead.
                     </p>
                   )}
                 </div>
@@ -371,9 +373,12 @@ export function SafetyHandoffStep() {
           </TabsContent>
 
           <TabsContent value="followup" forceMount className="mt-6 space-y-6 data-[state=inactive]:hidden">
+            <div className="flex items-center justify-end">
+              <SaveButton dirty={dirty} saving={saveStatus === 'saving'} onSave={performSave} />
+            </div>
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-              If a customer goes quiet mid-conversation, the agent can send one message to check
-              back in.
+              If a customer goes quiet mid-conversation, the agent can re-engage them with a
+              short check-in — once, or a few times, spaced out.
             </p>
 
             <div className="space-y-1.5">
@@ -404,13 +409,58 @@ export function SafetyHandoffStep() {
 
             {followUpOn && (
               <>
+                <div className="space-y-1.5">
+                  <span className="flex items-center gap-1.5">
+                    <Label>How many times</Label>
+                    <InfoTooltip text="Each retry waits the same silence window before sending. The agent stops retrying the moment the customer replies, or a person takes over." />
+                  </span>
+                  <Select
+                    value={String(state.replies.followUpMaxAttempts)}
+                    onValueChange={(v) => patch('replies', { followUpMaxAttempts: Number(v) as FollowUpMaxAttempts })}
+                    disabled={loading}
+                  >
+                    <SelectTrigger className="w-full max-w-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FOLLOW_UP_ATTEMPT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={String(opt.value)}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                  <div className="min-w-0">
+                    <p style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-medium)' }}>
+                      Only send within business hours
+                    </p>
+                    <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                      A silence window that ends overnight waits until you&rsquo;re open again.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={state.replies.followUpRespectHours}
+                    onCheckedChange={(checked) => patch('replies', { followUpRespectHours: checked })}
+                    disabled={loading}
+                  />
+                </div>
+
                 <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
                   Follow-up messages are charged the same way as any other message the agent sends.
                 </p>
                 <div className="space-y-1.5">
                   <span className="flex items-center gap-1.5">
                     <Label htmlFor="followup-message">What the agent sends</Label>
-                    <InfoTooltip text="Kept short and low pressure works best for a check-in message." />
+                    <InfoTooltip
+                      text={
+                        state.replies.followUpMaxAttempts > 1
+                          ? 'Kept short and low pressure works best. The same message is reused for every retry.'
+                          : 'Kept short and low pressure works best for a check-in message.'
+                      }
+                    />
                   </span>
                   <Textarea
                     id="followup-message"
@@ -544,24 +594,27 @@ function TopicsToAvoidField({
           No topics added.
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {values.map((topic, i) => (
-            <div key={i} className="flex items-center gap-2">
+            <div key={i} className="flex items-center gap-1">
               <Input
                 maxLength={MAX_TOPIC_LENGTH}
                 value={topic}
                 onChange={(e) => updateRow(i, e.target.value)}
                 placeholder="e.g. Comparing us to specific competitors"
                 disabled={disabled}
+                className="border-transparent bg-muted shadow-none focus-visible:border-ring focus-visible:bg-input-background"
               />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => removeRow(i)}
-                className="shrink-0 text-muted-foreground"
-                style={{ fontSize: 'var(--text-xs)' }}
+                disabled={disabled}
+                aria-label="Remove topic"
               >
-                Remove
-              </button>
+                <X className="size-4 text-muted-foreground" />
+              </Button>
             </div>
           ))}
         </div>

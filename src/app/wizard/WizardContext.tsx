@@ -116,11 +116,10 @@ export function createInitialState(): WizardState {
       followUpEnabled: false,
       followUpInterval: 0,
       followUpMessage: DEFAULT_REPLIES.followUpMessage,
+      followUpMaxAttempts: 1,
+      followUpRespectHours: true,
     },
     publish: {
-      versionNote: '',
-      approverRequired: false,
-      pendingApproval: false,
       testRunStatus: 'idle',
       testResults: [],
       testsStaleSince: null,
@@ -135,6 +134,7 @@ export function createInitialState(): WizardState {
       audienceMode: 'allowlisted',
       activated: false,
       activatedChannels: [],
+      stopped: false,
       standardChecksRun: false,
     },
     qualityChecks: {

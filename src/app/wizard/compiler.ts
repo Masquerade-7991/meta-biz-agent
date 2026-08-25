@@ -270,8 +270,13 @@ export function compileConfig(state: WizardState): CompiledConfig {
           enabled: true,
           followup_interval_in_seconds: state.replies.followUpInterval,
           message: state.replies.followUpMessage,
+          max_attempts: state.replies.followUpMaxAttempts,
+          respect_business_hours: state.replies.followUpRespectHours,
         }
       : null,
+    // ai_audience: these two enum strings have been used consistently across every prior spec,
+    // but were never independently confirmed against a primary Meta source — verify before
+    // wiring this to a real write.
     ai_audience: (state.publish.audienceMode === 'allowlisted'
       ? 'ALLOWLISTED_ONLY'
       : 'EVERYONE') as 'ALLOWLISTED_ONLY' | 'EVERYONE',

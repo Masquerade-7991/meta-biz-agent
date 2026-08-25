@@ -7,6 +7,7 @@ import { SegmentedControl } from '@/app/components/wizard/SegmentedControl'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { LoadFailedBanner, LoadingIndicator, SaveFailedBanner, SavingIndicator } from '@/app/components/wizard/RetryBanner'
+import { SaveButton } from '@/app/components/wizard/SaveButton'
 import { UnsavedChangesDialog } from '@/app/components/wizard/UnsavedChangesDialog'
 import { LanguageMultiSelect, LanguageSelect } from '@/app/components/wizard/LanguageCombobox'
 import { useWizard } from '@/app/wizard/WizardContext'
@@ -119,6 +120,10 @@ export function PersonalitySection() {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-end">
+        <SaveButton dirty={section.dirty} saving={section.saveStatus === 'saving'} onSave={section.performSave} />
+      </div>
+
       {section.loadStatus === 'failed' && (
         <LoadFailedBanner
           message="We could not load your saved choices. Anything you save now will replace them."

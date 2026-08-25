@@ -20,6 +20,15 @@ import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { INTEGRATION_CATALOG } from '@/app/wizard/mockData'
 import type { InstalledIntegration, IntegrationDef } from '@/app/wizard/types'
 
+// Deterministic per-category color from the chart palette, so each integration category reads
+// as a distinct visual group in the catalog grid instead of every avatar being the same gray.
+const CATEGORY_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)']
+function categoryColor(category: string): string {
+  let hash = 0
+  for (let i = 0; i < category.length; i++) hash = (hash * 31 + category.charCodeAt(i)) >>> 0
+  return CATEGORY_COLORS[hash % CATEGORY_COLORS.length]!
+}
+
 // A plausible stand-in for what each integration would show once connected, used when nothing
 // the user typed in this session makes a better one (see deriveConnectedAs below).
 const CONNECTED_AS_FALLBACK: Record<string, string> = {
@@ -80,7 +89,12 @@ function IntegrationCard({
     >
       <div className="flex w-full items-start justify-between gap-2">
         <Avatar size="lg">
-          <AvatarFallback className="bg-muted text-muted-foreground">{initials(integration.name)}</AvatarFallback>
+          <AvatarFallback
+            className="text-white"
+            style={{ backgroundColor: categoryColor(integration.category) }}
+          >
+            {initials(integration.name)}
+          </AvatarFallback>
         </Avatar>
         {connected ? (
           <Badge className="bg-success text-success-foreground shrink-0">Connected</Badge>
@@ -296,7 +310,12 @@ function IntegrationDetailDialog({
         <DialogHeader>
           <div className="flex items-center gap-3">
             <Avatar size="lg">
-              <AvatarFallback className="bg-muted text-muted-foreground">{initials(integration.name)}</AvatarFallback>
+              <AvatarFallback
+                className="text-white"
+                style={{ backgroundColor: categoryColor(integration.category) }}
+              >
+                {initials(integration.name)}
+              </AvatarFallback>
             </Avatar>
             <div>
               <DialogTitle>{integration.name}</DialogTitle>
@@ -407,7 +426,8 @@ function IntegrationDetailDialog({
               {phase === 'idle' &&
                 (installedRecord.connectedAs ? (
                   <div className="space-y-2">
-                    <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                    <p className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                      <span className="size-1.5 shrink-0 rounded-full bg-success" />
                       Connected to {installedRecord.connectedAs}
                     </p>
                     <Button size="sm" variant="outline" onClick={onDisconnectOnly}>
@@ -416,7 +436,8 @@ function IntegrationDetailDialog({
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                    <p className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                      <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
                       You are not connected to {integration.name}.
                     </p>
                     <Button size="sm" onClick={handleConnectClick}>

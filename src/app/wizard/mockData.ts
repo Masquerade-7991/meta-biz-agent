@@ -16,6 +16,7 @@ import type {
   Day,
   FaqRow,
   FollowUpInterval,
+  FollowUpMaxAttempts,
   IntegrationDef,
   IntentRow,
   MenuOption,
@@ -372,6 +373,12 @@ export const FOLLOW_UP_INTERVALS: { value: FollowUpInterval; label: string }[] =
   { value: 7200, label: '2 hours of silence' },
   { value: 28800, label: '8 hours of silence' },
   { value: 86400, label: '24 hours of silence' },
+]
+
+export const FOLLOW_UP_ATTEMPT_OPTIONS: { value: FollowUpMaxAttempts; label: string }[] = [
+  { value: 1, label: 'Once' },
+  { value: 2, label: 'Twice, spacing out each attempt' },
+  { value: 3, label: 'Up to 3 times, spacing out each attempt' },
 ]
 
 export const DEFAULT_REPLIES = {

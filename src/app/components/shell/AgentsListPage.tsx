@@ -9,10 +9,10 @@ import {
   FileCode2,
   History,
   MoreHorizontal,
-  Pause,
   Play,
   PlayCircle,
   Plus,
+  Square,
   SquarePen,
   Users,
 } from 'lucide-react'
@@ -54,21 +54,18 @@ function persistCreatedAgents(agents: AgentInstanceSummary[]) {
   window.localStorage.setItem(CREATED_AGENTS_KEY, JSON.stringify(agents))
 }
 
+// Collapsed to the three states the listing surfaces: green while live, red once stopped, blue
+// for everything still being built or verified before it can go live.
 function statusBadge(status: AgentRolloutStatus) {
   switch (status) {
     case 'live':
-      return <Badge className="bg-success text-success-foreground">Live</Badge>
-    case 'needs_testing':
-      return <Badge className="bg-warning text-warning-foreground">Needs testing</Badge>
+      return <Badge className="bg-success text-success-foreground">Active</Badge>
     case 'paused':
-      return (
-        <Badge variant="outline" className="gap-1 text-muted-foreground">
-          <Pause className="size-3" /> Paused
-        </Badge>
-      )
+      return <Badge className="bg-destructive text-destructive-foreground">Stopped</Badge>
+    case 'needs_testing':
     case 'draft':
     default:
-      return <Badge variant="secondary">Draft</Badge>
+      return <Badge className="bg-primary text-primary-foreground">In progress</Badge>
   }
 }
 
@@ -131,11 +128,13 @@ export function AgentsListPage({
         name: state.identity.agentName,
         companyName: state.identity.companyName || 'Untitled workspace',
         phoneNumber: state.gate.selectedPhoneNumber ?? '—',
-        status: state.publish.activated
-          ? 'live'
-          : state.publish.testResults.length > 0 && state.publish.testResults.every((r) => r.passed) && !state.publish.testsStaleSince
-            ? 'needs_testing'
-            : 'draft',
+        status: state.publish.stopped
+          ? 'paused'
+          : state.publish.activated
+            ? 'live'
+            : state.publish.testResults.length > 0 && state.publish.testResults.every((r) => r.passed) && !state.publish.testsStaleSince
+              ? 'needs_testing'
+              : 'draft',
         connector:
           state.connectors.connectorType === 'shopify'
             ? 'Shopify'
@@ -187,6 +186,14 @@ export function AgentsListPage({
       case 'allowlist':
         setSection('publish')
         onOpenBuilder()
+        break
+      case 'stop':
+        patch('publish', { activated: false, stopped: true })
+        toast.success(`${agent.name} stopped`)
+        break
+      case 'resume':
+        patch('publish', { activated: true, stopped: false })
+        toast.success(`${agent.name} is live again`)
         break
       default:
         toast(`"${action}" isn’t wired to real state in this prototype yet.`)
@@ -240,13 +247,11 @@ export function AgentsListPage({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Agent</TableHead>
+                  <TableHead>Agent name</TableHead>
+                  <TableHead>WABA name</TableHead>
+                  <TableHead>Phone number</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Connector</TableHead>
-                  <TableHead>Journey</TableHead>
-                  <TableHead>Audience</TableHead>
-                  <TableHead>Eval score</TableHead>
-                  <TableHead>Updated</TableHead>
+                  <TableHead>Last updated</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
@@ -263,40 +268,18 @@ export function AgentsListPage({
                             <Bot className="size-4" />
                           </AvatarFallback>
                         </Avatar>
-                        <div className="min-w-0">
-                          <p className="flex items-center gap-1.5 truncate" style={{ fontWeight: 'var(--font-weight-medium)' }}>
-                            {agent.name}
-                            {agent.isCurrent && (
-                              <Badge variant="outline" className="text-primary">
-                                In progress
-                              </Badge>
-                            )}
-                          </p>
-                          <p className="truncate text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                            {agent.companyName} &middot; {agent.phoneNumber}
-                          </p>
-                        </div>
+                        <p className="truncate" style={{ fontWeight: 'var(--font-weight-medium)' }}>
+                          {agent.name}
+                        </p>
                       </div>
                     </TableCell>
+                    <TableCell>
+                      <span style={{ fontSize: 'var(--text-sm)' }}>{agent.companyName}</span>
+                    </TableCell>
+                    <TableCell>
+                      <span style={{ fontSize: 'var(--text-sm)' }}>{agent.phoneNumber}</span>
+                    </TableCell>
                     <TableCell>{statusBadge(agent.status)}</TableCell>
-                    <TableCell>
-                      <span style={{ fontSize: 'var(--text-sm)' }}>{agent.connector}</span>
-                    </TableCell>
-                    <TableCell>
-                      <span style={{ fontSize: 'var(--text-sm)' }}>{agent.journeyProfile}</span>
-                    </TableCell>
-                    <TableCell>
-                      <span style={{ fontSize: 'var(--text-sm)' }}>
-                        {agent.audienceMode === 'Allowlisted'
-                          ? `Allowlisted (${agent.allowlistCount})`
-                          : 'Everyone'}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span style={{ fontSize: 'var(--text-sm)' }}>
-                        {agent.evalScore != null ? `${agent.evalScore.toFixed(1)}/5` : 'Not tested'}
-                      </span>
-                    </TableCell>
                     <TableCell>
                       <span className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
                         {agent.updatedAt}
@@ -329,10 +312,12 @@ export function AgentsListPage({
                           <DropdownMenuItem onClick={() => handleAction(agent, 'allowlist')}>
                             <Users /> Manage allowlist
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleAction(agent, agent.status === 'paused' ? 'resume' : 'pause')}>
-                            {agent.status === 'paused' ? <Play /> : <Pause />}
-                            {agent.status === 'paused' ? 'Resume rollout' : 'Pause rollout'}
-                          </DropdownMenuItem>
+                          {(agent.status === 'live' || agent.status === 'paused') && (
+                            <DropdownMenuItem onClick={() => handleAction(agent, agent.status === 'paused' ? 'resume' : 'stop')}>
+                              {agent.status === 'paused' ? <Play /> : <Square />}
+                              {agent.status === 'paused' ? 'Resume rollout' : 'Stop agent'}
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => handleAction(agent, 'duplicate')}>
                             <Copy /> Duplicate agent

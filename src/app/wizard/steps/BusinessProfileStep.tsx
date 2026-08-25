@@ -23,6 +23,7 @@ import {
 } from '@/app/components/ui/dialog'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
+import { SaveButton } from '@/app/components/wizard/SaveButton'
 import { UnsavedChangesDialog } from '@/app/components/wizard/UnsavedChangesDialog'
 import { LoadFailedBanner, LoadingIndicator, SaveFailedBanner, SavingIndicator } from '@/app/components/wizard/RetryBanner'
 import { useWizard } from '@/app/wizard/WizardContext'
@@ -49,9 +50,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const POLICY_COPY = {
   returnPolicy: {
-    label: 'Return policy',
-    placeholder: 'e.g. 7 day returns, unused items only',
-    helper: 'Your returns window, what can and cannot be returned, and how refunds are issued.',
+    label: 'Cancellations & refunds',
+    placeholder: 'e.g. 7 day returns, or free cancellation up to 24 hours before',
+    helper: 'Your cancellation or return window, and how refunds are issued.',
     example:
       '7 day returns on unused items with original packaging. Refunds go back to the original payment method within 5 working days. No returns on innerwear or customised items.',
   },
@@ -63,9 +64,9 @@ const POLICY_COPY = {
       'Order on our website or right here on WhatsApp. Share the product name and your address, and we will confirm price and delivery time before you pay.',
   },
   deliveryAndShipping: {
-    label: 'Delivery and shipping',
-    placeholder: 'e.g. 2 to 5 days across India',
-    helper: 'Where you deliver, how long it takes, and what it costs.',
+    label: 'Delivery or fulfilment',
+    placeholder: 'e.g. 2 to 5 days across India, or on-site at your service area',
+    helper: 'How you get orders or services to customers, how long it takes, and what it costs.',
     example:
       'We deliver across India. Metro cities in 2 to 3 days, everywhere else in 5 to 7 days. Free delivery on orders above Rs 999, otherwise Rs 49.',
   },
@@ -76,9 +77,9 @@ type PolicyKey = keyof typeof POLICY_COPY
 const FIELD_LABELS: Record<string, string> = {
   businessDescription: 'Business description',
   paymentMethods: 'Payment methods',
-  returnPolicy: 'Return policy',
+  returnPolicy: 'Cancellations & refunds',
   purchaseInfo: 'How customers buy or book',
-  deliveryAndShipping: 'Delivery and shipping',
+  deliveryAndShipping: 'Delivery or fulfilment',
   contactEmail: 'Contact email',
   businessAddress: 'Business address',
   businessHours: 'Business hours',
@@ -340,6 +341,10 @@ export function BusinessProfileStep() {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-end">
+        <SaveButton dirty={section.dirty} saving={saveStatus === 'saving'} onSave={performSave} />
+      </div>
+
       {loadStatus === 'failed' && (
         <LoadFailedBanner
           message="We could not load your saved details. Anything you enter now will be saved, but it may overwrite details saved earlier."

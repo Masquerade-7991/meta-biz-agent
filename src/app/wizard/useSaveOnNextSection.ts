@@ -105,12 +105,19 @@ export function useSaveOnNextSection<K extends SliceKey>(slice: K, options: Save
 
   useRegisterNavGuard(guard)
 
+  // Same comparison the nav guard uses, exposed so a page can show its own Save button —
+  // disabled until something differs from the last saved snapshot, re-enabled the moment it does.
+  const dirty =
+    savedSnapshot !== null &&
+    (options.isDirty ? options.isDirty(savedSnapshot, data) : JSON.stringify(savedSnapshot) !== JSON.stringify(data))
+
   return {
     data,
     dataRef,
     loading: loadStatus === 'loading',
     loadStatus,
     saveStatus,
+    dirty,
     forceSaveFailure,
     setForceSaveFailure,
     simulateLoadFailure,

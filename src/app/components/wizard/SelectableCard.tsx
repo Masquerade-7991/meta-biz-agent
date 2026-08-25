@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from 'react'
 import { Check } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { InfoTooltip } from './InfoTooltip'
 import { cn } from '@/app/lib/utils'
 
@@ -15,6 +16,7 @@ export function SelectableCard({
   selected,
   onClick,
   large,
+  icon: Icon,
 }: {
   title: string
   helper?: string
@@ -23,6 +25,8 @@ export function SelectableCard({
   onClick: () => void
   /** Front-door-only: bigger padding for the one-decision-at-a-time setup screens. */
   large?: boolean
+  /** Optional leading icon for scannability in longer lists (e.g. auth method choices). */
+  icon?: LucideIcon
 }) {
   function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -43,20 +47,27 @@ export function SelectableCard({
         selected ? 'border-primary bg-accent' : 'border-border hover:border-primary/50',
       )}
     >
-      <div className="min-w-0">
-        <span className="flex items-center gap-1.5">
-          <p style={{ fontWeight: 'var(--font-weight-medium)' }}>{title}</p>
-          {info && (
-            <span onClick={(e) => e.stopPropagation()}>
-              <InfoTooltip text={info} />
-            </span>
-          )}
-        </span>
-        {helper && (
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            {helper}
-          </p>
+      <div className="flex min-w-0 items-start gap-2.5">
+        {Icon && (
+          <Icon
+            className={cn('mt-0.5 size-4 shrink-0', selected ? 'text-primary' : 'text-muted-foreground')}
+          />
         )}
+        <div className="min-w-0">
+          <span className="flex items-center gap-1.5">
+            <p style={{ fontWeight: 'var(--font-weight-medium)' }}>{title}</p>
+            {info && (
+              <span onClick={(e) => e.stopPropagation()}>
+                <InfoTooltip text={info} />
+              </span>
+            )}
+          </span>
+          {helper && (
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              {helper}
+            </p>
+          )}
+        </div>
       </div>
       {selected && <Check className="mt-0.5 size-4 shrink-0 text-primary" />}
     </div>

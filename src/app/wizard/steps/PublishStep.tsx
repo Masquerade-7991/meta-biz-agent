@@ -1,12 +1,10 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { CheckCircle2, Plus, Rocket, ShieldQuestion, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Play, Plus, Rocket, Square, X } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
-import { Label } from '@/app/components/ui/label'
 import { Input } from '@/app/components/ui/input'
-import { Textarea } from '@/app/components/ui/textarea'
 import { SelectableCard } from '@/app/components/wizard/SelectableCard'
-import { Switch } from '@/app/components/ui/switch'
+import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
 import {
   Dialog,
   DialogContent,
@@ -16,13 +14,15 @@ import {
   DialogTitle,
 } from '@/app/components/ui/dialog'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
-import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { useExitWizard } from '@/app/wizard/ExitContext'
 
 const E164_RE = /^\+[1-9]\d{6,14}$/
-const VERSION_NOTE_MAX = 300
+
+// This page publishes an agent on one specific WhatsApp phone number, not a WABA account — a
+// WABA can hold several numbers, and this page (and the agent it activates) belongs to exactly
+// one. Nothing here should ever talk about "the WABA" going live.
 
 export function PublishStep() {
   const { state, patch } = useWizard()
@@ -56,28 +56,35 @@ export function PublishStep() {
     toast.success('Saved')
   }
 
-  // ---- Publish ----
+  // ---- Activate on channels ----
+  // Always enabled — no standard-checks precondition. Nothing in Meta's platform ever required
+  // one; that was a Helo-invented safety rail, removed on direct instruction.
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [activateError, setActivateError] = useState<string | null>(null)
-
-  const canActivate = publish.standardChecksRun
-  const activateReason = !canActivate ? 'Run the standard checks to continue' : null
-
-  const activateLabel = publish.approverRequired ? 'Submit for approval' : 'Activate on channels'
+  const [activateFailed, setActivateFailed] = useState(false)
 
   function confirmActivate() {
     setConfirmOpen(false)
     if (state.demo.forceNextFailure) {
       patch('demo', { forceNextFailure: false })
-      setActivateError('Could not save. Nothing was lost.')
+      setActivateFailed(true)
       return
     }
-    setActivateError(null)
-    if (publish.approverRequired) {
-      patch('publish', { pendingApproval: true })
-    } else {
-      patch('publish', { activated: true, activatedChannels: ['WhatsApp'] })
-    }
+    setActivateFailed(false)
+    patch('publish', { activated: true, activatedChannels: ['WhatsApp'], stopped: false })
+  }
+
+  // ---- Stop / resume ----
+  const [stopConfirmOpen, setStopConfirmOpen] = useState(false)
+
+  function confirmStop() {
+    setStopConfirmOpen(false)
+    patch('publish', { activated: false, stopped: true })
+    toast.success('Agent stopped')
+  }
+
+  function resumeAgent() {
+    patch('publish', { activated: true, stopped: false })
+    toast.success('Agent is live again')
   }
 
   useRegisterDevControls(
@@ -95,29 +102,25 @@ export function PublishStep() {
     <div className="space-y-10">
       {/* Who can talk to your agent */}
       <section className="space-y-3">
-        <div>
-          <span className="flex items-center gap-1.5">
-            <h3>Who can talk to your agent</h3>
-            <InfoTooltip text="Start with a small group while you’re confident it’s ready, then open it up." />
-          </span>
-        </div>
+        <h3>Who can talk to your agent</h3>
 
         <div className="grid gap-2 sm:grid-cols-2">
           <SelectableCard
             title="Only the numbers I list below"
             helper="Recommended for testing"
+            info="Add the WhatsApp numbers you want to test with below. Only those numbers can reach your agent until you switch this to Everyone."
             selected={publish.audienceMode === 'allowlisted'}
             onClick={() => setAudienceMode('allowlisted')}
           />
           <SelectableCard
             title="Everyone"
-            info="Any customer who messages this number will reach your agent immediately once you activate."
+            info="Opens your agent to any customer who messages this number. Best once you've tested with a smaller group first."
             selected={publish.audienceMode === 'everyone'}
             onClick={() => setAudienceMode('everyone')}
           />
         </div>
 
-        {publish.audienceMode === 'allowlisted' && (
+        {publish.audienceMode === 'allowlisted' ? (
           <div className="space-y-2">
             <div className="flex items-start gap-2">
               <div className="flex-1">
@@ -156,115 +159,90 @@ export function PublishStep() {
               </div>
             )}
           </div>
+        ) : (
+          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            Any customer who messages this number will reach your agent immediately once you
+            activate.
+          </p>
         )}
       </section>
 
-      {/* Publish */}
+      {/* Activate on channels */}
       <section className="space-y-4">
-        <div className="space-y-1.5">
-          <span className="flex items-center gap-1.5">
-            <Label htmlFor="version-note">What changed in this version?</Label>
-            <InfoTooltip text="For your own records. This is not sent to Meta." />
-          </span>
-          <Textarea
-            id="version-note"
-            rows={2}
-            maxLength={VERSION_NOTE_MAX}
-            value={publish.versionNote}
-            onChange={(e) => patch('publish', { versionNote: e.target.value })}
-            placeholder="e.g. Added a connection to Shopify, updated the tone"
-          />
-        </div>
-
-        <div className="flex items-center justify-between rounded-lg border border-border p-3">
-          <div className="flex items-center gap-2">
-            <ShieldQuestion className="size-4 text-muted-foreground" />
-            <span className="flex items-center gap-1.5">
-              <Label htmlFor="approval-toggle">Requires approval before going live</Label>
-              <InfoTooltip text="Someone else on your team must approve before this agent can go live." />
+        {publish.stopped ? (
+          <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 p-4">
+            <span className="flex items-center gap-3">
+              <Square className="size-5 text-destructive" />
+              <p style={{ fontWeight: 'var(--font-weight-medium)' }}>This agent is stopped.</p>
             </span>
+            <Button size="sm" onClick={resumeAgent}>
+              <Play className="size-3.5" />
+              Resume
+            </Button>
           </div>
-          <Switch
-            id="approval-toggle"
-            checked={publish.approverRequired}
-            onCheckedChange={(checked) => patch('publish', { approverRequired: checked })}
-          />
-        </div>
-
-        {publish.activated ? (
+        ) : publish.activated ? (
           <div className="flex items-center justify-between rounded-lg border border-success bg-success/10 p-4">
             <span className="flex items-center gap-3">
               <CheckCircle2 className="size-5 text-success" />
               <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Your agent is live.</p>
             </span>
-            <Button variant="outline" size="sm" onClick={exitWizard}>
-              Back to agents list
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setStopConfirmOpen(true)}>
+                <Square className="size-3.5" />
+                Stop agent
+              </Button>
+              <Button variant="outline" size="sm" onClick={exitWizard}>
+                Back to agents list
+              </Button>
+            </div>
+          </div>
+        ) : activateFailed ? (
+          <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
+            <span className="flex items-center gap-2">
+              <AlertTriangle className="size-4 text-destructive" />
+              <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>Couldn&rsquo;t activate</p>
+            </span>
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              Something went wrong switching this agent on. Nothing has changed.
+            </p>
+            <Button size="sm" onClick={confirmActivate}>
+              Try again
             </Button>
           </div>
-        ) : publish.pendingApproval ? (
-          <div className="rounded-lg border border-border bg-muted p-4">
-            <p style={{ fontWeight: 'var(--font-weight-medium)' }}>
-              Sent for approval. You&rsquo;ll be notified once it&rsquo;s reviewed.
-            </p>
-          </div>
         ) : (
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-3">
-              <Button size="lg" disabled={!canActivate} onClick={() => setConfirmOpen(true)}>
-                <Rocket className="size-4" />
-                {activateLabel}
-              </Button>
-              {activateReason && (
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                  {activateReason}
-                </p>
-              )}
-            </div>
-            {activateError && (
-              <p className="text-destructive" style={{ fontSize: 'var(--text-sm)' }}>
-                {activateError}
-              </p>
-            )}
-          </div>
+          <Button size="lg" onClick={() => setConfirmOpen(true)}>
+            <Rocket className="size-4" />
+            Activate on channels
+          </Button>
         )}
       </section>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
-          {publish.approverRequired ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>Send for approval?</DialogTitle>
-                <DialogDescription>
-                  This will notify your team that this agent is ready for review. It will not go live until approved.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setConfirmOpen(false)}>
-                  Go back
-                </Button>
-                <Button onClick={confirmActivate}>Send for approval</Button>
-              </DialogFooter>
-            </>
-          ) : (
-            <>
-              <DialogHeader>
-                <DialogTitle>Ready to go live?</DialogTitle>
-                <DialogDescription>
-                  Once activated, your agent becomes the main responder for {audiencePhrase}. Meta charges for every
-                  message it sends. This is not a test anymore.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setConfirmOpen(false)}>
-                  Go back
-                </Button>
-                <Button onClick={confirmActivate}>Yes, activate</Button>
-              </DialogFooter>
-            </>
-          )}
+          <DialogHeader>
+            <DialogTitle>Ready to go live?</DialogTitle>
+            <DialogDescription>
+              Once activated, your agent becomes the main responder for {audiencePhrase}. Meta charges for every
+              message it sends. This is not a test anymore.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+              Go back
+            </Button>
+            <Button onClick={confirmActivate}>Yes, activate</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={stopConfirmOpen}
+        title="Stop this agent?"
+        description="Customers messaging this number will no longer reach your agent until you resume."
+        confirmLabel="Stop agent"
+        onConfirm={confirmStop}
+        onCancel={() => setStopConfirmOpen(false)}
+      />
     </div>
   )
 }
