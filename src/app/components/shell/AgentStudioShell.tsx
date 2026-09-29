@@ -1,4 +1,7 @@
-import { LogOut } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Loader2, LogOut } from 'lucide-react'
+import { toast } from 'sonner'
+import { hydrateFromMeta } from '@/app/api/meta'
 import { Button } from '@/app/components/ui/button'
 import { Avatar, AvatarFallback } from '@/app/components/ui/avatar'
 import { useWizard } from '@/app/wizard/WizardContext'
@@ -35,8 +38,30 @@ const GROUPS = ['build', 'deploy', 'monitor'] as const
 // own wizard already modeled it (Identity, Abilities, Knowledge, Connections, Safety & handoff,
 // Test & Eval, Publish, Activity) — just no longer gated by Back/Next.
 export function AgentStudioShell({ onExit }: { onExit: () => void }) {
-  const { state, setSection } = useWizard()
+  const { state, setSection, patch } = useWizard()
   const { runGuard, pending } = useNavigationGuard()
+
+  // Meta is the source of truth: load everything it holds for this agent once, before any section
+  // renders, so each section's "saved" snapshot is what Meta actually has.
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    hydrateFromMeta(state).then(({ patch: slices, failed }) => {
+      if (cancelled) return
+      for (const [slice, value] of Object.entries(slices)) patch(slice as keyof typeof slices, value as never)
+      if (failed.length >= 9) {
+        toast.error("Couldn't load this agent from Meta", { description: 'Showing what was last saved in this browser. Is the local server running and the Helo.ai server reachable?' })
+      } else if (failed.length > 0) {
+        toast.warning(`Couldn't load from Meta: ${failed.join(', ')}`)
+      }
+      setHydrated(true)
+    })
+    return () => {
+      cancelled = true
+    }
+    // Once per opening of the agent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function navigate(id: StudioSectionId) {
     if (id === state.currentSection || pending) return
@@ -110,7 +135,11 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
                 </Avatar>
               )}
             </div>
-            {state.currentSection === 'overview' || state.currentSection === 'publish' ? (
+            {!hydrated ? (
+              <p className="flex items-center gap-2 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                <Loader2 className="size-4 animate-spin" /> Loading your agent from Meta...
+              </p>
+            ) : state.currentSection === 'overview' || state.currentSection === 'publish' ? (
               <ActiveComponent />
             ) : (
               <div className="rounded-lg border border-border bg-card p-8">

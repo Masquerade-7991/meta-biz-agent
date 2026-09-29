@@ -23,6 +23,7 @@ import { kebabCase, uniqueTitle } from '@/app/wizard/format'
 import { downloadCsv, normalizeForCompare, parseCsv } from '@/app/wizard/csv'
 import type { CustomSkill } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
+import { deleteSkill, errorText, listSkills, saveCustomSkill } from '@/app/api/meta'
 
 const MAX_SKILL_NAME = 60
 const MAX_SKILL_INSTRUCTION = 2000
@@ -67,7 +68,40 @@ function computeSkillWarnings(instruction: string, skills: CustomSkill[], exclud
   return warnings
 }
 
-type SkillEditorState = { mode: 'add' | 'edit'; skillId?: string; name: string; instruction: string }
+type SkillEditorState = { mode: 'add' | 'edit'; skillId?: string; name: string; description: string; instruction: string }
+
+const MAX_SKILL_DESCRIPTION = 1024
+
+const REVIEW_LABEL: Record<NonNullable<CustomSkill['reviewStatus']>, { label: string; className: string }> = {
+  active: { label: 'Active', className: 'bg-success/15 text-success' },
+  pending_review: { label: 'Pending Review', className: 'bg-warning/15 text-warning-foreground' },
+  blocked: { label: 'Blocked', className: 'bg-destructive/15 text-destructive' },
+}
+
+/** Creates each imported skill on Meta, 5 at a time; rejected rows come back in `failed`. */
+async function createSkills<T extends { name: string; description?: string; instruction: string }>(
+  rows: T[],
+  forceFail: boolean,
+  titleFor: (name: string) => string,
+) {
+  const created: (T & { title: string; metaId: string; reviewStatus: CustomSkill['reviewStatus'] })[] = []
+  const failed: T[] = []
+  for (let i = 0; i < rows.length; i += 5) {
+    await Promise.all(
+      rows.slice(i, i + 5).map(async (r) => {
+        try {
+          if (forceFail && i + 5 >= rows.length) throw new Error('forced')
+          const title = titleFor(r.name)
+          const saved = await saveCustomSkill({ id: '', name: r.name, title, description: r.description, instruction: r.instruction, createdAt: 0 })
+          created.push({ ...r, title, metaId: saved.metaId!, reviewStatus: saved.reviewStatus })
+        } catch {
+          failed.push(r)
+        }
+      }),
+    )
+  }
+  return { created, failed }
+}
 
 export function SkillsSection() {
   const { state, patch, setPendingSkillPrefill } = useWizard()
@@ -124,8 +158,21 @@ export function SkillsSection() {
     return personalization.customSkills.filter((s) => s.id !== excludeId).map((s) => s.title)
   }
 
-  function startAddSkill(prefill?: { name: string; instruction: string }) {
-    setSkillEditor({ mode: 'add', name: prefill?.name ?? '', instruction: prefill?.instruction ?? '' })
+  // Review status is Meta's (read-only, PRD V-b1a): refresh it whenever the tab opens.
+  useEffect(() => {
+    listSkills()
+      .then((remote) => {
+        const byId = new Map(remote.map((r) => [r.id, r.status]))
+        patch('personalization', (prev) => ({
+          customSkills: prev.customSkills.map((s) => (s.metaId && byId.has(s.metaId) ? { ...s, reviewStatus: byId.get(s.metaId) } : s)),
+        }))
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function startAddSkill(prefill?: { name: string; instruction: string; description?: string }) {
+    setSkillEditor({ mode: 'add', name: prefill?.name ?? '', description: prefill?.description ?? '', instruction: prefill?.instruction ?? '' })
     setSkillEditorError(null)
   }
 
@@ -140,73 +187,82 @@ export function SkillsSection() {
   }, [state.pendingSkillPrefill])
 
   function startEditSkill(skill: CustomSkill) {
-    setSkillEditor({ mode: 'edit', skillId: skill.id, name: skill.name, instruction: skill.instruction })
+    setSkillEditor({ mode: 'edit', skillId: skill.id, name: skill.name, description: skill.description ?? '', instruction: skill.instruction })
     setSkillEditorError(null)
   }
 
-  function saveSkillEditor() {
+  async function saveSkillEditor() {
     if (!skillEditor || !skillEditor.name.trim() || !skillEditor.instruction.trim()) return
     const warnings = computeSkillWarnings(skillEditor.instruction, personalization.customSkills, skillEditor.skillId)
     const shouldFail = forceSaveFailure
     setSkillEditorSaving(true)
     setSkillEditorError(null)
-    setTimeout(() => {
+    const isEdit = skillEditor.mode === 'edit' && !!skillEditor.skillId
+    const id = isEdit ? skillEditor.skillId! : newId('skill')
+    const existing = personalization.customSkills.find((s) => s.id === id)
+    const skill: CustomSkill = {
+      ...(existing ?? { id, createdAt: Date.now() }),
+      name: skillEditor.name.trim(),
+      title: uniqueTitle(kebabCase(skillEditor.name.trim()), existingTitlesExcluding(isEdit ? id : undefined)),
+      description: skillEditor.description.trim(),
+      instruction: skillEditor.instruction.trim(),
+    }
+    try {
+      if (shouldFail) throw new Error('forced')
+      // Every save goes back through Meta's review, so status resets to what Meta returns.
+      Object.assign(skill, await saveCustomSkill(skill))
+    } catch (err) {
+      setSkillEditorError(shouldFail ? 'Could not save this skill. Nothing was lost.' : `Could not save this skill. Nothing was lost. (${errorText(err)})`)
+      return
+    } finally {
       setSkillEditorSaving(false)
-      if (shouldFail) {
-        setSkillEditorError('Could not save this skill. Nothing was lost.')
-        return
-      }
-      if (skillEditor.mode === 'edit' && skillEditor.skillId) {
-        const id = skillEditor.skillId
-        const title = uniqueTitle(kebabCase(skillEditor.name.trim()), existingTitlesExcluding(id))
-        patch('personalization', {
-          customSkills: personalization.customSkills.map((s) =>
-            s.id === id ? { ...s, name: skillEditor.name.trim(), title, instruction: skillEditor.instruction.trim() } : s,
-          ),
-        })
-        setSkillWarnings((prev) => ({ ...prev, [id]: warnings }))
-      } else {
-        const id = newId('skill')
-        const title = uniqueTitle(kebabCase(skillEditor.name.trim()), existingTitlesExcluding())
-        patch('personalization', {
-          customSkills: [
-            { id, name: skillEditor.name.trim(), title, instruction: skillEditor.instruction.trim(), createdAt: Date.now() },
-            ...personalization.customSkills,
-          ],
-        })
-        setSkillWarnings((prev) => ({ ...prev, [id]: warnings }))
-      }
-      setSkillEditor(null)
-    }, 500)
+    }
+    patch('personalization', (prev) => ({
+      customSkills: isEdit ? prev.customSkills.map((s) => (s.id === id ? skill : s)) : [skill, ...prev.customSkills],
+    }))
+    setSkillWarnings((prev) => ({ ...prev, [id]: warnings }))
+    setSkillEditor(null)
   }
 
-  function confirmDeleteSkill() {
+  async function confirmDeleteSkill() {
     if (!pendingDeleteSkillId) return
     const id = pendingDeleteSkillId
     const shouldFail = forceSaveFailure
-    setTimeout(() => {
-      if (shouldFail) {
-        setDeleteSkillError('Could not delete. The item is still here.')
-        setPendingDeleteSkillId(null)
-        return
-      }
-      patch('personalization', { customSkills: personalization.customSkills.filter((s) => s.id !== id) })
-      setSkillWarnings((prev) => {
-        const next = { ...prev }
-        delete next[id]
-        return next
-      })
+    const metaId = personalization.customSkills.find((s) => s.id === id)?.metaId
+    try {
+      if (shouldFail) throw new Error('forced')
+      if (metaId) await deleteSkill(metaId)
+    } catch {
+      setDeleteSkillError('Could not delete. The item is still here.')
       setPendingDeleteSkillId(null)
-    }, 400)
+      return
+    }
+    patch('personalization', (prev) => ({ customSkills: prev.customSkills.filter((s) => s.id !== id) }))
+    setSkillWarnings((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    setPendingDeleteSkillId(null)
   }
 
-  function confirmUndoSkillImport() {
+  async function confirmUndoSkillImport() {
     const batch = personalization.lastSkillImport
     if (!batch) return
-    patch('personalization', {
-      customSkills: personalization.customSkills.filter((s) => s.importBatchId !== batch.id),
+    const failedIds = new Set<string>()
+    for (const s of personalization.customSkills.filter((k) => k.importBatchId === batch.id)) {
+      if (!s.metaId) continue
+      try {
+        await deleteSkill(s.metaId)
+      } catch {
+        failedIds.add(s.id)
+      }
+    }
+    if (failedIds.size > 0) setDeleteSkillError(`Could not remove ${failedIds.size} of the imported skills. They are still here.`)
+    patch('personalization', (prev) => ({
+      customSkills: prev.customSkills.filter((s) => s.importBatchId !== batch.id || failedIds.has(s.id)),
       lastSkillImport: null,
-    })
+    }))
     setPendingUndoSkillImport(false)
   }
 
@@ -304,7 +360,29 @@ export function SkillsSection() {
                     <MessageSquare className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                     <ChevronRight className={cn('mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-90')} />
                     <div className="min-w-0 flex-1">
-                      <p style={{ fontWeight: 'var(--font-weight-medium)' }}>{skill.name}</p>
+                      <p className="flex flex-wrap items-center gap-2" style={{ fontWeight: 'var(--font-weight-medium)' }}>
+                        {skill.name}
+                        {skill.reviewStatus && (
+                          <span
+                            className={cn('rounded-full px-2 py-0.5', REVIEW_LABEL[skill.reviewStatus].className)}
+                            style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-medium)' }}
+                            title={
+                              skill.reviewStatus === 'blocked'
+                                ? 'This skill failed review, most often because it asks for or refers to sensitive personal information. Edit and save it to have it reviewed again.'
+                                : skill.reviewStatus === 'pending_review'
+                                  ? 'Meta is reviewing this skill. The agent uses it once it is Active.'
+                                  : 'The agent is using this skill.'
+                            }
+                          >
+                            {REVIEW_LABEL[skill.reviewStatus].label}
+                          </span>
+                        )}
+                      </p>
+                      {expanded && skill.description && (
+                        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                          When it applies: {skill.description}
+                        </p>
+                      )}
                       <p className={cn('text-muted-foreground', !expanded && 'line-clamp-2')} style={{ fontSize: 'var(--text-sm)' }}>
                         {skill.instruction}
                       </p>
@@ -373,16 +451,24 @@ export function SkillsSection() {
         <SkillImportPanel
           existingSkills={personalization.customSkills}
           forceFailure={forceSaveFailure}
+          titleFor={(name) => uniqueTitle(kebabCase(name), existingTitlesExcluding())}
           onImported={(rows, batchId) => {
             const now = Date.now()
-            const newSkills: CustomSkill[] = rows.map((r, i) => {
-              const title = uniqueTitle(kebabCase(r.name), existingTitlesExcluding())
-              return { id: newId('skill'), name: r.name, title, instruction: r.instruction, createdAt: now - i, importBatchId: batchId }
-            })
-            patch('personalization', {
-              customSkills: [...newSkills, ...personalization.customSkills],
+            const newSkills: CustomSkill[] = rows.map((r, i) => ({
+              id: newId('skill'),
+              name: r.name,
+              title: r.title,
+              description: r.description,
+              instruction: r.instruction,
+              metaId: r.metaId,
+              reviewStatus: r.reviewStatus,
+              createdAt: now - i,
+              importBatchId: batchId,
+            }))
+            patch('personalization', (prev) => ({
+              customSkills: [...newSkills, ...prev.customSkills],
               lastSkillImport: { id: batchId, count: rows.length },
-            })
+            }))
           }}
           onClose={() => setSkillImportOpen(false)}
         />
@@ -420,6 +506,21 @@ function SkillEditorCard({
           value={editor.name}
           onChange={(e) => onChange({ ...editor, name: e.target.value })}
           placeholder="e.g. Handling warranty questions"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <span className="flex items-center gap-1.5">
+          <Label htmlFor="skill-description">Description</Label>
+          <InfoTooltip text="When and where this skill applies. The agent reads this to decide when to use it." />
+        </span>
+        <Textarea
+          id="skill-description"
+          rows={2}
+          maxLength={MAX_SKILL_DESCRIPTION}
+          value={editor.description}
+          onChange={(e) => onChange({ ...editor, description: e.target.value })}
+          placeholder="e.g. When a customer asks about the warranty on a product they bought."
+          className="bg-input-background shadow-sm"
         />
       </div>
       <div className="space-y-1.5">
@@ -518,6 +619,7 @@ function SkillTemplatesDialog({
 type ImportStage = 'upload' | 'mapping' | 'review' | 'saving' | 'done'
 interface SkillReviewRow {
   name: string
+  description?: string
   instruction: string
   rowNumber: number
   warnings: RowWarning[]
@@ -527,7 +629,7 @@ interface SkippedRow {
   reason: string
 }
 
-function buildSkillReview(dataRows: string[][], nameIdx: number, instrIdx: number, existingSkills: CustomSkill[]) {
+function buildSkillReview(dataRows: string[][], nameIdx: number, instrIdx: number, existingSkills: CustomSkill[], descIdx = -1) {
   const toImport: SkillReviewRow[] = []
   const skipped: SkippedRow[] = []
   const seenInFile = new Map<string, number>()
@@ -553,20 +655,25 @@ function buildSkillReview(dataRows: string[][], nameIdx: number, instrIdx: numbe
       return
     }
     seenInFile.set(norm, rowNumber)
-    toImport.push({ name, instruction, rowNumber, warnings: computeSkillWarnings(instruction, existingSkills) })
+    const description = descIdx >= 0 ? (cells[descIdx] ?? '').trim().slice(0, MAX_SKILL_DESCRIPTION) : undefined
+    toImport.push({ name, description, instruction, rowNumber, warnings: computeSkillWarnings(instruction, existingSkills) })
   })
   return { toImport, skipped }
 }
 
+type ImportedSkillRow = { name: string; title: string; description?: string; instruction: string; metaId: string; reviewStatus: CustomSkill['reviewStatus'] }
+
 function SkillImportPanel({
   existingSkills,
   forceFailure,
+  titleFor,
   onImported,
   onClose,
 }: {
   existingSkills: CustomSkill[]
   forceFailure: boolean
-  onImported: (rows: { name: string; instruction: string }[], batchId: string) => void
+  titleFor: (name: string) => string
+  onImported: (rows: ImportedSkillRow[], batchId: string) => void
   onClose: () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -588,10 +695,11 @@ function SkillImportPanel({
       setHeaders(head)
       setDataRows(rest)
       const norm = head.map((h) => h.trim().toLowerCase())
-      const ni = norm.indexOf('name')
+      // PRD headers are title / description / instruction; "name" still accepted.
+      const ni = norm.indexOf('title') !== -1 ? norm.indexOf('title') : norm.indexOf('name')
       const ii = norm.indexOf('instruction')
       if (ni !== -1 && ii !== -1) {
-        setReview(buildSkillReview(rest, ni, ii, existingSkills))
+        setReview(buildSkillReview(rest, ni, ii, existingSkills, norm.indexOf('description')))
         setStage('review')
       } else {
         setStage('mapping')
@@ -611,28 +719,19 @@ function SkillImportPanel({
   async function runImport() {
     if (!review) return
     setStage('saving')
-    const failCount = forceFailure ? Math.max(1, Math.round(review.toImport.length * 0.05)) : 0
-    const succeeded = failCount > 0 ? review.toImport.slice(0, review.toImport.length - failCount) : review.toImport
-    const failed = failCount > 0 ? review.toImport.slice(review.toImport.length - failCount) : []
-
-    const chunkSize = 25
-    for (let i = 0; i < succeeded.length; i += chunkSize) {
-      await new Promise((resolve) => setTimeout(resolve, 200))
-    }
-
-    const batchId = newId('import')
-    if (succeeded.length > 0) onImported(succeeded, batchId)
-    setSaveResult({ imported: succeeded.length, failed })
+    const { created, failed } = await createSkills(review.toImport, forceFailure, titleFor)
+    if (created.length > 0) onImported(created, newId('import'))
+    setSaveResult({ imported: created.length, failed })
     setStage('done')
     if (failed.length === 0) onClose()
   }
 
-  function retryFailed() {
+  async function retryFailed() {
     if (!saveResult || saveResult.failed.length === 0) return
-    const batchId = newId('import')
-    onImported(saveResult.failed, batchId)
-    setSaveResult({ imported: saveResult.imported + saveResult.failed.length, failed: [] })
-    onClose()
+    const { created, failed } = await createSkills(saveResult.failed, false, titleFor)
+    if (created.length > 0) onImported(created, newId('import'))
+    setSaveResult({ imported: saveResult.imported + created.length, failed })
+    if (failed.length === 0) onClose()
   }
 
   return (

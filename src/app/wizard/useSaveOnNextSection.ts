@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useWizard } from './WizardContext'
 import { useRegisterNavGuard, type NavIntent } from './NavigationGuardContext'
 import type { SliceKey, WizardState } from './types'
+import { toast } from 'sonner'
+import { pushSlice } from '../api/meta'
 
 export interface SaveOnNextOptions<T> {
   /** Custom dirty comparison. Defaults to a plain deep-equality check. Use this to exclude
@@ -56,21 +58,25 @@ export function useSaveOnNextSection<K extends SliceKey>(slice: K, options: Save
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'failed'>('idle')
   const [forceSaveFailure, setForceSaveFailure] = useState(false)
 
-  function performSave(): Promise<boolean> {
-    return new Promise((resolve) => {
-      options.beforeSave?.(dataRef.current)
-      setSaveStatus('saving')
-      setTimeout(() => {
-        if (forceSaveFailure) {
-          setSaveStatus('failed')
-          resolve(false)
-          return
-        }
-        setSaveStatus('idle')
-        setSavedSnapshot(dataRef.current)
-        resolve(true)
-      }, 900)
-    })
+  const stateRef = useRef(state)
+  stateRef.current = state
+
+  async function performSave(): Promise<boolean> {
+    options.beforeSave?.(dataRef.current)
+    setSaveStatus('saving')
+    try {
+      if (forceSaveFailure) throw new Error('Forced failure (Demo controls)')
+      // beforeSave may have patched the slice; let that render land before reading state.
+      await new Promise((r) => setTimeout(r, 0))
+      await pushSlice(slice, stateRef.current)
+    } catch (err) {
+      setSaveStatus('failed')
+      toast.error("Couldn't save to Meta", { description: err instanceof Error ? err.message : String(err) })
+      return false
+    }
+    setSaveStatus('idle')
+    setSavedSnapshot(dataRef.current)
+    return true
   }
 
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false)

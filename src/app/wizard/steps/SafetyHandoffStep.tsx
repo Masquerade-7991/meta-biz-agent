@@ -5,7 +5,6 @@ import { Input } from '@/app/components/ui/input'
 import { Textarea } from '@/app/components/ui/textarea'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
-import { Switch } from '@/app/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { TagInput } from '@/app/components/wizard/TagInput'
@@ -19,7 +18,6 @@ import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { useNavigationGuard, useRegisterNavGuard, type NavIntent } from '@/app/wizard/NavigationGuardContext'
 import {
-  FOLLOW_UP_ATTEMPT_OPTIONS,
   FOLLOW_UP_INTERVALS,
   SAMPLE_CUSTOM_HANDOFF_MESSAGE,
   SAMPLE_NEVER_SAY_WORDS,
@@ -28,8 +26,11 @@ import {
 } from '@/app/wizard/mockData'
 import type { FollowUpInterval, FollowUpMaxAttempts, GuardrailsState } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
+import { toast } from 'sonner'
+import { pushSlice } from '@/app/api/meta'
 
 type TabId = 'avoids' | 'handoff' | 'followup'
+type HandoffSource = 'default' | 'agent' | 'custom'
 
 const MAX_WORD_PHRASES = 50
 const MAX_WORD_LENGTH = 60
@@ -62,8 +63,10 @@ interface SafetySnapshot {
   topicsToAvoid: string[]
   handoffMessageEnabled: boolean
   handoffMessage: string
+  handoffMessageSource: HandoffSource
   followUpInterval: FollowUpInterval
   followUpMessage: string
+  followUpMessageSource: 'default' | 'custom'
   followUpMaxAttempts: FollowUpMaxAttempts
   followUpRespectHours: boolean
 }
@@ -72,6 +75,12 @@ export function SafetyHandoffStep() {
   const { state, patch, setSection, setPendingSkillPrefill } = useWizard()
   const [activeTab, setActiveTab] = useState<TabId>('avoids')
 
+  const handoffSource: HandoffSource =
+    state.guardrails.handoffMessageSource ?? (state.guardrails.handoffMessageEnabled ? 'custom' : 'default')
+  const followUpSource = state.replies.followUpMessageSource ?? 'custom'
+  const setHandoffSource = (source: HandoffSource) =>
+    patch('guardrails', { handoffMessageSource: source, handoffMessageEnabled: source === 'custom' })
+
   function currentSnapshot(): SafetySnapshot {
     return {
       groundingMode: state.guardrails.groundingMode,
@@ -79,8 +88,10 @@ export function SafetyHandoffStep() {
       topicsToAvoid: state.guardrails.topicsToAvoid,
       handoffMessageEnabled: state.guardrails.handoffMessageEnabled,
       handoffMessage: state.guardrails.handoffMessage,
+      handoffMessageSource: handoffSource,
       followUpInterval: state.replies.followUpInterval,
       followUpMessage: state.replies.followUpMessage,
+      followUpMessageSource: followUpSource,
       followUpMaxAttempts: state.replies.followUpMaxAttempts,
       followUpRespectHours: state.replies.followUpRespectHours,
     }
@@ -120,20 +131,32 @@ export function SafetyHandoffStep() {
     setTimeout(() => setLoadStatus('failed'), 900)
   }
 
-  function performSave(): Promise<boolean> {
-    return new Promise((resolve) => {
-      setSaveStatus('saving')
-      setTimeout(() => {
-        if (forceSaveFailure) {
-          setSaveStatus('failed')
-          resolve(false)
-          return
-        }
-        setSaveStatus('idle')
-        setSavedSnapshot(currentRef.current)
-        resolve(true)
-      }, 900)
-    })
+  const stateRef = useRef(state)
+  stateRef.current = state
+
+  async function performSave(): Promise<boolean> {
+    // PRD V-b2b / AC-b4: a custom message can't be saved empty.
+    const cur = stateRef.current
+    const emptyCustom =
+      ((cur.guardrails.handoffMessageSource ?? (cur.guardrails.handoffMessageEnabled ? 'custom' : 'default')) === 'custom' &&
+        !cur.guardrails.handoffMessage.trim()) ||
+      (cur.replies.followUpEnabled && (cur.replies.followUpMessageSource ?? 'custom') === 'custom' && !cur.replies.followUpMessage.trim())
+    if (emptyCustom) {
+      toast.error('A custom message cannot be empty.')
+      return false
+    }
+    setSaveStatus('saving')
+    try {
+      if (forceSaveFailure) throw new Error('Forced failure (Demo controls)')
+      await pushSlice('guardrails', stateRef.current)
+    } catch (err) {
+      setSaveStatus('failed')
+      toast.error("Couldn't save to Meta", { description: err instanceof Error ? err.message : String(err) })
+      return false
+    }
+    setSaveStatus('idle')
+    setSavedSnapshot(currentRef.current)
+    return true
   }
 
   function askUnsaved(): Promise<boolean> {
@@ -334,21 +357,27 @@ export function SafetyHandoffStep() {
 
             <div className="space-y-2">
               <Label>What the agent says when it hands over</Label>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-3">
                 <SelectableCard
                   title="Meta’s standard message"
                   info="A ready-made message, shown in the customer’s own language automatically."
-                  selected={!state.guardrails.handoffMessageEnabled}
-                  onClick={() => patch('guardrails', { handoffMessageEnabled: false })}
+                  selected={handoffSource === 'default'}
+                  onClick={() => setHandoffSource('default')}
+                />
+                <SelectableCard
+                  title="Let the agent write its own"
+                  info="The agent writes a handoff message for each conversation, matching what was being discussed."
+                  selected={handoffSource === 'agent'}
+                  onClick={() => setHandoffSource('agent')}
                 />
                 <SelectableCard
                   title="Write my own message"
-                  selected={state.guardrails.handoffMessageEnabled}
-                  onClick={() => patch('guardrails', { handoffMessageEnabled: true })}
+                  selected={handoffSource === 'custom'}
+                  onClick={() => setHandoffSource('custom')}
                 />
               </div>
 
-              {state.guardrails.handoffMessageEnabled && (
+              {handoffSource === 'custom' && (
                 <div className="space-y-1.5">
                   <Textarea
                     id="handoff-message"
@@ -377,8 +406,8 @@ export function SafetyHandoffStep() {
               <SaveButton dirty={dirty} saving={saveStatus === 'saving'} onSave={performSave} />
             </div>
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-              If a customer goes quiet mid-conversation, the agent can re-engage them with a
-              short check-in — once, or a few times, spaced out.
+              If a customer goes quiet mid-conversation, the agent can re-engage them with one
+              short check-in message.
             </p>
 
             <div className="space-y-1.5">
@@ -409,60 +438,30 @@ export function SafetyHandoffStep() {
 
             {followUpOn && (
               <>
-                <div className="space-y-1.5">
-                  <span className="flex items-center gap-1.5">
-                    <Label>How many times</Label>
-                    <InfoTooltip text="Each retry waits the same silence window before sending. The agent stops retrying the moment the customer replies, or a person takes over." />
-                  </span>
-                  <Select
-                    value={String(state.replies.followUpMaxAttempts)}
-                    onValueChange={(v) => patch('replies', { followUpMaxAttempts: Number(v) as FollowUpMaxAttempts })}
-                    disabled={loading}
-                  >
-                    <SelectTrigger className="w-full max-w-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {FOLLOW_UP_ATTEMPT_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={String(opt.value)}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                  <div className="min-w-0">
-                    <p style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-medium)' }}>
-                      Only send within business hours
-                    </p>
-                    <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                      A silence window that ends overnight waits until you&rsquo;re open again.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={state.replies.followUpRespectHours}
-                    onCheckedChange={(checked) => patch('replies', { followUpRespectHours: checked })}
-                    disabled={loading}
-                  />
-                </div>
-
                 <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
                   Follow-up messages are charged the same way as any other message the agent sends.
                 </p>
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <span className="flex items-center gap-1.5">
-                    <Label htmlFor="followup-message">What the agent sends</Label>
-                    <InfoTooltip
-                      text={
-                        state.replies.followUpMaxAttempts > 1
-                          ? 'Kept short and low pressure works best. The same message is reused for every retry.'
-                          : 'Kept short and low pressure works best for a check-in message.'
-                      }
-                    />
+                    <Label>Follow-up message</Label>
+                    <InfoTooltip text="Sent once, after the time above. Kept short and low pressure works best for a check-in message." />
                   </span>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <SelectableCard
+                      title="Meta’s standard message"
+                      selected={followUpSource === 'default'}
+                      onClick={() => patch('replies', { followUpMessageSource: 'default' })}
+                    />
+                    <SelectableCard
+                      title="Write my own message"
+                      selected={followUpSource === 'custom'}
+                      onClick={() => patch('replies', { followUpMessageSource: 'custom' })}
+                    />
+                  </div>
+                </div>
+                {followUpSource === 'custom' && (
                   <Textarea
+                    aria-label="Follow-up message"
                     id="followup-message"
                     rows={2}
                     maxLength={MAX_FOLLOWUP_MESSAGE}
@@ -471,7 +470,7 @@ export function SafetyHandoffStep() {
                     className="bg-input-background shadow-sm"
                     disabled={loading}
                   />
-                </div>
+                )}
               </>
             )}
           </TabsContent>

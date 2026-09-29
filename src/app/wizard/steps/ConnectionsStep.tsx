@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AlertTriangle,
   Ban,
@@ -62,6 +62,20 @@ import type {
   ValueType,
 } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
+import {
+  connectorLogs,
+  type ConnectorLogs,
+  deleteConnector,
+  deleteTool,
+  errorText,
+  listTools,
+  refreshMcpTools,
+  runTool,
+  saveConnector,
+  saveTool,
+  toolToAction,
+  upsertCredentials,
+} from '@/app/api/meta'
 
 const METHOD_OPTIONS: ActionMethod[] = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
 const TYPE_OPTIONS: { id: ValueType; label: string }[] = [
@@ -73,14 +87,6 @@ const TYPE_OPTIONS: { id: ValueType; label: string }[] = [
 const ACTION_COUNT_WARNING_THRESHOLD = 6
 
 // ---- Pure helpers ----
-
-/** Whether a connection, as just defined, already has a usable credential — otherwise it's a
- *  shell waiting on a separate Connect step. 'none' has nothing to provide, so it's always ready. */
-function hasWorkingCredential(connection: Pick<Connection, 'authMethod' | 'apiKeys' | 'clientSecret'>): boolean {
-  if (connection.authMethod === 'none') return true
-  if (connection.authMethod === 'client_credentials') return Boolean(connection.clientSecret?.trim())
-  return Boolean(connection.apiKeys && connection.apiKeys.length > 0 && connection.apiKeys.every((k) => k.value.trim()))
-}
 
 function domainFromUrl(url: string): string {
   try {
@@ -319,39 +325,72 @@ function ConnectionsTabContent() {
     return actions.filter((a) => a.connectionId === connectionId)
   }
 
-  function saveCustomConnection(connection: Omit<Connection, 'id' | 'createdAt' | 'demoStatus'>) {
-    if (connectionForm?.mode === 'edit') {
-      const id = connectionForm.connection.id
-      patch('connections', { connections: connections.map((c) => (c.id === id ? { ...c, ...connection } : c)) })
-      setConnectionForm(null)
-      return
+  /** Create or update on Meta first; the card only appears / changes once Meta accepts it. */
+  async function saveCustomConnection(connection: Omit<Connection, 'id' | 'createdAt' | 'demoStatus'>): Promise<string | null> {
+    const existing = connectionForm?.mode === 'edit' ? connectionForm.connection : undefined
+    const draft: Connection = existing
+      ? { ...existing, ...connection, protocol: existing.protocol ?? connection.protocol }
+      : { ...connection, id: newId('conn'), createdAt: Date.now(), demoStatus: 'not_tested' }
+    try {
+      if (consumeForcedFailure()) throw new Error('Could not save this connection.')
+      Object.assign(draft, await saveConnector(draft))
+    } catch (err) {
+      return errorText(err)
     }
-    // Defining a connection and actually connecting it are two different actions — a shell saved
-    // without a working credential yet waits for a separate Connect step, same as Integrations.
-    const demoStatus: ConnectionStatus = hasWorkingCredential(connection) ? 'not_tested' : 'waiting_signin'
-    const newConnection: Connection = { ...connection, id: newId('conn'), createdAt: Date.now(), demoStatus }
-    patch('connections', { connections: [...connections, newConnection] })
+    patch('connections', (prev) => ({
+      connections: existing ? prev.connections.map((c) => (c.id === draft.id ? draft : c)) : [...prev.connections, draft],
+    }))
     setConnectionForm(null)
-    setExpandedId(newConnection.id)
+    if (!existing) {
+      setExpandedId(draft.id)
+      if (draft.protocol === 'mcp') void refreshTools(draft)
+    }
+    return null
+  }
+
+  /** MCP only: Meta re-discovers the server's tools; we then list them as Test-only actions. */
+  async function refreshTools(connection: Connection) {
+    if (!connection.metaId) return
+    patch('connections', (prev) => ({
+      connections: prev.connections.map((c) => (c.id === connection.id ? { ...c, mcpSync: { status: 'PENDING', toolCount: c.mcpSync?.toolCount ?? 0 } } : c)),
+    }))
+    try {
+      const fields = await refreshMcpTools(connection.metaId)
+      const tools = await listTools(connection.metaId)
+      patch('connections', (prev) => ({
+        connections: prev.connections.map((c) => (c.id === connection.id ? { ...c, ...fields } : c)),
+        actions: [...prev.actions.filter((a) => a.connectionId !== connection.id), ...tools.map((t) => toolToAction(t, connection.id, true))],
+      }))
+    } catch (err) {
+      patch('connections', (prev) => ({
+        connections: prev.connections.map((c) => (c.id === connection.id ? { ...c, mcpSync: { status: 'ERROR', toolCount: c.mcpSync?.toolCount ?? 0 } } : c)),
+      }))
+      setRowError((prev) => ({ ...prev, [connection.id]: `Could not refresh tools. ${errorText(err)}` }))
+    }
   }
 
   function updateConnectionDemoStatus(id: string, demoStatus: ConnectionStatus) {
     patch('connections', { connections: connections.map((c) => (c.id === id ? { ...c, demoStatus } : c)) })
   }
 
-  // Provides the missing credential for a connection that's waiting to be connected — the
-  // Connect step, separate from having defined the connection at all.
-  function connectConnection(id: string, value: string) {
-    const shouldFail = consumeForcedFailure()
-    patch('connections', {
-      connections: connections.map((c) => {
-        if (c.id !== id) return c
-        if (shouldFail) return { ...c, demoStatus: 'key_rejected' }
-        if (c.authMethod === 'client_credentials') return { ...c, clientSecret: value, demoStatus: 'not_tested' }
-        const keys = c.apiKeys && c.apiKeys.length > 0 ? c.apiKeys : [newApiKeyEntry()]
-        return { ...c, apiKeys: [{ ...keys[0], value }, ...keys.slice(1)], demoStatus: 'not_tested' }
-      }),
-    })
+  /** Pushes a connection's new credential to Meta (upsertApiKey / upsertOAuth) and takes Meta's
+   *  resulting status. Shared by Connect (first credential) and Rotate key. */
+  async function pushCredential(id: string, value: string) {
+    const c = connections.find((x) => x.id === id)
+    if (!c) return
+    const keys = c.apiKeys && c.apiKeys.length > 0 ? c.apiKeys : [newApiKeyEntry()]
+    const updated: Connection =
+      c.authMethod === 'client_credentials'
+        ? { ...c, clientSecret: value }
+        : { ...c, apiKeys: [{ ...keys[0], value, fieldName: keys[0].fieldName || 'X-API-KEY' }, ...keys.slice(1)] }
+    try {
+      if (consumeForcedFailure()) throw new Error('The new credential was not accepted.')
+      const fields = c.metaId ? await upsertCredentials(updated) : await saveConnector(updated)
+      patch('connections', (prev) => ({ connections: prev.connections.map((x) => (x.id === id ? { ...updated, ...fields } : x)) }))
+      setRowError((prev) => ({ ...prev, [id]: '' }))
+    } catch (err) {
+      setRowError((prev) => ({ ...prev, [id]: `Could not update the credential. ${errorText(err)}` }))
+    }
   }
 
   useRegisterDevControls(
@@ -392,116 +431,98 @@ function ConnectionsTabContent() {
     </DemoControlsGroup>,
   )
 
-  // The quick "Replace key" shortcut (card menu + the key_rejected inline link) replaces the
-  // first key in the list — the common case per "most systems need one key". Replacing any
-  // additional key happens through the full editor, where each row has its own control.
-  function replaceKey(id: string, newKey: string) {
-    patch('connections', {
-      connections: connections.map((c) => {
-        if (c.id !== id) return c
-        const keys = c.apiKeys && c.apiKeys.length > 0 ? c.apiKeys : [newApiKeyEntry()]
-        return { ...c, apiKeys: [{ ...keys[0], value: newKey }, ...keys.slice(1)], demoStatus: 'not_tested' }
-      }),
-    })
-  }
-
-  function confirmDeleteConnection() {
+  async function confirmDeleteConnection() {
     if (!pendingDeleteConnectionId) return
     const id = pendingDeleteConnectionId
     const shouldFail = consumeForcedFailure()
-    setTimeout(() => {
-      if (shouldFail) {
-        setRowError((prev) => ({ ...prev, [id]: 'Could not delete. The item is still here.' }))
-        setPendingDeleteConnectionId(null)
-        return
-      }
-      patch('connections', {
-        connections: connections.filter((c) => c.id !== id),
-        actions: actions.filter((a) => a.connectionId !== id),
-      })
+    const metaId = connections.find((c) => c.id === id)?.metaId
+    try {
+      if (shouldFail) throw new Error('forced')
+      // Meta removes the connector's tools with it (PRD V-a4).
+      if (metaId) await deleteConnector(metaId)
+    } catch (err) {
+      setRowError((prev) => ({ ...prev, [id]: shouldFail ? 'Could not delete. The item is still here.' : `Could not delete. The item is still here. (${errorText(err)})` }))
       setPendingDeleteConnectionId(null)
-    }, 400)
+      return
+    }
+    patch('connections', (prev) => ({
+      connections: prev.connections.filter((c) => c.id !== id),
+      actions: prev.actions.filter((a) => a.connectionId !== id),
+    }))
+    setPendingDeleteConnectionId(null)
   }
 
-  function confirmDeleteAction() {
+  async function confirmDeleteAction() {
     if (!pendingDeleteAction) return
     const action = pendingDeleteAction
     const shouldFail = consumeForcedFailure()
-    setTimeout(() => {
-      if (shouldFail) {
-        setRowError((prev) => ({ ...prev, [action.id]: 'Could not delete. The item is still here.' }))
-        setPendingDeleteAction(null)
-        return
-      }
-      patch('connections', { actions: actions.filter((a) => a.id !== action.id) })
+    const connMetaId = connections.find((c) => c.id === action.connectionId)?.metaId
+    try {
+      if (shouldFail) throw new Error('forced')
+      if (connMetaId && action.metaId) await deleteTool(connMetaId, action.metaId)
+    } catch (err) {
+      setRowError((prev) => ({ ...prev, [action.id]: shouldFail ? 'Could not delete. The item is still here.' : `Could not delete. The item is still here. (${errorText(err)})` }))
       setPendingDeleteAction(null)
-    }, 400)
+      return
+    }
+    patch('connections', (prev) => ({ actions: prev.actions.filter((a) => a.id !== action.id) }))
+    setPendingDeleteAction(null)
   }
 
-  function saveAction(editorState: NonNullable<ActionEditorState>): Promise<boolean> {
-    return new Promise((resolve) => {
-      const shouldFail = consumeForcedFailure()
-      setTimeout(() => {
-        if (shouldFail) {
-          resolve(false)
-          return
-        }
-        if (editorState.mode === 'edit' && editorState.actionId) {
-          patch('connections', {
-            actions: actions.map((a) =>
-              a.id === editorState.actionId
-                ? { ...a, name: editorState.name, description: editorState.description, method: editorState.method, path: editorState.path, values: editorState.values }
-                : a,
-            ),
-          })
-        } else {
-          const newAction: ConnectionAction = {
-            id: newId('action'),
-            connectionId: editorState.connectionId,
-            name: editorState.name,
-            description: editorState.description,
-            method: editorState.method,
-            path: editorState.path,
-            values: editorState.values,
-            createdAt: Date.now(),
-          }
-          patch('connections', { actions: [...actions, newAction] })
-        }
-        resolve(true)
-      }, 500)
-    })
+  async function saveAction(editorState: NonNullable<ActionEditorState>): Promise<string | null> {
+    const connection = connections.find((c) => c.id === editorState.connectionId)
+    if (!connection?.metaId) return 'Save this connection to Meta first (edit and save it), then add actions.'
+    const isEdit = editorState.mode === 'edit' && !!editorState.actionId
+    const existing = isEdit ? actions.find((a) => a.id === editorState.actionId) : undefined
+    const action: ConnectionAction = {
+      ...(existing ?? { id: newId('action'), connectionId: editorState.connectionId, createdAt: Date.now() }),
+      name: editorState.name,
+      description: editorState.description,
+      method: editorState.method,
+      path: editorState.path,
+      values: editorState.values,
+    }
+    try {
+      if (consumeForcedFailure()) throw new Error('Could not save this action.')
+      action.metaId = await saveTool(connection.metaId, action)
+    } catch (err) {
+      return errorText(err)
+    }
+    patch('connections', (prev) => ({
+      actions: isEdit ? prev.actions.map((a) => (a.id === action.id ? action : a)) : [...prev.actions, action],
+    }))
+    return null
   }
 
-  function runActionTest(action: ConnectionAction, inputs: Record<string, string>): Promise<{ kind: 'success' | 'failure' | 'no_answer'; body: string }> {
-    return new Promise((resolve) => {
-      const shouldFail = consumeForcedFailure()
-      setTimeout(() => {
-        const now = Date.now()
-        if (shouldFail) {
-          patch('connections', {
-            activity: [{ id: newId('activity'), connectionId: action.connectionId, actionId: action.id, actionName: action.name, timestamp: now, outcome: 'failed', errorText: 'No response from the system.' }, ...activity],
-          })
-          resolve({ kind: 'no_answer', body: '' })
-          return
-        }
-        const succeeds = action.path.toLowerCase().includes('order')
-        if (succeeds) {
-          const firstConversationValue = action.values.find((v) => v.source === 'conversation' || v.source === 'conversation_memory')
-          const sample = firstConversationValue ? inputs[firstConversationValue.id] || 'ORD-12345' : 'ORD-12345'
-          const body = JSON.stringify({ status: 'shipped', reference: sample, updated_at: new Date(now).toISOString() }, null, 2)
-          patch('connections', {
-            activity: [{ id: newId('activity'), connectionId: action.connectionId, actionId: action.id, actionName: action.name, timestamp: now, outcome: 'worked' }, ...activity],
-          })
-          resolve({ kind: 'success', body })
-        } else {
-          const body = JSON.stringify({ error: 'not_found', message: 'No matching record.' }, null, 2)
-          patch('connections', {
-            activity: [{ id: newId('activity'), connectionId: action.connectionId, actionId: action.id, actionName: action.name, timestamp: now, outcome: 'failed', errorText: body }, ...activity],
-          })
-          resolve({ kind: 'failure', body })
-        }
-      }, 1000)
-    })
+  /** Runs the tool live on Meta with the connector's stored credentials (PRD AC-c14). */
+  async function runActionTest(action: ConnectionAction, inputs: Record<string, string>): Promise<{ kind: 'success' | 'failure' | 'no_answer'; body: string }> {
+    const connMetaId = connections.find((c) => c.id === action.connectionId)?.metaId
+    const log = (outcome: 'worked' | 'failed', errorText?: string) =>
+      patch('connections', (prev) => ({
+        activity: [
+          { id: newId('activity'), connectionId: action.connectionId, actionId: action.id, actionName: action.name, timestamp: Date.now(), outcome, errorText },
+          ...prev.activity,
+        ],
+      }))
+    if (consumeForcedFailure() || !connMetaId || !action.metaId) {
+      log('failed', 'No response from the system.')
+      return { kind: 'no_answer', body: '' }
+    }
+    const input = Object.fromEntries(action.values.filter((v) => inputs[v.id] !== undefined).map((v) => [v.name, inputs[v.id]]))
+    try {
+      const r = await runTool(connMetaId, action.metaId, input)
+      let body = r.output
+      try {
+        body = JSON.stringify(JSON.parse(r.output), null, 2)
+      } catch {
+        // not JSON: show as returned
+      }
+      log(r.status === 'success' ? 'worked' : 'failed', r.status === 'success' ? undefined : body)
+      return { kind: r.status === 'success' ? 'success' : 'failure', body }
+    } catch (err) {
+      log('failed', errorText(err))
+      return { kind: 'failure', body: errorText(err) }
+    }
   }
 
   return (
@@ -540,8 +561,9 @@ function ConnectionsTabContent() {
                 onOpenActivity={() => setActivityFor(connection)}
                 onEditConnection={() => setConnectionForm({ mode: 'edit', connection })}
                 onDeleteConnection={() => setPendingDeleteConnectionId(connection.id)}
-                onReplaceKey={(key) => replaceKey(connection.id, key)}
-                onConnect={(value) => connectConnection(connection.id, value)}
+                onReplaceKey={(key) => void pushCredential(connection.id, key)}
+                onConnect={(value) => void pushCredential(connection.id, value)}
+                onRefreshTools={() => void refreshTools(connection)}
                 rowError={rowError}
                 onClearRowError={(id) => setRowError((prev) => ({ ...prev, [id]: '' }))}
               />
@@ -577,15 +599,15 @@ function ConnectionsTabContent() {
       <ConfirmDialog
         open={pendingDeleteConnectionId !== null}
         title="Delete this connection?"
-        description="The agent will immediately lose all its actions on this system."
+        description={`Do you want to delete ${connections.find((c) => c.id === pendingDeleteConnectionId)?.name ?? 'this connection'}? It will also remove the associated tools as well. The agent will stop using this immediately.`}
         onConfirm={confirmDeleteConnection}
         onCancel={() => setPendingDeleteConnectionId(null)}
       />
 
       <ConfirmDialog
         open={pendingDeleteAction !== null}
-        title="Delete this action?"
-        description="The agent will stop being able to do this immediately."
+        title="Delete this tool?"
+        description="The agent will stop using this immediately."
         onConfirm={confirmDeleteAction}
         onCancel={() => setPendingDeleteAction(null)}
       />
@@ -624,6 +646,7 @@ function ConnectionCard({
   onDeleteConnection,
   onReplaceKey,
   onConnect,
+  onRefreshTools,
   rowError,
   onClearRowError,
 }: {
@@ -640,6 +663,7 @@ function ConnectionCard({
   onDeleteConnection: () => void
   onReplaceKey: (key: string) => void
   onConnect: (value: string) => void
+  onRefreshTools: () => void
   rowError: Record<string, string>
   onClearRowError: (id: string) => void
 }) {
@@ -647,6 +671,12 @@ function ConnectionCard({
   const [newKey, setNewKey] = useState('')
   const [connectOpen, setConnectOpen] = useState(false)
   const [connectValue, setConnectValue] = useState('')
+  const isMcp = connection.protocol === 'mcp'
+  // PRD AC-c14a: tools run only while the connector itself is Active.
+  const canTest = connection.demoStatus === 'working' && !!connection.metaId
+  const testBlockedReason = !connection.metaId
+    ? 'Save this connection to Meta first.'
+    : 'Tools can only run while this connection is Active.'
 
   return (
     <div className="rounded-lg border border-border">
@@ -657,6 +687,21 @@ function ConnectionCard({
             <div className="flex flex-wrap items-center gap-2">
               <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{connection.name}</p>
               <StatusDot status={connection.demoStatus} />
+              {isMcp && (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  MCP ·{' '}
+                  {connection.mcpSync?.status === 'READY'
+                    ? `Ready (${connection.mcpSync.toolCount} tools)`
+                    : connection.mcpSync?.status === 'ERROR'
+                      ? 'Error'
+                      : 'Pending'}
+                </span>
+              )}
+              {!connection.metaId && (
+                <span className="rounded-full bg-warning/15 px-2 py-0.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  Not saved to Meta
+                </span>
+              )}
             </div>
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
               {domainFromUrl(connection.baseUrl)}
@@ -717,9 +762,15 @@ function ConnectionCard({
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
-          <Button size="sm" variant="outline" onClick={onAddAction}>
-            Add action
-          </Button>
+          {isMcp ? (
+            <Button size="sm" variant="outline" onClick={onRefreshTools}>
+              Refresh tools
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={onAddAction}>
+              Add tool
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={onOpenActivity}>
             Activity
           </Button>
@@ -731,11 +782,17 @@ function ConnectionCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={onEditConnection}>Edit connection</DropdownMenuItem>
-              {connection.demoStatus === 'waiting_signin' ? (
+              {connection.authMethod === 'none' ? null : connection.demoStatus === 'waiting_signin' ? (
                 <DropdownMenuItem onClick={() => setConnectOpen(true)}>Connect</DropdownMenuItem>
               ) : (
-                <DropdownMenuItem onClick={() => setReplaceKeyOpen(true)}>Replace key</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setReplaceKeyOpen(true)}>Rotate key</DropdownMenuItem>
               )}
+              {isMcp ? (
+                <DropdownMenuItem onClick={onRefreshTools}>Refresh tools</DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={onAddAction}>Add tool</DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={onOpenActivity}>Activity logs</DropdownMenuItem>
               <DropdownMenuItem onClick={onDeleteConnection} className="text-destructive">
                 Delete
               </DropdownMenuItem>
@@ -770,15 +827,22 @@ function ConnectionCard({
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => onTestAction(action)}>
-                    Test
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => onEditAction(action)}>
-                    Edit
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => onDeleteAction(action)}>
-                    Delete
-                  </Button>
+                  <span title={canTest ? undefined : testBlockedReason}>
+                    <Button size="sm" variant="ghost" onClick={() => onTestAction(action)} disabled={!canTest || !action.metaId}>
+                      Test
+                    </Button>
+                  </span>
+                  {/* MCP tools live on the MCP server: Test only (PRD AC-c13a). */}
+                  {!action.fromMcp && (
+                    <>
+                      <Button size="sm" variant="ghost" onClick={() => onEditAction(action)}>
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => onDeleteAction(action)}>
+                        Delete
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
               {rowError[action.id] && (
@@ -800,9 +864,9 @@ function ConnectionCard({
 
       <CredentialPromptDialog
         open={replaceKeyOpen}
-        title="Replace the access key?"
+        title={connection.authMethod === 'client_credentials' ? 'Rotate the client secret?' : 'Rotate the access key?'}
         description="The old key stops working as soon as you save the new one."
-        label="New access key"
+        label={connection.authMethod === 'client_credentials' ? 'New client secret' : 'New access key'}
         confirmLabel="Save"
         value={newKey}
         onChange={setNewKey}
@@ -896,9 +960,14 @@ function CustomConnectionDialog({
   /** When set, the form edits this existing connection instead of creating a new one — the
    *  same editor the spec requires for recipe-created connections too. */
   initial?: Connection
-  onSave: (connection: Omit<Connection, 'id' | 'createdAt' | 'demoStatus'>) => void
+  /** Resolves to an error message, or null once Meta has accepted it. */
+  onSave: (connection: Omit<Connection, 'id' | 'createdAt' | 'demoStatus'>) => Promise<string | null>
   onClose: () => void
 }) {
+  const [protocol, setProtocol] = useState<'http' | 'mcp'>(initial?.protocol ?? 'http')
+  const [tokenContentType, setTokenContentType] = useState<'form' | 'json'>(initial?.tokenContentType ?? 'form')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [name, setName] = useState(initial?.name ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
   const [baseUrl, setBaseUrl] = useState(initial?.baseUrl ?? '')
@@ -924,18 +993,23 @@ function CustomConnectionDialog({
     })
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!canSave) return
-    onSave({
+    setSaving(true)
+    setSaveError(null)
+    const error = await onSave({
       name: name.trim(),
       description: description.trim(),
       baseUrl: baseUrl.trim(),
+      protocol,
       authMethod,
       ...(authMethod === 'api_key' ? { apiKeys: resolveApiKeyRows(apiKeyRows, initial) } : {}),
       ...(authMethod === 'client_credentials'
-        ? { tokenUrl, clientId, clientSecret: clientSecretTouched ? clientSecret : initial?.clientSecret, scopes }
+        ? { tokenUrl, clientId, clientSecret: clientSecretTouched ? clientSecret : initial?.clientSecret, scopes, tokenContentType }
         : {}),
     })
+    setSaving(false)
+    setSaveError(error)
   }
 
   return (
@@ -973,7 +1047,23 @@ function CustomConnectionDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="conn-base-url">Base web address</Label>
+              <span className="flex items-center gap-1.5">
+                <Label>Connection type</Label>
+                <InfoTooltip text="Standard API: you add each tool yourself. MCP server: tools are discovered from the server with Refresh tools. This can't be changed after the connection is created." />
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <SelectableCard title="Standard API (HTTP)" selected={protocol === 'http'} onClick={() => !initial && setProtocol('http')} />
+                <SelectableCard title="MCP server" selected={protocol === 'mcp'} onClick={() => !initial && setProtocol('mcp')} />
+              </div>
+              {initial && (
+                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  The connection type is fixed once created. To switch, create a new connection.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="conn-base-url">{protocol === 'mcp' ? 'MCP server address' : 'Base web address'}</Label>
               <Input id="conn-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com" aria-invalid={baseUrl.length > 0 && !urlValid} />
               {baseUrl.length > 0 && !urlValid && (
                 <InlineError message="Must start with https://" />
@@ -1113,6 +1203,21 @@ function CustomConnectionDialog({
                     <Label>Scopes (optional)</Label>
                     <TagInput values={scopes} onChange={setScopes} placeholder="Type a scope and press Enter" />
                   </div>
+                  <div className="space-y-1.5">
+                    <span className="flex items-center gap-1.5">
+                      <Label>Token request format</Label>
+                      <InfoTooltip text="How the token request is sent to your system. Most systems use URL-encoded." />
+                    </span>
+                    <Select value={tokenContentType} onValueChange={(v) => setTokenContentType(v as 'form' | 'json')}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="form">URL-encoded</SelectItem>
+                        <SelectItem value="json">JSON</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
 
@@ -1126,12 +1231,13 @@ function CustomConnectionDialog({
             </div>
           </div>
         </div>
+        {saveError && <InlineError message={saveError} onRetry={() => void handleSave()} />}
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={!canSave}>
-            {initial ? 'Save changes' : 'Create connection'}
+          <Button onClick={() => void handleSave()} disabled={!canSave || saving}>
+            {saving ? <Loader2 className="size-3.5 animate-spin" /> : initial ? 'Save changes' : 'Create connection'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1202,7 +1308,8 @@ function ActionEditorDialog({
   editor: NonNullable<ActionEditorState>
   existingActionsOnConnection: ConnectionAction[]
   onChange: (editor: ActionEditorState) => void
-  onSave: (editor: NonNullable<ActionEditorState>) => Promise<boolean>
+  /** Resolves to an error message, or null once Meta has accepted the tool. */
+  onSave: (editor: NonNullable<ActionEditorState>) => Promise<string | null>
   onClose: () => void
 }) {
   const [saving, setSaving] = useState(false)
@@ -1238,10 +1345,10 @@ function ActionEditorDialog({
     setShowDescriptionWarnings(true)
     setSaving(true)
     setError(null)
-    const ok = await onSave(editor)
+    const failure = await onSave(editor)
     setSaving(false)
-    if (!ok) {
-      setError('Could not save this action. Nothing was lost.')
+    if (failure) {
+      setError(`Could not save this tool. Nothing was lost. ${failure}`)
       return
     }
     onClose()
@@ -1575,7 +1682,26 @@ function ActivityDialog({
   onClose: () => void
 }) {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
-  const sorted = [...rows].sort((a, b) => b.timestamp - a.timestamp)
+  // A connector on Meta: its real last-7-days log (PRD AC-a19..a22). Otherwise, local test runs.
+  const [logs, setLogs] = useState<ConnectorLogs | null>(null)
+  const [logsError, setLogsError] = useState<string | null>(null)
+  const [pageSize, setPageSize] = useState(100)
+  const [page, setPage] = useState(0)
+  useEffect(() => {
+    if (!connection.metaId) return
+    connectorLogs(connection.metaId).then(setLogs, (err) => setLogsError(errorText(err)))
+  }, [connection.metaId])
+  const remoteRows = (logs?.data ?? []).map((d, i) => ({
+    id: `log-${i}`,
+    actionName: d.tool_name ?? 'Unknown tool',
+    timestamp: d.event_time ? Date.parse(d.event_time) : Date.now(),
+    outcome: 'failed' as const,
+    errorText: [d.failure_code_name, d.error_message].filter(Boolean).join(': '),
+  }))
+  const allRows = connection.metaId ? remoteRows : rows
+  const sorted = [...allRows].sort((a, b) => b.timestamp - a.timestamp)
+  const pageRows = sorted.slice(page * pageSize, (page + 1) * pageSize)
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize))
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
@@ -1583,18 +1709,41 @@ function ActivityDialog({
         <DialogHeader>
           <DialogTitle>Activity: {connection.name}</DialogTitle>
           <DialogDescription>
-            Shows what the agent has actually done with this system. Useful when something seems
-            not to be working.
+            {connection.metaId
+              ? 'The last 7 days. Individual entries are the errors your system returned.'
+              : 'Shows what the agent has actually done with this system. Useful when something seems not to be working.'}
           </DialogDescription>
         </DialogHeader>
-        {sorted.length === 0 ? (
+        {logsError && <InlineError message={`Could not load activity. ${logsError}`} />}
+        {logs?.stats && (
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              ['Executions', String(logs.stats.start_count)],
+              ['Succeeded', String(logs.stats.success_count)],
+              ['Success rate', `${Math.round((logs.stats.success_rate ?? 0) * (logs.stats.success_rate > 1 ? 1 : 100))}%`],
+              ['Avg latency', `${(logs.stats.avg_latency_s ?? 0).toFixed(2)} s`],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg bg-muted p-2">
+                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  {label}
+                </p>
+                <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {connection.metaId && !logs && !logsError ? (
+          <p className="flex items-center gap-2 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            <Loader2 className="size-3.5 animate-spin" /> Loading activity...
+          </p>
+        ) : sorted.length === 0 ? (
           <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
             No activity yet. The agent has not used this connection in a conversation, and no
             tests have been run.
           </p>
         ) : (
           <div className="max-h-80 space-y-1 overflow-y-auto">
-            {sorted.map((row) => (
+            {pageRows.map((row) => (
               <div key={row.id} className="rounded-md border border-border">
                 <button
                   type="button"
@@ -1619,6 +1768,36 @@ function ActivityDialog({
                 )}
               </div>
             ))}
+          </div>
+        )}
+        {sorted.length > 10 && (
+          <div className="flex items-center justify-between gap-2" style={{ fontSize: 'var(--text-xs)' }}>
+            <label className="flex items-center gap-1.5 text-muted-foreground">
+              Per page
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value))
+                  setPage(0)
+                }}
+                className="rounded border border-border bg-background"
+              >
+                {[10, 25, 50, 100].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span className="flex items-center gap-2">
+              <Button size="sm" variant="ghost" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+                Previous
+              </Button>
+              {page + 1} / {pageCount}
+              <Button size="sm" variant="ghost" disabled={page + 1 >= pageCount} onClick={() => setPage((p) => p + 1)}>
+                Next
+              </Button>
+            </span>
           </div>
         )}
         <DialogFooter>

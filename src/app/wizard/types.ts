@@ -114,6 +114,8 @@ export interface DemoState {
 // ---- Step 1.3 Knowledge Base ----
 export interface FaqRow {
   id: string
+  /** Meta's id once the row exists on Meta (agent_config/faq). */
+  metaId?: string
   question: string
   answer: string
   createdAt: number
@@ -123,16 +125,25 @@ export interface FaqRow {
 
 export interface DocumentFile {
   id: string
+  /** Meta's file id (agent_config/files). */
+  metaId?: string
   fileName: string
   sizeBytes: number
   type: string
   uploadedAt: number
 }
 
-export type WebsiteStatus = 'waiting' | 'reading' | 'done' | 'failed'
+/** Meta's six crawl states: not_started, pending ('waiting'), in_progress ('reading'),
+ *  completed ('done'), completed_no_data ('done_no_data'), failed. */
+export type WebsiteStatus = 'not_started' | 'waiting' | 'reading' | 'done' | 'done_no_data' | 'failed'
 
 export interface WebsiteSource {
   id: string
+  /** Meta's website id (agent_config/websites). */
+  metaId?: string
+  /** Meta's crawl_error, shown under a Failed row. */
+  crawlError?: string
+  lastCrawledAt?: number
   url: string
   status: WebsiteStatus
   pagesRead: number
@@ -173,11 +184,17 @@ export interface CustomSkill {
   id: string
   /** The plain name as the user typed it — shown in the UI. */
   name: string
+  /** When and where the skill applies (Meta description, max 1,024). */
+  description?: string
   /** Generated from name: lowercase, hyphenated, <=64 chars, collision-suffixed. Never shown to the user. */
   title: string
   instruction: string
   createdAt: number
   importBatchId?: string
+  /** Meta's skill id (agent_config/skills). */
+  metaId?: string
+  /** Meta's review status; read-only, only Active skills are used by the agent. */
+  reviewStatus?: 'active' | 'pending_review' | 'blocked'
 }
 
 // ---- Step 1 Rich replies (the system underneath calls these "UI skills") ----
@@ -185,6 +202,7 @@ export type RichReplyType =
   | 'cta_url'
   | 'image'
   | 'interactive_list'
+  | 'interactive_reply_buttons'
   | 'carousel_url'
   | 'carousel_quick_reply'
   | 'location'
@@ -215,6 +233,12 @@ export interface InteractiveListBlanks {
   menuButtonLabel: string
   groupsEnabled: boolean
   options: MenuOption[]
+}
+
+export interface ReplyButtonsBlanks {
+  messageText: string
+  /** 1 to 3 buttons, each a unique title of up to 20 characters. */
+  buttons: string[]
 }
 
 export interface CarouselCard {
@@ -256,6 +280,8 @@ export interface FlowBlanks {
 
 interface RichReplyBase {
   id: string
+  /** Meta's UI-skill id (agent-ui-skills). */
+  metaId?: string
   name: string
   trigger: string
   enabled: boolean
@@ -271,6 +297,7 @@ export type RichReply =
   | (RichReplyBase & { type: 'cta_url'; blanks: CtaUrlBlanks | null })
   | (RichReplyBase & { type: 'image'; blanks: ImageBlanks | null })
   | (RichReplyBase & { type: 'interactive_list'; blanks: InteractiveListBlanks | null })
+  | (RichReplyBase & { type: 'interactive_reply_buttons'; blanks: ReplyButtonsBlanks | null })
   | (RichReplyBase & { type: 'carousel_url'; blanks: CarouselUrlBlanks | null })
   | (RichReplyBase & { type: 'carousel_quick_reply'; blanks: CarouselQuickReplyBlanks | null })
   | (RichReplyBase & { type: 'location'; blanks: LocationBlanks | null })
@@ -361,10 +388,19 @@ export interface Connection {
   clientId?: string
   clientSecret?: string
   scopes?: string[]
+  /** OAuth token request body format (Meta token_request_content_type). Defaults to URL-encoded. */
+  tokenContentType?: 'form' | 'json'
   createdFromRecipe?: string
   createdAt: number
-  /** Prototype-only: drives the status shown on the card, chosen from the card's own dropdown. */
+  /** Status shown on the card. Set from Meta's connection_status once the connector exists there;
+   *  the card's demo dropdown can still override it for demos. */
   demoStatus: ConnectionStatus
+  /** Meta's connector id (agent_connectors). */
+  metaId?: string
+  /** Standard API or MCP server. Fixed once created. */
+  protocol?: 'http' | 'mcp'
+  /** MCP only: result of the last Refresh Tools. */
+  mcpSync?: { status: 'PENDING' | 'READY' | 'ERROR'; toolCount: number }
 }
 
 export type ActionMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
@@ -399,6 +435,10 @@ export interface ConnectionAction {
   path: string
   values: ActionValue[]
   createdAt: number
+  /** Meta's tool id (agent_connectors/{id}/tools). */
+  metaId?: string
+  /** Discovered from an MCP server by Refresh Tools: Test only, no Edit/Delete here. */
+  fromMcp?: boolean
 }
 
 export interface ActivityLogRow {
@@ -490,6 +530,10 @@ export interface GuardrailsState {
   topicsToAvoid: string[]
   handoffMessageEnabled: boolean
   handoffMessage: string
+  /** What the agent says at handoff (Meta message_selection): Meta's standard message, one the
+   *  agent writes itself, or handoffMessage. Absent on older saved state: derived from
+   *  handoffMessageEnabled. */
+  handoffMessageSource?: 'default' | 'agent' | 'custom'
 }
 
 // ---- Step 1.8 System Replies ----
@@ -507,6 +551,8 @@ export interface RepliesState {
   followUpEnabled: boolean
   followUpInterval: FollowUpInterval
   followUpMessage: string
+  /** Meta's standard follow-up message, or followUpMessage. Absent on older saved state: 'custom'. */
+  followUpMessageSource?: 'default' | 'custom'
   /** How many times the agent retries before it stops trying to bring a quiet customer back. */
   followUpMaxAttempts: FollowUpMaxAttempts
   /** Only send follow-ups within business hours, so a quiet customer isn't messaged at 3am. */

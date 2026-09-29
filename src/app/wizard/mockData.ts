@@ -481,10 +481,11 @@ export const SAMPLE_WEBSITES: { url: string; status: 'done' | 'failed'; pagesRea
 // ---- Step 3 Connections ----
 
 export const CONNECTION_STATUS_META: Record<ConnectionStatus, { label: string; dot: 'success' | 'warning' | 'muted' }> = {
-  working: { label: 'Working', dot: 'success' },
-  waiting_signin: { label: 'Waiting for sign-in', dot: 'warning' },
-  key_rejected: { label: 'Key not accepted', dot: 'warning' },
-  having_problems: { label: 'Having problems', dot: 'warning' },
+  // Meta connection_status: ACTIVE, PENDING_OAUTH, EXPIRED, ERROR (PRD AC-a13 labels).
+  working: { label: 'Active', dot: 'success' },
+  waiting_signin: { label: 'OAuth Pending', dot: 'warning' },
+  key_rejected: { label: 'Expired', dot: 'warning' },
+  having_problems: { label: 'Error', dot: 'warning' },
   not_tested: { label: 'Not tested yet', dot: 'muted' },
 }
 
@@ -1129,8 +1130,9 @@ export function matchFaqPreviewMessage(message: string, faqs: FaqRow[]): FaqRow[
 
 // ---- Step 1: Rich replies (the system underneath calls these "UI skills") ----
 
-export const RICH_REPLY_TYPE_GALLERY: { type: RichReplyType; name: string; description: string }[] = [
+const RICH_REPLY_TYPES: { type: RichReplyType; name: string; description: string }[] = [
   { type: 'cta_url', name: 'Button with a link', description: 'One tappable button that opens a web page.' },
+  { type: 'interactive_reply_buttons', name: 'Reply buttons', description: 'Up to three tap-to-answer buttons under a message.' },
   { type: 'image', name: 'Image', description: 'Sends a picture, with an optional caption.' },
   { type: 'interactive_list', name: 'Menu of choices', description: 'A tappable list the customer picks one option from.' },
   { type: 'carousel_url', name: 'Card carousel with links', description: 'Swipeable cards, each with a picture and a link button.' },
@@ -1140,8 +1142,12 @@ export const RICH_REPLY_TYPE_GALLERY: { type: RichReplyType; name: string; descr
   { type: 'flow', name: 'WhatsApp form (Flow)', description: 'Opens a structured form the customer fills in, like a booking or survey.' },
 ]
 
+/** WhatsApp Flows are out of scope for rich replies (PRD §4), so Flow is not offered for new
+ *  replies; its label stays for any existing Flow row. */
+export const RICH_REPLY_TYPE_GALLERY = RICH_REPLY_TYPES.filter((t) => t.type !== 'flow')
+
 export const RICH_REPLY_TYPE_LABEL: Record<RichReplyType, string> = Object.fromEntries(
-  RICH_REPLY_TYPE_GALLERY.map((t) => [t.type, t.name]),
+  RICH_REPLY_TYPES.map((t) => [t.type, t.name]),
 ) as Record<RichReplyType, string>
 
 /** Canned WhatsApp Flows already "set up on this number" — the prototype has no real Flows API. */
@@ -1175,6 +1181,11 @@ export function compileRichReplySentence(draft: RichReplyDraft): string {
     case 'cta_url': {
       const b = draft.blanks
       return `If ${t}, send a button with body text "${b.messageText}", button label "${b.buttonLabel}", and URL ${b.link}`
+    }
+    case 'interactive_reply_buttons': {
+      const b = draft.blanks
+      const buttons = b.buttons.filter((x) => x.trim()).map((x) => `"${x}"`).join(', ')
+      return `If ${t}, send a message with body text "${b.messageText}" and reply buttons: ${buttons}`
     }
     case 'image': {
       const b = draft.blanks

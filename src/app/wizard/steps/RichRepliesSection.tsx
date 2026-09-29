@@ -45,6 +45,7 @@ import type {
   CtaUrlBlanks,
   CustomSkill,
   FlowBlanks,
+  ReplyButtonsBlanks,
   ImageBlanks,
   InteractiveListBlanks,
   LocationBlanks,
@@ -52,6 +53,7 @@ import type {
   RichReply,
   RichReplyType,
 } from '@/app/wizard/types'
+import { createUiSkill, deleteUiSkill, errorText, updateUiSkill } from '@/app/api/meta'
 import { cn } from '@/app/lib/utils'
 
 const MAX_NAME = 60
@@ -80,6 +82,7 @@ const RICH_REPLY_TYPE_ICON: Record<RichReplyType, typeof Link2> = {
   location: MapPin,
   location_request: Navigation,
   flow: ClipboardList,
+  interactive_reply_buttons: MessageSquareReply,
 }
 
 // ---- Editor state: mirrors RichReply's blanks shape, plus in-progress add/edit bookkeeping ----
@@ -92,6 +95,7 @@ type RichReplyEditorState =
   | { mode: 'add' | 'edit'; replyId?: string; name: string; trigger: string; type: 'location'; blanks: LocationBlanks }
   | { mode: 'add' | 'edit'; replyId?: string; name: string; trigger: string; type: 'location_request'; blanks: LocationRequestBlanks }
   | { mode: 'add' | 'edit'; replyId?: string; name: string; trigger: string; type: 'flow'; blanks: FlowBlanks }
+  | { mode: 'add' | 'edit'; replyId?: string; name: string; trigger: string; type: 'interactive_reply_buttons'; blanks: ReplyButtonsBlanks }
 
 function emptyBlanksForType(type: RichReplyType): RichReplyEditorState {
   const shared = { mode: 'add' as const, name: '', trigger: '' }
@@ -112,6 +116,8 @@ function emptyBlanksForType(type: RichReplyType): RichReplyEditorState {
       return { ...shared, type, blanks: { messageText: '' } }
     case 'flow':
       return { ...shared, type, blanks: { flowName: CANNED_FLOWS[0] ?? null, messageText: '', buttonLabel: '' } }
+    case 'interactive_reply_buttons':
+      return { ...shared, type, blanks: { messageText: '', buttons: [''] } }
   }
 }
 
@@ -133,6 +139,8 @@ function editorFromExisting(reply: RichReply & { blanks: NonNullable<RichReply['
     case 'location_request':
       return { ...shared, type: reply.type, blanks: reply.blanks }
     case 'flow':
+      return { ...shared, type: reply.type, blanks: reply.blanks }
+    case 'interactive_reply_buttons':
       return { ...shared, type: reply.type, blanks: reply.blanks }
   }
 }
@@ -174,6 +182,10 @@ function isBlanksComplete(editor: RichReplyEditorState): boolean {
       return !!editor.blanks.messageText.trim()
     case 'flow':
       return !!(editor.blanks.flowName && editor.blanks.messageText.trim() && editor.blanks.buttonLabel.trim())
+    case 'interactive_reply_buttons': {
+      const labels = editor.blanks.buttons.map((b) => b.trim())
+      return !!(editor.blanks.messageText.trim() && labels.length >= 1 && labels.every(Boolean) && new Set(labels).size === labels.length)
+    }
   }
 }
 
@@ -283,86 +295,83 @@ export function RichRepliesSection() {
     setEditorError(null)
   }
 
-  function saveEditor() {
+  async function saveEditor() {
     if (!editor || !editor.name.trim() || !editor.trigger.trim() || !isBlanksComplete(editor)) return
     if (linkFormatError(editor)) return
     const warnings = computeTriggerWarnings(editor.trigger, richReplies, customSkills, editor.replyId)
     const shouldFail = forceSaveFailure
     setEditorSaving(true)
     setEditorError(null)
-    setTimeout(() => {
-      setEditorSaving(false)
-      if (shouldFail) {
-        setEditorError('Could not save. Nothing was lost.')
-        return
-      }
-      const sentence = compileRichReplySentence(editor)
-      if (editor.mode === 'edit' && editor.replyId) {
-        const id = editor.replyId
-        patch('richReplies', {
-          richReplies: richReplies.map((r) =>
-            r.id === id
-              ? ({
-                  ...r,
-                  type: editor.type,
-                  name: editor.name.trim(),
-                  trigger: editor.trigger.trim(),
-                  blanks: editor.blanks,
-                  instructionSentence: sentence,
-                } as RichReply)
-              : r,
-          ),
-        })
-        setRowWarnings((prev) => ({ ...prev, [id]: warnings }))
+    const sentence = compileRichReplySentence(editor)
+    const isEdit = editor.mode === 'edit' && !!editor.replyId
+    const id = isEdit ? editor.replyId! : newId('rr')
+    const existing = richReplies.find((r) => r.id === id)
+    const reply = {
+      ...(existing ?? { id, enabled: true, createdAt: Date.now() }),
+      type: editor.type,
+      name: editor.name.trim(),
+      trigger: editor.trigger.trim(),
+      blanks: editor.blanks,
+      instructionSentence: sentence,
+    } as RichReply
+    try {
+      if (shouldFail) throw new Error('forced')
+      if (existing?.metaId && existing.type === reply.type) {
+        await updateUiSkill(existing.metaId, { title: reply.name, instruction: sentence })
       } else {
-        const id = newId('rr')
-        const newReply = {
-          id,
-          type: editor.type,
-          name: editor.name.trim(),
-          trigger: editor.trigger.trim(),
-          enabled: true,
-          blanks: editor.blanks,
-          instructionSentence: sentence,
-          createdAt: Date.now(),
-        } as RichReply
-        patch('richReplies', { richReplies: [newReply, ...richReplies] })
-        setRowWarnings((prev) => ({ ...prev, [id]: warnings }))
+        // New, or rebuilt as a different type: Meta can't change a type in place, so replace it.
+        reply.metaId = (await createUiSkill(reply)).id
+        if (existing?.metaId) await deleteUiSkill(existing.metaId)
       }
-      setEditor(null)
-    }, 500)
+    } catch (err) {
+      setEditorError(shouldFail ? 'Could not save. Nothing was lost.' : `Could not save. Nothing was lost. (${errorText(err)})`)
+      return
+    } finally {
+      setEditorSaving(false)
+    }
+    patch('richReplies', (prev) => ({
+      richReplies: isEdit ? prev.richReplies.map((r) => (r.id === id ? reply : r)) : [reply, ...prev.richReplies],
+    }))
+    setRowWarnings((prev) => ({ ...prev, [id]: warnings }))
+    setEditor(null)
   }
 
-  function toggleEnabled(reply: RichReply) {
+  async function toggleEnabled(reply: RichReply) {
     const shouldFail = forceSaveFailure
-    if (shouldFail) {
-      toast.error('Could not save. Nothing was lost.')
+    try {
+      if (shouldFail) throw new Error('forced')
+      // Takes effect immediately on Meta (PRD AC-c21).
+      if (reply.metaId) await updateUiSkill(reply.metaId, { status: reply.enabled ? 'disabled' : 'enabled' })
+    } catch (err) {
+      toast.error('Could not save. Nothing was lost.', shouldFail ? undefined : { description: errorText(err) })
       return
     }
-    patch('richReplies', {
-      richReplies: richReplies.map((r) => (r.id === reply.id ? { ...r, enabled: !r.enabled } : r)),
-    })
+    patch('richReplies', (prev) => ({
+      richReplies: prev.richReplies.map((r) => (r.id === reply.id ? { ...r, enabled: !r.enabled } : r)),
+    }))
     toast.success('Saved')
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!pendingDeleteId) return
     const id = pendingDeleteId
     const shouldFail = forceSaveFailure
-    setTimeout(() => {
-      if (shouldFail) {
-        setDeleteError('Could not delete. The item is still here.')
-        setPendingDeleteId(null)
-        return
-      }
-      patch('richReplies', { richReplies: richReplies.filter((r) => r.id !== id) })
-      setRowWarnings((prev) => {
-        const next = { ...prev }
-        delete next[id]
-        return next
-      })
+    const metaId = richReplies.find((r) => r.id === id)?.metaId
+    try {
+      if (shouldFail) throw new Error('forced')
+      if (metaId) await deleteUiSkill(metaId)
+    } catch {
+      setDeleteError('Could not delete. The item is still here.')
       setPendingDeleteId(null)
-    }, 400)
+      return
+    }
+    patch('richReplies', (prev) => ({ richReplies: prev.richReplies.filter((r) => r.id !== id) }))
+    setRowWarnings((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    setPendingDeleteId(null)
   }
 
   return (
@@ -835,6 +844,57 @@ function RichReplyBlanksForm({
         </div>
       )
 
+    case 'interactive_reply_buttons':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="rr-buttons-message">Message text</Label>
+            <Textarea
+              id="rr-buttons-message"
+              rows={2}
+              maxLength={MAX_MESSAGE_TEXT}
+              value={editor.blanks.messageText}
+              onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, messageText: e.target.value } })}
+              placeholder="e.g. How would you like to receive your order?"
+            />
+          </div>
+          <div className="space-y-2">
+            <span className="flex items-center gap-1.5">
+              <Label>Buttons</Label>
+              <InfoTooltip text="One to three buttons. Each label must be different, up to 20 characters. Tapping one sends its label as the customer's reply." />
+            </span>
+            {editor.blanks.buttons.map((label, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  aria-label={`Button ${i + 1} label`}
+                  maxLength={MAX_BUTTON_LABEL}
+                  value={label}
+                  onChange={(e) =>
+                    onChange({ ...editor, blanks: { ...editor.blanks, buttons: editor.blanks.buttons.map((b, j) => (j === i ? e.target.value : b)) } })
+                  }
+                  placeholder={i === 0 ? 'e.g. Home delivery' : 'e.g. Store pickup'}
+                />
+                {editor.blanks.buttons.length > 1 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Remove button ${i + 1}`}
+                    onClick={() => onChange({ ...editor, blanks: { ...editor.blanks, buttons: editor.blanks.buttons.filter((_, j) => j !== i) } })}
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+            ))}
+            {editor.blanks.buttons.length < 3 && (
+              <Button size="sm" variant="outline" onClick={() => onChange({ ...editor, blanks: { ...editor.blanks, buttons: [...editor.blanks.buttons, ''] } })}>
+                Add a button
+              </Button>
+            )}
+          </div>
+        </div>
+      )
+
     case 'location_request':
       return (
         <div className="space-y-1.5">
@@ -1207,6 +1267,14 @@ function RichReplyPreview({ editor }: { editor: RichReplyEditorState }) {
             </p>
           )}
         </div>
+      )}
+      {editor.type === 'interactive_reply_buttons' && (
+        <>
+          <PreviewBubble text={editor.blanks.messageText} />
+          {editor.blanks.buttons.filter((b) => b.trim()).map((b, i) => (
+            <PreviewButton key={i} label={b} icon={MessageSquareReply} />
+          ))}
+        </>
       )}
       {editor.type === 'location_request' && (
         <>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
   ChevronDown,
@@ -44,6 +44,20 @@ import { formatRelativeDate } from '@/app/wizard/format'
 import { downloadCsv, normalizeForCompare, parseCsv } from '@/app/wizard/csv'
 import type { DocumentFile, FaqRow, KnowledgeState, WebsiteSource } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
+import {
+  addWebsite,
+  createFaq,
+  deleteFaq,
+  deleteFile,
+  deleteWebsite,
+  errorText,
+  isCrawlDone,
+  trackCrawl,
+  updateFaq,
+  updateWebsite,
+  uploadFile,
+  websiteFields,
+} from '@/app/api/meta'
 
 const FAQ_WARNING_THRESHOLD = 150
 const SEARCH_THRESHOLD = 20
@@ -148,23 +162,31 @@ export function FaqTab({
     setNewRowError(null)
   }
 
-  function saveNewRow() {
+  async function saveNewRow() {
     if (!newRow || !newRow.question.trim() || !newRow.answer.trim()) return
+    const question = newRow.question.trim()
+    const answer = newRow.answer.trim()
+    // PRD AC-b33: exact duplicate questions are rejected.
+    if (faqs.some((f) => f.question.trim() === question)) {
+      setNewRowError('This question already exists. Edit the existing entry instead of adding a new one.')
+      return
+    }
     const warnings = computeRowWarnings(newRow.question, newRow.answer, faqs)
     const shouldFail = consumeForcedFailure()
     setNewRowSaving(true)
     setNewRowError(null)
-    setTimeout(() => {
-      setNewRowSaving(false)
-      if (shouldFail) {
-        setNewRowError('Could not save. Nothing was lost.')
-        return
-      }
+    try {
+      if (shouldFail) throw new Error('forced')
+      const created = await createFaq(question, answer)
       const id = newId('faq')
-      patchKnowledge((prev) => ({ faqs: [{ id, question: newRow.question.trim(), answer: newRow.answer.trim(), createdAt: Date.now() }, ...prev.faqs] }))
+      patchKnowledge((prev) => ({ faqs: [{ id, metaId: created.id, question, answer, createdAt: Date.now() }, ...prev.faqs] }))
       setRowWarnings((prev) => ({ ...prev, [id]: warnings }))
       setNewRow(null)
-    }, 500)
+    } catch (err) {
+      setNewRowError(shouldFail ? 'Could not save. Nothing was lost.' : `Could not save. Nothing was lost. (${errorText(err)})`)
+    } finally {
+      setNewRowSaving(false)
+    }
   }
 
   function startEdit(row: FaqRow) {
@@ -173,50 +195,62 @@ export function FaqTab({
     setEditError(null)
   }
 
-  function saveEdit(id: string) {
+  async function saveEdit(id: string) {
     if (!editDraft.question.trim() || !editDraft.answer.trim()) return
+    const question = editDraft.question.trim()
+    const answer = editDraft.answer.trim()
+    if (faqs.some((f) => f.id !== id && f.question.trim() === question)) {
+      setEditError('This question already exists. Edit the existing entry instead of adding a new one.')
+      return
+    }
     const warnings = computeRowWarnings(editDraft.question, editDraft.answer, faqs, id)
     const shouldFail = consumeForcedFailure()
+    const row = faqs.find((f) => f.id === id)
     setEditSaving(true)
     setEditError(null)
-    setTimeout(() => {
-      setEditSaving(false)
-      if (shouldFail) {
-        setEditError('Could not save. Nothing was lost.')
-        return
-      }
+    try {
+      if (shouldFail) throw new Error('forced')
+      // A row never sent to Meta (e.g. demo sample data) is created there on first edit.
+      const metaId = row?.metaId ? (await updateFaq(row.metaId, question, answer)).id ?? row.metaId : (await createFaq(question, answer)).id
       patchKnowledge((prev) => ({
-        faqs: prev.faqs.map((f) => (f.id === id ? { ...f, question: editDraft.question.trim(), answer: editDraft.answer.trim() } : f)),
+        faqs: prev.faqs.map((f) => (f.id === id ? { ...f, metaId, question, answer } : f)),
       }))
       setRowWarnings((prev) => ({ ...prev, [id]: warnings }))
       setEditingId(null)
-    }, 500)
+    } catch (err) {
+      setEditError(shouldFail ? 'Could not save. Nothing was lost.' : `Could not save. Nothing was lost. (${errorText(err)})`)
+    } finally {
+      setEditSaving(false)
+    }
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!pendingDeleteId) return
     const id = pendingDeleteId
     const shouldFail = consumeForcedFailure()
-    setTimeout(() => {
-      if (shouldFail) {
-        setDeleteError('Could not delete. The item is still here.')
-        setPendingDeleteId(null)
-        return
-      }
-      patchKnowledge((prev) => ({ faqs: prev.faqs.filter((f) => f.id !== id) }))
-      setRowWarnings((prev) => {
-        const next = { ...prev }
-        delete next[id]
-        return next
-      })
+    const metaId = faqs.find((f) => f.id === id)?.metaId
+    try {
+      if (shouldFail) throw new Error('forced')
+      if (metaId) await deleteFaq(metaId)
+    } catch {
+      setDeleteError('Could not delete. The item is still here.')
       setPendingDeleteId(null)
-    }, 400)
+      return
+    }
+    patchKnowledge((prev) => ({ faqs: prev.faqs.filter((f) => f.id !== id) }))
+    setRowWarnings((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    setPendingDeleteId(null)
   }
 
-  function handleImported(rows: { question: string; answer: string }[], batchId: string) {
+  function handleImported(rows: { question: string; answer: string; metaId?: string }[], batchId: string) {
     const now = Date.now()
     const newFaqs: FaqRow[] = rows.map((r, i) => ({
       id: newId('faq'),
+      metaId: r.metaId,
       question: r.question,
       answer: r.answer,
       createdAt: now - i,
@@ -227,9 +261,23 @@ export function FaqTab({
 
   const [pendingUndoImport, setPendingUndoImport] = useState(false)
 
-  function confirmUndoImport() {
+  async function confirmUndoImport() {
     if (!lastImport) return
-    patchKnowledge((prev) => ({ faqs: prev.faqs.filter((f) => f.importBatchId !== lastImport.id), lastFaqImport: null }))
+    const batch = faqs.filter((f) => f.importBatchId === lastImport.id)
+    const failedIds = new Set<string>()
+    for (const f of batch) {
+      if (!f.metaId) continue
+      try {
+        await deleteFaq(f.metaId)
+      } catch {
+        failedIds.add(f.id)
+      }
+    }
+    if (failedIds.size > 0) setDeleteError(`Could not remove ${failedIds.size} of the imported entries. They are still here.`)
+    patchKnowledge((prev) => ({
+      faqs: prev.faqs.filter((f) => f.importBatchId !== lastImport.id || failedIds.has(f.id)),
+      lastFaqImport: null,
+    }))
     setPendingUndoImport(false)
   }
 
@@ -355,7 +403,7 @@ export function FaqTab({
                 const isEditing = editingId === row.id
                 const warnings = rowWarnings[row.id]
                 return (
-                  <>
+                  <Fragment key={row.id}>
                     <TableRow
                       key={row.id}
                       ref={(el) => {
@@ -425,7 +473,7 @@ export function FaqTab({
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 )
               })}
             </TableBody>
@@ -475,6 +523,27 @@ interface SkippedRow {
   reason: string
 }
 
+
+/** Creates each imported FAQ on Meta, 5 at a time. Rows Meta rejects come back in `failed` so
+ *  the dialog's "retry failed" path can resend just those. */
+async function createFaqs<T extends { question: string; answer: string }>(rows: T[], forceFail: boolean) {
+  const created: (T & { metaId: string })[] = []
+  const failed: T[] = []
+  for (let i = 0; i < rows.length; i += 5) {
+    await Promise.all(
+      rows.slice(i, i + 5).map(async (r) => {
+        try {
+          if (forceFail && i + 5 >= rows.length) throw new Error('forced')
+          created.push({ ...r, metaId: (await createFaq(r.question, r.answer)).id })
+        } catch {
+          failed.push(r)
+        }
+      }),
+    )
+  }
+  return { created, failed }
+}
+
 function buildReview(dataRows: string[][], qIdx: number, aIdx: number, existingFaqs: FaqRow[]) {
   const toImport: ReviewRow[] = []
   const skipped: SkippedRow[] = []
@@ -514,7 +583,7 @@ function FaqImportPanel({
 }: {
   existingFaqs: FaqRow[]
   consumeForcedFailure: () => boolean
-  onImported: (rows: { question: string; answer: string }[], batchId: string) => void
+  onImported: (rows: { question: string; answer: string; metaId?: string }[], batchId: string) => void
   onClose: () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -560,29 +629,20 @@ function FaqImportPanel({
     if (!review) return
     setStage('saving')
     const shouldFail = consumeForcedFailure()
-    const failCount = shouldFail ? Math.max(1, Math.round(review.toImport.length * 0.05)) : 0
-    const succeeded = failCount > 0 ? review.toImport.slice(0, review.toImport.length - failCount) : review.toImport
-    const failed = failCount > 0 ? review.toImport.slice(review.toImport.length - failCount) : []
-
-    // Send in paced chunks rather than all at once.
-    const chunkSize = 25
-    for (let i = 0; i < succeeded.length; i += chunkSize) {
-      await new Promise((resolve) => setTimeout(resolve, 200))
-    }
-
+    const { created, failed } = await createFaqs(review.toImport, shouldFail)
     const batchId = newId('import')
-    if (succeeded.length > 0) onImported(succeeded, batchId)
-    setSaveResult({ imported: succeeded.length, failed })
+    if (created.length > 0) onImported(created, batchId)
+    setSaveResult({ imported: created.length, failed })
     setStage('done')
     if (failed.length === 0) onClose()
   }
 
-  function retryFailed() {
+  async function retryFailed() {
     if (!saveResult || saveResult.failed.length === 0) return
-    const batchId = newId('import')
-    onImported(saveResult.failed, batchId)
-    setSaveResult({ imported: saveResult.imported + saveResult.failed.length, failed: [] })
-    onClose()
+    const { created, failed } = await createFaqs(saveResult.failed, false)
+    if (created.length > 0) onImported(created, newId('import'))
+    setSaveResult({ imported: saveResult.imported + created.length, failed })
+    if (failed.length === 0) onClose()
   }
 
   return (
@@ -768,38 +828,52 @@ export function DocumentsTab({
   const [pendingReplace, setPendingReplace] = useState<{ id: string; fileName: string; file: File } | null>(null)
   const replaceTargetId = useRef<string | null>(null)
 
-  function runUpload(file: File, replacingId?: string) {
+  async function runUpload(file: File, replacingId?: string) {
     const id = newId('upload')
     setTopError(null)
     setUploading((prev) => [...prev, { id, fileName: file.name, progress: 0, replacingId }])
 
     const shouldFail = consumeForcedFailure()
+    // Cosmetic progress while the real upload runs; holds at 90% until Meta answers.
     const interval = setInterval(() => {
       setUploading((prev) =>
-        prev.map((u) => (u.id === id ? { ...u, progress: Math.min(100, u.progress + 15 + Math.random() * 15) } : u)),
+        prev.map((u) => (u.id === id ? { ...u, progress: Math.min(90, u.progress + 10 + Math.random() * 10) } : u)),
       )
-    }, 180)
+    }, 250)
 
-    const totalMs = 900 + Math.random() * 500
-    setTimeout(() => {
+    let uploaded: { id: string; file_name: string }
+    try {
+      if (shouldFail) throw new Error('Could not upload the file.')
+      uploaded = await uploadFile(file)
+    } catch (err) {
+      const msg = shouldFail ? 'Could not upload the file.' : errorText(err)
+      if (replacingId) setTopError(`The new file could not be uploaded, so the old one was kept. ${msg}`)
+      else setRowErrors((prev) => ({ ...prev, [id]: msg }))
+      return
+    } finally {
       clearInterval(interval)
       setUploading((prev) => prev.filter((u) => u.id !== id))
-      if (shouldFail) {
-        if (replacingId) {
-          setTopError('The old file was removed but the new one could not be uploaded. Please upload it again.')
-        } else {
-          setRowErrors((prev) => ({ ...prev, [id]: 'Could not upload the file.' }))
-        }
-        return
+    }
+
+    // Replace = upload the new file first, then remove the old one, so a failed upload loses nothing.
+    const old = replacingId ? documents.find((d) => d.id === replacingId) : undefined
+    if (old?.metaId) {
+      try {
+        await deleteFile(old.metaId)
+      } catch (err) {
+        setTopError(`The new file was uploaded, but the old one could not be removed. ${errorText(err)}`)
       }
-      const ext = `.${file.name.split('.').pop()?.toLowerCase()}`
-      const newDocId = newId('doc')
-      patchKnowledge((prev) => ({
-        documents: [{ id: newDocId, fileName: file.name, sizeBytes: file.size, type: ext, uploadedAt: Date.now() }, ...prev.documents],
-      }))
-      setJustSettledIds((prev) => ({ ...prev, [newDocId]: true }))
-      setTimeout(() => setJustSettledIds((prev) => ({ ...prev, [newDocId]: false })), 4000)
-    }, totalMs)
+    }
+    const ext = `.${uploaded.file_name.split('.').pop()?.toLowerCase()}`
+    const newDocId = newId('doc')
+    patchKnowledge((prev) => ({
+      documents: [
+        { id: newDocId, metaId: uploaded.id, fileName: uploaded.file_name, sizeBytes: file.size, type: ext, uploadedAt: Date.now() },
+        ...prev.documents.filter((d) => d.id !== replacingId),
+      ],
+    }))
+    setJustSettledIds((prev) => ({ ...prev, [newDocId]: true }))
+    setTimeout(() => setJustSettledIds((prev) => ({ ...prev, [newDocId]: false })), 4000)
   }
 
   function processFiles(files: FileList | null, replacingId?: string) {
@@ -807,11 +881,12 @@ export function DocumentsTab({
     Array.from(files).forEach((file) => {
       const ext = `.${file.name.split('.').pop()?.toLowerCase()}`
       if (!ACCEPTED_DOCUMENT_TYPES.includes(ext)) {
-        setTopError('This file type is not supported. Use PDF, Word documents, or images.')
+        // PRD AC-c16: the type check wins over the size check.
+        setTopError('Document type is not supported.')
         return
       }
       if (file.size > MAX_DOCUMENT_BYTES) {
-        setTopError('This file is too large. The limit is 100 MB per file.')
+        setTopError('File exceeds 100 MB.')
         return
       }
       if ((ext === '.csv' || ext === '.xlsx') && consumeForcedFailure()) {
@@ -820,31 +895,32 @@ export function DocumentsTab({
         )
         return
       }
-      runUpload(file, replacingId)
+      void runUpload(file, replacingId)
     })
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!pendingDeleteId) return
     const id = pendingDeleteId
     const shouldFail = consumeForcedFailure()
-    setTimeout(() => {
-      if (shouldFail) {
-        setRowErrors((prev) => ({ ...prev, [id]: 'Could not delete. The item is still here.' }))
-        setPendingDeleteId(null)
-        return
-      }
-      patchKnowledge((prev) => ({ documents: prev.documents.filter((d) => d.id !== id) }))
+    const metaId = documents.find((d) => d.id === id)?.metaId
+    try {
+      if (shouldFail) throw new Error('forced')
+      if (metaId) await deleteFile(metaId)
+    } catch (err) {
+      setRowErrors((prev) => ({ ...prev, [id]: shouldFail ? 'Could not delete. The item is still here.' : `Could not delete. The item is still here. (${errorText(err)})` }))
       setPendingDeleteId(null)
-    }, 400)
+      return
+    }
+    patchKnowledge((prev) => ({ documents: prev.documents.filter((d) => d.id !== id) }))
+    setPendingDeleteId(null)
   }
 
   function confirmReplace() {
     if (!pendingReplace) return
     const { id, file } = pendingReplace
     setPendingReplace(null)
-    patchKnowledge((prev) => ({ documents: prev.documents.filter((d) => d.id !== id) }))
-    runUpload(file, id)
+    void runUpload(file, id)
   }
 
   const showEmptyState = documents.length === 0 && uploading.length === 0
@@ -1027,34 +1103,40 @@ export function WebsiteTab({
   const [whyOpen, setWhyOpen] = useState<Record<string, boolean>>({})
   const [bulkOpen, setBulkOpen] = useState(false)
 
-  function runFakeCrawl(id: string, shouldFail: boolean) {
-    setTimeout(() => {
-      patchKnowledge((prev) => ({ websites: prev.websites.map((w) => (w.id === id ? { ...w, status: 'reading' } : w)) }))
-    }, 1500)
-    setTimeout(() => {
-      patchKnowledge((prev) => ({
-        websites: prev.websites.map((w) => {
-          if (w.id !== id) return w
-          if (shouldFail) return { ...w, status: 'failed', updatedAt: Date.now() }
-          const pagesRead = 20 + Math.floor(Math.random() * 70)
-          return { ...w, status: 'done', pagesRead, subpages: generateFakeSubpages(w.url, pagesRead), updatedAt: Date.now() }
-        }),
-      }))
-    }, 9500)
-  }
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editUrl, setEditUrl] = useState('')
 
-  function addWebsites(urls: string[]) {
+  const setSite = (id: string, fields: Partial<WebsiteSource>) =>
+    patchKnowledge((prev) => ({ websites: prev.websites.map((w) => (w.id === id ? { ...w, ...fields } : w)) }))
+
+  // Any row Meta knows about whose crawl hasn't finished gets polled until it does. Add, re-crawl
+  // and edit only have to put a row back into a crawling state; this picks it up.
+  useEffect(() => {
+    websites.forEach((w) => {
+      if (w.metaId && !isCrawlDone(w.status)) trackCrawl(w.metaId, patchKnowledge)
+    })
+  }, [websites, patchKnowledge])
+
+  async function addWebsites(urls: string[]) {
     const now = Date.now()
     const newSites: WebsiteSource[] = urls.map((url, i) => ({
       id: newId('site'),
       url,
-      status: 'waiting',
+      status: 'not_started',
       pagesRead: 0,
       subpages: [],
       updatedAt: now - i,
     }))
     patchKnowledge((prev) => ({ websites: [...newSites, ...prev.websites] }))
-    newSites.forEach((site) => runFakeCrawl(site.id, consumeForcedFailure()))
+    for (const site of newSites) {
+      const shouldFail = consumeForcedFailure()
+      try {
+        if (shouldFail) throw new Error('Could not add this website.')
+        setSite(site.id, websiteFields(await addWebsite(site.url)))
+      } catch (err) {
+        setSite(site.id, { status: 'failed', crawlError: errorText(err) })
+      }
+    }
   }
 
   function handleAdd() {
@@ -1066,32 +1148,58 @@ export function WebsiteTab({
       return
     }
     if (websites.some((w) => normalizeUrl(w.url) === normalizeUrl(url))) {
-      setInputError('This website is already added.')
+      setInputError(`The URL ${url} already exists`)
       return
     }
     setInputError(null)
     setUrlInput('')
-    addWebsites([url])
+    void addWebsites([url])
   }
 
-  function handleReread(id: string) {
-    patchKnowledge((prev) => ({ websites: prev.websites.map((w) => (w.id === id ? { ...w, status: 'waiting' } : w)) }))
-    runFakeCrawl(id, consumeForcedFailure())
+  /** Re-crawl and edit are the same call on Meta: PUT the URL, which restarts the crawl. */
+  async function recrawl(site: WebsiteSource, url = site.url) {
+    const shouldFail = consumeForcedFailure()
+    try {
+      if (shouldFail) throw new Error('forced')
+      const fields = site.metaId ? websiteFields(await updateWebsite(site.metaId, url)) : websiteFields(await addWebsite(url))
+      // A re-crawl keeps the same row (PRD V-d5); show it as pending until the poll reports.
+      setSite(site.id, { ...fields, url, status: isCrawlDone(fields.status!) ? 'waiting' : fields.status, crawlError: undefined })
+      return true
+    } catch (err) {
+      setRowErrors((prev) => ({ ...prev, [site.id]: shouldFail ? 'Could not start reading this site again.' : errorText(err) }))
+      return false
+    }
   }
 
-  function confirmRemove() {
+  async function saveEditUrl(site: WebsiteSource) {
+    let url = editUrl.trim()
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`
+    if (!isWebsiteShapeValid(url)) {
+      setRowErrors((prev) => ({ ...prev, [site.id]: 'This does not look like a website address.' }))
+      return
+    }
+    if (websites.some((w) => w.id !== site.id && normalizeUrl(w.url) === normalizeUrl(url))) {
+      setRowErrors((prev) => ({ ...prev, [site.id]: `The URL ${url} already exists` }))
+      return
+    }
+    if (await recrawl(site, url)) setEditingId(null)
+  }
+
+  async function confirmRemove() {
     if (!pendingRemoveId) return
     const id = pendingRemoveId
     const shouldFail = consumeForcedFailure()
-    setTimeout(() => {
-      if (shouldFail) {
-        setRowErrors((prev) => ({ ...prev, [id]: 'Could not delete. The item is still here.' }))
-        setPendingRemoveId(null)
-        return
-      }
-      patchKnowledge((prev) => ({ websites: prev.websites.filter((w) => w.id !== id) }))
+    const metaId = websites.find((w) => w.id === id)?.metaId
+    try {
+      if (shouldFail) throw new Error('forced')
+      if (metaId) await deleteWebsite(metaId)
+    } catch (err) {
+      setRowErrors((prev) => ({ ...prev, [id]: shouldFail ? 'Could not delete. The item is still here.' : `Could not delete. The item is still here. (${errorText(err)})` }))
       setPendingRemoveId(null)
-    }, 400)
+      return
+    }
+    patchKnowledge((prev) => ({ websites: prev.websites.filter((w) => w.id !== id) }))
+    setPendingRemoveId(null)
   }
 
   return (
@@ -1146,31 +1254,63 @@ export function WebsiteTab({
                   </span>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  {(site.status === 'done' || site.status === 'failed') && (
-                    <button type="button" onClick={() => handleReread(site.id)} className="text-primary" style={{ fontSize: 'var(--text-sm)' }}>
-                      Re-read
+                  {isCrawlDone(site.status) && (
+                    <button type="button" onClick={() => void recrawl(site)} className="text-primary" style={{ fontSize: 'var(--text-sm)' }}>
+                      Re-crawl
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingId(site.id)
+                      setEditUrl(site.url)
+                    }}
+                    className="text-muted-foreground"
+                    style={{ fontSize: 'var(--text-sm)' }}
+                  >
+                    Edit
+                  </button>
                   <button type="button" onClick={() => setPendingRemoveId(site.id)} className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
                     Remove
                   </button>
                 </div>
               </div>
 
+              {editingId === site.id && (
+                <div className="mt-2 flex items-center gap-2">
+                  <Input
+                    value={editUrl}
+                    onChange={(e) => setEditUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && void saveEditUrl(site)}
+                    aria-label="Website address"
+                  />
+                  <Button size="sm" onClick={() => void saveEditUrl(site)} disabled={!editUrl.trim()}>
+                    Save
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>
+                    Cancel
+                  </Button>
+                </div>
+              )}
+
               <div className="mt-1 flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                {site.status === 'waiting' && <span>Waiting to start</span>}
+                {site.status === 'not_started' && <span>Not started</span>}
+                {site.status === 'waiting' && <span>Pending</span>}
                 {site.status === 'reading' && (
                   <>
                     <Loader2 className="size-3 animate-spin" />
-                    <span>Reading the site now...</span>
+                    <span>In progress · {site.pagesRead} pages so far</span>
                   </>
                 )}
                 {site.status === 'done' && (
                   <span>
-                    Ready · {site.pagesRead} pages read · updated {formatRelativeDate(site.updatedAt)}
+                    Completed · {site.pagesRead} pages crawled · last crawled {formatRelativeDate(site.lastCrawledAt ?? site.updatedAt)}
                   </span>
                 )}
-                {site.status === 'failed' && <span>Could not read this site</span>}
+                {site.status === 'done_no_data' && (
+                  <span>Completed (No Data) · last crawled {formatRelativeDate(site.lastCrawledAt ?? site.updatedAt)}</span>
+                )}
+                {site.status === 'failed' && <span>Failed{site.crawlError ? `: ${site.crawlError}` : ''}</span>}
               </div>
 
               {site.status === 'done' && site.subpages.length > 0 && (
@@ -1240,7 +1380,7 @@ export function WebsiteTab({
       {bulkOpen && (
         <WebsiteBulkImportDialog
           existingWebsites={websites}
-          onImport={addWebsites}
+          onImport={(urls) => void addWebsites(urls)}
           onClose={() => setBulkOpen(false)}
         />
       )}

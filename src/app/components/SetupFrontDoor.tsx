@@ -11,7 +11,7 @@ import {
 } from '@/app/components/ui/select'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { SelectableCard } from '@/app/components/wizard/SelectableCard'
-import { generateFakeSubpages } from '@/app/wizard/steps/KnowledgeBaseStep'
+import { addWebsite, errorText, trackCrawl, websiteFields } from '@/app/api/meta'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { useWizard } from '@/app/wizard/WizardContext'
 import {
@@ -361,23 +361,21 @@ export function SetupFrontDoor({ onFinish }: { onFinish: () => void }) {
       const id = newId('site')
       const shouldFail = state.demo.forceNextFailure
       if (shouldFail) patch('demo', { forceNextFailure: false })
-      const newSite: WebsiteSource = { id, url: websiteUrl, status: 'waiting', pagesRead: 0, subpages: [], updatedAt: Date.now() }
+      const newSite: WebsiteSource = { id, url: websiteUrl, status: 'not_started', pagesRead: 0, subpages: [], updatedAt: Date.now() }
       patch('knowledge', (prev) => ({ websites: [newSite, ...prev.websites] }))
-      setTimeout(() => {
-        patch('knowledge', (prev) => ({
-          websites: prev.websites.map((w) => (w.id === id ? { ...w, status: 'reading' } : w)),
-        }))
-      }, 1500)
-      setTimeout(() => {
-        patch('knowledge', (prev) => ({
-          websites: prev.websites.map((w) => {
-            if (w.id !== id) return w
-            if (shouldFail) return { ...w, status: 'failed', updatedAt: Date.now() }
-            const pagesRead = 20 + Math.floor(Math.random() * 70)
-            return { ...w, status: 'done', pagesRead, subpages: generateFakeSubpages(w.url, pagesRead), updatedAt: Date.now() }
-          }),
-        }))
-      }, 9500)
+      // Real crawl on Meta; the Website tab polls it to completion from here.
+      const setSite = (fields: Partial<WebsiteSource>) =>
+        patch('knowledge', (prev) => ({ websites: prev.websites.map((w) => (w.id === id ? { ...w, ...fields } : w)) }))
+      void (async () => {
+        try {
+          if (shouldFail) throw new Error('Could not add this website.')
+          const fields = websiteFields(await addWebsite(websiteUrl))
+          setSite(fields)
+          trackCrawl(fields.metaId!, (fn) => patch('knowledge', fn))
+        } catch (err) {
+          setSite({ status: 'failed', crawlError: errorText(err) })
+        }
+      })()
     }
 
     // 2 & 3. Business description + agent role — land unsaved and editable, Step 1's own

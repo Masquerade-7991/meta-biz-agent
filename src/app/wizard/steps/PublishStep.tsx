@@ -17,8 +17,10 @@ import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { useExitWizard } from '@/app/wizard/ExitContext'
+import { addAllowlistNumber, removeAllowlistNumber, setRollout } from '@/app/api/meta'
 
 const E164_RE = /^\+[1-9]\d{6,14}$/
+const MAX_ALLOWLIST = 20
 
 // This page publishes an agent on one specific WhatsApp phone number, not a WABA account — a
 // WABA can hold several numbers, and this page (and the agent it activates) belongs to exactly
@@ -29,11 +31,26 @@ export function PublishStep() {
   const { publish } = state
   const exitWizard = useExitWizard()
 
+  // Every change here goes to Meta first (settings: rollout + ai_audience; allowlist entries) and
+  // only lands in the UI once Meta accepts it, so the screen never shows a state Meta doesn't have.
+  async function pushPublish(changes: Partial<typeof publish>, okMessage: string, call?: () => Promise<unknown>): Promise<boolean> {
+    const next = { ...publish, ...changes }
+    try {
+      await (call ? call() : setRollout(next.activated, next.audienceMode))
+    } catch (err) {
+      toast.error("Couldn't save to Meta", { description: err instanceof Error ? err.message : String(err) })
+      return false
+    }
+    patch('publish', changes)
+    toast.success(okMessage)
+    return true
+  }
+
   // ---- Who can talk to your agent ----
   const [numberDraft, setNumberDraft] = useState('')
   const [numberError, setNumberError] = useState<string | null>(null)
 
-  function addAllowlistNumber() {
+  function addNumber() {
     const value = numberDraft.trim()
     if (!E164_RE.test(value)) {
       setNumberError("This doesn't look like a valid number")
@@ -42,18 +59,18 @@ export function PublishStep() {
     setNumberDraft('')
     setNumberError(null)
     if (publish.allowlistNumbers.includes(value)) return
-    patch('publish', { allowlistNumbers: [...publish.allowlistNumbers, value] })
-    toast.success('Saved')
+    // PRD V1b: Meta caps the allowlist at 20; reject before calling.
+    if (publish.allowlistNumbers.length >= MAX_ALLOWLIST) return
+    // Live the moment it's added (PRD AC3a); independent of Publish.
+    void pushPublish({ allowlistNumbers: [...publish.allowlistNumbers, value] }, 'Saved', () => addAllowlistNumber(value))
   }
 
-  function removeAllowlistNumber(value: string) {
-    patch('publish', { allowlistNumbers: publish.allowlistNumbers.filter((n) => n !== value) })
-    toast.success('Saved')
+  function removeNumber(value: string) {
+    void pushPublish({ allowlistNumbers: publish.allowlistNumbers.filter((n) => n !== value) }, 'Saved', () => removeAllowlistNumber(value))
   }
 
   function setAudienceMode(mode: 'allowlisted' | 'everyone') {
-    patch('publish', { audienceMode: mode })
-    toast.success('Saved')
+    void pushPublish({ audienceMode: mode }, 'Saved')
   }
 
   // ---- Activate on channels ----
@@ -62,15 +79,15 @@ export function PublishStep() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [activateFailed, setActivateFailed] = useState(false)
 
-  function confirmActivate() {
+  async function confirmActivate() {
     setConfirmOpen(false)
     if (state.demo.forceNextFailure) {
       patch('demo', { forceNextFailure: false })
       setActivateFailed(true)
       return
     }
-    setActivateFailed(false)
-    patch('publish', { activated: true, activatedChannels: ['WhatsApp'], stopped: false })
+    const ok = await pushPublish({ activated: true, activatedChannels: ['WhatsApp'], stopped: false }, 'Agent activated')
+    setActivateFailed(!ok)
   }
 
   // ---- Stop / resume ----
@@ -78,13 +95,11 @@ export function PublishStep() {
 
   function confirmStop() {
     setStopConfirmOpen(false)
-    patch('publish', { activated: false, stopped: true })
-    toast.success('Agent stopped')
+    void pushPublish({ activated: false, stopped: true }, 'Agent stopped')
   }
 
   function resumeAgent() {
-    patch('publish', { activated: true, stopped: false })
-    toast.success('Agent is live again')
+    void pushPublish({ activated: true, stopped: false }, 'Agent is live again')
   }
 
   useRegisterDevControls(
@@ -131,7 +146,7 @@ export function PublishStep() {
                     setNumberError(null)
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') addAllowlistNumber()
+                    if (e.key === 'Enter') addNumber()
                   }}
                   placeholder="+15551234567"
                 />
@@ -141,17 +156,22 @@ export function PublishStep() {
                   </p>
                 )}
               </div>
-              <Button variant="outline" onClick={addAllowlistNumber}>
+              <Button variant="outline" onClick={addNumber} disabled={publish.allowlistNumbers.length >= MAX_ALLOWLIST}>
                 <Plus className="size-4" />
                 Add
               </Button>
             </div>
+            {publish.allowlistNumbers.length >= MAX_ALLOWLIST && (
+              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                You've reached the limit of 20 numbers. Remove one to add another.
+              </p>
+            )}
             {publish.allowlistNumbers.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {publish.allowlistNumbers.map((n) => (
                   <span key={n} className="badge flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-accent-foreground">
                     {n}
-                    <button type="button" onClick={() => removeAllowlistNumber(n)} aria-label={`Remove ${n}`}>
+                    <button type="button" onClick={() => removeNumber(n)} aria-label={`Remove ${n}`}>
                       <X className="size-3" />
                     </button>
                   </span>

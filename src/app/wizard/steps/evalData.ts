@@ -7,7 +7,8 @@
 // Meta doesn't yet document a way to author eval scenarios, so everything below is illustrative,
 // not a real run.
 
-export type EvalCategory = 'Ordering' | 'Escalation' | 'Knowledge' | 'Boundaries' | 'Actions'
+/** Demo categories below; real cases carry whatever category strings Meta assigns. */
+export type EvalCategory = string
 
 export interface EvalScenario {
   id: string
@@ -124,6 +125,10 @@ export interface EvalConversationResult {
   summary: string
   transcript: TranscriptLine[]
   reasons: EvalReason[]
+  /** From a real run's summary (JSON-string fields on Meta's side, parsed). */
+  highlights?: string[]
+  topFailures?: string[]
+  avgTurnScore?: number
 }
 
 export const EVAL_RESULTS: EvalConversationResult[] = [

@@ -5,12 +5,12 @@ import { Badge } from '@/app/components/ui/badge'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
+import { errorText, listEvalCases, runEvalCase } from '@/app/api/meta'
 import { cn } from '@/app/lib/utils'
 import {
   EVAL_RESULTS,
   EVAL_SCENARIOS,
   deriveWeakResult,
-  scoreBandLabel,
   type EvalConversationResult,
   type EvalScenario,
 } from './evalData'
@@ -31,12 +31,9 @@ const STAGE_ACTIVE_TEXT: Record<Exclude<Stage, 'done'>, string> = {
   insights: 'Finding patterns...',
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
+/** Demo controls only: a canned result, re-pointed at whichever case it's shown on. */
 function resultFor(scenarioId: string): EvalConversationResult {
-  return EVAL_RESULTS.find((r) => r.scenarioId === scenarioId)!
+  return { ...(EVAL_RESULTS.find((r) => r.scenarioId === scenarioId) ?? EVAL_RESULTS[0]), scenarioId }
 }
 
 function reasonIcon(score: number) {
@@ -52,6 +49,7 @@ interface CardState {
   rerunning: boolean
   viewingConversation: boolean
   showFailureDetails: boolean
+  failureReason?: string
 }
 
 function initialCardState(): CardState {
@@ -64,16 +62,31 @@ export function EvalTab() {
   // Nothing renders until the real GET /cases call is made — this mirrors the real endpoint,
   // which lists a client's eval scenarios on demand rather than something the wizard already has.
   const [casesStatus, setCasesStatus] = useState<CasesStatus>('idle')
+  const [scenarios, setScenarios] = useState<EvalScenario[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [cards, setCards] = useState<Record<string, CardState>>({})
   // Per-scenario run tokens, so a stale "Run again" from an earlier click can't clobber a newer one.
   const tokensRef = useRef<Record<string, number>>({})
 
-  function pullEvalCases() {
+  // Meta generates the cases from the WABA's business category; they can't be created here.
+  async function pullEvalCases() {
     setCasesStatus('loading')
-    setTimeout(() => {
-      setCards(Object.fromEntries(EVAL_SCENARIOS.map((s) => [s.id, initialCardState()])))
+    setLoadError(null)
+    try {
+      const cases = await listEvalCases()
+      setScenarios(cases)
+      setCards(Object.fromEntries(cases.map((s) => [s.id, initialCardState()])))
       setCasesStatus('loaded')
-    }, 700)
+    } catch (err) {
+      setLoadError(errorText(err))
+      setCasesStatus('idle')
+    }
+  }
+
+  function demoPullCases() {
+    setScenarios(EVAL_SCENARIOS)
+    setCards(Object.fromEntries(EVAL_SCENARIOS.map((s) => [s.id, initialCardState()])))
+    setCasesStatus('loaded')
   }
 
   useEffect(() => {
@@ -87,14 +100,18 @@ export function EvalTab() {
     setCards((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }))
   }
 
+  /** Real run on Meta: submit, poll the job's stage every 3 s, then fetch the scored details. */
   async function runStages(id: string, token: number) {
     const isCurrent = () => tokensRef.current[id] === token
-    for (const stage of STAGES.slice(0, -1) as Exclude<Stage, 'done'>[]) {
-      patchCard(id, { stage })
-      await sleep(stage === 'insights' ? 700 : 550)
+    try {
+      const result = await runEvalCase(id, (stage) => isCurrent() && patchCard(id, { stage }), isCurrent)
+      if (!result || !isCurrent()) return
+      // A re-run replaces the previous result; no history is kept (PRD V7).
+      patchCard(id, { status: 'completed', stage: 'done', result, rerunning: false })
+    } catch (err) {
       if (!isCurrent()) return
+      patchCard(id, { status: 'failed', rerunning: false, showFailureDetails: false, failureReason: errorText(err) })
     }
-    patchCard(id, { status: 'completed', stage: 'done', result: resultFor(id), rerunning: false })
   }
 
   function startEval(id: string) {
@@ -111,7 +128,7 @@ export function EvalTab() {
         showFailureDetails: false,
       },
     }))
-    runStages(id, token)
+    void runStages(id, token)
   }
 
   // ---- Demo controls, one set per scenario plus the "returning visitor" restore ----
@@ -128,6 +145,7 @@ export function EvalTab() {
 
   function demoLoadAllCompleted() {
     for (const id of Object.keys(tokensRef.current)) tokensRef.current[id] = (tokensRef.current[id] ?? 0) + 1
+    setScenarios(EVAL_SCENARIOS)
     setCards(
       Object.fromEntries(
         EVAL_SCENARIOS.map((s) => [
@@ -142,14 +160,14 @@ export function EvalTab() {
   useRegisterDevControls(
     'eval',
     <DemoControlsGroup label="Evaluation">
-      <Button variant="outline" size="sm" onClick={pullEvalCases}>
-        Demo: pull eval cases now
+      <Button variant="outline" size="sm" onClick={demoPullCases}>
+        Demo: load sample eval cases
       </Button>
       <Button variant="outline" size="sm" onClick={demoLoadAllCompleted}>
         Demo: load all as previously completed
       </Button>
       {casesStatus === 'loaded' &&
-        EVAL_SCENARIOS.map((s) => (
+        scenarios.map((s) => (
           <div key={s.id} className="flex flex-wrap items-center gap-1.5">
             <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
               {s.title}:
@@ -175,8 +193,8 @@ export function EvalTab() {
     <div className="space-y-6">
       <div className="rounded-lg border border-border bg-muted/40 p-3">
         <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-          This shows what Eval will look like. Meta doesn&rsquo;t yet document a way to create scenarios ourselves,
-          so the scenarios and results below are illustrative, not real evaluations of this agent.
+          Meta doesn&rsquo;t yet provide a way to create evaluation scenarios, so only Meta&rsquo;s own cases can be
+          pulled and run. Meta generates them from the business category set on your WhatsApp Business Account.
         </p>
       </div>
 
@@ -185,7 +203,8 @@ export function EvalTab() {
           <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
             No eval cases loaded yet.
           </p>
-          <Button onClick={pullEvalCases}>Pull eval cases</Button>
+          <Button onClick={() => void pullEvalCases()}>Pull eval cases</Button>
+          {loadError && <p className="text-destructive" style={{ fontSize: 'var(--text-xs)' }}>Could not load eval cases. {loadError}</p>}
         </div>
       )}
 
@@ -200,7 +219,12 @@ export function EvalTab() {
 
       {casesStatus === 'loaded' && (
         <div className="space-y-3">
-          {EVAL_SCENARIOS.map((scenario) => (
+          {scenarios.length === 0 && (
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              Meta has no eval cases for this number yet.
+            </p>
+          )}
+          {scenarios.map((scenario) => (
             <EvalCard
               key={scenario.id}
               scenario={scenario}
@@ -316,21 +340,20 @@ function EvalCard({
 
       {card.status === 'failed' && (
         <div className="space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
-          <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Could not complete</p>
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-            Something went wrong during Simulation.
+          <p className="text-destructive" style={{ fontWeight: 'var(--font-weight-medium)' }}>
+            Evaluation failed. {card.failureReason ?? 'Could not complete the simulation.'}
           </p>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={onToggleFailureDetails}>
               {card.showFailureDetails ? 'Hide details' : 'View details'}
             </Button>
             <Button size="sm" onClick={onStart}>
-              Try again
+              Run again
             </Button>
           </div>
           {card.showFailureDetails && (
             <p className="text-muted-foreground font-mono" style={{ fontSize: 'var(--text-xs)' }}>
-              SIMULATION_FAILED
+              {card.failureReason ?? 'SIMULATION_FAILED'}
             </p>
           )}
         </div>
@@ -355,21 +378,39 @@ function EvalCard({
 }
 
 function CompletedBody({ result }: { result: EvalConversationResult }) {
-  const band = scoreBandLabel(result.score)
   const struggles = result.reasons.filter((r) => r.recommendedAction)
 
   return (
     <div className="space-y-3">
-      <div>
-        <p style={{ fontSize: '1.5rem', fontWeight: 'var(--font-weight-medium)' }}>{result.score.toFixed(1)} / 5</p>
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-          {band}
-        </p>
-      </div>
+      {/* PRD AC11 / V5 / V9: whole-number score only, no word label, no pass/fail. */}
+      <p style={{ fontSize: '1.5rem', fontWeight: 'var(--font-weight-medium)' }}>{Math.round(result.score)} / 5</p>
 
-      <p className="italic text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-        &ldquo;{result.summary}&rdquo;
-      </p>
+      {result.summary && (
+        <p className="italic text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          &ldquo;{result.summary}&rdquo;
+        </p>
+      )}
+
+      {(result.highlights?.length ?? 0) > 0 && (
+        <div className="space-y-1">
+          <p style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-medium)' }}>What went well</p>
+          {result.highlights!.map((h, i) => (
+            <p key={i} className="flex items-start gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" /> {h}
+            </p>
+          ))}
+        </div>
+      )}
+      {(result.topFailures?.length ?? 0) > 0 && (
+        <div className="space-y-1">
+          <p style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-medium)' }}>Top failure reasons</p>
+          {result.topFailures!.map((f, i) => (
+            <p key={i} className="flex items-start gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              <XCircle className="mt-0.5 size-4 shrink-0 text-destructive" /> {f}
+            </p>
+          ))}
+        </div>
+      )}
 
       {struggles.length > 0 && (
         <div>
@@ -399,8 +440,11 @@ function ConversationDetail({ result }: { result: EvalConversationResult }) {
   return (
     <div className="space-y-4 rounded-md border border-border bg-muted/20 p-3">
       <div>
-        <p className="mb-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="mb-1 flex items-center justify-between text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
           Transcript
+          {result.avgTurnScore !== undefined && (
+            <span style={{ fontSize: 'var(--text-xs)' }}>Turn-level average: {Math.round(result.avgTurnScore)} / 5</span>
+          )}
         </p>
         <div className="space-y-1.5">
           {result.transcript.map((line, i) => (

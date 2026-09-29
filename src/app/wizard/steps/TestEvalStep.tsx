@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Send } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, History, Loader2, Send } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
@@ -18,21 +18,41 @@ import {
   SAMPLE_RICH_REPLIES,
   SAMPLE_TOPICS_TO_AVOID,
   SAMPLE_WEBSITES,
-  matchConnectionPreviewMessage,
-  matchFaqPreviewMessage,
   newId,
   pickConnectionPreviewReply,
 } from '@/app/wizard/mockData'
 import type { Connection, ConnectionAction, WizardState } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
+import { checkEligibility, errorText, MetaError, sendTestMessage } from '@/app/api/meta'
+import { InlineError } from '@/app/components/wizard/RetryBanner'
 
-function simulateAgentReply(state: WizardState, message: string): string {
-  const faqMatches = matchFaqPreviewMessage(message, state.knowledge.faqs)
-  if (faqMatches.length > 0) return faqMatches[0].answer
-  const connMatches = matchConnectionPreviewMessage(message, state.connections.connections, state.connections.actions)
-  if (connMatches.length > 0) return pickConnectionPreviewReply(connMatches[0])
-  if (/\b(hi|hello|hey)\b/i.test(message)) return state.replies.greetingReply
-  return state.replies.fallbackReply
+interface ChatMessage {
+  from: 'customer' | 'agent' | 'system'
+  text: string
+  at: number
+  quickReplies?: string[]
+}
+interface TestConversation {
+  id: string
+  startedAt: number
+  messages: ChatMessage[]
+}
+
+// Meta has no history API for test conversations, so past ones are kept in this browser (PRD 5.4.1 AC6b-f).
+const TEST_HISTORY_KEY = 'meta-agent-test-history-v1'
+function loadTestHistory(): TestConversation[] {
+  try {
+    return JSON.parse(localStorage.getItem(TEST_HISTORY_KEY) ?? '[]') as TestConversation[]
+  } catch {
+    return []
+  }
+}
+function saveTestHistory(history: TestConversation[]) {
+  try {
+    localStorage.setItem(TEST_HISTORY_KEY, JSON.stringify(history.slice(0, 100)))
+  } catch {
+    // storage full or blocked: history just isn't kept
+  }
 }
 
 type CheckStatus = 'pending' | 'normal' | 'warn'
@@ -103,35 +123,115 @@ function buildStandardChecks(state: WizardState, forceAmberGreeting: boolean): C
 export function TestEvalStep() {
   const { state, patch } = useWizard()
 
-  // ---- Quick test (local, per-visit only — no history kept between visits) ----
-  const [chatMessages, setChatMessages] = useState<{ from: 'customer' | 'agent'; text: string }[]>([])
+  // ---- Quick test: Meta's Agent Test API (not billed, 500/hour per number) ----
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatDraft, setChatDraft] = useState('')
+  const [sending, setSending] = useState(false)
+  // conversation_id threads follow-ups into one conversation; cleared by Start New Conversation.
+  const [conversationId, setConversationId] = useState<string | undefined>()
+  const [limitMessage, setLimitMessage] = useState<string | null>(null)
+  const [ineligible, setIneligible] = useState(false)
+  const [history, setHistory] = useState<TestConversation[]>(loadTestHistory)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [viewing, setViewing] = useState<TestConversation | null>(null)
 
-  function sendQuickTest() {
-    const text = chatDraft.trim()
-    if (!text) return
-    setChatDraft('')
-    setChatMessages((prev) => [...prev, { from: 'customer', text }])
-    setTimeout(() => {
-      setChatMessages((prev) => [...prev, { from: 'agent', text: simulateAgentReply(state, text) }])
-    }, 700)
+  // PRD 5.4.1 AC5: a number that has become ineligible can't be tested at all.
+  useEffect(() => {
+    checkEligibility()
+      .then((r) => setIneligible(!r.is_eligible))
+      .catch(() => {}) // can't evaluate (401/404/unreachable) is not the same as ineligible
+  }, [])
+
+  const hasAnyConfig =
+    state.identity.agentRole.trim() !== '' ||
+    state.personalization.customSkills.length > 0 ||
+    state.knowledge.faqs.length > 0 ||
+    state.knowledge.documents.length > 0 ||
+    state.knowledge.websites.length > 0 ||
+    state.business.businessDescription.trim() !== ''
+
+  async function sendQuickTest(textArg?: string) {
+    const text = (textArg ?? chatDraft).trim()
+    if (!text || sending) return
+    if (!textArg) setChatDraft('')
+    setChatMessages((prev) => [...prev, { from: 'customer', text, at: Date.now() }])
+    setSending(true)
+    try {
+      const r = await sendTestMessage(text, conversationId)
+      setConversationId(r.conversation_id)
+      setChatMessages((prev) => [
+        ...prev,
+        ...(r.agent_response ? [{ from: 'agent' as const, text: r.agent_response, at: Date.now(), quickReplies: r.quick_replies }] : []),
+        ...(r.handoff_reason ? [{ from: 'system' as const, text: 'This message would hand off to a human agent here.', at: Date.now() }] : []),
+        ...(!r.agent_response && !r.handoff_reason && r.no_response_reason
+          ? [{ from: 'system' as const, text: `The agent did not reply: ${r.no_response_reason}`, at: Date.now() }]
+          : []),
+      ])
+    } catch (err) {
+      if (err instanceof MetaError && err.status === 429) {
+        // Meta limits test messages per number (500/h) and per app across every agent (10,000/h).
+        setLimitMessage(
+          /app|platform/i.test(err.message)
+            ? 'Testing is temporarily at capacity across the platform. Try again later.'
+            : "You've reached this agent's testing limit for the hour. Try again shortly.",
+        )
+      } else {
+        toast.error("Couldn't reach the agent", { description: errorText(err) })
+        setChatMessages((prev) => [...prev, { from: 'system', text: errorText(err), at: Date.now() }])
+      }
+    } finally {
+      setSending(false)
+    }
   }
 
-  // ---- Standard checks (local per-visit rows, but "has this run at least once" is real,
-  // persisted agent state — see standardChecksRun on PublishState. Publish no longer gates
-  // Activate on this, but the flag itself is still recorded.) ----
+  function startNewConversation() {
+    if (chatMessages.length > 0) {
+      const next = [{ id: newId('testconv'), startedAt: chatMessages[0].at, messages: chatMessages }, ...history]
+      setHistory(next)
+      saveTestHistory(next)
+    }
+    setChatMessages([])
+    setConversationId(undefined)
+    setViewing(null)
+  }
+
+  // ---- Standard checks: each situation is sent to the real agent as its own conversation ----
   const [checkRows, setCheckRows] = useState<CheckRow[] | null>(null)
   const [expandedCheck, setExpandedCheck] = useState<string | null>(null)
 
-  function runStandardChecks(forceAmberGreeting = false) {
+  async function runStandardChecks(forceAmberGreeting = false) {
     const defs = buildStandardChecks(state, forceAmberGreeting)
-    setCheckRows(defs.map((d) => ({ ...d, status: 'pending' })))
-    defs.forEach((d, i) => {
-      setTimeout(() => {
-        setCheckRows((prev) => (prev ? prev.map((r) => (r.id === d.id ? { ...r, status: d.finalStatus } : r)) : prev))
-        if (i === defs.length - 1) patch('publish', { standardChecksRun: true })
-      }, (i + 1) * 500)
-    })
+    setCheckRows(defs.map((d) => ({ ...d, reply: '', status: 'pending' })))
+    const done: CheckRow[] = []
+    for (const d of defs) {
+      let row: CheckRow
+      if (forceAmberGreeting) {
+        // Demo control: show the stored-config preview without calling Meta.
+        row = { ...d, status: d.finalStatus }
+      } else {
+        try {
+          const r = await sendTestMessage(d.sent)
+          const reply = r.agent_response || (r.handoff_reason ? 'This message would hand off to a human agent here.' : r.no_response_reason ?? '')
+          row = { ...d, reply, status: r.handoff_reason || !r.agent_response ? 'warn' : 'normal' }
+        } catch (err) {
+          row = { ...d, reply: `Could not reach the agent: ${errorText(err)}`, status: 'warn' }
+        }
+      }
+      done.push(row)
+      setCheckRows((prev) => (prev ? prev.map((r) => (r.id === d.id ? row : r)) : prev))
+    }
+    patch('publish', { standardChecksRun: true })
+    // Kept as history on the Activity page.
+    patch('qualityChecks', (prev) => ({
+      runs: [
+        {
+          id: newId('qcrun'),
+          timestamp: Date.now(),
+          items: done.map((r) => ({ id: r.id, situation: r.situation, sent: r.sent, reply: r.reply, status: r.status === 'warn' ? ('warn' as const) : ('normal' as const) })),
+        },
+        ...prev.runs,
+      ],
+    }))
   }
 
   // ---- Demo controls ----
@@ -193,7 +293,7 @@ export function TestEvalStep() {
       <Button variant="outline" size="sm" onClick={demoLoadCompiledConfig}>
         Demo: load compiled configuration
       </Button>
-      <Button variant="outline" size="sm" onClick={() => runStandardChecks(true)}>
+      <Button variant="outline" size="sm" onClick={() => void runStandardChecks(true)}>
         Demo: simulate standard checks result
       </Button>
     </DemoControlsGroup>,
@@ -209,45 +309,140 @@ export function TestEvalStep() {
       <TabsContent value="testing" className="space-y-4 pt-3">
         {/* Quick test */}
         <div className="space-y-2">
-          <span className="flex items-center gap-1.5">
-            <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Quick test</p>
-            <InfoTooltip text="Test messages here are free and do not count toward your usage." />
-          </span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5">
+              <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Quick test</p>
+              <InfoTooltip text="Test messages here are free and do not count toward your usage." />
+            </span>
+            <span className="flex items-center gap-1">
+              <Button size="sm" variant="ghost" onClick={() => setHistoryOpen((o) => !o)} aria-label="Test history">
+                <History className="size-4" />
+                Test history
+              </Button>
+              <Button size="sm" variant="outline" onClick={startNewConversation}>
+                Start new conversation
+              </Button>
+            </span>
+          </div>
+
+          {ineligible && (
+            <InlineError message="This number is no longer eligible for Meta Business Agent. Testing is unavailable until this is resolved." />
+          )}
+          {!ineligible && !hasAnyConfig && (
+            <p className="flex items-center gap-1.5 rounded-lg bg-warning/10 p-2 text-warning-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              <AlertTriangle className="size-4 shrink-0" />
+              This agent has no knowledge, skills, or other configuration set. Please navigate to the agent configuration section.
+            </p>
+          )}
+
+          {historyOpen && (
+            <div className="space-y-1 rounded-lg border border-border p-3">
+              {history.length === 0 ? (
+                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                  No past test conversations yet.
+                </p>
+              ) : (
+                history.map((h) => (
+                  <button
+                    key={h.id}
+                    type="button"
+                    onClick={() => {
+                      setViewing(h)
+                      setHistoryOpen(false)
+                    }}
+                    className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left hover:bg-accent"
+                    style={{ fontSize: 'var(--text-sm)' }}
+                  >
+                    <span className="truncate">{h.messages[0]?.text ?? '(empty)'}</span>
+                    <span className="shrink-0 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                      {new Date(h.startedAt).toLocaleString()}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+
           <div className="space-y-2 rounded-lg border border-border p-4">
+            {viewing && (
+              <div className="flex items-center justify-between gap-2 rounded-md bg-muted px-2 py-1" style={{ fontSize: 'var(--text-xs)' }}>
+                <span className="text-muted-foreground">Read-only: conversation from {new Date(viewing.startedAt).toLocaleString()}</span>
+                <button type="button" className="text-primary" onClick={() => setViewing(null)}>
+                  Back to testing
+                </button>
+              </div>
+            )}
             <div className="max-h-64 space-y-2 overflow-y-auto">
-              {chatMessages.length === 0 ? (
+              {(viewing ? viewing.messages : chatMessages).length === 0 ? (
                 <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
                   No messages yet.
                 </p>
               ) : (
-                chatMessages.map((m, i) => (
-                  <div key={i} className={cn('flex', m.from === 'customer' ? 'justify-end' : 'justify-start')}>
-                    <p
-                      className={cn(
-                        'max-w-[80%] rounded-lg px-3 py-1.5',
-                        m.from === 'customer' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted',
-                      )}
-                      style={{ fontSize: 'var(--text-sm)' }}
-                    >
+                (viewing ? viewing.messages : chatMessages).map((m, i, all) =>
+                  m.from === 'system' ? (
+                    <p key={i} className="text-center text-muted-foreground italic" style={{ fontSize: 'var(--text-xs)' }}>
                       {m.text}
                     </p>
-                  </div>
-                ))
+                  ) : (
+                    <div key={i} className={cn('flex flex-col', m.from === 'customer' ? 'items-end' : 'items-start')}>
+                      <p
+                        className={cn(
+                          'max-w-[80%] rounded-lg px-3 py-1.5 whitespace-pre-wrap',
+                          m.from === 'customer' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted',
+                        )}
+                        style={{ fontSize: 'var(--text-sm)' }}
+                      >
+                        {m.text}
+                      </p>
+                      {viewing && (
+                        <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                          {new Date(m.at).toLocaleTimeString()}
+                        </span>
+                      )}
+                      {/* Quick replies on the latest agent message, tappable like on WhatsApp. */}
+                      {!viewing && m.quickReplies && m.quickReplies.length > 0 && i === all.length - 1 && (
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {m.quickReplies.map((qr) => (
+                            <button
+                              key={qr}
+                              type="button"
+                              onClick={() => void sendQuickTest(qr)}
+                              disabled={sending || !!limitMessage || ineligible}
+                              className="rounded-full border border-primary px-2.5 py-0.5 text-primary hover:bg-accent"
+                              style={{ fontSize: 'var(--text-xs)' }}
+                            >
+                              {qr}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ),
+                )
+              )}
+              {sending && !viewing && (
+                <p className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  <Loader2 className="size-3 animate-spin" /> The agent is replying...
+                </p>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <Input
-                value={chatDraft}
-                onChange={(e) => setChatDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') sendQuickTest()
-                }}
-                placeholder="Type a message to try..."
-              />
-              <Button size="icon" onClick={sendQuickTest} disabled={!chatDraft.trim()}>
-                <Send className="size-4" />
-              </Button>
-            </div>
+            {limitMessage && <InlineError message={limitMessage} onRetry={() => setLimitMessage(null)} />}
+            {!viewing && (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={chatDraft}
+                  onChange={(e) => setChatDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void sendQuickTest()
+                  }}
+                  placeholder="Type a message to try..."
+                  disabled={ineligible || !!limitMessage}
+                />
+                <Button size="icon" onClick={() => void sendQuickTest()} disabled={!chatDraft.trim() || sending || ineligible || !!limitMessage}>
+                  <Send className="size-4" />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -259,7 +454,7 @@ export function TestEvalStep() {
               <InfoTooltip text="A short set of common situations, run automatically, so you don’t have to think of them yourself." />
             </span>
           </div>
-          <Button variant="outline" onClick={() => runStandardChecks(false)} disabled={checkRows !== null && checkRows.some((r) => r.status === 'pending')}>
+          <Button variant="outline" onClick={() => void runStandardChecks(false)} disabled={checkRows !== null && checkRows.some((r) => r.status === 'pending')}>
             Run standard checks
           </Button>
 

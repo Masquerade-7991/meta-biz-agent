@@ -36,6 +36,8 @@ import {
   DropdownMenuTrigger,
 } from '@/app/components/ui/dropdown-menu'
 import { CreateAgentModal } from './CreateAgentModal'
+import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
+import { deleteAgent, errorText, setRollout } from '@/app/api/meta'
 import { useWizard } from '@/app/wizard/WizardContext'
 import type { AgentInstanceSummary, AgentRolloutStatus } from '@/app/wizard/types'
 
@@ -161,6 +163,21 @@ export function AgentsListPage({
 
   const rows = currentAgent ? [currentAgent, ...createdAgents] : createdAgents
 
+  const [pendingDelete, setPendingDelete] = useState<AgentInstanceSummary | null>(null)
+  async function confirmDeleteAgent() {
+    const agent = pendingDelete
+    setPendingDelete(null)
+    if (!agent) return
+    try {
+      await deleteAgent()
+    } catch (err) {
+      toast.error("Couldn't delete the agent on Meta", { description: errorText(err) })
+      return
+    }
+    resetWizard()
+    toast.success(`${agent.name} deleted`)
+  }
+
   function handleAction(agent: AgentInstanceSummary, action: string) {
     if (action === 'open') {
       openAgentConfiguration(agent)
@@ -188,12 +205,24 @@ export function AgentsListPage({
         onOpenBuilder()
         break
       case 'stop':
-        patch('publish', { activated: false, stopped: true })
-        toast.success(`${agent.name} stopped`)
+      case 'resume': {
+        // Same rollout lever as Publish: Meta first, then the row.
+        const enabled = action === 'resume'
+        setRollout(enabled, state.publish.audienceMode).then(
+          () => {
+            patch('publish', { activated: enabled, stopped: !enabled })
+            toast.success(enabled ? `${agent.name} is live again` : `${agent.name} stopped`)
+          },
+          (err) => toast.error("Couldn't save to Meta", { description: errorText(err) }),
+        )
         break
-      case 'resume':
-        patch('publish', { activated: true, stopped: false })
-        toast.success(`${agent.name} is live again`)
+      }
+      case 'archive':
+        setPendingDelete(agent)
+        break
+      case 'duplicate':
+        // One agent per number, and this proof of concept is connected to a single number (.env).
+        toast('Duplicating needs a second WhatsApp number. This setup is connected to one number, so there is nowhere to put the copy yet.')
         break
       default:
         toast(`"${action}" isn’t wired to real state in this prototype yet.`)
@@ -323,7 +352,7 @@ export function AgentsListPage({
                             <Copy /> Duplicate agent
                           </DropdownMenuItem>
                           <DropdownMenuItem variant="destructive" onClick={() => handleAction(agent, 'archive')}>
-                            <Archive /> Archive agent
+                            <Archive /> Delete agent
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -335,6 +364,19 @@ export function AgentsListPage({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete agent?"
+        description={
+          rows.length === 1
+            ? 'This is your last agent. Deleting it disconnects your WhatsApp Business integration entirely, not just this agent. Are you sure you want to delete it?'
+            : 'Are you sure you want to delete this agent?'
+        }
+        confirmLabel="Proceed"
+        onConfirm={() => void confirmDeleteAgent()}
+        onCancel={() => setPendingDelete(null)}
+      />
 
       <CreateAgentModal
         open={modalOpen}

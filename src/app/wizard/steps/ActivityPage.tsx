@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Plus, Search, X } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
@@ -39,6 +39,17 @@ import type {
   QualityCheckRun,
 } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
+import { Textarea } from '@/app/components/ui/textarea'
+import { InlineError } from '@/app/components/wizard/RetryBanner'
+import {
+  conversationInsights,
+  conversationTurns,
+  errorText,
+  getAgentEvent,
+  MetaError,
+  sendAgentEvent,
+  threadControl,
+} from '@/app/api/meta'
 
 // ==================================================================================
 // QUALITY CHECKS
@@ -395,12 +406,33 @@ function InboundEventsSection({
   agentEvents,
   onPatch,
   onAddSkillForEvent,
+  onSendEvent,
 }: {
   agentEvents: AgentEventsState
   onPatch: (patch: Partial<AgentEventsState>) => void
   onAddSkillForEvent: () => void
+  onSendEvent: (event: TestEvent) => Promise<string | null>
 }) {
   const [setupOpen, setSetupOpen] = useState(false)
+  const [eventDraft, setEventDraft] = useState<TestEvent>({ to: '', type: '', description: '', payload: '{}' })
+  const [eventSending, setEventSending] = useState(false)
+  const [eventError, setEventError] = useState<string | null>(null)
+  const payloadValid = (() => {
+    try {
+      JSON.parse(eventDraft.payload || '{}')
+      return true
+    } catch {
+      return false
+    }
+  })()
+  const canSendEvent = /^\+[1-9]\d{6,14}$/.test(eventDraft.to.trim()) && eventDraft.type.trim() && eventDraft.description.trim() && payloadValid
+
+  async function sendEvent() {
+    setEventSending(true)
+    setEventError(null)
+    setEventError(await onSendEvent({ ...eventDraft, to: eventDraft.to.trim(), payload: eventDraft.payload || '{}' }))
+    setEventSending(false)
+  }
 
   return (
     <section className="space-y-4">
@@ -439,6 +471,25 @@ function InboundEventsSection({
         </button>
       </p>
 
+      {/* A real Agent Event: Meta queues it, then the agent acts on it in that customer's conversation. */}
+      <div className="space-y-2 rounded-lg border border-border p-3">
+        <span className="flex items-center gap-1.5">
+          <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Send a test event</p>
+          <InfoTooltip text="The customer must already have a conversation with this number. Their status updates below as Meta processes it." />
+        </span>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Input aria-label="Customer WhatsApp number" placeholder="+15551234567" value={eventDraft.to} onChange={(e) => setEventDraft({ ...eventDraft, to: e.target.value })} />
+          <Input aria-label="Event type" placeholder="e.g. payment_received" maxLength={256} value={eventDraft.type} onChange={(e) => setEventDraft({ ...eventDraft, type: e.target.value })} />
+        </div>
+        <Input aria-label="Event description" placeholder="e.g. Payment confirmed for order 1042" maxLength={1024} value={eventDraft.description} onChange={(e) => setEventDraft({ ...eventDraft, description: e.target.value })} />
+        <Textarea aria-label="Event payload (JSON)" rows={2} maxLength={4096} value={eventDraft.payload} onChange={(e) => setEventDraft({ ...eventDraft, payload: e.target.value })} className="font-mono" />
+        {!payloadValid && <p className="text-destructive" style={{ fontSize: 'var(--text-xs)' }}>The payload must be valid JSON.</p>}
+        {eventError && <InlineError message={eventError} />}
+        <Button size="sm" onClick={() => void sendEvent()} disabled={!canSendEvent || eventSending}>
+          {eventSending ? <Loader2 className="size-3.5 animate-spin" /> : 'Send event'}
+        </Button>
+      </div>
+
       <InboundEventsMonitor events={agentEvents.events} />
 
       {setupOpen && (
@@ -459,7 +510,8 @@ function InboundEventsSection({
 // CONVERSATIONS
 // ==================================================================================
 
-type ConversationLookupStatus = 'idle' | 'loading' | 'found' | 'not_found'
+type ConversationLookupStatus = 'idle' | 'loading' | 'found' | 'not_found' | 'failed'
+type TestEvent = { to: string; type: string; description: string; payload: string }
 
 /** Precomputes each turn's display time in one pass: the turn's own timestamp when Meta actually
  *  returned one, otherwise `~` plus the last turn that did have one — never an invented time,
@@ -503,14 +555,35 @@ function ConversationsSection({
   status,
   turns,
   onLookup,
+  lookupError,
+  insights,
+  onThreadControl,
 }: {
   numberDraft: string
   onNumberDraftChange: (value: string) => void
   status: ConversationLookupStatus
   turns: ConversationTurn[]
   onLookup: () => void
+  lookupError: string | null
+  insights: { aiThreads: number; aiHandoffs: number } | null
+  onThreadControl: (action: 'take' | 'release') => Promise<string | null>
 }) {
   const displayTimes = turnDisplayTimes(turns)
+  const [controlBusy, setControlBusy] = useState(false)
+  const [controlNote, setControlNote] = useState<string | null>(null)
+
+  async function control(action: 'take' | 'release') {
+    setControlBusy(true)
+    const err = await onThreadControl(action)
+    setControlBusy(false)
+    setControlNote(
+      err
+        ? `Could not ${action === 'take' ? 'take over' : 'hand back'}: ${err}`
+        : action === 'take'
+          ? 'You now hold this conversation. The agent stops replying until you hand it back.'
+          : 'Handed back. The agent replies to this customer again.',
+    )
+  }
 
   return (
     <section className="space-y-3">
@@ -520,6 +593,23 @@ function ConversationsSection({
           Look up a customer&rsquo;s real conversation with your agent.
         </p>
       </div>
+
+      {insights && (
+        <div className="grid max-w-md grid-cols-2 gap-2">
+          <div className="rounded-lg bg-muted p-3">
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              AI conversations, last 30 days
+            </p>
+            <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{insights.aiThreads}</p>
+          </div>
+          <div className="rounded-lg bg-muted p-3">
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              Handed to a person right now
+            </p>
+            <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{insights.aiHandoffs}</p>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-end gap-2">
         <div className="max-w-xs flex-1 space-y-1.5">
@@ -546,8 +636,25 @@ function ConversationsSection({
         </p>
       )}
 
+      {status === 'failed' && <InlineError message={`Could not look up this conversation. ${lookupError ?? ''}`} onRetry={onLookup} />}
+
       {status === 'found' && (
         <div className="space-y-3 rounded-lg border border-border p-4">
+          {/* Human takeover via WhatsApp thread control (PRD 5.3.7 d). */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => void control('take')} disabled={controlBusy}>
+              Take over conversation
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => void control('release')} disabled={controlBusy}>
+              Hand back to agent
+            </Button>
+            {controlBusy && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+          </div>
+          {controlNote && (
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              {controlNote}
+            </p>
+          )}
           {turns.map((turn, i) => (
             <ConversationTurnRow key={i} turn={turn} displayTime={displayTimes[i]} />
           ))}
@@ -576,19 +683,101 @@ export function ActivityPage() {
     return value.replace(/[^\d+]/g, '')
   }
 
-  function lookupConversation() {
+  const [lookupError, setLookupError] = useState<string | null>(null)
+  const [insights, setInsights] = useState<{ aiThreads: number; aiHandoffs: number } | null>(null)
+  useEffect(() => {
+    conversationInsights().then(setInsights, () => {})
+  }, [])
+
+  /** Meta's conversation-turns insight: the customer's most recent conversation, turn metadata only. */
+  async function lookupConversation() {
     const query = convoNumberDraft.trim()
     if (!query) return
     setConvoStatus('loading')
-    setTimeout(() => {
-      if (normalizePhone(query) === normalizePhone(SAMPLE_CONVERSATION_NUMBER)) {
-        setConvoTurns(buildSampleConversationTurns())
-        setConvoStatus('found')
-      } else {
+    setLookupError(null)
+    // The demo sample number still shows the sample conversation without calling Meta.
+    if (normalizePhone(query) === normalizePhone(SAMPLE_CONVERSATION_NUMBER)) {
+      setConvoTurns(buildSampleConversationTurns())
+      setConvoStatus('found')
+      return
+    }
+    try {
+      const turns = await conversationTurns(query)
+      setConvoTurns(
+        turns.map((t) => {
+          const tool = t.steps?.find((st) => st.type === 'TOOL_CALL')
+          return {
+            timestamp: t.timestamp,
+            e2eLatencyMs: t.e2e_latency_ms,
+            tool: tool?.tool_name,
+            toolWorked: tool?.status ? tool.status === 'SUCCESS' : undefined,
+          }
+        }),
+      )
+      setConvoStatus(turns.length > 0 ? 'found' : 'not_found')
+    } catch (err) {
+      if (err instanceof MetaError && (err.status === 404 || /not found/i.test(err.message))) {
         setConvoTurns([])
         setConvoStatus('not_found')
+      } else {
+        setLookupError(errorText(err))
+        setConvoStatus('failed')
       }
-    }, 700)
+    }
+  }
+
+  async function handleThreadControl(action: 'take' | 'release'): Promise<string | null> {
+    try {
+      await threadControl(action, convoNumberDraft)
+      conversationInsights().then(setInsights, () => {})
+      return null
+    } catch (err) {
+      return errorText(err)
+    }
+  }
+
+  /** POST agent_event, then poll its status every 2 s until Meta reports a final one. */
+  async function sendTestEvent(ev: TestEvent): Promise<string | null> {
+    let agentEventId: string | undefined
+    try {
+      agentEventId = (await sendAgentEvent(ev.to, { type: ev.type, description: ev.description, payload: ev.payload })).agent_event_id
+    } catch (err) {
+      return errorText(err)
+    }
+    const id = newId('aevent')
+    const createdAt = Date.now()
+    const row: AgentEventRow = {
+      id,
+      agentEventId: agentEventId ?? id,
+      eventType: ev.type,
+      description: ev.description,
+      to: ev.to,
+      status: 'request_received',
+      createdAt,
+      updatedAt: createdAt,
+      payload: ev.payload,
+    }
+    patch('agentEvents', (prev) => ({ configured: true, events: [row, ...prev.events] }))
+    if (!agentEventId) return null
+    void (async () => {
+      for (let i = 0; i < 90; i++) {
+        await new Promise((r) => setTimeout(r, 2000))
+        try {
+          const e = await getAgentEvent(agentEventId)
+          patch('agentEvents', (prev) => ({
+            events: prev.events.map((r) =>
+              r.id === id
+                ? { ...r, status: e.status, updatedAt: Date.parse(e.updated_at) || Date.now(), errorMessage: e.error_message, skippedReason: e.skipped_reason }
+                : r,
+            ),
+          }))
+          if (e.status === 'success' || e.status === 'failed' || e.status === 'skipped') return
+        } catch {
+          // transient: keep polling
+        }
+      }
+    })()
+    return null
   }
 
   function goToTestPublish() {
@@ -753,13 +942,17 @@ export function ActivityPage() {
         agentEvents={state.agentEvents}
         onPatch={(p) => patch('agentEvents', p)}
         onAddSkillForEvent={addSkillForEvent}
+        onSendEvent={sendTestEvent}
       />
       <ConversationsSection
         numberDraft={convoNumberDraft}
         onNumberDraftChange={setConvoNumberDraft}
         status={convoStatus}
         turns={convoTurns}
-        onLookup={lookupConversation}
+        onLookup={() => void lookupConversation()}
+        lookupError={lookupError}
+        insights={insights}
+        onThreadControl={handleThreadControl}
       />
     </div>
   )

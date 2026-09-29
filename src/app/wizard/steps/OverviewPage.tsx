@@ -1,4 +1,5 @@
-import { useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { conversationInsights, toolCallInsights } from '@/app/api/meta'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { CompiledConfigViewer } from '@/app/components/wizard/CompiledConfigViewer'
 import { Card } from '@/app/components/ui/card'
@@ -28,6 +29,24 @@ export function OverviewPage() {
   const { state, setSection, setPendingStepFocus } = useWizard()
   const compiled = useMemo(() => compileConfig(state), [state])
 
+  // Live numbers from Meta's insights (last 30 days); cards show '—' until they load or if they can't.
+  const [live, setLive] = useState<{ threads: string; handoffs: string; toolSuccess: string }>({ threads: '—', handoffs: '—', toolSuccess: '—' })
+  useEffect(() => {
+    conversationInsights().then(
+      (c) => setLive((prev) => ({ ...prev, threads: String(c.aiThreads), handoffs: String(c.aiHandoffs) })),
+      () => {},
+    )
+    toolCallInsights().then(
+      (t) => {
+        const rows = t.data ?? []
+        const calls = rows.reduce((n, r) => n + r.thread_count, 0)
+        const ok = rows.reduce((n, r) => n + r.thread_count * (r.success_rate ?? 0), 0)
+        setLive((prev) => ({ ...prev, toolSuccess: calls ? `${Math.round((ok / calls) * 100)}%` : '—' }))
+      },
+      () => {},
+    )
+  }, [])
+
   // CompiledConfigViewer only ever calls onNavigate with a handful of (step, tab) combinations —
   // knowledge's own inner tabs need pendingStepFocus, everything else maps straight to a section.
   function onNavigate(step: StepId, tab?: string) {
@@ -56,8 +75,11 @@ export function OverviewPage() {
 
   return (
     <div className="space-y-10">
-      <section className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <section className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <MetricCard label="Status" value={compiled.settings.rollout.enabled ? 'Live' : 'Draft'} />
+        <MetricCard label="AI conversations (30 days)" value={live.threads} />
+        <MetricCard label="Handed to a person now" value={live.handoffs} />
+        <MetricCard label="Tool success (30 days)" value={live.toolSuccess} />
         <MetricCard label="Skills" value={String(compiled.skills.length)} />
         <MetricCard
           label="Connections"

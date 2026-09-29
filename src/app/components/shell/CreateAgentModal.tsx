@@ -32,6 +32,7 @@ import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { newId } from '@/app/wizard/mockData'
 import type { AgentInstanceSummary } from '@/app/wizard/types'
+import { checkEligibility, getServerHealth, MetaError, onboardAgent } from '@/app/api/meta'
 
 // ---- Mock WABA / phone number directory, scoped to this modal ----
 
@@ -147,7 +148,23 @@ export function CreateAgentModal({
     ) : null,
   )
 
-  const wabas = MOCK_WABA_DIRECTORY
+  // The real WABA + number from .env (via the local server); the mock directory only when the
+  // server isn't running, so the demo still works offline.
+  const [realWabas, setRealWabas] = useState<MockWaba[] | null>(null)
+  useEffect(() => {
+    if (!open) return
+    void getServerHealth().then((h) => {
+      if (!h?.wabaId || !h.phoneNumberId) return
+      setRealWabas([
+        {
+          id: h.wabaId,
+          name: h.businessName || `WABA ${h.wabaId}`,
+          phoneNumbers: [{ id: h.phoneNumberId, displayName: 'Configured number', phoneNumber: `ID ${h.phoneNumberId}`, hasAgent: false }],
+        },
+      ])
+    })
+  }, [open])
+  const wabas = realWabas ?? MOCK_WABA_DIRECTORY
   const selectedWaba = wabas.find((w) => w.id === wabaId) ?? null
   const phoneNumbers = selectedWaba?.phoneNumbers ?? []
   const selectedPhone = phoneNumbers.find((p) => p.id === phoneId) ?? null
@@ -188,14 +205,26 @@ export function CreateAgentModal({
     setCheckStatus('idle')
   }
 
+  // Real call unless the Demo controls force a specific outcome.
+  async function eligibilityCheck(): Promise<MockApiResult> {
+    if (forcedOutcome !== 'ready' || !realWabas) return mockEligibilityCheck(forcedOutcome)
+    try {
+      const r = await checkEligibility()
+      return { ok: true, isEligible: r.is_eligible }
+    } catch (err) {
+      console.log('[agent_eligibility]', err instanceof Error ? err.message : err)
+      return { ok: false, httpCode: err instanceof MetaError ? err.status : 500 }
+    }
+  }
+
   async function runCheck() {
     setCheckStatus('checking')
-    let result = await mockEligibilityCheck(forcedOutcome)
+    let result = await eligibilityCheck()
 
     if (!result.ok && result.httpCode === 429) {
       console.log('[agent_eligibility] HTTP 429 — retrying once after 3s')
       await new Promise((r) => setTimeout(r, 3000))
-      result = await mockEligibilityCheck('ready') // demo: the auto-retry always succeeds
+      result = await eligibilityCheck()
     }
 
     if (result.ok) {
@@ -218,8 +247,18 @@ export function CreateAgentModal({
       : null
   const canCreate = !isEmpty && !isDuplicate && checkStatus === 'ready' && Boolean(selectedWaba) && Boolean(selectedPhone)
 
-  function handleCreate() {
+  async function handleCreate() {
     if (!canCreate || !selectedWaba || !selectedPhone) return
+    if (realWabas) {
+      try {
+        const { agent_id } = await onboardAgent()
+        toast.success('Agent created on Meta', { description: `agent_id ${agent_id}` })
+      } catch (err) {
+        // A number onboarded earlier (e.g. in WhatsApp Manager) rejects a second onboarding;
+        // the existing agent is still usable, so carry on and say what Meta returned.
+        toast.warning('Meta onboarding call failed', { description: err instanceof Error ? err.message : String(err) })
+      }
+    }
     onCreate({
       id: newId('agent'),
       name: trimmedName,

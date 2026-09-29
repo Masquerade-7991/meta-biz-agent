@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local secrets / IDs (read only by server/index.ts)
+.env
