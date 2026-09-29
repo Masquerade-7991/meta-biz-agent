@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Loader2, LogOut } from 'lucide-react'
 import { toast } from 'sonner'
-import { hydrateFromMeta } from '@/app/api/meta'
+import { hydrateFromMeta, setActivePhoneNumberId } from '@/app/api/meta'
 import { Button } from '@/app/components/ui/button'
 import { Avatar, AvatarFallback } from '@/app/components/ui/avatar'
 import { useWizard } from '@/app/wizard/WizardContext'
@@ -17,6 +17,7 @@ import { SafetyHandoffStep } from '@/app/wizard/steps/SafetyHandoffStep'
 import { TestEvalStep } from '@/app/wizard/steps/TestEvalStep'
 import { PublishStep } from '@/app/wizard/steps/PublishStep'
 import { ActivityPage } from '@/app/wizard/steps/ActivityPage'
+import { AnalyticsPage } from '@/app/wizard/steps/AnalyticsPage'
 import { cn } from '@/app/lib/utils'
 
 const SECTION_COMPONENTS: Record<StudioSectionId, () => React.ReactElement> = {
@@ -28,6 +29,7 @@ const SECTION_COMPONENTS: Record<StudioSectionId, () => React.ReactElement> = {
   safety: SafetyHandoffStep,
   testEval: TestEvalStep,
   publish: PublishStep,
+  analytics: AnalyticsPage,
   activity: ActivityPage,
 }
 
@@ -46,6 +48,7 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
   const [hydrated, setHydrated] = useState(false)
   useEffect(() => {
     let cancelled = false
+    setActivePhoneNumberId(state.gate.selectedPhoneNumberId ?? null)
     hydrateFromMeta(state).then(({ patch: slices, failed }) => {
       if (cancelled) return
       for (const [slice, value] of Object.entries(slices)) patch(slice as keyof typeof slices, value as never)

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react'
 import type { SliceKey, StepId, StudioSectionId, WizardState } from './types'
 import { DEFAULT_BUSINESS_HOURS, DEFAULT_REPLIES } from './mockData'
+import { migrateRichReply } from './richReplies'
 
 const STORAGE_KEY = 'meta-agent-wizard-state-v1'
 
@@ -269,6 +270,9 @@ function loadInitialState(): WizardState {
       ...defaults,
       ...parsed,
       knowledge: migrateKnowledge(parsed.knowledge) ?? defaults.knowledge,
+      richReplies: parsed.richReplies?.richReplies
+        ? { ...parsed.richReplies, richReplies: parsed.richReplies.richReplies.map(migrateRichReply) }
+        : defaults.richReplies,
       publish: { ...defaults.publish, ...parsed.publish },
     }
   } catch {

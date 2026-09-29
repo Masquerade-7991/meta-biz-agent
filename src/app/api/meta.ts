@@ -1,5 +1,5 @@
 // Real calls to the Meta Business Agent API, via server/index.ts (npm run dev:server).
-// PHONE_NUMBER_ID in a path is filled in server-side from .env, so the browser never holds IDs or tokens.
+// PHONE_NUMBER_ID / WABA_ID / BUSINESS_ID in a path are filled in server-side from .env unless a real ID is set, so the browser never holds tokens.
 // Field names and paths follow developers.facebook.com/documentation/meta-business-agent/reference.
 import type {
   ActionValue,
@@ -17,9 +17,14 @@ import type {
   WizardState,
 } from '../wizard/types'
 import { compileConfig } from '../wizard/compiler'
+import { validateRichReply } from '../wizard/richReplies'
 import type { EvalConversationResult, EvalScenario, TranscriptLine } from '../wizard/steps/evalData'
 
-const AGENT = '/PHONE_NUMBER_ID'
+// The number every call targets. Unset → the PHONE_NUMBER_ID placeholder the server fills from .env.
+let activePhoneNumberId: string | null = null
+export const setActivePhoneNumberId = (id: string | null) => void (activePhoneNumberId = id)
+export const getActivePhoneNumberId = () => activePhoneNumberId
+export const agent = (id = activePhoneNumberId) => '/' + (id || 'PHONE_NUMBER_ID')
 
 /** Meta's StandardError shape, which the server also uses when the upstream is unreachable. */
 export class MetaError extends Error {
@@ -56,12 +61,17 @@ export async function metaFetch<T = unknown>(path: string, method = 'GET', body?
   return parse<T>(res)
 }
 
+/** GET on the Graph API (WABAs, phone numbers), via the server's /api/graph route. */
+export async function graphFetch<T = unknown>(path: string): Promise<T> {
+  return parse<T>(await fetch(`/api/graph${path}`))
+}
+
 /** multipart/form-data upload; the browser sets the boundary, the server passes it through. */
 async function metaUpload<T>(path: string, form: FormData): Promise<T> {
   return parse<T>(await fetch(`/api/meta${path}`, { method: 'POST', body: form }))
 }
 
-const q = (params: Record<string, string | number | boolean | undefined>) =>
+export const q = (params: Record<string, string | number | boolean | undefined>) =>
   '?' +
   Object.entries(params)
     .filter(([, v]) => v !== undefined && v !== '')
@@ -80,12 +90,12 @@ function jsonField<T>(value: unknown, fallback: T): T {
   }
 }
 
-/** Every item of a cursor-paginated list (ui-skills, conversation turns). */
-async function listAllPages<T>(path: string): Promise<T[]> {
+/** Every item of a cursor-paginated list (ui-skills, conversation turns, Graph lists). */
+async function listAllPages<T>(path: string, fetcher: typeof graphFetch = metaFetch): Promise<T[]> {
   const out: T[] = []
   let after: string | undefined
   for (let page = 0; page < 50; page++) {
-    const r = await metaFetch<{ data: T[]; paging?: { cursors?: { after?: string }; next?: string } }>(
+    const r = await fetcher<{ data: T[]; paging?: { cursors?: { after?: string }; next?: string } }>(
       path + (path.includes('?') ? '&' : '?') + q({ after, limit: 100 }).slice(1),
     )
     out.push(...(r.data ?? []))
@@ -113,10 +123,68 @@ export async function getServerHealth(): Promise<ServerHealth | null> {
   }
 }
 
+// ---- WABAs and phone numbers (Graph API) ----
+export interface MetaWaba {
+  id: string
+  name: string
+}
+/** Owned + client WABAs, de-duplicated. One side failing is fine; both failing throws. */
+export async function listWabas(): Promise<MetaWaba[]> {
+  const results = await Promise.allSettled(
+    ['owned', 'client'].map((k) => listAllPages<MetaWaba>(`/BUSINESS_ID/${k}_whatsapp_business_accounts?fields=id,name`, graphFetch)),
+  )
+  const ok = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
+  if (!ok.length) throw (results[0] as PromiseRejectedResult).reason
+  return [...new Map(ok.flat().map((w) => [w.id, w])).values()]
+}
+
+export interface MetaPhoneNumber {
+  id: string
+  displayPhoneNumber: string
+  verifiedName: string
+  qualityRating?: string
+  status?: string
+  platformType?: string
+}
+export async function listPhoneNumbers(wabaId: string): Promise<MetaPhoneNumber[]> {
+  const rows = await listAllPages<{
+    id: string
+    display_phone_number: string
+    verified_name: string
+    quality_rating?: string
+    status?: string
+    platform_type?: string
+  }>(`/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status,platform_type,status`, graphFetch)
+  return rows.map((p) => ({
+    id: p.id,
+    displayPhoneNumber: p.display_phone_number,
+    verifiedName: p.verified_name,
+    qualityRating: p.quality_rating,
+    status: p.status,
+    platformType: p.platform_type,
+  }))
+}
+
+export interface AgentOnNumber {
+  agentId: string
+  enabled: boolean
+  audience?: 'ALLOWLISTED_ONLY' | 'EVERYONE'
+}
+/** The agent already on a number, or null when there is none (Meta answers 404). */
+export async function getAgentOnNumber(phoneId: string): Promise<AgentOnNumber | null> {
+  try {
+    const s = await metaFetch<MetaSettings & { agent_id?: string }>(`${agent(phoneId)}/agent_config/settings`)
+    return s.agent_id ? { agentId: s.agent_id, enabled: !!s.rollout?.enabled, audience: s.ai_audience } : null
+  } catch (err) {
+    if (err instanceof MetaError && err.status === 404) return null
+    throw err
+  }
+}
+
 // ---- Onboard / delete ----
-export const checkEligibility = () => metaFetch<{ is_eligible: boolean }>(`${AGENT}/agent_eligibility`)
-export const onboardAgent = () => metaFetch<{ agent_id: string }>(`${AGENT}/agent_onboarding`, 'POST', {})
-export const deleteAgent = () => metaFetch<{ deleted_agent_id: string | null }>(`${AGENT}/delete_agent`, 'DELETE')
+export const checkEligibility = (phoneId?: string) => metaFetch<{ is_eligible: boolean }>(`${agent(phoneId)}/agent_eligibility`)
+export const onboardAgent = (phoneId?: string) => metaFetch<{ agent_id: string }>(`${agent(phoneId)}/agent_onboarding`, 'POST', {})
+export const deleteAgent = () => metaFetch<{ deleted_agent_id: string | null }>(`${agent()}/delete_agent`, 'DELETE')
 
 // ---- Test (not billed; 500 req/hour per number) ----
 export interface AgentTestReply {
@@ -129,7 +197,7 @@ export interface AgentTestReply {
   quick_replies?: string[]
 }
 export const sendTestMessage = (user_msg: string, conversation_id?: string) =>
-  metaFetch<AgentTestReply>(`${AGENT}/agent_test`, 'POST', { user_msg, conversation_id })
+  metaFetch<AgentTestReply>(`${agent()}/agent_test`, 'POST', { user_msg, conversation_id })
 
 // ---- Settings (partial update: only the fields sent change) ----
 export function settingsBody(state: WizardState) {
@@ -157,11 +225,11 @@ export function settingsBody(state: WizardState) {
     never_say_phrases: s.never_say_phrases,
   }
 }
-export const saveSettings = (state: WizardState) => metaFetch(`${AGENT}/agent_config/settings`, 'PUT', settingsBody(state))
+export const saveSettings = (state: WizardState) => metaFetch(`${agent()}/agent_config/settings`, 'PUT', settingsBody(state))
 
 /** Publish / Stop / Resume: only rollout + audience. */
 export const setRollout = (enabled: boolean, audienceMode: WizardState['publish']['audienceMode']) =>
-  metaFetch(`${AGENT}/agent_config/settings`, 'PUT', {
+  metaFetch(`${agent()}/agent_config/settings`, 'PUT', {
     rollout: { enabled },
     ai_audience: audienceMode === 'allowlisted' ? 'ALLOWLISTED_ONLY' : 'EVERYONE',
   })
@@ -176,7 +244,7 @@ interface MetaSettings {
 
 // ---- Business info (full replace) ----
 export const saveBusinessInfo = (state: WizardState) =>
-  metaFetch(`${AGENT}/agent_config/business_info`, 'PUT', compileConfig(state).business_info)
+  metaFetch(`${agent()}/agent_config/business_info`, 'PUT', compileConfig(state).business_info)
 
 // ---- Skills ----
 interface MetaSkill {
@@ -191,7 +259,7 @@ interface MetaSkill {
 export const skillTitle = (t: string) =>
   t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64) || 'skill'
 
-export const listSkills = () => metaFetch<MetaSkill[]>(`${AGENT}/agent_config/skills`)
+export const listSkills = () => metaFetch<MetaSkill[]>(`${agent()}/agent_config/skills`)
 
 /** The Layer-1 skills compiled from Identity / Personality / Safety, upserted by title. Custom
  *  (Layer-2) skills are saved one by one from the Skills tab instead. */
@@ -201,7 +269,7 @@ export async function syncSkills(state: WizardState) {
   for (const s of compileConfig(state).skills.filter((k) => k.managed)) {
     const body = { title: skillTitle(s.title), description: s.description.slice(0, 1024), skill: s.skill.slice(0, 20000) }
     const id = byTitle.get(body.title)
-    await (id ? metaFetch(`${AGENT}/agent_config/skills/${id}`, 'PUT', body) : metaFetch(`${AGENT}/agent_config/skills`, 'POST', body))
+    await (id ? metaFetch(`${agent()}/agent_config/skills/${id}`, 'PUT', body) : metaFetch(`${agent()}/agent_config/skills`, 'POST', body))
   }
 }
 
@@ -213,20 +281,20 @@ const customSkillBody = (s: CustomSkill) => ({
 /** Create or update one custom skill; returns Meta's id and review status. */
 export async function saveCustomSkill(s: CustomSkill): Promise<Pick<CustomSkill, 'metaId' | 'reviewStatus'>> {
   const r = s.metaId
-    ? await metaFetch<MetaSkill>(`${AGENT}/agent_config/skills/${s.metaId}`, 'PUT', customSkillBody(s))
-    : await metaFetch<MetaSkill>(`${AGENT}/agent_config/skills`, 'POST', customSkillBody(s))
+    ? await metaFetch<MetaSkill>(`${agent()}/agent_config/skills/${s.metaId}`, 'PUT', customSkillBody(s))
+    : await metaFetch<MetaSkill>(`${agent()}/agent_config/skills`, 'POST', customSkillBody(s))
   return { metaId: r.id, reviewStatus: r.status ?? 'pending_review' }
 }
-export const deleteSkill = (metaId: string) => metaFetch(`${AGENT}/agent_config/skills/${metaId}`, 'DELETE')
+export const deleteSkill = (metaId: string) => metaFetch(`${agent()}/agent_config/skills/${metaId}`, 'DELETE')
 
 // ---- Allowlist (max 20 numbers) ----
-export const addAllowlistNumber = (n: string) => metaFetch(`${AGENT}/agent_config/allowlist`, 'POST', { consumer_phone_number: n })
+export const addAllowlistNumber = (n: string) => metaFetch(`${agent()}/agent_config/allowlist`, 'POST', { consumer_phone_number: n })
 
 /** Removes by phone number, looking up Meta's entry id first. */
 export async function removeAllowlistNumber(n: string) {
-  const existing = await metaFetch<{ id: string; consumer_phone_number?: string }[]>(`${AGENT}/agent_config/allowlist`)
+  const existing = await metaFetch<{ id: string; consumer_phone_number?: string }[]>(`${agent()}/agent_config/allowlist`)
   const entry = existing.find((e) => e.consumer_phone_number === n)
-  if (entry) await metaFetch(`${AGENT}/agent_config/allowlist/${entry.id}`, 'DELETE')
+  if (entry) await metaFetch(`${agent()}/agent_config/allowlist/${entry.id}`, 'DELETE')
 }
 
 // ---- FAQs ----
@@ -236,10 +304,10 @@ interface MetaFaq {
   answer: string
   created_at?: number
 }
-export const createFaq = (question: string, answer: string) => metaFetch<MetaFaq>(`${AGENT}/agent_config/faq`, 'POST', { question, answer })
+export const createFaq = (question: string, answer: string) => metaFetch<MetaFaq>(`${agent()}/agent_config/faq`, 'POST', { question, answer })
 export const updateFaq = (id: string, question: string, answer: string) =>
-  metaFetch<MetaFaq>(`${AGENT}/agent_config/faq/${id}`, 'PUT', { question, answer })
-export const deleteFaq = (id: string) => metaFetch(`${AGENT}/agent_config/faq/${id}`, 'DELETE')
+  metaFetch<MetaFaq>(`${agent()}/agent_config/faq/${id}`, 'PUT', { question, answer })
+export const deleteFaq = (id: string) => metaFetch(`${agent()}/agent_config/faq/${id}`, 'DELETE')
 
 // ---- Files (≤100 MB; .pdf .doc .docx .png .jpg .jpeg .csv .xlsx) ----
 export async function uploadFile(file: File): Promise<{ id: string; file_name: string }> {
@@ -247,7 +315,7 @@ export async function uploadFile(file: File): Promise<{ id: string; file_name: s
   form.append('file_name', file.name)
   form.append('file', file, file.name)
   try {
-    return await metaUpload(`${AGENT}/agent_config/files`, form)
+    return await metaUpload(`${agent()}/agent_config/files`, form)
   } catch (err) {
     // PRD 5.3.5(c) wording for the two statuses Meta documents.
     if (err instanceof MetaError && err.status === 409)
@@ -257,7 +325,7 @@ export async function uploadFile(file: File): Promise<{ id: string; file_name: s
     throw err
   }
 }
-export const deleteFile = (id: string) => metaFetch(`${AGENT}/agent_config/files/${id}`, 'DELETE')
+export const deleteFile = (id: string) => metaFetch(`${agent()}/agent_config/files/${id}`, 'DELETE')
 
 // ---- Websites ----
 interface MetaWebsite {
@@ -278,7 +346,7 @@ const CRAWL_STATUS: Record<NonNullable<MetaWebsite['crawl_status']>, WebsiteStat
   failed: 'failed',
 }
 /** Meta timestamps may be seconds or ms. */
-const toMs = (t?: number) => (t ? (t < 1e12 ? t * 1000 : t) : undefined)
+export const toMs = (t?: number) => (t ? (t < 1e12 ? t * 1000 : t) : undefined)
 export const websiteFields = (w: MetaWebsite): Partial<WebsiteSource> => ({
   metaId: w.id,
   url: w.url,
@@ -290,10 +358,10 @@ export const websiteFields = (w: MetaWebsite): Partial<WebsiteSource> => ({
 })
 export const isCrawlDone = (s: WebsiteStatus) => s === 'done' || s === 'done_no_data' || s === 'failed'
 
-export const addWebsite = (url: string) => metaFetch<MetaWebsite>(`${AGENT}/agent_config/websites`, 'POST', { url })
+export const addWebsite = (url: string) => metaFetch<MetaWebsite>(`${agent()}/agent_config/websites`, 'POST', { url })
 /** Also how a re-crawl is triggered: PUT the (same or new) URL. */
-export const updateWebsite = (id: string, url: string) => metaFetch<MetaWebsite>(`${AGENT}/agent_config/websites/${id}`, 'PUT', { url })
-export const deleteWebsite = (id: string) => metaFetch(`${AGENT}/agent_config/websites/${id}`, 'DELETE')
+export const updateWebsite = (id: string, url: string) => metaFetch<MetaWebsite>(`${agent()}/agent_config/websites/${id}`, 'PUT', { url })
+export const deleteWebsite = (id: string) => metaFetch(`${agent()}/agent_config/websites/${id}`, 'DELETE')
 
 /** Polls one website until its crawl finishes, reporting every change. Gives up quietly after
  *  ~30 min (the row keeps its last known status; a page reload re-polls via hydrate). */
@@ -302,7 +370,7 @@ export async function pollWebsite(id: string, onUpdate: (fields: Partial<Website
     await sleep(intervalMs)
     let w: MetaWebsite
     try {
-      w = await metaFetch<MetaWebsite>(`${AGENT}/agent_config/websites/${id}`)
+      w = await metaFetch<MetaWebsite>(`${agent()}/agent_config/websites/${id}`)
     } catch (err) {
       if (err instanceof MetaError && err.status === 404) return // deleted meanwhile
       continue
@@ -336,17 +404,34 @@ interface MetaUiSkill {
   instruction: string
   created_at?: number
 }
-export const createUiSkill = (r: RichReply) =>
-  metaFetch<MetaUiSkill>(`${AGENT}/agent-ui-skills`, 'POST', {
+/** Refuses to send a rich reply Meta's agent couldn't build. Rows with `blanks: null` (created
+ *  outside this app) have only raw instruction text, so they just need a title and instruction. */
+export function assertValidRichReply(reply: RichReply) {
+  const issues = validateRichReply(reply)
+  if (!reply.name.trim()) issues.unshift({ field: 'name', message: 'Name is required.' })
+  if (!reply.instructionSentence.trim()) issues.push({ field: 'instructionSentence', message: 'Instruction is empty.' })
+  if (issues.length) throw new MetaError(422, 'Rich reply is not valid', issues.map((i) => i.message).join(' '))
+}
+export const createUiSkill = async (r: RichReply) => {
+  assertValidRichReply(r)
+  return metaFetch<MetaUiSkill>(`${agent()}/agent-ui-skills`, 'POST', {
     title: r.name,
     component_type: r.type,
     status: r.enabled ? 'enabled' : 'disabled',
     instruction: r.instructionSentence,
   })
-/** Type can't change after creation (Meta and PRD V-c3); only title, status, instruction. */
-export const updateUiSkill = (id: string, patch: { title?: string; status?: 'enabled' | 'disabled'; instruction?: string }) =>
-  metaFetch<MetaUiSkill>(`${AGENT}/agent-ui-skills/${id}`, 'PUT', patch)
-export const deleteUiSkill = (id: string) => metaFetch(`${AGENT}/agent-ui-skills/${id}`, 'DELETE')
+}
+/** Type can't change after creation (Meta and PRD V-c3); only title, status, instruction.
+ *  Pass `reply` (the row as it will be saved) to validate it before sending. */
+export const updateUiSkill = async (
+  id: string,
+  patch: { title?: string; status?: 'enabled' | 'disabled'; instruction?: string },
+  reply?: RichReply,
+) => {
+  if (reply) assertValidRichReply(reply)
+  return metaFetch<MetaUiSkill>(`${agent()}/agent-ui-skills/${id}`, 'PUT', patch)
+}
+export const deleteUiSkill = (id: string) => metaFetch(`${agent()}/agent-ui-skills/${id}`, 'DELETE')
 
 // ---- Connectors + tools ----
 type MetaConnStatus = 'PENDING_OAUTH' | 'ACTIVE' | 'EXPIRED' | 'ERROR'
@@ -408,35 +493,43 @@ function connectorBody(c: Connection) {
 export async function saveConnector(c: Connection): Promise<Partial<Connection>> {
   try {
     const r = c.metaId
-      ? await metaFetch<MetaConnector>(`${AGENT}/agent_connectors/${c.metaId}`, 'PUT', connectorBody(c))
-      : await metaFetch<MetaConnector>(`${AGENT}/agent_connectors`, 'POST', connectorBody(c))
+      ? await metaFetch<MetaConnector>(`${agent()}/agent_connectors/${c.metaId}`, 'PUT', connectorBody(c))
+      : await metaFetch<MetaConnector>(`${agent()}/agent_connectors`, 'POST', connectorBody(c))
     return connectorFields(r)
   } catch (err) {
     if (err instanceof MetaError && err.status === 409) throw new MetaError(409, `A connection named "${c.name}" already exists.`, '')
     throw err
   }
 }
-export const deleteConnector = (id: string) => metaFetch(`${AGENT}/agent_connectors/${id}`, 'DELETE')
+export const deleteConnector = (id: string) => metaFetch(`${agent()}/agent_connectors/${id}`, 'DELETE')
 /** Rotate key / connect: push the credentials already set on the connection. */
 export async function upsertCredentials(c: Connection): Promise<Partial<Connection>> {
   const r =
     c.authMethod === 'client_credentials'
-      ? await metaFetch<MetaConnector>(`${AGENT}/agent_connectors/${c.metaId}/upsertOAuth`, 'POST', { oauth_config: oauthConfig(c) })
-      : await metaFetch<MetaConnector>(`${AGENT}/agent_connectors/${c.metaId}/upsertApiKey`, 'POST', { api_key_config: apiKeyConfig(c) })
+      ? await metaFetch<MetaConnector>(`${agent()}/agent_connectors/${c.metaId}/upsertOAuth`, 'POST', { oauth_config: oauthConfig(c) })
+      : await metaFetch<MetaConnector>(`${agent()}/agent_connectors/${c.metaId}/upsertApiKey`, 'POST', { api_key_config: apiKeyConfig(c) })
   return connectorFields(r)
 }
 export const refreshMcpTools = async (id: string) =>
-  connectorFields(await metaFetch<MetaConnector>(`${AGENT}/agent_connectors/${id}/refreshMCPTools`, 'POST', {}))
+  connectorFields(await metaFetch<MetaConnector>(`${agent()}/agent_connectors/${id}/refreshMCPTools`, 'POST', {}))
 
 export interface ConnectorLogs {
   data: { event_time?: string; failure_code_name?: string; error_message?: string; tool_name?: string; occurrences?: number }[]
-  stats?: { start_count: number; success_count: number; success_rate: number; avg_latency_s: number }
+  stats?: {
+    start_count: number
+    success_count: number
+    exception_count?: number
+    success_rate: number
+    avg_latency_s: number
+    p95_latency_s?: number
+    p99_latency_s?: number
+  }
 }
-/** Last 7 days, the platform's own retention (PRD V-a5). */
-export const connectorLogs = (id: string) =>
+/** Last 7 days, the platform's own retention (PRD V-a5). `extra` adds e.g. summary_only/top_n. */
+export const connectorLogs = (id: string, extra: Record<string, string | number | boolean> = {}) =>
   metaFetch<ConnectorLogs>(
-    `${AGENT}/agent_connectors/${id}/logs` +
-      q({ start_time: Math.floor(Date.now() / 1000) - 7 * 86400 + 60, include_stats: true, limit: 1000 }),
+    `${agent()}/agent_connectors/${id}/logs` +
+      q({ start_time: Math.floor(Date.now() / 1000) - 7 * 86400 + 60, include_stats: true, limit: 1000, ...extra }),
   )
 
 interface ParamNode {
@@ -494,15 +587,15 @@ function toolBody(a: ConnectionAction) {
   }
 }
 export async function saveTool(connectorMetaId: string, a: ConnectionAction): Promise<string> {
-  const base = `${AGENT}/agent_connectors/${connectorMetaId}/tools`
+  const base = `${agent()}/agent_connectors/${connectorMetaId}/tools`
   const r = a.metaId ? await metaFetch<MetaTool>(`${base}/${a.metaId}`, 'PUT', toolBody(a)) : await metaFetch<MetaTool>(base, 'POST', toolBody(a))
   return r.id
 }
 export const deleteTool = (connectorMetaId: string, toolId: string) =>
-  metaFetch(`${AGENT}/agent_connectors/${connectorMetaId}/tools/${toolId}`, 'DELETE')
+  metaFetch(`${agent()}/agent_connectors/${connectorMetaId}/tools/${toolId}`, 'DELETE')
 /** Runs the tool live with the connector's stored credentials; output is the raw result. */
 export const runTool = (connectorMetaId: string, toolId: string, input: Record<string, unknown> = {}) =>
-  metaFetch<{ output: string; status: 'success' | 'error' }>(`${AGENT}/agent_connectors/${connectorMetaId}/tools/${toolId}/run`, 'POST', {
+  metaFetch<{ output: string; status: 'success' | 'error' }>(`${agent()}/agent_connectors/${connectorMetaId}/tools/${toolId}/run`, 'POST', {
     input: JSON.stringify(input),
   })
 
@@ -540,7 +633,7 @@ export function toolToAction(t: MetaTool, connectionId: string, fromMcp: boolean
     fromMcp,
   }
 }
-export const listTools = (connectorMetaId: string) => metaFetch<MetaTool[]>(`${AGENT}/agent_connectors/${connectorMetaId}/tools`)
+export const listTools = (connectorMetaId: string) => metaFetch<MetaTool[]>(`${agent()}/agent_connectors/${connectorMetaId}/tools`)
 
 // ---- Agent Eval ----
 interface MetaEvalCase {
@@ -551,7 +644,7 @@ interface MetaEvalCase {
   success_criteria?: string[]
 }
 export async function listEvalCases(): Promise<EvalScenario[]> {
-  const r = await metaFetch<{ eval_cases: MetaEvalCase[] }>(`${AGENT}/agent-eval/cases`)
+  const r = await metaFetch<{ eval_cases: MetaEvalCase[] }>(`${agent()}/agent-eval/cases`)
   return (r.eval_cases ?? []).map((c) => ({
     id: c.id,
     title: c.scenario.length > 70 ? `${c.scenario.slice(0, 67)}...` : c.scenario,
@@ -612,11 +705,11 @@ export async function runEvalCase(
   onStage: (stage: EvalStage) => void,
   isCurrent: () => boolean,
 ): Promise<EvalConversationResult | null> {
-  const { job_id } = await metaFetch<{ job_id: string }>(`${AGENT}/agent-eval/run` + q({ eval_case_ids: caseId }), 'POST', {})
+  const { job_id } = await metaFetch<{ job_id: string }>(`${agent()}/agent-eval/run` + q({ eval_case_ids: caseId }), 'POST', {})
   for (let i = 0; i < 400; i++) {
     await sleep(3000)
     if (!isCurrent()) return null
-    const job = await metaFetch<MetaEvalJob>(`${AGENT}/agent-eval/run` + q({ job_id }))
+    const job = await metaFetch<MetaEvalJob>(`${agent()}/agent-eval/run` + q({ job_id }))
     if (job.progress?.current_stage) onStage(job.progress.current_stage)
     if (job.status === 'FAILED') throw new Error(job.error?.message || 'Could not complete the simulation.')
     if (job.status !== 'COMPLETED') continue
@@ -626,7 +719,7 @@ export async function runEvalCase(
       ? (
           await metaFetch<{
             evaluations: { id: string; eval_case_id?: string; score?: number; reasons?: string; transcript?: string }[]
-          }>(`${AGENT}/agent-eval/details` + q({ eval_ids: ids.join(',') }))
+          }>(`${agent()}/agent-eval/details` + q({ eval_ids: ids.join(',') }))
         ).evaluations ?? []
       : []
     const d = details.find((e) => e.eval_case_id === caseId) ?? details[0]
@@ -654,10 +747,10 @@ export async function runEvalCase(
 // ---- Agent events ----
 export type MetaAgentEventStatus = 'request_received' | 'processing' | 'sent' | 'failed' | 'skipped' | 'success'
 export const sendAgentEvent = (to: string, event: { type: string; description: string; payload: string }) =>
-  metaFetch<{ status: string; agent_event_id?: string }>(`${AGENT}/agent_event`, 'POST', { to, event })
+  metaFetch<{ status: string; agent_event_id?: string }>(`${agent()}/agent_event`, 'POST', { to, event })
 export const getAgentEvent = (id: string) =>
   metaFetch<{ status: MetaAgentEventStatus; event_type: string; error_message?: string; skipped_reason?: string; updated_at: string }>(
-    `${AGENT}/agent_event/${id}`,
+    `${agent()}/agent_event/${id}`,
   )
 
 // ---- Insights ----
@@ -666,30 +759,46 @@ export interface MetaTurn {
   timestamp?: number
   e2e_latency_ms?: number
   conversation_id: string
-  steps: { type: 'LLM_CALL' | 'TOOL_CALL'; status?: 'SUCCESS' | 'ERROR' | 'TIMEOUT'; tool_name?: string }[]
+  steps: { type: 'LLM_CALL' | 'TOOL_CALL'; status?: 'SUCCESS' | 'ERROR' | 'TIMEOUT'; tool_name?: string; latency_ms?: number }[]
 }
 /** Most recent conversation only. Phone must be digits with country code, no '+'. */
 export const conversationTurns = (phone: string) =>
-  listAllPages<MetaTurn>(`${AGENT}/insights/conversations/turns` + q({ user_phone_number: phone.replace(/\D/g, '') }))
+  listAllPages<MetaTurn>(`${agent()}/insights/conversations/turns` + q({ user_phone_number: phone.replace(/\D/g, '') }))
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10)
 const lastDays = (n: number) => ({ start_date: isoDay(new Date(Date.now() - (n - 1) * 86400000)), end_date: isoDay(new Date()) })
+export interface DateRange {
+  start_date: string
+  end_date: string
+}
 
-/** AI threads over the last 30 days, plus the live count of handed-off conversations. */
-export async function conversationInsights() {
+/**
+ * AI threads in the range (default last 30 days), plus the live count of handed-off conversations
+ * (a snapshot of now; Meta ignores the range for it). Each metric is a separate scan, so `metrics`
+ * narrows it; omitted, Meta returns both.
+ */
+export async function conversationInsights(range: DateRange = lastDays(30), metrics?: 'ai_threads' | 'ai_handoffs') {
   const r = await metaFetch<{ data: { ai_threads?: { count: number }; ai_handoffs?: { count: number } }[] }>(
-    `${AGENT}/insights/conversations` + q(lastDays(30)),
+    `${agent()}/insights/conversations` + q({ ...range, metrics }),
   )
   return { aiThreads: r.data?.[0]?.ai_threads?.count ?? 0, aiHandoffs: r.data?.[0]?.ai_handoffs?.count ?? 0 }
 }
-export const toolCallInsights = () =>
-  metaFetch<{ data: { tool_name: string; thread_count: number; success_rate?: number | null; avg_latency_ms?: number | null }[] }>(
-    `${AGENT}/insights/tool_calls` + q(lastDays(30)),
-  )
+/** Rates are 0–1 and nullable; timeouts are also counted in error_rate. Max 30 days. */
+export const toolCallInsights = (range: DateRange = lastDays(30)) =>
+  metaFetch<{
+    data: {
+      tool_name: string
+      thread_count: number
+      success_rate?: number | null
+      error_rate?: number | null
+      timeout_rate?: number | null
+      avg_latency_ms?: number | null
+    }[]
+  }>(`${agent()}/insights/tool_calls` + q({ ...range }))
 
 // ---- Thread control (human takeover; X-API-Version 1.0.0 is set by the server) ----
 export const threadControl = (action: 'take' | 'release', to: string) =>
-  metaFetch(`/business/whatsapp/phone_numbers/PHONE_NUMBER_ID/thread_control`, 'POST', {
+  metaFetch(`/business/whatsapp/phone_numbers${agent()}/thread_control`, 'POST', {
     messaging_product: 'whatsapp',
     action,
     to: to.replace(/[^\d]/g, ''),
@@ -746,15 +855,15 @@ export async function hydrateFromMeta(state: WizardState): Promise<{ patch: Patc
     }
   }
   const [settings, businessInfo, faqs, files, websites, uiSkills, skills, allowlist, connectors] = await Promise.all([
-    get('settings', () => metaFetch<MetaSettings>(`${AGENT}/agent_config/settings`)),
-    get('business info', () => metaFetch<Record<string, unknown>>(`${AGENT}/agent_config/business_info`)),
-    get('FAQs', () => metaFetch<MetaFaq[]>(`${AGENT}/agent_config/faq`)),
-    get('documents', () => metaFetch<{ id: string; file_name: string }[]>(`${AGENT}/agent_config/files`)),
-    get('websites', () => metaFetch<MetaWebsite[]>(`${AGENT}/agent_config/websites`)),
-    get('rich replies', () => listAllPages<MetaUiSkill>(`${AGENT}/agent-ui-skills`)),
+    get('settings', () => metaFetch<MetaSettings>(`${agent()}/agent_config/settings`)),
+    get('business info', () => metaFetch<Record<string, unknown>>(`${agent()}/agent_config/business_info`)),
+    get('FAQs', () => metaFetch<MetaFaq[]>(`${agent()}/agent_config/faq`)),
+    get('documents', () => metaFetch<{ id: string; file_name: string }[]>(`${agent()}/agent_config/files`)),
+    get('websites', () => metaFetch<MetaWebsite[]>(`${agent()}/agent_config/websites`)),
+    get('rich replies', () => listAllPages<MetaUiSkill>(`${agent()}/agent-ui-skills`)),
     get('skills', listSkills),
-    get('allowlist', () => metaFetch<{ id: string; consumer_phone_number?: string }[]>(`${AGENT}/agent_config/allowlist`)),
-    get('connectors', () => metaFetch<MetaConnector[]>(`${AGENT}/agent_connectors`)),
+    get('allowlist', () => metaFetch<{ id: string; consumer_phone_number?: string }[]>(`${agent()}/agent_config/allowlist`)),
+    get('connectors', () => metaFetch<MetaConnector[]>(`${agent()}/agent_connectors`)),
   ])
   const patch: Patch = {}
   const now = Date.now()

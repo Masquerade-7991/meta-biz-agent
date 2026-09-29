@@ -12,6 +12,7 @@ export type StudioSectionId =
   | 'safety'
   | 'testEval'
   | 'publish'
+  | 'analytics'
   | 'activity'
 
 export interface StepMeta {
@@ -39,6 +40,8 @@ export interface GateState {
    *  (needed since the Create Agent modal draws from its own WABA directory). */
   selectedPhoneNumber: string | null
   selectedWabaName: string | null
+  /** Meta phone number ID of the chosen number; every Meta call targets it (see setActivePhoneNumberId). */
+  selectedPhoneNumberId?: string
   pin: string
   pinAttempted: boolean
   pinError: string | null
@@ -209,19 +212,35 @@ export type RichReplyType =
   | 'location_request'
   | 'flow'
 
+/** Where the agent gets an image at reply time (PRD Appendix C: not a direct upload).
+ *  `ref` is the document/website/action id, or the https URL for 'url'; `label` is the human
+ *  name (file name, "site.com/menu", tool name, or the URL). `path` narrows a website to one page. */
+export interface ImageSource {
+  kind: 'document' | 'website' | 'connector' | 'url'
+  ref: string
+  label: string
+  path?: string
+}
+
 export interface CtaUrlBlanks {
   messageText: string
   buttonLabel: string
   link: string
+  /** Optional image or video shown above the body. */
+  headerMedia?: ImageSource & { mediaType: 'image' | 'video' }
+  /** Optional line under the body, 1–60 characters. */
+  footer?: string
 }
 
 export interface ImageBlanks {
-  imageUrl: string
+  image: ImageSource
   caption: string
 }
 
 export interface MenuOption {
   id: string
+  /** Stable identifier sent back when the customer picks this row (see rowIdFromTitle). */
+  rowId: string
   title: string
   description: string
   /** Which named group this option sits under — only meaningful when groupsEnabled is true. */
@@ -243,7 +262,7 @@ export interface ReplyButtonsBlanks {
 
 export interface CarouselCard {
   id: string
-  imageUrl: string
+  image: ImageSource
   cardText: string
   buttonLabel: string
   /** Present for carousel_url cards; ignored (kept empty) for carousel_quick_reply cards. */
@@ -261,8 +280,8 @@ export interface CarouselQuickReplyBlanks {
 }
 
 export interface LocationBlanks {
-  placeName: string
-  address: string
+  placeName?: string
+  address?: string
   latitude: string
   longitude: string
 }

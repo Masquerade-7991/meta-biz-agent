@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  AlertTriangle,
   CheckCircle2,
   Clock,
   ExternalLink,
   Info,
   Loader2,
   RefreshCw,
+  XCircle,
 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
@@ -32,42 +32,65 @@ import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { newId } from '@/app/wizard/mockData'
 import type { AgentInstanceSummary } from '@/app/wizard/types'
-import { checkEligibility, getServerHealth, MetaError, onboardAgent } from '@/app/api/meta'
+import {
+  checkEligibility,
+  getAgentOnNumber,
+  getServerHealth,
+  listPhoneNumbers,
+  listWabas,
+  errorText,
+  MetaError,
+  onboardAgent,
+  setActivePhoneNumberId,
+} from '@/app/api/meta'
 
-// ---- Mock WABA / phone number directory, scoped to this modal ----
+// ---- WABA / phone number directory: Meta's, else the .env number, else a mock (offline demo) ----
 
-interface MockPhoneNumber {
+interface PhoneOption {
   id: string
-  displayName: string
   phoneNumber: string
-  hasAgent: boolean
+  verifiedName: string
 }
 
-interface MockWaba {
+interface WabaOption {
   id: string
   name: string
-  phoneNumbers: MockPhoneNumber[]
+  /** Preset for the .env / mock fallbacks; Meta WABAs load their numbers on selection. */
+  phoneNumbers?: PhoneOption[]
 }
 
-const MOCK_WABA_DIRECTORY: MockWaba[] = [
+type DirectorySource = 'meta' | 'env' | 'mock'
+
+const MOCK_WABA_DIRECTORY: WabaOption[] = [
   {
     id: 'waba_dir_1',
     name: 'Aurora Retail India',
     phoneNumbers: [
-      { id: 'num_1', displayName: 'Support Line', phoneNumber: '+91 98765 43210', hasAgent: false },
-      { id: 'num_2', displayName: 'Sales Line', phoneNumber: '+91 98765 43211', hasAgent: true },
-      { id: 'num_3', displayName: 'Returns Desk', phoneNumber: '+91 98765 43212', hasAgent: false },
+      { id: 'num_1', verifiedName: 'Support Line', phoneNumber: '+91 98765 43210' },
+      { id: 'num_3', verifiedName: 'Returns Desk', phoneNumber: '+91 98765 43212' },
     ],
   },
   {
     id: 'waba_dir_2',
     name: 'Aurora Wellness Clinic',
     phoneNumbers: [
-      { id: 'num_4', displayName: 'Front Desk', phoneNumber: '+91 90000 11122', hasAgent: false },
-      { id: 'num_5', displayName: 'Appointments', phoneNumber: '+91 90000 11123', hasAgent: false },
+      { id: 'num_4', verifiedName: 'Front Desk', phoneNumber: '+91 90000 11122' },
+      { id: 'num_5', verifiedName: 'Appointments', phoneNumber: '+91 90000 11123' },
     ],
   },
 ]
+
+/** Black primary line, grey secondary line (PRD 5.2 AC4/AC5). */
+function TwoLineOption({ primary, secondary }: { primary: string; secondary: string }) {
+  return (
+    <span className="flex flex-col items-start">
+      <span className="text-foreground">{primary}</span>
+      <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        {secondary}
+      </span>
+    </span>
+  )
+}
 
 // ---- Mock eligibility API (real endpoint: GET /{phone_number_id}/agent_eligibility) ----
 
@@ -114,7 +137,8 @@ export function CreateAgentModal({
 }: {
   open: boolean
   onClose: () => void
-  onCreate: (agent: AgentInstanceSummary) => void
+  /** phoneNumberId is Meta's id for the number; undefined for the offline mock directory. */
+  onCreate: (agent: AgentInstanceSummary, phoneNumberId?: string, wabaId?: string) => void
   existingAgentNames: string[]
 }) {
   const [agentName, setAgentName] = useState('')
@@ -148,30 +172,79 @@ export function CreateAgentModal({
     ) : null,
   )
 
-  // The real WABA + number from .env (via the local server); the mock directory only when the
-  // server isn't running, so the demo still works offline.
-  const [realWabas, setRealWabas] = useState<MockWaba[] | null>(null)
+  const [wabas, setWabas] = useState<WabaOption[] | null>(null)
+  const [source, setSource] = useState<DirectorySource>('meta')
   useEffect(() => {
     if (!open) return
-    void getServerHealth().then((h) => {
-      if (!h?.wabaId || !h.phoneNumberId) return
-      setRealWabas([
-        {
-          id: h.wabaId,
-          name: h.businessName || `WABA ${h.wabaId}`,
-          phoneNumbers: [{ id: h.phoneNumberId, displayName: 'Configured number', phoneNumber: `ID ${h.phoneNumberId}`, hasAgent: false }],
-        },
-      ])
-    })
+    let cancelled = false
+    setWabas(null)
+    listWabas().then(
+      (list) => {
+        if (cancelled) return
+        setSource('meta')
+        setWabas(list)
+      },
+      async (err) => {
+        console.log('[listWabas]', errorText(err))
+        const h = await getServerHealth()
+        if (cancelled) return
+        if (h?.wabaId && h.phoneNumberId) {
+          setSource('env')
+          setWabas([
+            {
+              id: h.wabaId,
+              name: h.businessName || `WABA ${h.wabaId}`,
+              phoneNumbers: [{ id: h.phoneNumberId, verifiedName: 'Configured number', phoneNumber: `ID ${h.phoneNumberId}` }],
+            },
+          ])
+        } else {
+          setSource('mock')
+          setWabas(MOCK_WABA_DIRECTORY)
+        }
+      },
+    )
+    return () => {
+      cancelled = true
+    }
   }, [open])
-  const wabas = realWabas ?? MOCK_WABA_DIRECTORY
-  const selectedWaba = wabas.find((w) => w.id === wabaId) ?? null
-  const phoneNumbers = selectedWaba?.phoneNumbers ?? []
-  const selectedPhone = phoneNumbers.find((p) => p.id === phoneId) ?? null
+  const selectedWaba = wabas?.find((w) => w.id === wabaId) ?? null
+
+  // Numbers for the picked WABA, minus any that already have an agent (PRD 5.2 AC5a / V3a).
+  const [phoneNumbers, setPhoneNumbers] = useState<PhoneOption[] | null>(null)
+  const [numbersFailed, setNumbersFailed] = useState(false)
+  const [numbersAttempt, setNumbersAttempt] = useState(0)
+  useEffect(() => {
+    setNumbersFailed(false)
+    if (!selectedWaba || selectedWaba.phoneNumbers) {
+      setPhoneNumbers(selectedWaba?.phoneNumbers ?? null)
+      return
+    }
+    let cancelled = false
+    setPhoneNumbers(null)
+    listPhoneNumbers(selectedWaba.id)
+      .then((list) => Promise.all(list.map(async (n) => ((await getAgentOnNumber(n.id)) ? null : n))))
+      .then(
+        (free) => {
+          if (cancelled) return
+          setPhoneNumbers(
+            free.flatMap((n) => (n ? [{ id: n.id, phoneNumber: n.displayPhoneNumber, verifiedName: n.verifiedName }] : [])),
+          )
+        },
+        (err) => {
+          if (cancelled) return
+          console.log('[listPhoneNumbers]', errorText(err))
+          setNumbersFailed(true)
+        },
+      )
+    return () => {
+      cancelled = true
+    }
+  }, [selectedWaba, numbersAttempt])
+  const selectedPhone = phoneNumbers?.find((p) => p.id === phoneId) ?? null
 
   // Auto-select the WABA when the client only has one.
   useEffect(() => {
-    if (open && wabas.length === 1 && !wabaId) {
+    if (open && wabas?.length === 1 && !wabaId) {
       setWabaId(wabas[0].id)
     }
   }, [open, wabaId, wabas])
@@ -207,9 +280,9 @@ export function CreateAgentModal({
 
   // Real call unless the Demo controls force a specific outcome.
   async function eligibilityCheck(): Promise<MockApiResult> {
-    if (forcedOutcome !== 'ready' || !realWabas) return mockEligibilityCheck(forcedOutcome)
+    if (forcedOutcome !== 'ready' || source === 'mock' || !phoneId) return mockEligibilityCheck(forcedOutcome)
     try {
-      const r = await checkEligibility()
+      const r = await checkEligibility(phoneId)
       return { ok: true, isEligible: r.is_eligible }
     } catch (err) {
       console.log('[agent_eligibility]', err instanceof Error ? err.message : err)
@@ -249,9 +322,11 @@ export function CreateAgentModal({
 
   async function handleCreate() {
     if (!canCreate || !selectedWaba || !selectedPhone) return
-    if (realWabas) {
+    const realPhoneId = source === 'mock' ? undefined : selectedPhone.id
+    if (realPhoneId) {
+      setActivePhoneNumberId(realPhoneId)
       try {
-        const { agent_id } = await onboardAgent()
+        const { agent_id } = await onboardAgent(realPhoneId)
         toast.success('Agent created on Meta', { description: `agent_id ${agent_id}` })
       } catch (err) {
         // A number onboarded earlier (e.g. in WhatsApp Manager) rejects a second onboarding;
@@ -271,7 +346,7 @@ export function CreateAgentModal({
       allowlistCount: 0,
       evalScore: null,
       updatedAt: 'Just now',
-    })
+    }, realPhoneId, source === 'mock' ? undefined : selectedWaba.id)
     handleClose()
   }
 
@@ -309,49 +384,75 @@ export function CreateAgentModal({
 
           <div className="space-y-1.5">
             <Label>WhatsApp Business Account</Label>
-            {wabas.length === 1 ? (
-              <p className="rounded-md border border-border px-3 py-2" style={{ fontSize: 'var(--text-sm)' }}>
-                {wabas[0].name} ({wabas[0].phoneNumbers.length} numbers)
-              </p>
+            {!wabas ? (
+              <div className="flex items-center gap-2 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                <Loader2 className="size-4 animate-spin" />
+                Loading your accounts&hellip;
+              </div>
+            ) : wabas.length === 1 ? (
+              <div className="rounded-md border border-border px-3 py-2" style={{ fontSize: 'var(--text-sm)' }}>
+                <TwoLineOption primary={wabas[0].name} secondary={wabas[0].id} />
+              </div>
             ) : (
               <Select value={wabaId ?? undefined} onValueChange={handleWabaChange}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a WhatsApp Business Account" />
+                  <SelectValue placeholder="Select a WhatsApp Business Account">{selectedWaba?.name}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {wabas.map((waba) => (
                     <SelectItem key={waba.id} value={waba.id}>
-                      {waba.name} ({waba.phoneNumbers.length} numbers)
+                      <TwoLineOption primary={waba.name} secondary={waba.id} />
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             )}
+            {source === 'env' && (
+              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                Couldn&rsquo;t load your accounts from Meta; showing the number from settings.
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
             <Label>Phone number</Label>
-            <Select value={phoneId ?? undefined} onValueChange={handlePhoneChange} disabled={!wabaId}>
+            <Select value={phoneId ?? undefined} onValueChange={handlePhoneChange} disabled={!wabaId || !phoneNumbers?.length}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder={wabaId ? 'Select a phone number' : 'Select a WABA first'} />
+                <SelectValue
+                  placeholder={
+                    !wabaId
+                      ? 'Select a WABA first'
+                      : numbersFailed
+                        ? 'Couldn’t load numbers'
+                        : !phoneNumbers
+                          ? 'Loading numbers…'
+                          : phoneNumbers.length === 0
+                            ? 'No numbers without an agent'
+                            : 'Select a phone number'
+                  }
+                >
+                  {selectedPhone?.phoneNumber}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {phoneNumbers.map((num) => (
-                  <SelectItem key={num.id} value={num.id} disabled={num.hasAgent}>
-                    <span className="flex items-center gap-2">
-                      <span>
-                        {num.displayName}, {num.phoneNumber}
-                      </span>
-                      {num.hasAgent && (
-                        <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                          Already has an agent
-                        </span>
-                      )}
-                    </span>
+                {phoneNumbers?.map((num) => (
+                  <SelectItem key={num.id} value={num.id}>
+                    <TwoLineOption primary={num.phoneNumber} secondary={num.verifiedName} />
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {numbersFailed && (
+              <div className="flex items-center gap-2">
+                <p className="text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+                  Couldn&rsquo;t load this account&rsquo;s numbers from Meta.
+                </p>
+                <Button variant="ghost" size="sm" onClick={() => setNumbersAttempt((n) => n + 1)}>
+                  <RefreshCw className="size-3.5" />
+                  Try again
+                </Button>
+              </div>
+            )}
           </div>
 
           {selectedPhone && (
@@ -366,20 +467,18 @@ export function CreateAgentModal({
               )}
 
               {checkStatus === 'ready' && (
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="size-4 shrink-0 text-success" />
-                  <span style={{ fontSize: 'var(--text-sm)' }}>This number is ready to use.</span>
+                <div className="flex items-center gap-2 rounded-md bg-success/10 p-2 text-success">
+                  <CheckCircle2 className="size-4 shrink-0" />
+                  <span style={{ fontSize: 'var(--text-sm)' }}>Number is eligible.</span>
                 </div>
               )}
 
               {checkStatus === 'not_available' && (
                 <div className="space-y-2">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
+                  <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-2 text-destructive">
+                    <XCircle className="mt-0.5 size-4 shrink-0" />
                     <span style={{ fontSize: 'var(--text-sm)' }}>
-                      This number isn&rsquo;t available yet. Common causes: the business isn&rsquo;t
-                      verified, the wrong business category is set, or another messaging product is
-                      already active on it.
+                      Number not eligible, please try another number or WABA profile.
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-2">

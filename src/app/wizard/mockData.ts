@@ -1,3 +1,4 @@
+import { compileRichReplySentence } from './richReplies'
 import type {
   ActionMethod,
   AgentEventRow,
@@ -1154,88 +1155,27 @@ export const RICH_REPLY_TYPE_LABEL: Record<RichReplyType, string> = Object.fromE
 export const CANNED_FLOWS = ['Book an appointment', 'Delivery feedback']
 
 export function newMenuOption(): MenuOption {
-  return { id: newId('option'), title: '', description: '', group: '' }
+  return { id: newId('option'), rowId: '', title: '', description: '', group: '' }
 }
 
 export function newCarouselCard(): CarouselCard {
-  return { id: newId('card'), imageUrl: '', cardText: '', buttonLabel: '', link: '' }
+  return { id: newId('card'), image: { kind: 'url', ref: '', label: '' }, cardText: '', buttonLabel: '', link: '' }
 }
 
 export function newApiKeyEntry(): ApiKeyEntry {
   return { id: newId('key'), value: '', location: 'header', fieldName: '', prefix: '' }
 }
 
-// Plain `Pick` collapses a union into one flat shape (losing the type<->blanks correlation) —
-// distributing over a naked type parameter keeps each variant separate, so the switch below narrows.
-type DistributivePick<T, K extends keyof T> = T extends unknown ? Pick<T, K> : never
-type RichReplyDraft = DistributivePick<RichReply, 'type' | 'trigger' | 'blanks'>
-
-/** Regenerated in full from `blanks` on every save, following the pattern in the system's own
- *  documentation — this is a build artifact, never parsed back into blanks. Takes the type and
- *  blanks bundled in one object (not as separate params) so the switch below actually narrows
- *  `blanks` per case — TypeScript can't link two independent parameters that way. */
-export function compileRichReplySentence(draft: RichReplyDraft): string {
-  const t = draft.trigger.trim() || '…'
-  if (!draft.blanks) return ''
-  switch (draft.type) {
-    case 'cta_url': {
-      const b = draft.blanks
-      return `If ${t}, send a button with body text "${b.messageText}", button label "${b.buttonLabel}", and URL ${b.link}`
-    }
-    case 'interactive_reply_buttons': {
-      const b = draft.blanks
-      const buttons = b.buttons.filter((x) => x.trim()).map((x) => `"${x}"`).join(', ')
-      return `If ${t}, send a message with body text "${b.messageText}" and reply buttons: ${buttons}`
-    }
-    case 'image': {
-      const b = draft.blanks
-      const caption = b.caption.trim() ? ` with caption "${b.caption}"` : ''
-      return `If ${t}, send an image at ${b.imageUrl}${caption}`
-    }
-    case 'interactive_list': {
-      const b = draft.blanks
-      const optionsText = b.options
-        .map((o) => (o.description.trim() ? `"${o.title}" (${o.description})` : `"${o.title}"`))
-        .join(', ')
-      return `If ${t}, send a menu with body text "${b.messageText}", button label "${b.menuButtonLabel}", and options: ${optionsText}`
-    }
-    case 'carousel_url': {
-      const b = draft.blanks
-      const cardsText = b.cards
-        .map((c) => `image ${c.imageUrl}, text "${c.cardText}", button label "${c.buttonLabel}", URL ${c.link}`)
-        .join('; ')
-      return `If ${t}, send a card carousel with body text "${b.messageText}" and ${b.cards.length} cards: ${cardsText}`
-    }
-    case 'carousel_quick_reply': {
-      const b = draft.blanks
-      const cardsText = b.cards
-        .map((c) => `image ${c.imageUrl}, text "${c.cardText}", button label "${c.buttonLabel}" that replies with that label`)
-        .join('; ')
-      return `If ${t}, send a card carousel with body text "${b.messageText}" and ${b.cards.length} cards: ${cardsText}`
-    }
-    case 'location': {
-      const b = draft.blanks
-      return `If ${t}, send your location: ${b.placeName}, ${b.address}, at coordinates ${b.latitude}, ${b.longitude}`
-    }
-    case 'location_request': {
-      const b = draft.blanks
-      return `If ${t}, ask the customer to share their location with the message "${b.messageText}"`
-    }
-    case 'flow': {
-      const b = draft.blanks
-      return `If ${t}, open the WhatsApp form "${b.flowName}" with body text "${b.messageText}" and button label "${b.buttonLabel}"`
-    }
-    default:
-      return ''
-  }
-}
+// Moved to richReplies.ts; re-exported so existing imports keep working.
+export { compileRichReplySentence }
 
 const SAMPLE_RR_1_TRIGGER = 'When someone asks where to buy online'
 const SAMPLE_RR_1_BLANKS = {
   messageText: 'You can order directly from our website.',
   buttonLabel: 'Shop now',
   link: 'https://example.com/shop',
-} as const
+  footer: 'Free delivery over ₹999',
+}
 
 const SAMPLE_RR_2_TRIGGER = 'When someone asks what we sell'
 const SAMPLE_RR_2_BLANKS = {
@@ -1243,8 +1183,8 @@ const SAMPLE_RR_2_BLANKS = {
   menuButtonLabel: 'See options',
   groupsEnabled: false,
   options: [
-    { id: newId('option'), title: 'Candles', description: 'Scented and unscented', group: '' },
-    { id: newId('option'), title: 'Gift sets', description: '', group: '' },
+    { id: newId('option'), rowId: 'candles', title: 'Candles', description: 'Scented and unscented', group: '' },
+    { id: newId('option'), rowId: 'gift_sets', title: 'Gift sets', description: '', group: '' },
   ],
 }
 

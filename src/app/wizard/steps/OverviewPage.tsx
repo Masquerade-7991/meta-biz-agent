@@ -19,6 +19,7 @@ const SECTION_BLURB: Partial<Record<StudioSectionId, string>> = {
   safety: 'Words and handoff',
   testEval: 'Try it and run checks',
   publish: 'Go live',
+  analytics: 'Trends and performance',
   activity: 'Health and logs',
 }
 

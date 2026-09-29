@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react'
+import { createContext, useContext, useId, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
+  ChevronRight,
   ClipboardList,
   GalleryHorizontal,
   GripVertical,
@@ -13,6 +14,7 @@ import {
   MessageSquareReply,
   Navigation,
   Plus,
+  X,
 } from 'lucide-react'
 import { Label } from '@/app/components/ui/label'
 import { Input } from '@/app/components/ui/input'
@@ -32,46 +34,23 @@ import {
   RICH_REPLY_TYPE_GALLERY,
   RICH_REPLY_TYPE_LABEL,
   SAMPLE_RICH_REPLIES,
-  compileRichReplySentence,
   newCarouselCard,
   newId,
   newMenuOption,
 } from '@/app/wizard/mockData'
+import { RICH_REPLY_LIMITS, compileRichReplySentence, rowIdFromTitle, validateRichReply, type RichReplyIssue } from '@/app/wizard/richReplies'
 import { normalizeForCompare } from '@/app/wizard/csv'
-import type {
-  CarouselCard,
-  CarouselQuickReplyBlanks,
-  CarouselUrlBlanks,
-  CtaUrlBlanks,
-  CustomSkill,
-  FlowBlanks,
-  ReplyButtonsBlanks,
-  ImageBlanks,
-  InteractiveListBlanks,
-  LocationBlanks,
-  LocationRequestBlanks,
-  RichReply,
-  RichReplyType,
-} from '@/app/wizard/types'
+import type { CarouselCard, CustomSkill, ImageSource, InteractiveListBlanks, RichReply, RichReplyType } from '@/app/wizard/types'
 import { createUiSkill, deleteUiSkill, errorText, updateUiSkill } from '@/app/api/meta'
 import { cn } from '@/app/lib/utils'
+import { WhatsAppPreview, type RichReplyDraft } from './WhatsAppPreview'
 
 const MAX_NAME = 60
 const MAX_TRIGGER = 300
 const RICH_REPLY_COUNT_WARNING_THRESHOLD = 10
-
-const MAX_MESSAGE_TEXT = 300
-const MAX_BUTTON_LABEL = 20
-const MAX_CAPTION = 300
-const MAX_MENU_OPTION_TITLE = 24
-const MAX_MENU_OPTION_DESC = 72
-const MAX_CAROUSEL_CARD_TEXT = 160
 const MAX_LOCATION_NAME = 100
 const MAX_LOCATION_ADDRESS = 300
-const MIN_MENU_OPTIONS = 1
-const MAX_MENU_OPTIONS = 10
-const MIN_CAROUSEL_CARDS = 2
-const MAX_CAROUSEL_CARDS = 10
+const L = RICH_REPLY_LIMITS
 
 const RICH_REPLY_TYPE_ICON: Record<RichReplyType, typeof Link2> = {
   cta_url: Link2,
@@ -85,17 +64,10 @@ const RICH_REPLY_TYPE_ICON: Record<RichReplyType, typeof Link2> = {
   interactive_reply_buttons: MessageSquareReply,
 }
 
-// ---- Editor state: mirrors RichReply's blanks shape, plus in-progress add/edit bookkeeping ----
-type RichReplyEditorState =
-  | { mode: 'add' | 'edit'; replyId?: string; name: string; trigger: string; type: 'cta_url'; blanks: CtaUrlBlanks }
-  | { mode: 'add' | 'edit'; replyId?: string; name: string; trigger: string; type: 'image'; blanks: ImageBlanks }
-  | { mode: 'add' | 'edit'; replyId?: string; name: string; trigger: string; type: 'interactive_list'; blanks: InteractiveListBlanks }
-  | { mode: 'add' | 'edit'; replyId?: string; name: string; trigger: string; type: 'carousel_url'; blanks: CarouselUrlBlanks }
-  | { mode: 'add' | 'edit'; replyId?: string; name: string; trigger: string; type: 'carousel_quick_reply'; blanks: CarouselQuickReplyBlanks }
-  | { mode: 'add' | 'edit'; replyId?: string; name: string; trigger: string; type: 'location'; blanks: LocationBlanks }
-  | { mode: 'add' | 'edit'; replyId?: string; name: string; trigger: string; type: 'location_request'; blanks: LocationRequestBlanks }
-  | { mode: 'add' | 'edit'; replyId?: string; name: string; trigger: string; type: 'flow'; blanks: FlowBlanks }
-  | { mode: 'add' | 'edit'; replyId?: string; name: string; trigger: string; type: 'interactive_reply_buttons'; blanks: ReplyButtonsBlanks }
+// ---- Editor state: a draft (type + blanks + trigger) plus in-progress add/edit bookkeeping ----
+type RichReplyEditorState = { mode: 'add' | 'edit'; replyId?: string; name: string } & RichReplyDraft
+
+const emptySource = (): ImageSource => ({ kind: 'document', ref: '', label: '' })
 
 function emptyBlanksForType(type: RichReplyType): RichReplyEditorState {
   const shared = { mode: 'add' as const, name: '', trigger: '' }
@@ -103,7 +75,7 @@ function emptyBlanksForType(type: RichReplyType): RichReplyEditorState {
     case 'cta_url':
       return { ...shared, type, blanks: { messageText: '', buttonLabel: '', link: '' } }
     case 'image':
-      return { ...shared, type, blanks: { imageUrl: '', caption: '' } }
+      return { ...shared, type, blanks: { image: emptySource(), caption: '' } }
     case 'interactive_list':
       return { ...shared, type, blanks: { messageText: '', menuButtonLabel: '', groupsEnabled: false, options: [newMenuOption()] } }
     case 'carousel_url':
@@ -121,82 +93,8 @@ function emptyBlanksForType(type: RichReplyType): RichReplyEditorState {
   }
 }
 
-function editorFromExisting(reply: RichReply & { blanks: NonNullable<RichReply['blanks']> }): RichReplyEditorState {
-  const shared = { mode: 'edit' as const, replyId: reply.id, name: reply.name, trigger: reply.trigger }
-  switch (reply.type) {
-    case 'cta_url':
-      return { ...shared, type: reply.type, blanks: reply.blanks }
-    case 'image':
-      return { ...shared, type: reply.type, blanks: reply.blanks }
-    case 'interactive_list':
-      return { ...shared, type: reply.type, blanks: reply.blanks }
-    case 'carousel_url':
-      return { ...shared, type: reply.type, blanks: reply.blanks }
-    case 'carousel_quick_reply':
-      return { ...shared, type: reply.type, blanks: reply.blanks }
-    case 'location':
-      return { ...shared, type: reply.type, blanks: reply.blanks }
-    case 'location_request':
-      return { ...shared, type: reply.type, blanks: reply.blanks }
-    case 'flow':
-      return { ...shared, type: reply.type, blanks: reply.blanks }
-    case 'interactive_reply_buttons':
-      return { ...shared, type: reply.type, blanks: reply.blanks }
-  }
-}
-
-function isUrl(value: string): boolean {
-  return /^https:\/\//.test(value.trim())
-}
-
-/** Every required blank present — gates the Save button. Link *format* is checked separately,
- *  since an invalid https:// link blocks Save with its own visible warning (section 7). */
-function isBlanksComplete(editor: RichReplyEditorState): boolean {
-  switch (editor.type) {
-    case 'cta_url':
-      return !!(editor.blanks.messageText.trim() && editor.blanks.buttonLabel.trim() && editor.blanks.link.trim())
-    case 'image':
-      return !!editor.blanks.imageUrl.trim()
-    case 'interactive_list':
-      return !!(
-        editor.blanks.messageText.trim() &&
-        editor.blanks.menuButtonLabel.trim() &&
-        editor.blanks.options.length >= MIN_MENU_OPTIONS &&
-        editor.blanks.options.every((o) => o.title.trim())
-      )
-    case 'carousel_url':
-      return !!(
-        editor.blanks.messageText.trim() &&
-        editor.blanks.cards.length >= MIN_CAROUSEL_CARDS &&
-        editor.blanks.cards.every((c) => c.imageUrl.trim() && c.cardText.trim() && c.buttonLabel.trim() && c.link.trim())
-      )
-    case 'carousel_quick_reply':
-      return !!(
-        editor.blanks.messageText.trim() &&
-        editor.blanks.cards.length >= MIN_CAROUSEL_CARDS &&
-        editor.blanks.cards.every((c) => c.imageUrl.trim() && c.cardText.trim() && c.buttonLabel.trim())
-      )
-    case 'location':
-      return !!(editor.blanks.placeName.trim() && editor.blanks.address.trim() && editor.blanks.latitude.trim() && editor.blanks.longitude.trim())
-    case 'location_request':
-      return !!editor.blanks.messageText.trim()
-    case 'flow':
-      return !!(editor.blanks.flowName && editor.blanks.messageText.trim() && editor.blanks.buttonLabel.trim())
-    case 'interactive_reply_buttons': {
-      const labels = editor.blanks.buttons.map((b) => b.trim())
-      return !!(editor.blanks.messageText.trim() && labels.length >= 1 && labels.every(Boolean) && new Set(labels).size === labels.length)
-    }
-  }
-}
-
-const LINK_FORMAT_WARNING = 'Links need to start with https:// to open reliably on WhatsApp.'
-
-/** Any filled link blank that doesn't start with https:// — this one blocks Save, unlike the
- *  other warnings in section 7 which are advisory only. */
-function linkFormatError(editor: RichReplyEditorState): string | null {
-  if (editor.type === 'cta_url' && editor.blanks.link.trim() && !isUrl(editor.blanks.link)) return LINK_FORMAT_WARNING
-  if (editor.type === 'carousel_url' && editor.blanks.cards.some((c) => c.link.trim() && !isUrl(c.link))) return LINK_FORMAT_WARNING
-  return null
+function editorFromExisting(reply: RichReply): RichReplyEditorState {
+  return { mode: 'edit', replyId: reply.id, name: reply.name, trigger: reply.trigger, type: reply.type, blanks: reply.blanks } as RichReplyEditorState
 }
 
 function findSimilarRichReplyTrigger(trigger: string, replies: RichReply[], excludeId?: string): RichReply | undefined {
@@ -284,7 +182,7 @@ export function RichRepliesSection() {
 
   function startEdit(reply: RichReply) {
     if (!reply.blanks) return
-    setEditor(editorFromExisting(reply as RichReply & { blanks: NonNullable<RichReply['blanks']> }))
+    setEditor(editorFromExisting(reply))
     setEditorError(null)
   }
 
@@ -296,8 +194,7 @@ export function RichRepliesSection() {
   }
 
   async function saveEditor() {
-    if (!editor || !editor.name.trim() || !editor.trigger.trim() || !isBlanksComplete(editor)) return
-    if (linkFormatError(editor)) return
+    if (!editor || !editor.name.trim() || !editor.trigger.trim() || validateRichReply(editor).length) return
     const warnings = computeTriggerWarnings(editor.trigger, richReplies, customSkills, editor.replyId)
     const shouldFail = forceSaveFailure
     setEditorSaving(true)
@@ -317,7 +214,7 @@ export function RichRepliesSection() {
     try {
       if (shouldFail) throw new Error('forced')
       if (existing?.metaId && existing.type === reply.type) {
-        await updateUiSkill(existing.metaId, { title: reply.name, instruction: sentence })
+        await updateUiSkill(existing.metaId, { title: reply.name, instruction: sentence }, reply)
       } else {
         // New, or rebuilt as a different type: Meta can't change a type in place, so replace it.
         reply.metaId = (await createUiSkill(reply)).id
@@ -546,9 +443,17 @@ function RichReplyGalleryDialog({ onSelect, onClose }: { onSelect: (type: RichRe
   )
 }
 
+
 // ==================================================================================
 // EDITOR
 // ==================================================================================
+
+/** Which errors are visible: a field shows its issue once touched, or all at once after the user
+ *  asks what's blocking Save. */
+const FormContext = createContext<{ issue: (field: string) => string | undefined; touch: (field: string) => void }>({
+  issue: () => undefined,
+  touch: () => {},
+})
 
 function RichReplyEditorDialog({
   editor,
@@ -567,79 +472,402 @@ function RichReplyEditorDialog({
   onSave: () => void
   onClose: () => void
 }) {
-  const linkError = linkFormatError(editor)
-  const canSave = !!(editor.name.trim() && editor.trigger.trim() && isBlanksComplete(editor) && !linkError)
+  const [touched, setTouched] = useState<Set<string>>(() => new Set())
+  const [showAll, setShowAll] = useState(false)
+  const issues: RichReplyIssue[] = [
+    ...(editor.name.trim() ? [] : [{ field: 'name', message: 'Name is required.' }]),
+    ...(editor.trigger.trim() ? [] : [{ field: 'trigger', message: 'Describe when the agent should send this.' }]),
+    ...validateRichReply(editor),
+  ]
+  const canSave = issues.length === 0
+  const form = {
+    issue: (field: string) => (showAll || touched.has(field) ? issues.find((i) => i.field === field)?.message : undefined),
+    touch: (field: string) => setTouched((prev) => (prev.has(field) ? prev : new Set(prev).add(field))),
+  }
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="sm:max-w-4xl">
+      <DialogContent className="sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle>{RICH_REPLY_TYPE_LABEL[editor.type]}</DialogTitle>
         </DialogHeader>
-        {/* items-start keeps the shorter preview column from being stretched to match the fields
-         *  column's height — the default grid stretch left a large empty gap under the preview. */}
-        <div className="grid max-h-[75vh] grid-cols-[1fr_320px] items-start gap-6 overflow-y-auto pr-1">
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <span className="flex items-center gap-1.5">
-                  <Label htmlFor="rr-name">Name</Label>
-                  <InfoTooltip text="Only for you, so you can find it in the list." />
-                </span>
-                <Input
-                  id="rr-name"
-                  maxLength={MAX_NAME}
+        <FormContext.Provider value={form}>
+          {/* items-start keeps the shorter column from stretching to the taller one's height. */}
+          <div className="grid max-h-[75vh] items-start gap-6 overflow-y-auto pr-1 md:grid-cols-[minmax(0,1fr)_336px]">
+            <div className="space-y-5">
+              <div className="space-y-4">
+                <TextField
+                  field="name"
+                  label="Name"
+                  required
+                  hint="Only for you, so you can find it in the list."
+                  max={MAX_NAME}
                   value={editor.name}
-                  onChange={(e) => onChange({ ...editor, name: e.target.value })}
+                  onChange={(name) => onChange({ ...editor, name })}
                   placeholder="e.g. Product page button"
                 />
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="flex items-center gap-1.5">
-                  <Label htmlFor="rr-trigger">When should the agent send this?</Label>
-                  <InfoTooltip text="Written for the agent. Describe the situation, and the agent decides in the moment whether it fits." />
-                </span>
-                <Textarea
-                  id="rr-trigger"
-                  rows={3}
-                  maxLength={MAX_TRIGGER}
+                <TextField
+                  field="trigger"
+                  label="When should the agent send this?"
+                  required
+                  hint="Written for the agent. Describe the situation, and the agent decides in the moment whether it fits."
+                  rows={2}
+                  max={MAX_TRIGGER}
                   value={editor.trigger}
-                  onChange={(e) => onChange({ ...editor, trigger: e.target.value })}
+                  onChange={(trigger) => onChange({ ...editor, trigger })}
                   placeholder="e.g. When someone asks where they can buy online"
-                  className="bg-input-background shadow-sm"
                 />
               </div>
+              <div className="border-t border-border pt-5">
+                <RichReplyBlanksForm editor={editor} businessAddress={businessAddress} onChange={onChange} />
+              </div>
+              {error && <InlineError message={error} onRetry={onSave} />}
             </div>
 
-            <RichReplyBlanksForm editor={editor} businessAddress={businessAddress} onChange={onChange} />
-
-            {linkError && (
-              <p className="flex items-center gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                <AlertTriangle className="size-3.5 shrink-0" />
-                {linkError}
-              </p>
-            )}
-            {error && <InlineError message={error} onRetry={onSave} />}
+            <div className="space-y-3 md:sticky md:top-0">
+              <WhatsAppPreview draft={editor} />
+              <details className="group rounded-lg border border-border">
+                <summary
+                  className="flex cursor-pointer list-none items-center gap-1.5 rounded-lg px-3 py-2 focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
+                  style={{ fontSize: 'var(--text-sm)' }}
+                >
+                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+                  Instruction the agent will read
+                </summary>
+                <p className="whitespace-pre-wrap break-words border-t border-border px-3 py-2 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  {compileRichReplySentence(editor)}
+                </p>
+              </details>
+            </div>
           </div>
-
-          <div className="sticky top-0 space-y-1.5">
-            <Label>What the customer sees</Label>
-            <RichReplyPreview editor={editor} />
+        </FormContext.Provider>
+        <DialogFooter className="items-center sm:justify-between">
+          {canSave ? (
+            <span />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              className="text-left text-muted-foreground underline-offset-2 hover:underline"
+              style={{ fontSize: 'var(--text-xs)' }}
+            >
+              {issues.length === 1 ? '1 field needs attention before you can save' : `${issues.length} fields need attention before you can save`}
+              {!showAll && '. Show them'}
+            </button>
+          )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={onSave} disabled={!canSave || saving}>
+              {saving ? <Loader2 className="size-3.5 animate-spin" /> : 'Save'}
+            </Button>
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={onSave} disabled={!canSave || saving}>
-            {saving ? <Loader2 className="size-3.5 animate-spin" /> : 'Save'}
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
 }
+
+// ---- Field primitives ----
+
+function FieldShell({
+  htmlFor,
+  label,
+  required,
+  hint,
+  count,
+  max,
+  error,
+  errorId,
+  action,
+  children,
+}: {
+  htmlFor?: string
+  label: string
+  required?: boolean
+  hint?: string
+  count?: number
+  max?: number
+  error?: string
+  errorId?: string
+  action?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5">
+          <Label htmlFor={htmlFor}>
+            {label}
+            {required && (
+              <>
+                <span className="text-destructive" aria-hidden>
+                  *
+                </span>
+                <span className="sr-only">(required)</span>
+              </>
+            )}
+          </Label>
+          {hint && <InfoTooltip text={hint} />}
+        </span>
+        <span className="flex items-center gap-2">
+          {max !== undefined && count !== undefined && (
+            <span
+              className={cn(
+                'tabular-nums text-muted-foreground',
+                count > max ? 'text-destructive' : count >= max * 0.9 && 'text-warning-foreground',
+              )}
+              style={{ fontSize: 'var(--text-xs)' }}
+            >
+              {count}/{max}
+            </span>
+          )}
+          {action}
+        </span>
+      </div>
+      {children}
+      {error && (
+        <p id={errorId} className="text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function TextField({
+  field,
+  label,
+  value,
+  onChange,
+  max,
+  required,
+  hint,
+  placeholder,
+  rows,
+  inputMode,
+  action,
+}: {
+  field: string
+  label: string
+  value: string
+  onChange: (value: string) => void
+  max?: number
+  required?: boolean
+  hint?: string
+  placeholder?: string
+  rows?: number
+  inputMode?: 'url' | 'decimal'
+  action?: ReactNode
+}) {
+  const { issue, touch } = useContext(FormContext)
+  const id = useId()
+  const err = issue(field)
+  const common = {
+    id,
+    value,
+    placeholder,
+    maxLength: max,
+    'aria-invalid': err ? true : undefined,
+    'aria-describedby': err ? `${id}-err` : undefined,
+    onBlur: () => touch(field),
+  }
+  return (
+    <FieldShell htmlFor={id} label={label} required={required} hint={hint} count={max ? value.length : undefined} max={max} error={err} errorId={`${id}-err`} action={action}>
+      {rows ? (
+        <Textarea rows={rows} {...common} onChange={(e) => onChange(e.target.value)} />
+      ) : (
+        <Input inputMode={inputMode} {...common} onChange={(e) => onChange(e.target.value)} />
+      )}
+    </FieldShell>
+  )
+}
+
+function OptionalGroup({ children }: { children: ReactNode }) {
+  return (
+    <fieldset className="space-y-4 rounded-lg border border-dashed border-border px-3 pb-3 pt-1">
+      <legend className="px-1 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        Optional
+      </legend>
+      {children}
+    </fieldset>
+  )
+}
+
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: { value: T; label: string }[]
+  onChange: (value: T) => void
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="inline-flex flex-wrap gap-0.5 rounded-md bg-muted p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={o.value === value}
+          onClick={() => onChange(o.value)}
+          className={cn(
+            'rounded px-2.5 py-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring',
+            o.value === value && 'bg-background text-foreground shadow-sm',
+          )}
+          style={{ fontSize: 'var(--text-xs)' }}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** Where an image (or header video) comes from: something the agent already has access to, or a
+ *  plain https link. Never an upload (PRD Appendix C). */
+function ImageSourcePicker({
+  field,
+  label,
+  value,
+  onChange,
+  required,
+  media = 'image',
+}: {
+  field: string
+  label: string
+  value: ImageSource
+  onChange: (src: ImageSource) => void
+  required?: boolean
+  media?: 'image' | 'video'
+}) {
+  const { state, setSection } = useWizard()
+  const { issue, touch } = useContext(FormContext)
+  const id = useId()
+  const listId = useId()
+  const err = issue(field)
+  const { documents, websites } = state.knowledge
+  const tools = state.connections.actions
+  const refOf = (x: { id: string; metaId?: string }) => x.metaId ?? x.id
+  const pick = (next: ImageSource) => {
+    onChange(next)
+    touch(field)
+  }
+  const aria = { 'aria-invalid': err ? true : undefined, 'aria-describedby': err ? `${id}-err` : undefined }
+  const empty = (text: string, section: 'knowledge' | 'connections', where: string) => (
+    <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+      {text}{' '}
+      <button type="button" className="text-primary underline underline-offset-2" onClick={() => setSection(section)}>
+        Add one in {where}
+      </button>
+    </p>
+  )
+  const site = value.kind === 'website' ? websites.find((w) => refOf(w) === value.ref) : undefined
+
+  return (
+    <FieldShell htmlFor={value.kind === 'url' ? id : undefined} label={label} required={required} error={err} errorId={`${id}-err`}>
+      <div className="space-y-2">
+        <Segmented
+          label={`Where the ${media} comes from`}
+          value={value.kind}
+          options={[
+            { value: 'document', label: 'Knowledge document' },
+            { value: 'website', label: 'Website page' },
+            { value: 'connector', label: 'Connector tool' },
+            { value: 'url', label: media === 'video' ? 'Video link' : 'Image link' },
+          ]}
+          onChange={(kind) => kind !== value.kind && onChange({ kind, ref: '', label: '' })}
+        />
+        {value.kind === 'document' &&
+          (documents.length ? (
+            <Select value={value.ref || undefined} onValueChange={(ref) => pick({ kind: 'document', ref, label: documents.find((d) => refOf(d) === ref)?.fileName ?? '' })}>
+              <SelectTrigger className="w-full" {...aria}>
+                <SelectValue placeholder="Choose a document" />
+              </SelectTrigger>
+              <SelectContent>
+                {documents.map((d) => (
+                  <SelectItem key={d.id} value={refOf(d)}>
+                    {d.fileName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            empty('No documents yet.', 'knowledge', 'Knowledge')
+          ))}
+        {value.kind === 'website' &&
+          (websites.length ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Select value={value.ref || undefined} onValueChange={(ref) => pick({ kind: 'website', ref, label: websites.find((w) => refOf(w) === ref)?.url ?? '' })}>
+                <SelectTrigger className="w-full" {...aria}>
+                  <SelectValue placeholder="Choose a website" />
+                </SelectTrigger>
+                <SelectContent>
+                  {websites.map((w) => (
+                    <SelectItem key={w.id} value={refOf(w)}>
+                      {w.url}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                aria-label="Page path (optional)"
+                list={listId}
+                disabled={!value.ref}
+                value={value.path ?? ''}
+                onChange={(e) => onChange({ ...value, path: e.target.value || undefined })}
+                placeholder="Page path, e.g. /products (optional)"
+              />
+              <datalist id={listId}>
+                {site?.subpages.map((p) => <option key={p} value={p} />)}
+              </datalist>
+            </div>
+          ) : (
+            empty('No websites yet.', 'knowledge', 'Knowledge')
+          ))}
+        {value.kind === 'connector' &&
+          (tools.length ? (
+            <>
+              <Select value={value.ref || undefined} onValueChange={(ref) => pick({ kind: 'connector', ref, label: tools.find((a) => refOf(a) === ref)?.name ?? '' })}>
+                <SelectTrigger className="w-full" {...aria}>
+                  <SelectValue placeholder="Choose a tool" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tools.map((a) => (
+                    <SelectItem key={a.id} value={refOf(a)}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                Pick a tool whose response includes a link to the {media}.
+              </p>
+            </>
+          ) : (
+            empty('No connector tools yet.', 'connections', 'Connections')
+          ))}
+        {value.kind === 'url' && (
+          <Input
+            id={id}
+            inputMode="url"
+            {...aria}
+            value={value.ref}
+            onChange={(e) => onChange({ kind: 'url', ref: e.target.value, label: e.target.value })}
+            onBlur={() => touch(field)}
+            placeholder="https://"
+          />
+        )}
+      </div>
+    </FieldShell>
+  )
+}
+
+// ---- Per-type forms (fields in PRD Appendix C order) ----
 
 function RichReplyBlanksForm({
   editor,
@@ -650,323 +878,278 @@ function RichReplyBlanksForm({
   businessAddress: string
   onChange: (editor: RichReplyEditorState) => void
 }) {
+  const up = <B,>(b: B, patch: Partial<B>) => onChange({ ...editor, blanks: { ...b, ...patch } } as unknown as RichReplyEditorState)
+
   switch (editor.type) {
-    case 'cta_url':
+    case 'cta_url': {
+      const b = editor.blanks
+      const media = b.headerMedia
       return (
         <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="rr-message">Message text</Label>
-            <Textarea
-              id="rr-message"
-              rows={2}
-              maxLength={MAX_MESSAGE_TEXT}
-              value={editor.blanks.messageText}
-              onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, messageText: e.target.value } })}
-              placeholder="e.g. You can order directly from our website."
+          <TextField
+            field="messageText"
+            label="Body"
+            required
+            rows={3}
+            max={L.bodyMax}
+            value={b.messageText}
+            onChange={(v) => up(b, { messageText: v })}
+            placeholder="e.g. You can order directly from our website."
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextField
+              field="buttonLabel"
+              label="Button label"
+              required
+              hint="Keep it to a word or two. Long labels get cut off on phones."
+              max={L.labelMax}
+              value={b.buttonLabel}
+              onChange={(v) => up(b, { buttonLabel: v })}
+              placeholder="e.g. Shop now"
             />
+            <TextField field="link" label="Button URL" required inputMode="url" value={b.link} onChange={(v) => up(b, { link: v })} placeholder="https://" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <span className="flex items-center gap-1.5">
-                <Label htmlFor="rr-button-label">Button label</Label>
-                <InfoTooltip text="Keep it to a word or two. Long labels get cut off on phones." />
-              </span>
-              <Input
-                id="rr-button-label"
-                maxLength={MAX_BUTTON_LABEL}
-                value={editor.blanks.buttonLabel}
-                onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, buttonLabel: e.target.value } })}
-                placeholder="e.g. Shop now"
-              />
+          <OptionalGroup>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label>Header media</Label>
+                <Segmented
+                  label="Header media"
+                  value={media?.mediaType ?? 'none'}
+                  options={[
+                    { value: 'none', label: 'None' },
+                    { value: 'image', label: 'Image' },
+                    { value: 'video', label: 'Video' },
+                  ]}
+                  onChange={(v) => up(b, { headerMedia: v === 'none' ? undefined : { ...(media ?? emptySource()), mediaType: v } })}
+                />
+              </div>
+              {media && (
+                <ImageSourcePicker
+                  field="headerMedia"
+                  label={media.mediaType === 'video' ? 'Header video' : 'Header image'}
+                  media={media.mediaType}
+                  value={media}
+                  onChange={(src) => up(b, { headerMedia: { ...src, mediaType: media.mediaType } })}
+                />
+              )}
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="rr-link">Link</Label>
-              <Input
-                id="rr-link"
-                value={editor.blanks.link}
-                onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, link: e.target.value } })}
-                placeholder="https://"
-              />
-            </div>
-          </div>
+            <TextField
+              field="footer"
+              label="Footer"
+              max={L.footerMax}
+              value={b.footer ?? ''}
+              onChange={(v) => up(b, { footer: v })}
+              placeholder="e.g. Free delivery on orders over ₹999"
+            />
+          </OptionalGroup>
         </div>
       )
+    }
 
-    case 'image':
-      return (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <span className="flex items-center gap-1.5">
-              <Label htmlFor="rr-image-url">Image</Label>
-              <InfoTooltip text="A link to a hosted image. Uploading from your computer comes later." />
-            </span>
-            <Input
-              id="rr-image-url"
-              value={editor.blanks.imageUrl}
-              onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, imageUrl: e.target.value } })}
-              placeholder="Paste a link to the image"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="rr-caption">Caption</Label>
-            <Input
-              id="rr-caption"
-              maxLength={MAX_CAPTION}
-              value={editor.blanks.caption}
-              onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, caption: e.target.value } })}
-            />
-          </div>
-        </div>
-      )
-
-    case 'interactive_list':
+    case 'image': {
+      const b = editor.blanks
       return (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="rr-menu-message">Message text</Label>
-              <Textarea
-                id="rr-menu-message"
-                rows={2}
-                maxLength={MAX_MESSAGE_TEXT}
-                value={editor.blanks.messageText}
-                onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, messageText: e.target.value } })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="rr-menu-button-label">Menu button label</Label>
-              <Input
-                id="rr-menu-button-label"
-                maxLength={MAX_BUTTON_LABEL}
-                value={editor.blanks.menuButtonLabel}
-                onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, menuButtonLabel: e.target.value } })}
-                placeholder="e.g. See options"
-              />
-            </div>
-          </div>
+          <ImageSourcePicker field="image" label="Image source" required value={b.image} onChange={(image) => up(b, { image })} />
+          <OptionalGroup>
+            <TextField field="caption" label="Caption" rows={2} max={L.bodyMax} value={b.caption} onChange={(v) => up(b, { caption: v })} />
+          </OptionalGroup>
+        </div>
+      )
+    }
+
+    case 'interactive_list': {
+      const b = editor.blanks
+      return (
+        <div className="space-y-4">
+          <TextField field="messageText" label="Body" required rows={3} max={L.listBodyMax} value={b.messageText} onChange={(v) => up(b, { messageText: v })} />
+          <TextField
+            field="menuButtonLabel"
+            label="Button text"
+            required
+            hint="The button that opens the list."
+            max={L.labelMax}
+            value={b.menuButtonLabel}
+            onChange={(v) => up(b, { menuButtonLabel: v })}
+            placeholder="e.g. See options"
+          />
           <MenuOptionsEditor
-            options={editor.blanks.options}
-            groupsEnabled={editor.blanks.groupsEnabled}
-            onChange={(options) => onChange({ ...editor, blanks: { ...editor.blanks, options } })}
-            onToggleGroups={(groupsEnabled) => onChange({ ...editor, blanks: { ...editor.blanks, groupsEnabled } })}
+            options={b.options}
+            groupsEnabled={b.groupsEnabled}
+            onChange={(options) => up(b, { options })}
+            onToggleGroups={(groupsEnabled) => up(b, { groupsEnabled })}
           />
         </div>
       )
+    }
 
     case 'carousel_url':
-    case 'carousel_quick_reply':
+    case 'carousel_quick_reply': {
+      const b = editor.blanks
       return (
         <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="rr-carousel-message">Message text</Label>
-            <Textarea
-              id="rr-carousel-message"
-              rows={2}
-              maxLength={MAX_MESSAGE_TEXT}
-              value={editor.blanks.messageText}
-              onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, messageText: e.target.value } })}
-            />
-          </div>
-          <CarouselCardsEditor
-            cards={editor.blanks.cards}
-            hasLink={editor.type === 'carousel_url'}
-            onChange={(cards) => onChange({ ...editor, blanks: { ...editor.blanks, cards } } as RichReplyEditorState)}
-          />
+          <TextField field="messageText" label="Body" required rows={2} max={L.bodyMax} value={b.messageText} onChange={(v) => up(b, { messageText: v })} />
+          <CarouselCardsEditor cards={b.cards} hasLink={editor.type === 'carousel_url'} onChange={(cards) => up(b, { cards })} />
         </div>
       )
+    }
 
-    case 'location':
+    case 'location': {
+      const b = editor.blanks
       return (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="rr-place-name">Name of the place</Label>
-              <Input
-                id="rr-place-name"
-                maxLength={MAX_LOCATION_NAME}
-                value={editor.blanks.placeName}
-                onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, placeName: e.target.value } })}
-                placeholder="e.g. Aurora Home Goods, Bandra West"
-              />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextField field="latitude" label="Latitude" required inputMode="decimal" value={b.latitude} onChange={(v) => up(b, { latitude: v })} placeholder="e.g. 19.0596" />
+            <TextField field="longitude" label="Longitude" required inputMode="decimal" value={b.longitude} onChange={(v) => up(b, { longitude: v })} placeholder="e.g. 72.8295" />
+          </div>
+          <p className="flex items-start gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            <MapPin className="mt-px size-3.5 shrink-0" />
+            Copy the coordinates from a verified source, like your Google Business Profile or a pin dropped at your door. A wrong pin sends customers to the wrong place.
+          </p>
+          <OptionalGroup>
+            <TextField
+              field="placeName"
+              label="Name"
+              max={MAX_LOCATION_NAME}
+              value={b.placeName ?? ''}
+              onChange={(v) => up(b, { placeName: v })}
+              placeholder="e.g. Aurora Home Goods, Bandra West"
+            />
+            <div className="space-y-2">
+              <TextField field="address" label="Address" rows={2} max={MAX_LOCATION_ADDRESS} value={b.address ?? ''} onChange={(v) => up(b, { address: v })} />
+              {businessAddress.trim() && b.address !== businessAddress && (
+                <Button size="sm" variant="outline" onClick={() => up(b, { address: businessAddress })}>
+                  Use my business address
+                </Button>
+              )}
+              {businessAddress.trim() && b.address === businessAddress && (
+                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  Filled from your business details. Edit if this reply should point somewhere else.
+                </p>
+              )}
             </div>
-            <div className="space-y-1.5">
-              <span className="flex items-center gap-1.5">
-                <Label htmlFor="rr-lat">Map position</Label>
-                <InfoTooltip text="Tip: copy these from the share options in any maps app." />
-              </span>
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  id="rr-lat"
-                  aria-label="Latitude"
-                  value={editor.blanks.latitude}
-                  onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, latitude: e.target.value } })}
-                  placeholder="Latitude"
-                />
-                <Input
-                  id="rr-lng"
-                  aria-label="Longitude"
-                  value={editor.blanks.longitude}
-                  onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, longitude: e.target.value } })}
-                  placeholder="Longitude"
-                />
-              </div>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="rr-address">Address</Label>
-            <Textarea
-              id="rr-address"
-              rows={2}
-              maxLength={MAX_LOCATION_ADDRESS}
-              value={editor.blanks.address}
-              onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, address: e.target.value } })}
-            />
-            {businessAddress.trim() && !editor.blanks.placeName.trim() && !editor.blanks.address.trim() && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  onChange({
-                    ...editor,
-                    blanks: { ...editor.blanks, address: businessAddress },
-                  })
-                }
-              >
-                Fill from business details
-              </Button>
-            )}
-            {editor.blanks.address === businessAddress && businessAddress.trim() && (
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                Filled from your business details. Edit if this reply should point somewhere else.
-              </p>
-            )}
-          </div>
+          </OptionalGroup>
         </div>
       )
+    }
 
-    case 'interactive_reply_buttons':
-      return (
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="rr-buttons-message">Message text</Label>
-            <Textarea
-              id="rr-buttons-message"
-              rows={2}
-              maxLength={MAX_MESSAGE_TEXT}
-              value={editor.blanks.messageText}
-              onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, messageText: e.target.value } })}
-              placeholder="e.g. How would you like to receive your order?"
-            />
-          </div>
-          <div className="space-y-2">
-            <span className="flex items-center gap-1.5">
-              <Label>Buttons</Label>
-              <InfoTooltip text="One to three buttons. Each label must be different, up to 20 characters. Tapping one sends its label as the customer's reply." />
-            </span>
-            {editor.blanks.buttons.map((label, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Input
-                  aria-label={`Button ${i + 1} label`}
-                  maxLength={MAX_BUTTON_LABEL}
-                  value={label}
-                  onChange={(e) =>
-                    onChange({ ...editor, blanks: { ...editor.blanks, buttons: editor.blanks.buttons.map((b, j) => (j === i ? e.target.value : b)) } })
-                  }
-                  placeholder={i === 0 ? 'e.g. Home delivery' : 'e.g. Store pickup'}
-                />
-                {editor.blanks.buttons.length > 1 && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    aria-label={`Remove button ${i + 1}`}
-                    onClick={() => onChange({ ...editor, blanks: { ...editor.blanks, buttons: editor.blanks.buttons.filter((_, j) => j !== i) } })}
-                  >
-                    Remove
-                  </Button>
-                )}
-              </div>
-            ))}
-            {editor.blanks.buttons.length < 3 && (
-              <Button size="sm" variant="outline" onClick={() => onChange({ ...editor, blanks: { ...editor.blanks, buttons: [...editor.blanks.buttons, ''] } })}>
-                Add a button
-              </Button>
-            )}
-          </div>
-        </div>
-      )
+    case 'interactive_reply_buttons': {
+      const b = editor.blanks
+      return <ReplyButtonsEditor messageText={b.messageText} buttons={b.buttons} onChange={(patch) => up(b, patch)} />
+    }
 
-    case 'location_request':
+    case 'location_request': {
+      const b = editor.blanks
       return (
-        <div className="space-y-1.5">
-          <span className="flex items-center gap-1.5">
-            <Label htmlFor="rr-location-request-message">Message text</Label>
-            <InfoTooltip text="The customer always chooses whether to share. The agent should never insist." />
-          </span>
-          <Textarea
-            id="rr-location-request-message"
-            rows={2}
-            maxLength={MAX_MESSAGE_TEXT}
-            value={editor.blanks.messageText}
-            onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, messageText: e.target.value } })}
-            placeholder="e.g. Please share your location so we can check delivery to your area."
-          />
-        </div>
+        <TextField
+          field="messageText"
+          label="Body"
+          required
+          hint="The customer always chooses whether to share. The agent should never insist."
+          rows={3}
+          max={L.bodyMax}
+          value={b.messageText}
+          onChange={(v) => up(b, { messageText: v })}
+          placeholder="e.g. Please share your location so we can check delivery to your area."
+        />
       )
+    }
 
     case 'flow': {
-      if (CANNED_FLOWS.length === 0) {
-        return (
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-            No WhatsApp forms are set up on this number yet. Forms are created separately from
-            this wizard.
-          </p>
-        )
-      }
+      // Out of scope (hidden from the gallery); kept editable for rows that already exist.
+      const b = editor.blanks
       return (
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="rr-flow-message">Message text</Label>
-            <Textarea
-              id="rr-flow-message"
-              rows={2}
-              maxLength={MAX_MESSAGE_TEXT}
-              value={editor.blanks.messageText}
-              onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, messageText: e.target.value } })}
-            />
+            <Label>Which form</Label>
+            <Select value={b.flowName ?? undefined} onValueChange={(v) => up(b, { flowName: v })}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Choose a form" />
+              </SelectTrigger>
+              <SelectContent>
+                {CANNED_FLOWS.map((f) => (
+                  <SelectItem key={f} value={f}>
+                    {f}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Which form</Label>
-              <Select
-                value={editor.blanks.flowName ?? undefined}
-                onValueChange={(v) => onChange({ ...editor, blanks: { ...editor.blanks, flowName: v } })}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose a form" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CANNED_FLOWS.map((f) => (
-                    <SelectItem key={f} value={f}>
-                      {f}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="rr-flow-button-label">Button label</Label>
-              <Input
-                id="rr-flow-button-label"
-                maxLength={MAX_BUTTON_LABEL}
-                value={editor.blanks.buttonLabel}
-                onChange={(e) => onChange({ ...editor, blanks: { ...editor.blanks, buttonLabel: e.target.value } })}
-              />
-            </div>
-          </div>
+          <TextField field="messageText" label="Body" required rows={2} max={L.bodyMax} value={b.messageText} onChange={(v) => up(b, { messageText: v })} />
+          <TextField field="buttonLabel" label="Button label" required max={L.labelMax} value={b.buttonLabel} onChange={(v) => up(b, { buttonLabel: v })} />
         </div>
       )
     }
   }
+}
+
+function CountError({ field }: { field: string }) {
+  const message = useContext(FormContext).issue(field)
+  return message ? (
+    <p className="text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+      {message}
+    </p>
+  ) : null
+}
+
+function RemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button type="button" aria-label={label} onClick={onClick} className="rounded text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+      <X className="size-3.5" />
+    </button>
+  )
+}
+
+function ReplyButtonsEditor({
+  messageText,
+  buttons,
+  onChange,
+}: {
+  messageText: string
+  buttons: string[]
+  onChange: (patch: { messageText?: string; buttons?: string[] }) => void
+}) {
+  return (
+    <div className="space-y-4">
+      <TextField
+        field="messageText"
+        label="Body"
+        required
+        rows={3}
+        max={L.bodyMax}
+        value={messageText}
+        onChange={(v) => onChange({ messageText: v })}
+        placeholder="e.g. How would you like to receive your order?"
+      />
+      <div className="space-y-3">
+        <span className="flex items-center gap-1.5">
+          <Label>Buttons</Label>
+          <InfoTooltip text="One to three buttons, each with a different title. Tapping one sends its title as the customer's reply." />
+        </span>
+        {buttons.map((label, i) => (
+          <TextField
+            key={i}
+            field={`buttons.${i}`}
+            label={`Button ${i + 1}`}
+            required
+            max={L.labelMax}
+            value={label}
+            onChange={(v) => onChange({ buttons: buttons.map((b, j) => (j === i ? v : b)) })}
+            placeholder={i === 0 ? 'e.g. Home delivery' : 'e.g. Store pickup'}
+            action={buttons.length > L.buttonsMin && <RemoveButton label={`Remove button ${i + 1}`} onClick={() => onChange({ buttons: buttons.filter((_, j) => j !== i) })} />}
+          />
+        ))}
+        <CountError field="buttons" />
+        {buttons.length < L.buttonsMax && (
+          <Button size="sm" variant="outline" onClick={() => onChange({ buttons: [...buttons, ''] })}>
+            <Plus className="size-3.5" />
+            Add a button
+          </Button>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function MenuOptionsEditor({
@@ -980,69 +1163,77 @@ function MenuOptionsEditor({
   onChange: (options: InteractiveListBlanks['options']) => void
   onToggleGroups: (enabled: boolean) => void
 }) {
+  const otherIds = (id: string) => options.filter((o) => o.id !== id).map((o) => o.rowId)
+  const autoId = (title: string, id: string) => (title.trim() ? rowIdFromTitle(title, otherIds(id)) : '')
+  // Rows whose ID the user typed themselves; those stop following the title.
+  const [manual, setManual] = useState(() => new Set(options.filter((o) => o.rowId && o.rowId !== autoId(o.title, o.id)).map((o) => o.id)))
+  const edit = (id: string, patch: Partial<InteractiveListBlanks['options'][number]>) => onChange(options.map((o) => (o.id === id ? { ...o, ...patch } : o)))
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <Label>Options</Label>
-        {!groupsEnabled && (
-          <button type="button" onClick={() => onToggleGroups(true)} className="text-primary" style={{ fontSize: 'var(--text-xs)' }}>
-            Group these options
-          </button>
-        )}
+        <span className="flex items-center gap-1.5">
+          <Label>Rows</Label>
+          <InfoTooltip text={`${L.rowsMin} to ${L.rowsMax} rows. The customer picks one from the list.`} />
+        </span>
+        <button
+          type="button"
+          onClick={() => onToggleGroups(!groupsEnabled)}
+          className="text-primary underline-offset-2 hover:underline"
+          style={{ fontSize: 'var(--text-xs)' }}
+        >
+          {groupsEnabled ? 'Remove groups' : 'Group these rows'}
+        </button>
       </div>
-      <div className="space-y-2">
-        {options.map((option, i) => (
-          <div key={option.id} className="space-y-2 rounded-lg border border-border p-3">
-            <div className="flex items-center justify-between">
-              <p style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-medium)' }}>Option {i + 1}</p>
-              {options.length > MIN_MENU_OPTIONS && (
-                <button
-                  type="button"
-                  onClick={() => onChange(options.filter((o) => o.id !== option.id))}
-                  className="text-muted-foreground"
-                  style={{ fontSize: 'var(--text-xs)' }}
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <span className="flex items-center gap-1.5">
-                  <Label className="text-xs">Option title</Label>
-                  <InfoTooltip text="Short. This is the line the customer taps." />
-                </span>
-                <Input
-                  maxLength={MAX_MENU_OPTION_TITLE}
-                  value={option.title}
-                  onChange={(e) => onChange(options.map((o) => (o.id === option.id ? { ...o, title: e.target.value } : o)))}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Description</Label>
-                <Input
-                  maxLength={MAX_MENU_OPTION_DESC}
-                  value={option.description}
-                  onChange={(e) => onChange(options.map((o) => (o.id === option.id ? { ...o, description: e.target.value } : o)))}
-                />
-              </div>
-            </div>
-            {groupsEnabled && (
-              <div className="space-y-1">
-                <Label className="text-xs">Group heading</Label>
-                <Input
-                  value={option.group}
-                  onChange={(e) => onChange(options.map((o) => (o.id === option.id ? { ...o, group: e.target.value } : o)))}
-                />
-              </div>
-            )}
+      {options.map((option, i) => (
+        <div key={option.id} className="space-y-3 rounded-lg border border-border p-3">
+          <div className="flex items-center justify-between">
+            <p style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-medium)' }}>Row {i + 1}</p>
+            {options.length > L.rowsMin && <RemoveButton label={`Remove row ${i + 1}`} onClick={() => onChange(options.filter((o) => o.id !== option.id))} />}
           </div>
-        ))}
-      </div>
-      {options.length < MAX_MENU_OPTIONS && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextField
+              field={`options.${option.id}.title`}
+              label="Row title"
+              required
+              hint="Short. This is the line the customer taps."
+              max={L.rowTitleMax}
+              value={option.title}
+              onChange={(title) => edit(option.id, manual.has(option.id) ? { title } : { title, rowId: autoId(title, option.id) })}
+            />
+            <TextField
+              field={`options.${option.id}.rowId`}
+              label="Row ID"
+              required
+              hint="Sent back when the customer picks this row. Filled in from the title; each row needs a different one."
+              max={L.rowIdMax}
+              value={option.rowId}
+              onChange={(rowId) => {
+                setManual((prev) => {
+                  const next = new Set(prev)
+                  if (rowId) next.add(option.id)
+                  else next.delete(option.id)
+                  return next
+                })
+                edit(option.id, { rowId })
+              }}
+            />
+          </div>
+          <TextField
+            field={`options.${option.id}.description`}
+            label="Row description (optional)"
+            max={L.rowDescriptionMax}
+            value={option.description}
+            onChange={(description) => edit(option.id, { description })}
+          />
+          {groupsEnabled && <TextField field={`options.${option.id}.group`} label="Group heading" value={option.group} onChange={(group) => edit(option.id, { group })} />}
+        </div>
+      ))}
+      <CountError field="options" />
+      {options.length < L.rowsMax && (
         <Button size="sm" variant="outline" onClick={() => onChange([...options, newMenuOption()])}>
           <Plus className="size-3.5" />
-          Add option
+          Add row
         </Button>
       )}
     </div>
@@ -1059,6 +1250,7 @@ function CarouselCardsEditor({
   onChange: (cards: CarouselCard[]) => void
 }) {
   const dragIndex = useRef<number | null>(null)
+  const edit = (id: string, patch: Partial<CarouselCard>) => onChange(cards.map((c) => (c.id === id ? { ...c, ...patch } : c)))
 
   function handleDrop(targetIndex: number) {
     if (dragIndex.current === null || dragIndex.current === targetIndex) return
@@ -1070,228 +1262,61 @@ function CarouselCardsEditor({
   }
 
   return (
-    <div className="space-y-2">
-      <Label>Cards</Label>
-      <div className="space-y-2">
-        {cards.map((card, i) => (
-          <div
-            key={card.id}
-            draggable
-            onDragStart={() => {
-              dragIndex.current = i
-            }}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={() => handleDrop(i)}
-            className="space-y-2 rounded-lg border border-border p-3"
-          >
-            <div className="flex items-center gap-2">
-              <GripVertical className="size-4 shrink-0 cursor-grab text-muted-foreground" />
-              <p className="flex-1" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-medium)' }}>
-                Card {i + 1}
-              </p>
-              {cards.length > MIN_CAROUSEL_CARDS && (
-                <button
-                  type="button"
-                  onClick={() => onChange(cards.filter((c) => c.id !== card.id))}
-                  className="text-muted-foreground"
-                  style={{ fontSize: 'var(--text-xs)' }}
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Picture</Label>
-                <Input
-                  value={card.imageUrl}
-                  onChange={(e) => onChange(cards.map((c) => (c.id === card.id ? { ...c, imageUrl: e.target.value } : c)))}
-                  placeholder="Paste a link to the image"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Card text</Label>
-                <Input
-                  maxLength={MAX_CAROUSEL_CARD_TEXT}
-                  value={card.cardText}
-                  onChange={(e) => onChange(cards.map((c) => (c.id === card.id ? { ...c, cardText: e.target.value } : c)))}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <span className="flex items-center gap-1.5">
-                  <Label className="text-xs">Button label</Label>
-                  {!hasLink && <InfoTooltip text="Tapping this sends the label back as the customer’s answer." />}
-                </span>
-                <Input
-                  maxLength={MAX_BUTTON_LABEL}
-                  value={card.buttonLabel}
-                  onChange={(e) => onChange(cards.map((c) => (c.id === card.id ? { ...c, buttonLabel: e.target.value } : c)))}
-                />
-              </div>
-              {hasLink && (
-                <div className="space-y-1">
-                  <Label className="text-xs">Link</Label>
-                  <Input
-                    value={card.link}
-                    onChange={(e) => onChange(cards.map((c) => (c.id === card.id ? { ...c, link: e.target.value } : c)))}
-                    placeholder="https://"
-                  />
-                </div>
-              )}
-            </div>
+    <div className="space-y-3">
+      <span className="flex items-center gap-1.5">
+        <Label>Cards</Label>
+        <InfoTooltip text={`${L.cardsMin} to ${L.cardsMax} cards. Drag to reorder.`} />
+      </span>
+      {cards.map((card, i) => (
+        <div
+          key={card.id}
+          draggable
+          onDragStart={() => {
+            dragIndex.current = i
+          }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => handleDrop(i)}
+          className="space-y-3 rounded-lg border border-border p-3"
+        >
+          <div className="flex items-center gap-2">
+            <GripVertical className="size-4 shrink-0 cursor-grab text-muted-foreground" />
+            <p className="flex-1" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-medium)' }}>
+              Card {i + 1}
+            </p>
+            {cards.length > L.cardsMin && <RemoveButton label={`Remove card ${i + 1}`} onClick={() => onChange(cards.filter((c) => c.id !== card.id))} />}
           </div>
-        ))}
-      </div>
-      {cards.length < MAX_CAROUSEL_CARDS && (
+          <ImageSourcePicker field={`cards.${card.id}.image`} label="Image" required value={card.image} onChange={(image) => edit(card.id, { image })} />
+          <TextField
+            field={`cards.${card.id}.cardText`}
+            label="Card text"
+            required
+            rows={2}
+            max={L.cardTextMax}
+            value={card.cardText}
+            onChange={(cardText) => edit(card.id, { cardText })}
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextField
+              field={`cards.${card.id}.buttonLabel`}
+              label="Button label"
+              required
+              hint={hasLink ? undefined : 'Tapping this sends the label back as the customer’s answer.'}
+              max={L.labelMax}
+              value={card.buttonLabel}
+              onChange={(buttonLabel) => edit(card.id, { buttonLabel })}
+            />
+            {hasLink && (
+              <TextField field={`cards.${card.id}.link`} label="Button URL" required inputMode="url" value={card.link} onChange={(link) => edit(card.id, { link })} placeholder="https://" />
+            )}
+          </div>
+        </div>
+      ))}
+      <CountError field="cards" />
+      {cards.length < L.cardsMax && (
         <Button size="sm" variant="outline" onClick={() => onChange([...cards, newCarouselCard()])}>
           <Plus className="size-3.5" />
           Add card
         </Button>
-      )}
-    </div>
-  )
-}
-
-// ==================================================================================
-// PREVIEW
-// ==================================================================================
-
-function PreviewBubble({ text }: { text: string }) {
-  if (!text.trim()) return null
-  return (
-    <div className="max-w-full rounded-xl rounded-br-sm bg-accent px-3 py-2 text-accent-foreground">
-      <p className="whitespace-pre-wrap break-words" style={{ fontSize: 'var(--text-sm)' }}>
-        {text}
-      </p>
-    </div>
-  )
-}
-
-function PreviewButton({ label, icon: Icon }: { label: string; icon?: typeof Link2 }) {
-  if (!label.trim()) return null
-  return (
-    <div className="flex items-center justify-center gap-1.5 rounded-lg border border-accent px-3 py-2 text-accent">
-      {Icon && <Icon className="size-3.5" />}
-      <span style={{ fontSize: 'var(--text-sm)' }}>{label}</span>
-    </div>
-  )
-}
-
-function RichReplyPreview({ editor }: { editor: RichReplyEditorState }) {
-  return (
-    <div className="space-y-2 rounded-xl border border-border bg-card p-3">
-      {editor.type === 'cta_url' && (
-        <>
-          <PreviewBubble text={editor.blanks.messageText} />
-          <PreviewButton label={editor.blanks.buttonLabel} icon={Link2} />
-        </>
-      )}
-      {editor.type === 'image' && (
-        <>
-          {editor.blanks.imageUrl.trim() ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={editor.blanks.imageUrl}
-              alt=""
-              className="h-32 w-full rounded-lg object-cover"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none'
-              }}
-            />
-          ) : (
-            <div className="flex h-32 items-center justify-center rounded-lg bg-muted">
-              <ImageIcon className="size-6 text-muted-foreground" />
-            </div>
-          )}
-          {editor.blanks.caption.trim() && (
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              {editor.blanks.caption}
-            </p>
-          )}
-        </>
-      )}
-      {editor.type === 'interactive_list' && (
-        <>
-          <PreviewBubble text={editor.blanks.messageText} />
-          <PreviewButton label={editor.blanks.menuButtonLabel} icon={List} />
-          {editor.blanks.options.some((o) => o.title.trim()) && (
-            <ul className="space-y-1 rounded-lg bg-muted p-2">
-              {editor.blanks.options
-                .filter((o) => o.title.trim())
-                .map((o) => (
-                  <li key={o.id} style={{ fontSize: 'var(--text-xs)' }}>
-                    {o.title}
-                  </li>
-                ))}
-            </ul>
-          )}
-        </>
-      )}
-      {(editor.type === 'carousel_url' || editor.type === 'carousel_quick_reply') && (
-        <>
-          <PreviewBubble text={editor.blanks.messageText} />
-          {editor.blanks.cards.some((c) => c.cardText.trim() || c.imageUrl.trim()) && (
-            <div className="flex gap-2 overflow-x-auto">
-              {editor.blanks.cards.map((c) => (
-                <div key={c.id} className="w-28 shrink-0 space-y-1 rounded-lg border border-border p-2">
-                  <div className="flex h-14 items-center justify-center rounded bg-muted">
-                    <ImageIcon className="size-4 text-muted-foreground" />
-                  </div>
-                  <p className="line-clamp-2" style={{ fontSize: 'var(--text-xs)' }}>
-                    {c.cardText || '—'}
-                  </p>
-                  {c.buttonLabel.trim() && (
-                    <p className="truncate rounded border border-accent px-1 py-0.5 text-center text-accent" style={{ fontSize: 'var(--text-xs)' }}>
-                      {c.buttonLabel}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-      {editor.type === 'location' && (editor.blanks.placeName.trim() || editor.blanks.address.trim()) && (
-        <div className="space-y-1 rounded-lg bg-muted p-3">
-          <div className="flex items-center gap-1.5 text-primary">
-            <MapPin className="size-4" />
-            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-medium)' }}>
-              {editor.blanks.placeName || 'Untitled place'}
-            </span>
-          </div>
-          {editor.blanks.address.trim() && (
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              {editor.blanks.address}
-            </p>
-          )}
-        </div>
-      )}
-      {editor.type === 'interactive_reply_buttons' && (
-        <>
-          <PreviewBubble text={editor.blanks.messageText} />
-          {editor.blanks.buttons.filter((b) => b.trim()).map((b, i) => (
-            <PreviewButton key={i} label={b} icon={MessageSquareReply} />
-          ))}
-        </>
-      )}
-      {editor.type === 'location_request' && (
-        <>
-          <PreviewBubble text={editor.blanks.messageText} />
-          <PreviewButton label="Send location" icon={Navigation} />
-        </>
-      )}
-      {editor.type === 'flow' && (
-        <>
-          <PreviewBubble text={editor.blanks.messageText} />
-          <PreviewButton label={editor.blanks.buttonLabel} icon={ClipboardList} />
-          {editor.blanks.flowName && (
-            <p className="text-center text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-              Opens: {editor.blanks.flowName}
-            </p>
-          )}
-        </>
       )}
     </div>
   )

@@ -1,6 +1,7 @@
 import {
   Activity,
   BadgeCheck,
+  BarChart3,
   BrainCircuit,
   FlaskConical,
   LayoutGrid,
@@ -37,5 +38,6 @@ export const STUDIO_NAV_SECTIONS: StudioNavItem[] = [
   { id: 'safety', label: 'Safety & handoff', icon: ShieldAlert, group: 'build' },
   { id: 'testEval', label: 'Test & Eval', icon: FlaskConical, group: 'deploy' },
   { id: 'publish', label: 'Publish', icon: Rocket, group: 'deploy' },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3, group: 'monitor' },
   { id: 'activity', label: 'Activity', icon: Activity, group: 'monitor' },
 ]

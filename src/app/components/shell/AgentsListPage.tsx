@@ -1,13 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
   Activity,
   Archive,
-  ArrowRight,
   Bot,
   Copy,
   FileCode2,
   History,
+  Loader2,
   MoreHorizontal,
   Play,
   PlayCircle,
@@ -18,7 +18,6 @@ import {
 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
-import { Card, CardContent } from '@/app/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/app/components/ui/avatar'
 import {
   Table,
@@ -37,7 +36,15 @@ import {
 } from '@/app/components/ui/dropdown-menu'
 import { CreateAgentModal } from './CreateAgentModal'
 import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
-import { deleteAgent, errorText, setRollout } from '@/app/api/meta'
+import {
+  deleteAgent,
+  errorText,
+  getAgentOnNumber,
+  listPhoneNumbers,
+  listWabas,
+  setActivePhoneNumberId,
+  setRollout,
+} from '@/app/api/meta'
 import { useWizard } from '@/app/wizard/WizardContext'
 import type { AgentInstanceSummary, AgentRolloutStatus } from '@/app/wizard/types'
 
@@ -54,6 +61,84 @@ function loadCreatedAgents(): AgentInstanceSummary[] {
 
 function persistCreatedAgents(agents: AgentInstanceSummary[]) {
   window.localStorage.setItem(CREATED_AGENTS_KEY, JSON.stringify(agents))
+}
+
+// What Meta doesn't hold about an agent, keyed by phone number id: the display name given at
+// creation, when it was last touched here, and whether it has ever gone live (Stopped vs In progress).
+const NUMBER_META_KEY = 'meta-agent-wizard-numbers-v1'
+interface NumberMeta {
+  name?: string
+  updatedAt?: number
+  launched?: boolean
+}
+
+function loadNumberMeta(): Record<string, NumberMeta> {
+  try {
+    return JSON.parse(window.localStorage.getItem(NUMBER_META_KEY) ?? '{}') as Record<string, NumberMeta>
+  } catch {
+    return {}
+  }
+}
+
+function saveNumberMeta(phoneNumberId: string, meta: NumberMeta) {
+  try {
+    const all = loadNumberMeta()
+    all[phoneNumberId] = { ...all[phoneNumberId], ...meta }
+    window.localStorage.setItem(NUMBER_META_KEY, JSON.stringify(all))
+  } catch {
+    // Storage unavailable: the list falls back to Meta's verified name.
+  }
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const pad = (n: number) => String(n).padStart(2, '0')
+/** "DD Mon YYYY, HH:MM" (PRD 5.1 AC5). */
+function formatStamp(t: number) {
+  const d = new Date(t)
+  return `${pad(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/** A list row; Meta-backed rows carry the ids needed to open the agent. */
+type AgentRow = AgentInstanceSummary & { phoneNumberId?: string; wabaId?: string }
+
+/** One row per phone number that has an agent, across every WABA the account can see. */
+async function loadMetaRows(): Promise<AgentRow[]> {
+  const stored = loadNumberMeta()
+  const wabas = await listWabas()
+  const perWaba = await Promise.all(
+    wabas.map(async (waba) => {
+      const numbers = await listPhoneNumbers(waba.id)
+      return Promise.all(
+        numbers.map(async (n): Promise<AgentRow | null> => {
+          const agent = await getAgentOnNumber(n.id)
+          if (!agent) return null
+          const m = stored[n.id] ?? {}
+          if (agent.enabled && !m.launched) saveNumberMeta(n.id, { launched: true })
+          return {
+            id: n.id,
+            phoneNumberId: n.id,
+            wabaId: waba.id,
+            name: m.name || n.verifiedName,
+            companyName: waba.name,
+            phoneNumber: n.displayPhoneNumber,
+            status: agent.enabled ? 'live' : m.launched ? 'paused' : 'draft',
+            connector: 'None',
+            journeyProfile: '—',
+            audienceMode: agent.audience === 'EVERYONE' ? 'Everyone' : 'Allowlisted',
+            allowlistCount: 0,
+            evalScore: null,
+            updatedAt: m.updatedAt ? formatStamp(m.updatedAt) : '—',
+          }
+        }),
+      )
+    }),
+  )
+  // Newest first (PRD 5.1 AC10); agents never touched here go last.
+  const at = (r: AgentRow) => stored[r.id]?.updatedAt ?? 0
+  return perWaba
+    .flat()
+    .filter((r): r is AgentRow => r !== null)
+    .sort((a, b) => at(b) - at(a))
 }
 
 // Collapsed to the three states the listing surfaces: green while live, red once stopped, blue
@@ -84,17 +169,40 @@ export function AgentsListPage({
   const [modalOpen, setModalOpen] = useState(false)
   const [createdAgents, setCreatedAgents] = useState<AgentInstanceSummary[]>(loadCreatedAgents)
 
+  // Meta is the source of truth for which agents exist. If it can't be reached, the list falls back
+  // to the agent in this browser (so the app still demos offline) under the PRD 5.1 V1 error.
+  const [metaRows, setMetaRows] = useState<AgentRow[] | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    loadMetaRows().then(
+      (r) => !cancelled && setMetaRows(r),
+      (err) => {
+        if (cancelled) return
+        console.log('[agent list]', errorText(err))
+        setLoadFailed(true)
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const loading = metaRows === null && !loadFailed
+
   // A brand new agent skips the agents table entirely and goes straight into the setup front
   // door — "Open configuration" for an EXISTING draft row still goes straight to the wizard via
   // openAgentConfiguration below, unaffected.
-  function handleAgentCreated(agent: AgentInstanceSummary) {
+  function handleAgentCreated(agent: AgentInstanceSummary, phoneNumberId?: string, wabaId?: string) {
     resetWizard()
     patch('identity', { agentName: agent.name, companyName: agent.companyName })
     patch('gate', {
       gatePassed: true,
       selectedPhoneNumber: agent.phoneNumber,
       selectedWabaName: agent.companyName,
+      selectedWabaId: wabaId ?? null,
+      selectedPhoneNumberId: phoneNumberId,
     })
+    if (phoneNumberId) saveNumberMeta(phoneNumberId, { name: agent.name, updatedAt: Date.now() })
     toast.success(`${agent.name} created`)
     onAgentCreated()
   }
@@ -110,23 +218,30 @@ export function AgentsListPage({
   // Loads a draft agent's known fields into the wizard and opens the stepped
   // configuration flow. The app only tracks one agent's deep config at a time,
   // so the stub is "promoted" out of the static list and into live wizard state.
-  function openAgentConfiguration(agent: AgentInstanceSummary) {
-    if (!agent.isCurrent) {
-      resetWizard()
-      patch('identity', { agentName: agent.name, companyName: agent.companyName })
-      patch('gate', {
-        gatePassed: true,
-        selectedPhoneNumber: agent.phoneNumber,
-        selectedWabaName: agent.companyName,
-      })
-      removeCreatedAgent(agent.id)
-    }
+  function selectAgent(agent: AgentRow) {
+    if (agent.isCurrent) return
+    resetWizard()
+    patch('identity', { agentName: agent.name, companyName: agent.companyName })
+    patch('gate', {
+      gatePassed: true,
+      selectedPhoneNumber: agent.phoneNumber,
+      selectedWabaName: agent.companyName,
+      selectedWabaId: agent.wabaId ?? null,
+      selectedPhoneNumberId: agent.phoneNumberId,
+    })
+    setActivePhoneNumberId(agent.phoneNumberId ?? null)
+    if (!agent.phoneNumberId) removeCreatedAgent(agent.id)
+  }
+
+  function openAgentConfiguration(agent: AgentRow) {
+    selectAgent(agent)
     onOpenBuilder()
   }
 
-  const currentAgent: AgentInstanceSummary | null = state.identity.agentName.trim()
+  const currentAgent: AgentRow | null = state.identity.agentName.trim()
     ? {
         id: 'current',
+        wabaId: state.gate.selectedWabaId ?? undefined,
         name: state.identity.agentName,
         companyName: state.identity.companyName || 'Untitled workspace',
         phoneNumber: state.gate.selectedPhoneNumber ?? '—',
@@ -161,9 +276,23 @@ export function AgentsListPage({
       }
     : null
 
-  const rows = currentAgent ? [currentAgent, ...createdAgents] : createdAgents
+  const localRows: AgentRow[] = currentAgent ? [currentAgent, ...createdAgents] : createdAgents
+  // The open agent's row takes its name and stop state from the wizard; everything else is Meta's.
+  const rows: AgentRow[] = metaRows
+    ? metaRows.map((r) =>
+        currentAgent && r.phoneNumberId === state.gate.selectedPhoneNumberId
+          ? { ...r, name: currentAgent.name, status: r.status === 'draft' && currentAgent.status === 'paused' ? 'paused' : r.status, isCurrent: true }
+          : r,
+      )
+    : loadFailed
+      ? localRows
+      : []
 
-  const [pendingDelete, setPendingDelete] = useState<AgentInstanceSummary | null>(null)
+  function updateMetaRow(id: string, fields: Partial<AgentRow> | null) {
+    setMetaRows((prev) => prev && (fields ? prev.map((r) => (r.id === id ? { ...r, ...fields } : r)) : prev.filter((r) => r.id !== id)))
+  }
+
+  const [pendingDelete, setPendingDelete] = useState<AgentRow | null>(null)
   async function confirmDeleteAgent() {
     const agent = pendingDelete
     setPendingDelete(null)
@@ -175,18 +304,22 @@ export function AgentsListPage({
       return
     }
     resetWizard()
+    setActivePhoneNumberId(null)
+    updateMetaRow(agent.id, null)
     toast.success(`${agent.name} deleted`)
   }
 
-  function handleAction(agent: AgentInstanceSummary, action: string) {
+  function handleAction(agent: AgentRow, action: string) {
     if (action === 'open') {
       openAgentConfiguration(agent)
       return
     }
-    if (!agent.isCurrent) {
+    if (!agent.isCurrent && !agent.phoneNumberId) {
       toast('This is a demo agent instance for illustration — actions here don’t affect real data.')
       return
     }
+    // Every other action works on the open agent, so a Meta row becomes it first.
+    if (action !== 'duplicate') selectAgent(agent)
     switch (action) {
       case 'activity':
         setSection('activity')
@@ -208,9 +341,11 @@ export function AgentsListPage({
       case 'resume': {
         // Same rollout lever as Publish: Meta first, then the row.
         const enabled = action === 'resume'
-        setRollout(enabled, state.publish.audienceMode).then(
+        setRollout(enabled, agent.audienceMode === 'Everyone' ? 'everyone' : 'allowlisted').then(
           () => {
             patch('publish', { activated: enabled, stopped: !enabled })
+            updateMetaRow(agent.id, { status: enabled ? 'live' : 'paused' })
+            if (agent.phoneNumberId) saveNumberMeta(agent.phoneNumberId, { launched: true, updatedAt: Date.now() })
             toast.success(enabled ? `${agent.name} is live again` : `${agent.name} stopped`)
           },
           (err) => toast.error("Couldn't save to Meta", { description: errorText(err) }),
@@ -231,31 +366,23 @@ export function AgentsListPage({
 
   return (
     <>
-      {rows.length === 0 ? (
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <Loader2 className="size-4 animate-spin" />
+          Loading your agents&hellip;
+        </div>
+      ) : loadFailed && rows.length === 0 ? (
         <div className="mx-auto w-full max-w-3xl px-6 py-10">
-          <h1>Welcome back</h1>
-          <p className="mt-1 text-muted-foreground">You haven&rsquo;t configured any AI agents yet.</p>
-
-          <Card className="mt-6 border-primary/30 bg-accent">
-            <CardContent className="flex items-center justify-between gap-4 py-5">
-              <div className="flex items-center gap-4">
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                  <Bot className="size-6" />
-                </div>
-                <div>
-                  <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>Build your first AI agent</p>
-                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                    Configure a governed, tested WhatsApp AI agent in structured steps — no prompt
-                    engineering required.
-                  </p>
-                </div>
-              </div>
-              <Button onClick={() => setModalOpen(true)} className="shrink-0">
-                Create agent
-                <ArrowRight className="size-4" />
-              </Button>
-            </CardContent>
-          </Card>
+          <h1>AI Agents</h1>
+          <p className="mt-4 text-destructive">Failed to load the list. Please try again after some time.</p>
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 px-6 text-center">
+          <h1>Get started with AI agents</h1>
+          <Button onClick={() => setModalOpen(true)} size="lg">
+            <Plus className="size-4" />
+            Create agent
+          </Button>
         </div>
       ) : (
         <div className="mx-auto w-full max-w-6xl px-6 py-8">
@@ -271,13 +398,18 @@ export function AgentsListPage({
               Create agent
             </Button>
           </div>
+          {loadFailed && (
+            <p className="mt-4 text-destructive" style={{ fontSize: 'var(--text-sm)' }}>
+              Failed to load the list. Please try again after some time.
+            </p>
+          )}
 
           <div className="mt-6 overflow-hidden rounded-lg border border-border">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Agent name</TableHead>
-                  <TableHead>WABA name</TableHead>
+                  <TableHead>WABA ID</TableHead>
                   <TableHead>Phone number</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last updated</TableHead>
@@ -303,7 +435,7 @@ export function AgentsListPage({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span style={{ fontSize: 'var(--text-sm)' }}>{agent.companyName}</span>
+                      <span style={{ fontSize: 'var(--text-sm)' }}>{agent.wabaId ?? '—'}</span>
                     </TableCell>
                     <TableCell>
                       <span style={{ fontSize: 'var(--text-sm)' }}>{agent.phoneNumber}</span>
