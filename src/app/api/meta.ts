@@ -112,7 +112,10 @@ export interface ServerHealth {
   hasToken: boolean
   businessName: string
   wabaId: string
+  wabaName?: string
   phoneNumberId: string
+  phoneNumber?: string
+  phoneName?: string
 }
 export async function getServerHealth(): Promise<ServerHealth | null> {
   try {

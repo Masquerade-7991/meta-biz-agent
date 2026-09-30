@@ -3,24 +3,17 @@
 // /api/graph/<path> goes to <upstream><GRAPH_PREFIX>/<path> (plain Graph API, no X-API-Version).
 // Literal WABA_ID / PHONE_NUMBER_ID / BUSINESS_ID segments in <path> are swapped for the .env values,
 // so the browser never needs to know them; real IDs pass through. Run: npm run dev:server
+// With MONGODB_URI set, successful traffic is also recorded (record.ts), /api/store/* and
+// /api/analytics/* are served from MongoDB (store.ts), and collectors run in the background.
 import http from 'node:http'
+import { allow, getCached, invalidatePhone, putCached, ttlFor } from './cache.ts'
+import { startCollectors } from './collectors.ts'
+import { initDb } from './db.ts'
+import { record, resourceOf, splitPhone } from './record.ts'
+import { handleStore } from './store.ts'
+import { agentUpstream, callUpstream, env, ids, resolveIds, upstream, type Kind } from './upstream.ts'
 
-process.loadEnvFile?.('.env')
-const env = (k: string) => (process.env[k] ?? '').trim()
-
-// UPSTREAM=meta → BASE_URL_1 (needs META_TOKEN); anything else → BASE_URL_2 (Helo.ai server).
-const upstream = (env('UPSTREAM') === 'meta' ? env('BASE_URL_1') : env('BASE_URL_2')).replace(/\/+$/, '')
 const PORT = Number(env('SERVER_PORT') || 8787)
-const GRAPH_PREFIX = env('GRAPH_PREFIX').replace(/\/+$/, '')
-const ids: Record<string, string> = {
-  WABA_ID: env('WABA_ID'),
-  PHONE_NUMBER_ID: env('PHONE_NUMBER_ID'),
-  BUSINESS_ID: env('BUSINESS_ID'),
-}
-
-function buildTarget(base: string, rest: string): string {
-  return base + rest.replace(/\/(WABA_ID|PHONE_NUMBER_ID|BUSINESS_ID)(?=\/|\?|$)/g, (_, k: string) => '/' + ids[k])
-}
 
 async function readBody(req: http.IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = []
@@ -28,23 +21,55 @@ async function readBody(req: http.IncomingMessage): Promise<Buffer> {
   return Buffer.concat(chunks)
 }
 
-async function forward(req: http.IncomingMessage, res: http.ServerResponse, target: string, headers: Record<string, string>) {
-  if (req.headers['content-type']) headers['content-type'] = req.headers['content-type']
-  if (env('META_TOKEN')) headers.authorization = `Bearer ${env('META_TOKEN')}`
+function sendError(res: http.ServerResponse, status: number, title: string, detail: string) {
+  // Same StandardError shape Meta uses, so the UI handles one error format.
+  res.writeHead(status, { 'content-type': 'application/json' })
+  res.end(JSON.stringify({ title, detail, status }))
+}
 
+/** Local guard below Meta's limits: 500 agent_test/h per number, 1000/h per resource per number. */
+function rateLimited(kind: Kind, path: string): string | null {
+  const { phone, rest } = splitPhone(new URL(path, 'http://x').pathname)
+  if (kind !== 'meta' || !phone) return null
+  if (rest === 'agent_test') {
+    return allow(`${phone}|agent_test`, 500) ? null : 'Local safety limit reached (500 test messages per hour for this number). Try again shortly.'
+  }
+  const { resource } = resourceOf(rest)
+  return allow(`${phone}|${resource}`, 1000) ? null : `Local safety limit reached (1000 requests per hour for ${resource} on this number). Try again shortly.`
+}
+
+async function forward(req: http.IncomingMessage, res: http.ServerResponse, kind: Kind, path: string) {
+  const method = req.method ?? 'GET'
+  const ttl = method === 'GET' ? ttlFor(kind, path) : 0
+  const key = `${kind} ${path}`
+  const hit = ttl ? getCached(key) : undefined
+  if (hit) {
+    res.writeHead(hit.status, { 'content-type': hit.contentType })
+    res.end(hit.text)
+    return
+  }
+  const limited = rateLimited(kind, path)
+  if (limited) {
+    console.log(`${method} ${path} → 429 (local guard)`)
+    return sendError(res, 429, 'Too many requests', limited)
+  }
+  const contentType = req.headers['content-type']
+  const body = method === 'GET' || method === 'HEAD' ? undefined : await readBody(req)
   try {
-    const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await readBody(req)
-    const r = await fetch(target, { method: req.method, headers, body, signal: AbortSignal.timeout(20_000) })
-    const text = await r.text()
-    console.log(`${req.method} ${target} → ${r.status}`)
-    res.writeHead(r.status, { 'content-type': r.headers.get('content-type') ?? 'application/json' })
-    res.end(text)
+    const r = await callUpstream(kind, method, path, body, contentType)
+    res.writeHead(r.status, { 'content-type': r.contentType })
+    res.end(r.text)
+    const ok = r.status >= 200 && r.status < 300
+    if (ttl && ok) putCached(key, r, ttl)
+    if (method !== 'GET' && ok) {
+      const { phone } = splitPhone(new URL(path, 'http://x').pathname)
+      if (phone) invalidatePhone(phone)
+    }
+    record({ kind, method, path, reqBody: body, contentType: contentType ?? '', status: r.status, resText: r.text })
   } catch (err) {
-    // Same StandardError shape Meta uses, so the UI handles one error format.
     const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
-    console.log(`${req.method} ${target} → 502 (${detail})`)
-    res.writeHead(502, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ title: 'Upstream unreachable', detail: `${upstream} did not respond. ${detail}`, status: 502 }))
+    console.log(`${method} ${path} → 502 (${detail})`)
+    sendError(res, 502, 'Upstream unreachable', `${upstream} did not respond. ${detail}`)
   }
 }
 
@@ -60,20 +85,21 @@ const server = http.createServer(async (req, res) => {
         hasToken: !!env('META_TOKEN'),
         businessName: env('BUSINESS_NAME'),
         wabaId: ids.WABA_ID,
+        // Display labels for the offline fallback, matching WhatsApp Manager (not IDs, not secrets).
+        wabaName: env('WABA_NAME'),
         phoneNumberId: ids.PHONE_NUMBER_ID,
+        phoneNumber: env('PHONE_NUMBER'),
+        phoneName: env('PHONE_NAME'),
       }),
     )
     return
   }
-  if (url.startsWith('/api/meta/')) {
-    // Thread Control is the one endpoint on the 1.0.0 contract.
-    const version = url.includes('/thread_control') ? '1.0.0' : '2.0.0'
-    await forward(req, res, buildTarget(upstream, url.slice('/api/meta'.length)), { 'X-API-Version': version })
-  } else if (url.startsWith('/api/graph/')) {
-    await forward(req, res, buildTarget(upstream + GRAPH_PREFIX, url.slice('/api/graph'.length)), {})
-  } else {
-    res.writeHead(404).end()
-  }
+  if (url.startsWith('/api/meta/')) await forward(req, res, 'meta', resolveIds(url.slice('/api/meta'.length)))
+  else if (url.startsWith('/api/graph/')) await forward(req, res, 'graph', resolveIds(url.slice('/api/graph'.length)))
+  else if (!(await handleStore(req, res))) res.writeHead(404).end()
 })
 
-server.listen(PORT, () => console.log(`API proxy on :${PORT} → ${upstream || '(no upstream set)'}`))
+server.listen(PORT, () => console.log(`API proxy on :${PORT} → graph: ${upstream || '(no upstream set)'} · agent: ${agentUpstream || '(no upstream set)'}`))
+if (await initDb()) {
+  if (env('COLLECTORS') !== 'off') startCollectors()
+} else if (!env('MONGODB_URI')) console.log('No MONGODB_URI: running without a database (store routes return 503)')

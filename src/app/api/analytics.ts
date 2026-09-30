@@ -13,6 +13,7 @@ import {
   toolCallInsights,
   type DateRange,
 } from './meta'
+import { getHandoffs, getTrend, ms } from './store'
 
 export type AnalyticsRange = 7 | 14 | 30
 
@@ -112,8 +113,11 @@ export interface TrendPoint {
 // Closed days never change, so cache them per number. Today is always re-fetched.
 const trendCache = new Map<string, number>()
 
-/** One call per day (Meta has no daily breakdown), 5 at a time. Failed days come back as null. */
+/** The server's cached per-day series when it has a database; otherwise one call per day from here
+ *  (Meta has no daily breakdown), 5 at a time. Failed days come back as null. */
 export async function getConversationTrend(range: AnalyticsRange): Promise<TrendPoint[]> {
+  const stored = await getTrend(range)
+  if (stored) return stored
   const { start_date, end_date } = rangeDates(range)
   const phone = getActivePhoneNumberId() ?? 'PHONE_NUMBER_ID'
   const days = Array.from({ length: range }, (_, i) => addDays(start_date, i))
@@ -142,6 +146,16 @@ export async function getConversationTrend(range: AnalyticsRange): Promise<Trend
   await Promise.all(Array.from({ length: 5 }, worker))
   if (failures === out.length) throw firstError
   return out
+}
+
+export interface HandoffPoint {
+  at: number
+  count: number
+}
+/** Open-handoff snapshots the server takes over time, oldest first. Null when it has no database. */
+export async function getHandoffTrend(range: AnalyticsRange): Promise<HandoffPoint[] | null> {
+  const rows = await getHandoffs(range)
+  return rows?.map((r) => ({ at: ms(r.ts), count: r.count })) ?? null
 }
 
 export interface ToolRow {

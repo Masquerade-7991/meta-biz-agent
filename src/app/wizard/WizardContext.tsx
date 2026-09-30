@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNo
 import type { SliceKey, StepId, StudioSectionId, WizardState } from './types'
 import { DEFAULT_BUSINESS_HOURS, DEFAULT_REPLIES } from './mockData'
 import { migrateRichReply } from './richReplies'
+import { getDraftSyncPhone, putDraft } from '@/app/api/store'
 
 const STORAGE_KEY = 'meta-agent-wizard-state-v1'
 
@@ -298,6 +299,14 @@ export function WizardProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  }, [state])
+
+  // localStorage stays the fast cache; the stored draft (minus secrets) follows 2 s after the last edit.
+  useEffect(() => {
+    const phone = getDraftSyncPhone()
+    if (!phone || phone !== state.gate.selectedPhoneNumberId) return
+    const t = setTimeout(() => void putDraft(phone, state), 2000)
+    return () => clearTimeout(t)
   }, [state])
 
   const value = useMemo<WizardContextValue>(

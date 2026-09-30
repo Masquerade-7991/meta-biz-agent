@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { Loader2, LogOut } from 'lucide-react'
 import { toast } from 'sonner'
 import { hydrateFromMeta, setActivePhoneNumberId } from '@/app/api/meta'
+import { getDraft, keepLocalSecrets, ms, putStoredAgent, setDraftSyncPhone } from '@/app/api/store'
+import { migrateRichReply } from '@/app/wizard/richReplies'
+import type { SliceKey, WizardState } from '@/app/wizard/types'
 import { Button } from '@/app/components/ui/button'
 import { Avatar, AvatarFallback } from '@/app/components/ui/avatar'
 import { useWizard } from '@/app/wizard/WizardContext'
@@ -19,6 +22,27 @@ import { PublishStep } from '@/app/wizard/steps/PublishStep'
 import { ActivityPage } from '@/app/wizard/steps/ActivityPage'
 import { AnalyticsPage } from '@/app/wizard/steps/AnalyticsPage'
 import { cn } from '@/app/lib/utils'
+
+// Slices a stored draft may restore. Gate (which number is open) and demo controls stay local.
+const DRAFT_SLICES = [
+  'identity', 'business', 'knowledge', 'personalization', 'richReplies', 'routing', 'connectors',
+  'connections', 'integrations', 'mcp', 'guardrails', 'replies', 'publish', 'qualityChecks', 'agentEvents',
+] as const satisfies readonly SliceKey[]
+
+/** The stored draft's slices, when it is newer than this browser's copy. The store holds secrets
+ *  blanked, so the ones in this browser are kept; old drafts get the same defaults as localStorage. */
+function draftPatch(local: WizardState, draft: Partial<WizardState>, updatedAt: number): Partial<WizardState> {
+  // Identity is skipped: opening an agent from the list writes its name there just before this runs.
+  // ponytail: identity edits made <2 s before a reload can lose to the draft; per-slice timestamps if that bites.
+  const localEdit = Math.max(0, ...Object.entries(local.lastEditedAt).map(([k, t]) => (k === 'identity' ? 0 : t)))
+  if (updatedAt < localEdit) return {}
+  const out: Partial<WizardState> = {}
+  for (const k of DRAFT_SLICES) if (draft[k]) Object.assign(out, { [k]: { ...local[k], ...draft[k] } })
+  const kept = keepLocalSecrets(out, local)
+  if (kept.richReplies) kept.richReplies = { richReplies: kept.richReplies.richReplies.map(migrateRichReply) }
+  if (kept.knowledge) kept.knowledge = { ...kept.knowledge, websites: kept.knowledge.websites.map((w) => ({ ...w, subpages: w.subpages ?? [] })) }
+  return kept
+}
 
 const SECTION_COMPONENTS: Record<StudioSectionId, () => React.ReactElement> = {
   overview: OverviewPage,
@@ -48,8 +72,17 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
   const [hydrated, setHydrated] = useState(false)
   useEffect(() => {
     let cancelled = false
-    setActivePhoneNumberId(state.gate.selectedPhoneNumberId ?? null)
-    hydrateFromMeta(state).then(({ patch: slices, failed }) => {
+    const phone = state.gate.selectedPhoneNumberId ?? null
+    setActivePhoneNumberId(phone)
+    if (phone) void putStoredAgent(phone, { lastOpenedAt: Date.now() })
+    // The stored draft first (so forms like rich-reply blanks survive a change of browser), then Meta,
+    // which wins for everything it owns.
+    void (async () => {
+      const draft = phone ? await getDraft(phone) : null
+      if (cancelled) return
+      const fromDraft = draft?.state ? draftPatch(state, draft.state, ms(draft.updatedAt)) : {}
+      for (const [slice, value] of Object.entries(fromDraft)) patch(slice as SliceKey, value as never)
+      const { patch: slices, failed } = await hydrateFromMeta({ ...state, ...fromDraft })
       if (cancelled) return
       for (const [slice, value] of Object.entries(slices)) patch(slice as keyof typeof slices, value as never)
       if (failed.length >= 9) {
@@ -58,9 +91,11 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
         toast.warning(`Couldn't load from Meta: ${failed.join(', ')}`)
       }
       setHydrated(true)
-    })
+      setDraftSyncPhone(phone)
+    })()
     return () => {
       cancelled = true
+      setDraftSyncPhone(null)
     }
     // Once per opening of the agent.
     // eslint-disable-next-line react-hooks/exhaustive-deps

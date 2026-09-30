@@ -6,6 +6,7 @@ import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { errorText, listEvalCases, runEvalCase } from '@/app/api/meta'
+import { evalResultFromRun, listEvalRuns } from '@/app/api/store'
 import { cn } from '@/app/lib/utils'
 import {
   EVAL_RESULTS,
@@ -77,6 +78,20 @@ export function EvalTab() {
       setScenarios(cases)
       setCards(Object.fromEntries(cases.map((s) => [s.id, initialCardState()])))
       setCasesStatus('loaded')
+      // The latest stored run per case, when the server has a database (still one result per case, PRD V7).
+      const runs = await listEvalRuns()
+      setCards((prev) => {
+        const next = { ...prev }
+        for (const run of runs ?? []) {
+          const card = next[run.caseId]
+          if (!card || card.status !== 'idle') continue
+          const result = evalResultFromRun(run)
+          next[run.caseId] = result
+            ? { ...card, status: 'completed', stage: 'done', result }
+            : { ...card, status: 'failed', failureReason: run.error?.message }
+        }
+        return next
+      })
     } catch (err) {
       setLoadError(errorText(err))
       setCasesStatus('idle')

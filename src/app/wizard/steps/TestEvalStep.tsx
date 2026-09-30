@@ -24,6 +24,7 @@ import {
 import type { Connection, ConnectionAction, WizardState } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
 import { checkEligibility, errorText, MetaError, sendTestMessage } from '@/app/api/meta'
+import { listTestConversations } from '@/app/api/store'
 import { InlineError } from '@/app/components/wizard/RetryBanner'
 
 interface ChatMessage {
@@ -38,7 +39,8 @@ interface TestConversation {
   messages: ChatMessage[]
 }
 
-// Meta has no history API for test conversations, so past ones are kept in this browser (PRD 5.4.1 AC6b-f).
+// Meta has no history API for test conversations (PRD 5.4.1 AC6b-f). The server records every test
+// message in its store; without a database, past ones are kept in this browser instead.
 const TEST_HISTORY_KEY = 'meta-agent-test-history-v1'
 function loadTestHistory(): TestConversation[] {
   try {
@@ -134,6 +136,20 @@ export function TestEvalStep() {
   const [history, setHistory] = useState<TestConversation[]>(loadTestHistory)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [viewing, setViewing] = useState<TestConversation | null>(null)
+  // True once the store answered: the server keeps history then, so this browser stops writing it.
+  const [storeOn, setStoreOn] = useState(false)
+  useEffect(() => {
+    if (!historyOpen) return
+    let live = true
+    listTestConversations().then((list) => {
+      if (!live || !list) return
+      setStoreOn(true)
+      setHistory(list)
+    })
+    return () => {
+      live = false
+    }
+  }, [historyOpen])
 
   // PRD 5.4.1 AC5: a number that has become ineligible can't be tested at all.
   useEffect(() => {
@@ -185,7 +201,7 @@ export function TestEvalStep() {
   }
 
   function startNewConversation() {
-    if (chatMessages.length > 0) {
+    if (chatMessages.length > 0 && !storeOn) {
       const next = [{ id: newId('testconv'), startedAt: chatMessages[0].at, messages: chatMessages }, ...history]
       setHistory(next)
       saveTestHistory(next)

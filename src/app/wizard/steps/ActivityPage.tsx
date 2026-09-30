@@ -50,6 +50,7 @@ import {
   sendAgentEvent,
   threadControl,
 } from '@/app/api/meta'
+import { listAgentEvents, listAudit, listTraces, ms, type AuditRow, type StoredTrace } from '@/app/api/store'
 
 // ==================================================================================
 // QUALITY CHECKS
@@ -558,7 +559,9 @@ function ConversationsSection({
   lookupError,
   insights,
   onThreadControl,
+  past,
 }: {
+  past: PastConversation[]
   numberDraft: string
   onNumberDraftChange: (value: string) => void
   status: ConversationLookupStatus
@@ -660,6 +663,101 @@ function ConversationsSection({
           ))}
         </div>
       )}
+
+      {/* Earlier conversations the server recorded, newest first (only when it has a database). */}
+      {past.length > 0 && (
+        <div className="space-y-2">
+          <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Earlier conversations</p>
+          {past.map((c) => {
+            const times = turnDisplayTimes(c.turns)
+            return (
+              <details key={c.id} className="rounded-lg border border-border p-3">
+                <summary className="cursor-pointer" style={{ fontSize: 'var(--text-sm)' }}>
+                  {formatFullTimestamp(c.startedAt)} &middot; {c.turns.length} turn{c.turns.length === 1 ? '' : 's'}
+                </summary>
+                <div className="mt-2 space-y-3">
+                  {c.turns.map((turn, i) => (
+                    <ConversationTurnRow key={i} turn={turn} displayTime={times[i]} />
+                  ))}
+                </div>
+              </details>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
+type PastConversation = { id: string; startedAt: number; turns: ConversationTurn[] }
+
+function toPastConversation(c: StoredTrace): PastConversation {
+  return {
+    id: c.conversationId,
+    startedAt: ms(c.startedAt),
+    turns: c.turns.map((t) => {
+      const tool = t.steps.find((st) => st.type === 'TOOL_CALL')
+      return {
+        timestamp: ms(t.ts) || undefined,
+        e2eLatencyMs: t.e2eLatencyMs ?? undefined,
+        tool: tool?.tool_name,
+        toolWorked: tool?.status ? tool.status === 'SUCCESS' : undefined,
+      }
+    }),
+  }
+}
+
+// ==================================================================================
+// CHANGE HISTORY (the server's audit log; hidden when it has no database)
+// ==================================================================================
+
+function ChangeHistorySection({ rows }: { rows: AuditRow[] }) {
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3>Change history</h3>
+        <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          Every change this console sent to Meta for this agent, newest first.
+        </p>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          No changes recorded yet.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full text-left" style={{ fontSize: 'var(--text-sm)' }}>
+            <thead className="bg-muted text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              <tr>
+                <th className="px-3 py-2 font-medium">When</th>
+                <th className="px-3 py-2 font-medium">Action</th>
+                <th className="px-3 py-2 font-medium">Resource</th>
+                <th className="px-3 py-2 font-medium">Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => {
+                const failed = Number(r.status) >= 400
+                return (
+                  <tr key={i} className="border-t border-border align-top">
+                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{formatFullTimestamp(ms(r.at))}</td>
+                    <td className={cn('px-3 py-2 capitalize', failed && 'text-destructive')}>
+                      {r.action}
+                      {failed && ` (failed, ${r.status})`}
+                    </td>
+                    <td className="px-3 py-2">{r.resource}</td>
+                    <td className="px-3 py-2 break-words text-muted-foreground">
+                      {Object.entries(r.summary ?? {})
+                        .map(([k, v]) => `${k}: ${v}`)
+                        .join(', ')}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   )
 }
@@ -689,20 +787,38 @@ export function ActivityPage() {
     conversationInsights().then(setInsights, () => {})
   }, [])
 
+  // From the server's store; each stays empty/null when it has no database.
+  const [pastConvos, setPastConvos] = useState<PastConversation[]>([])
+  const [audit, setAudit] = useState<AuditRow[] | null>(null)
+  const [storedEvents, setStoredEvents] = useState<AgentEventRow[]>([])
+  useEffect(() => {
+    listAudit().then(setAudit)
+    listAgentEvents().then((rows) => rows && setStoredEvents(rows))
+  }, [])
+  // This browser's rows win for events it sent (they update live); the store adds everything else.
+  const knownEventIds = new Set(state.agentEvents.events.map((e) => e.agentEventId))
+  const events = [...state.agentEvents.events, ...storedEvents.filter((e) => !knownEventIds.has(e.agentEventId))].sort(
+    (a, b) => b.createdAt - a.createdAt,
+  )
+
   /** Meta's conversation-turns insight: the customer's most recent conversation, turn metadata only. */
   async function lookupConversation() {
     const query = convoNumberDraft.trim()
     if (!query) return
     setConvoStatus('loading')
     setLookupError(null)
+    setPastConvos([])
     // The demo sample number still shows the sample conversation without calling Meta.
     if (normalizePhone(query) === normalizePhone(SAMPLE_CONVERSATION_NUMBER)) {
       setConvoTurns(buildSampleConversationTurns())
       setConvoStatus('found')
       return
     }
+    const tracesPromise = listTraces(query)
     try {
       const turns = await conversationTurns(query)
+      const latestId = turns[0]?.conversation_id
+      void tracesPromise.then((list) => setPastConvos((list ?? []).filter((c) => c.conversationId !== latestId).map(toPastConversation)))
       setConvoTurns(
         turns.map((t) => {
           const tool = t.steps?.find((st) => st.type === 'TOOL_CALL')
@@ -716,6 +832,7 @@ export function ActivityPage() {
       )
       setConvoStatus(turns.length > 0 ? 'found' : 'not_found')
     } catch (err) {
+      void tracesPromise.then((list) => setPastConvos((list ?? []).map(toPastConversation)))
       if (err instanceof MetaError && (err.status === 404 || /not found/i.test(err.message))) {
         setConvoTurns([])
         setConvoStatus('not_found')
@@ -939,7 +1056,7 @@ export function ActivityPage() {
       <QualityChecksSection runs={state.qualityChecks.runs} onGoToTestPublish={goToTestPublish} />
       <ConnectorActivitySection connectionsState={state.connections} onGoToConnections={goToConnections} />
       <InboundEventsSection
-        agentEvents={state.agentEvents}
+        agentEvents={{ ...state.agentEvents, events }}
         onPatch={(p) => patch('agentEvents', p)}
         onAddSkillForEvent={addSkillForEvent}
         onSendEvent={sendTestEvent}
@@ -953,7 +1070,9 @@ export function ActivityPage() {
         lookupError={lookupError}
         insights={insights}
         onThreadControl={handleThreadControl}
+        past={pastConvos}
       />
+      {audit && <ChangeHistorySection rows={audit} />}
     </div>
   )
 }

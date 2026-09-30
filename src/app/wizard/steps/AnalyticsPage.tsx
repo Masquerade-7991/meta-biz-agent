@@ -4,9 +4,11 @@ import {
   getConnectorHealth,
   getConversationTrend,
   getEventBreakdown,
+  getHandoffTrend,
   getKpis,
   getToolBreakdown,
   type AnalyticsRange,
+  type HandoffPoint,
   type TrendPoint,
 } from '@/app/api/analytics'
 import { Button } from '@/app/components/ui/button'
@@ -80,6 +82,7 @@ export function AnalyticsPage() {
 
   const [kpis, reloadKpis] = useLoad(() => getKpis(range), key)
   const [trend, reloadTrend] = useLoad(() => getConversationTrend(range), key)
+  const [handoffs, reloadHandoffs] = useLoad(() => getHandoffTrend(range), key)
   const [tools, reloadTools] = useLoad(() => getToolBreakdown(range), key)
   const [events, reloadEvents] = useLoad(() => getEventBreakdown(range), key)
   const [health, reloadHealth] = useLoad(
@@ -148,6 +151,21 @@ export function AnalyticsPage() {
           {(points) => (points.length === 0 ? <Empty>No conversations in this period.</Empty> : <TrendChart points={points} />)}
         </Loaded>
       </Section>
+
+      {/* Only the server's database keeps handoff history; without one (null) the section is left out. */}
+      {!(handoffs.status === 'ok' && handoffs.data === null) && (
+        <Section title="Handoffs over time" info="Conversations waiting on a person, as the server sampled them over time.">
+          <Loaded load={handoffs} onRetry={reloadHandoffs} what="handoff history" skeleton="h-40">
+            {(points) =>
+              !points || points.length < 2 ? (
+                <Empty>Handoff history starts once the server has been running for a while.</Empty>
+              ) : (
+                <HandoffChart points={points} range={range} />
+              )
+            }
+          </Loaded>
+        </Section>
+      )}
 
       <Section title="Tools" info="How often each tool ran and how those calls ended.">
         <Loaded load={tools} onRetry={reloadTools} what="tool calls" skeleton="h-32">
@@ -401,6 +419,97 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
           Striped bar: today, still counting
         </p>
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------------
+// Handoffs over time: single-series step line. Each sample is a snapshot of open handoffs that holds
+// until the next one, hence steps. Gaps much longer than the usual sampling interval (server down)
+// break the line instead of bridging it. Same frame, grid and tooltip as the column chart above.
+// ---------------------------------------------------------------------------------
+
+const HH = 160
+
+function HandoffChart({ points, range }: { points: HandoffPoint[]; range: AnalyticsRange }) {
+  const [hover, setHover] = useState<number | null>(null)
+  const plotW = W - PAD.left - PAD.right
+  const plotH = HH - PAD.top - PAD.bottom
+  const end = Date.now()
+  const start = new Date(new Date().setHours(0, 0, 0, 0)).getTime() - (range - 1) * 86400000
+  const x = (t: number) => PAD.left + ((Math.min(Math.max(t, start), end) - start) / (end - start)) * plotW
+  const maxV = Math.max(...points.map((p) => p.count))
+  const step = niceStep(maxV)
+  const yMax = step * Math.max(1, Math.ceil(maxV / step))
+  const ticks = Array.from({ length: Math.round(yMax / step) + 1 }, (_, i) => i * step)
+  const y = (v: number) => PAD.top + plotH - (v / yMax) * plotH
+
+  const gaps = points.slice(1).map((p, i) => p.at - points[i].at).sort((a, b) => a - b)
+  const breakAfter = 3 * (gaps[Math.floor(gaps.length / 2)] ?? Infinity)
+  let d = ''
+  points.forEach((p, i) => {
+    const prev = points[i - 1]
+    if (!prev || p.at - prev.at > breakAfter) d += `M${x(p.at)},${y(p.count)}`
+    else d += `H${x(p.at)}V${y(p.count)}`
+  })
+
+  const labelEvery = Math.ceil(range / 7)
+  const days = Array.from({ length: range }, (_, i) => start + i * 86400000).filter((_, i) => (range - 1 - i) % labelEvery === 0)
+
+  const latest = points[points.length - 1]
+  const peak = points.reduce((a, b) => (b.count > a.count ? b : a))
+  const when = (t: number) => new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  const summary = `Step chart of open handoffs over the last ${range} days. Now ${latest.count}, peak ${peak.count} at ${when(peak.at)}.`
+
+  function onMove(e: React.MouseEvent<SVGSVGElement>) {
+    const box = e.currentTarget.getBoundingClientRect()
+    const px = ((e.clientX - box.left) / box.width) * W
+    let best = 0
+    points.forEach((p, i) => {
+      if (Math.abs(x(p.at) - px) < Math.abs(x(points[best].at) - px)) best = i
+    })
+    setHover(best)
+  }
+
+  const hp = hover != null ? points[hover] : null
+  return (
+    <div className="rounded-lg border border-border p-4">
+      <div className="relative">
+        <svg viewBox={`0 0 ${W} ${HH}`} className="block h-auto w-full" role="img" aria-label={summary} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+          {ticks.map((t) => (
+            <g key={t}>
+              <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeWidth="1" />
+              <text x={PAD.left - 6} y={y(t)} dy="0.32em" textAnchor="end" fontSize="11" fill="var(--muted-foreground)" style={TNUM}>
+                {compact(t)}
+              </text>
+            </g>
+          ))}
+          {days.map((t) => (
+            <text key={t} x={x(t)} y={HH - 6} textAnchor="middle" fontSize="11" fill="var(--muted-foreground)">
+              {new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            </text>
+          ))}
+          <line x1={PAD.left} x2={W - PAD.right} y1={y(0)} y2={y(0)} stroke="var(--muted-foreground)" strokeOpacity="0.5" strokeWidth="1" />
+          <path d={d} fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          {hp && (
+            <>
+              <line x1={x(hp.at)} x2={x(hp.at)} y1={PAD.top} y2={PAD.top + plotH} stroke="var(--muted-foreground)" strokeOpacity="0.5" strokeWidth="1" />
+              <circle cx={x(hp.at)} cy={y(hp.count)} r="4" fill="var(--primary)" stroke="var(--card)" strokeWidth="2" />
+            </>
+          )}
+        </svg>
+        {hp && (
+          <div
+            className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-1.5 text-popover-foreground shadow-md"
+            style={{ left: `${(x(hp.at) / W) * 100}%`, fontSize: 'var(--text-xs)' }}
+          >
+            <p className="whitespace-nowrap text-muted-foreground">{when(hp.at)}</p>
+            <p className="whitespace-nowrap" style={{ fontWeight: 'var(--font-weight-medium)', ...TNUM }}>
+              {hp.count.toLocaleString()} waiting on a person
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

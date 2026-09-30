@@ -43,6 +43,7 @@ import {
   onboardAgent,
   setActivePhoneNumberId,
 } from '@/app/api/meta'
+import { putStoredAgent } from '@/app/api/store'
 
 // ---- WABA / phone number directory: Meta's, else the .env number, else a mock (offline demo) ----
 
@@ -193,8 +194,14 @@ export function CreateAgentModal({
           setWabas([
             {
               id: h.wabaId,
-              name: h.businessName || `WABA ${h.wabaId}`,
-              phoneNumbers: [{ id: h.phoneNumberId, verifiedName: 'Configured number', phoneNumber: `ID ${h.phoneNumberId}` }],
+              name: h.wabaName || h.businessName || `WABA ${h.wabaId}`,
+              phoneNumbers: [
+                {
+                  id: h.phoneNumberId,
+                  verifiedName: h.phoneName || 'Configured number',
+                  phoneNumber: h.phoneNumber || `ID ${h.phoneNumberId}`,
+                },
+              ],
             },
           ])
         } else {
@@ -334,6 +341,7 @@ export function CreateAgentModal({
         toast.warning('Meta onboarding call failed', { description: err instanceof Error ? err.message : String(err) })
       }
     }
+    if (realPhoneId) void putStoredAgent(realPhoneId, { wabaId: selectedWaba.id, displayName: trimmedName, createdAt: Date.now() })
     onCreate({
       id: newId('agent'),
       name: trimmedName,

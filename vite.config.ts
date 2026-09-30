@@ -7,7 +7,8 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    proxy: { '/api': 'http://localhost:8787' },
+    // API_PROXY_TARGET lets a second relay (e.g. a test one on another port) serve this dev server.
+    proxy: { '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:8787' },
   },
   resolve: {
     alias: {

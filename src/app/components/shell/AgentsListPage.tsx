@@ -45,6 +45,7 @@ import {
   setActivePhoneNumberId,
   setRollout,
 } from '@/app/api/meta'
+import { listStoredAgents, ms, putStoredAgent, putStoredAgents } from '@/app/api/store'
 import { useWizard } from '@/app/wizard/WizardContext'
 import type { AgentInstanceSummary, AgentRolloutStatus } from '@/app/wizard/types'
 
@@ -65,6 +66,7 @@ function persistCreatedAgents(agents: AgentInstanceSummary[]) {
 
 // What Meta doesn't hold about an agent, keyed by phone number id: the display name given at
 // creation, when it was last touched here, and whether it has ever gone live (Stopped vs In progress).
+// The server's store (/api/store/agents) is the record; this localStorage key is the fallback cache.
 const NUMBER_META_KEY = 'meta-agent-wizard-numbers-v1'
 interface NumberMeta {
   name?: string
@@ -88,6 +90,33 @@ function saveNumberMeta(phoneNumberId: string, meta: NumberMeta) {
   } catch {
     // Storage unavailable: the list falls back to Meta's verified name.
   }
+  void putStoredAgent(phoneNumberId, {
+    ...(meta.name !== undefined ? { displayName: meta.name } : {}),
+    ...(meta.updatedAt !== undefined ? { lastOpenedAt: meta.updatedAt } : {}),
+    ...(meta.launched !== undefined ? { everLive: meta.launched } : {}),
+  })
+}
+
+/** The store's record when the database is on, merged over (and cached into) localStorage. */
+async function loadAllNumberMeta(): Promise<Record<string, NumberMeta>> {
+  const local = loadNumberMeta()
+  const stored = await listStoredAgents()
+  if (!stored) return local
+  // One-time move of entries only this browser knows into the store.
+  const known = new Set(stored.map((a) => a.phoneNumberId))
+  const missing = Object.entries(local).filter(([id]) => !known.has(id))
+  if (missing.length > 0)
+    void putStoredAgents(missing.map(([phoneNumberId, m]) => ({ phoneNumberId, displayName: m.name, everLive: m.launched, lastOpenedAt: m.updatedAt })))
+  for (const a of stored) {
+    const l = local[a.phoneNumberId] ?? {}
+    local[a.phoneNumberId] = { name: a.displayName || l.name, updatedAt: ms(a.lastOpenedAt) || l.updatedAt, launched: a.everLive ?? l.launched }
+  }
+  try {
+    window.localStorage.setItem(NUMBER_META_KEY, JSON.stringify(local))
+  } catch {
+    // cache only
+  }
+  return local
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -103,8 +132,7 @@ type AgentRow = AgentInstanceSummary & { phoneNumberId?: string; wabaId?: string
 
 /** One row per phone number that has an agent, across every WABA the account can see. */
 async function loadMetaRows(): Promise<AgentRow[]> {
-  const stored = loadNumberMeta()
-  const wabas = await listWabas()
+  const [stored, wabas] = await Promise.all([loadAllNumberMeta(), listWabas()])
   const perWaba = await Promise.all(
     wabas.map(async (waba) => {
       const numbers = await listPhoneNumbers(waba.id)
@@ -173,6 +201,12 @@ export function AgentsListPage({
   // to the agent in this browser (so the app still demos offline) under the PRD 5.1 V1 error.
   const [metaRows, setMetaRows] = useState<AgentRow[] | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
+  const [loadAttempt, setLoadAttempt] = useState(0)
+  const retryLoad = () => {
+    setLoadFailed(false)
+    setMetaRows(null)
+    setLoadAttempt((n) => n + 1)
+  }
   useEffect(() => {
     let cancelled = false
     loadMetaRows().then(
@@ -186,7 +220,7 @@ export function AgentsListPage({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [loadAttempt])
   const loading = metaRows === null && !loadFailed
 
   // A brand new agent skips the agents table entirely and goes straight into the setup front
@@ -375,6 +409,16 @@ export function AgentsListPage({
         <div className="mx-auto w-full max-w-3xl px-6 py-10">
           <h1>AI Agents</h1>
           <p className="mt-4 text-destructive">Failed to load the list. Please try again after some time.</p>
+          {/* PRD 5.1 AC5: never a dead end — retry, or create an agent on the number from settings. */}
+          <div className="mt-4 flex gap-2">
+            <Button variant="outline" onClick={retryLoad}>
+              Try again
+            </Button>
+            <Button onClick={() => setModalOpen(true)}>
+              <Plus className="size-4" />
+              Create agent
+            </Button>
+          </div>
         </div>
       ) : rows.length === 0 ? (
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 px-6 text-center">
@@ -399,8 +443,11 @@ export function AgentsListPage({
             </Button>
           </div>
           {loadFailed && (
-            <p className="mt-4 text-destructive" style={{ fontSize: 'var(--text-sm)' }}>
+            <p className="mt-4 flex items-center gap-2 text-destructive" style={{ fontSize: 'var(--text-sm)' }}>
               Failed to load the list. Please try again after some time.
+              <button type="button" onClick={retryLoad} className="text-primary underline underline-offset-2">
+                Try again
+              </button>
             </p>
           )}
 
