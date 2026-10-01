@@ -7,7 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/ta
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { EvalTab } from './EvalTab'
-import { generateFakeSubpages } from './KnowledgeBaseStep'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import {
@@ -18,6 +17,7 @@ import {
   SAMPLE_RICH_REPLIES,
   SAMPLE_TOPICS_TO_AVOID,
   SAMPLE_WEBSITES,
+  generateFakeSubpages,
   newId,
   pickConnectionPreviewReply,
 } from '@/app/wizard/mockData'

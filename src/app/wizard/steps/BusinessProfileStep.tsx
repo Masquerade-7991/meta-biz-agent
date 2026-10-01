@@ -40,6 +40,7 @@ import {
 } from '@/app/wizard/mockData'
 import { composeBusinessHoursSentence, composePaymentSentence } from '@/app/wizard/format'
 import type { BusinessHourRow, BusinessState, Day, PaymentMethodId } from '@/app/wizard/types'
+import { FIELD_LABELS, hasHoursData, isFieldEmpty } from '@/app/wizard/validation'
 import { cn } from '@/app/lib/utils'
 
 const MAX_DESCRIPTION = 500
@@ -73,40 +74,6 @@ const POLICY_COPY = {
 } as const
 
 type PolicyKey = keyof typeof POLICY_COPY
-
-const FIELD_LABELS: Record<string, string> = {
-  businessDescription: 'Business description',
-  paymentMethods: 'Payment methods',
-  returnPolicy: 'Cancellations & refunds',
-  purchaseInfo: 'How customers buy or book',
-  deliveryAndShipping: 'Delivery or fulfilment',
-  contactEmail: 'Contact email',
-  businessAddress: 'Business address',
-  businessHours: 'Business hours',
-}
-
-function hasHoursData(rows: BusinessHourRow[]): boolean {
-  return rows.some((r) => r.closed || (r.open && r.close))
-}
-
-function isFieldEmpty(key: string, business: BusinessState): boolean {
-  if (key === 'paymentMethods') {
-    return business.paymentSource === 'text'
-      ? business.paymentPlainText.trim().length === 0
-      : business.paymentMethods.length === 0
-  }
-  if (key === 'businessHours') {
-    return !hasHoursData(business.businessHours)
-  }
-  const value = (business as unknown as Record<string, string>)[key]
-  return !value || value.trim().length === 0
-}
-
-/** Used by the Knowledge step container to decide whether to say "Business details provided"
- *  in the coverage line, and whether the all-empty block should show. */
-export function hasAnyBusinessDetails(business: BusinessState): boolean {
-  return Object.keys(FIELD_LABELS).some((key) => !isFieldEmpty(key, business))
-}
 
 function getClearedFields(saved: BusinessState, current: BusinessState): string[] {
   return Object.keys(FIELD_LABELS).filter((key) => !isFieldEmpty(key, saved) && isFieldEmpty(key, current)).map((key) => FIELD_LABELS[key])

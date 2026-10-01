@@ -23,36 +23,12 @@ import {
 } from 'lucide-react'
 import { useWizard } from '@/app/wizard/WizardContext'
 import type { ImageSource, RichReply, RichReplyType } from '@/app/wizard/types'
+import { WA } from './whatsappTheme'
 
 /** What the preview needs from an editor draft: the type, its blanks, and the trigger. */
 export type RichReplyDraft = {
   [T in RichReplyType]: { type: T; trigger: string; blanks: NonNullable<Extract<RichReply, { type: T }>['blanks']> }
 }[RichReplyType]
-
-// WhatsApp's own light-mode palette. Local on purpose: this file mocks another product's UI, so
-// these must not leak into the app's tokens.
-export const WA = {
-  header: '#008069',
-  wallpaper: '#efeae2',
-  doodle: '#d9d1c4',
-  bubbleIn: '#ffffff',
-  bubbleOut: '#d9fdd3',
-  text: '#111b21',
-  meta: '#667781',
-  faint: '#aebac1',
-  link: '#027eb5',
-  tick: '#53bdeb',
-  divider: '#e9edef',
-  chip: '#ffffff',
-  notice: '#ffeecd',
-  noticeText: '#54656f',
-  green: '#00a884',
-  mapLand: '#e8eadf',
-  mapRoad: '#ffffff',
-  mapWater: '#aad3df',
-  pin: '#ea4335',
-  font: '-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-}
 
 // A few hand-drawn-ish strokes tiled at low contrast, the way WhatsApp's default wallpaper reads.
 const DOODLE = `url("data:image/svg+xml,${encodeURIComponent(
@@ -144,7 +120,7 @@ export function Bubble({ out, children, footer, flush }: { out?: boolean; childr
         >
           <path d="M0 0h8L1.5 10.5C.9 11.4 0 11 0 10z" fill={bg} />
         </svg>
-        <div className={flush ? 'p-[3px]' : 'px-2 pb-1.5 pt-1.5'} style={{ color: WA.text, fontSize: 13, lineHeight: '18px' }}>
+        <div className={flush ? 'p-0.75' : 'px-2 pb-1.5 pt-1.5'} style={{ color: WA.text, fontSize: 13, lineHeight: '18px' }}>
           {children}
         </div>
         {footer}
@@ -165,7 +141,7 @@ export function BubbleButton({ icon: Icon, label, placeholder, onClick }: { icon
   const cls = 'flex w-full items-center justify-center gap-1.5 px-3 py-2'
   const style = { color: WA.link, fontSize: 13.5, borderTop: `1px solid ${WA.divider}`, fontWeight: 500 }
   return onClick ? (
-    <button type="button" className={`${cls} rounded-b-[7.5px] focus-visible:outline-2 focus-visible:outline-offset-[-2px]`} style={style} onClick={onClick}>
+    <button type="button" className={`${cls} rounded-b-[7.5px] focus-visible:outline-2 focus-visible:-outline-offset-2`} style={style} onClick={onClick}>
       {content}
     </button>
   ) : (
@@ -292,7 +268,7 @@ function ListSheet({ title, draft, onClose }: { title: string; draft: Extract<Ri
                     </div>
                   )}
                 </div>
-                <span className="size-[18px] shrink-0 rounded-full" style={{ border: `2px solid ${WA.faint}` }} />
+                <span className="size-4.5 shrink-0 rounded-full" style={{ border: `2px solid ${WA.faint}` }} />
               </div>
             ))}
           </div>
@@ -312,15 +288,15 @@ function BusinessMessage({ draft, onOpenList }: { draft: RichReplyDraft; onOpenL
       return (
         <Bubble footer={<BubbleButton icon={ExternalLink} label={b.buttonLabel} placeholder="Button label" />}>
           {b.headerMedia && (
-            <div className="-mx-[5px] -mt-[3px] mb-1.5">
+            <div className="-mx-1.25 -mt-0.75 mb-1.5">
               <MediaTile source={b.headerMedia} mediaType={b.headerMedia.mediaType} />
             </div>
           )}
-          <div className="whitespace-pre-wrap break-words">
+          <div className="whitespace-pre-wrap wrap-break-word">
             <Ph value={b.messageText} placeholder="Message body" />
           </div>
           {b.footer?.trim() && (
-            <div className="mt-0.5 break-words" style={{ fontSize: 11.5, color: WA.meta }}>
+            <div className="mt-0.5 wrap-break-word" style={{ fontSize: 11.5, color: WA.meta }}>
               {b.footer}
             </div>
           )}
@@ -333,8 +309,8 @@ function BusinessMessage({ draft, onOpenList }: { draft: RichReplyDraft; onOpenL
       return (
         <Bubble flush>
           <MediaTile source={b.image} tall />
-          <div className="px-[5px] pb-1 pt-1">
-            {b.caption.trim() && <div className="whitespace-pre-wrap break-words">{b.caption}</div>}
+          <div className="px-1.25 pb-1 pt-1">
+            {b.caption.trim() && <div className="whitespace-pre-wrap wrap-break-word">{b.caption}</div>}
             <Meta />
           </div>
         </Bubble>
@@ -344,7 +320,7 @@ function BusinessMessage({ draft, onOpenList }: { draft: RichReplyDraft; onOpenL
       const b = draft.blanks
       return (
         <Bubble footer={<BubbleButton icon={List} label={b.menuButtonLabel} placeholder="Button text" onClick={onOpenList} />}>
-          <div className="whitespace-pre-wrap break-words">
+          <div className="whitespace-pre-wrap wrap-break-word">
             <Ph value={b.messageText} placeholder="Message body" />
           </div>
           <Meta />
@@ -354,9 +330,9 @@ function BusinessMessage({ draft, onOpenList }: { draft: RichReplyDraft; onOpenL
     case 'interactive_reply_buttons': {
       const b = draft.blanks
       return (
-        <div className="space-y-[3px]">
+        <div className="space-y-0.75">
           <Bubble>
-            <div className="whitespace-pre-wrap break-words">
+            <div className="whitespace-pre-wrap wrap-break-word">
               <Ph value={b.messageText} placeholder="Message body" />
             </div>
             <Meta />
@@ -372,7 +348,7 @@ function BusinessMessage({ draft, onOpenList }: { draft: RichReplyDraft; onOpenL
       return (
         <Bubble flush>
           <MapTile />
-          <div className="px-[5px] pb-1 pt-1.5">
+          <div className="px-1.25 pb-1 pt-1.5">
             <div className="truncate" style={{ color: WA.link, fontWeight: 500 }}>
               <Ph value={b.placeName} placeholder={b.latitude && b.longitude ? `${b.latitude}, ${b.longitude}` : 'Pinned location'} />
             </div>
@@ -389,7 +365,7 @@ function BusinessMessage({ draft, onOpenList }: { draft: RichReplyDraft; onOpenL
     case 'location_request':
       return (
         <Bubble footer={<BubbleButton icon={MapPin} label="Send location" placeholder="" />}>
-          <div className="whitespace-pre-wrap break-words">
+          <div className="whitespace-pre-wrap wrap-break-word">
             <Ph value={draft.blanks.messageText} placeholder="Message body" />
           </div>
           <Meta />
@@ -402,7 +378,7 @@ function BusinessMessage({ draft, onOpenList }: { draft: RichReplyDraft; onOpenL
       return (
         <div className="space-y-1.5">
           <Bubble>
-            <div className="whitespace-pre-wrap break-words">
+            <div className="whitespace-pre-wrap wrap-break-word">
               <Ph value={b.messageText} placeholder="Message body" />
             </div>
             <Meta />
@@ -411,13 +387,13 @@ function BusinessMessage({ draft, onOpenList }: { draft: RichReplyDraft; onOpenL
             {b.cards.map((c, i) => (
               <div
                 key={c.id}
-                className="w-[200px] shrink-0 snap-start overflow-hidden shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
+                className="w-50 shrink-0 snap-start overflow-hidden shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
                 style={{ background: WA.bubbleIn, borderRadius: 7.5 }}
               >
-                <div className="p-[3px]">
+                <div className="p-0.75">
                   <MediaTile source={c.image} />
                 </div>
-                <div className="line-clamp-3 px-2 pb-1.5 pt-1 break-words" style={{ fontSize: 13, color: WA.text, lineHeight: '17px', minHeight: 40 }}>
+                <div className="line-clamp-3 px-2 pb-1.5 pt-1 wrap-break-word" style={{ fontSize: 13, color: WA.text, lineHeight: '17px', minHeight: 40 }}>
                   <Ph value={c.cardText} placeholder={`Card ${i + 1} text`} />
                 </div>
                 <BubbleButton icon={isUrl ? ExternalLink : Reply} label={c.buttonLabel} placeholder="Button label" />
@@ -430,7 +406,7 @@ function BusinessMessage({ draft, onOpenList }: { draft: RichReplyDraft; onOpenL
     case 'flow':
       return (
         <Bubble footer={<BubbleButton icon={ClipboardList} label={draft.blanks.buttonLabel} placeholder="Button label" />}>
-          <div className="whitespace-pre-wrap break-words">
+          <div className="whitespace-pre-wrap wrap-break-word">
             <Ph value={draft.blanks.messageText} placeholder="Message body" />
           </div>
           <Meta />
@@ -460,10 +436,10 @@ export function PhoneFrame({
     <section
       tabIndex={0}
       aria-label={label}
-      className="mx-auto w-full max-w-[320px] rounded-[2.4rem] p-[9px] shadow-lg outline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
+      className="mx-auto w-full max-w-80 rounded-[2.4rem] p-2.25 shadow-lg outline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
       style={{ background: '#1f2328', fontFamily: WA.font }}
     >
-      <div className="relative flex h-[560px] flex-col overflow-hidden rounded-[1.9rem]" style={{ background: WA.wallpaper }}>
+      <div className="relative flex h-140 flex-col overflow-hidden rounded-[1.9rem]" style={{ background: WA.wallpaper }}>
         {/* Status bar */}
         <div className="flex items-center justify-between px-6 pb-1 pt-2.5 text-white" style={{ background: WA.header, fontSize: 12, fontWeight: 600 }}>
           <span>9:41</span>
@@ -492,7 +468,7 @@ export function PhoneFrame({
             </div>
           </div>
           <span className="flex shrink-0 items-center gap-3.5 pr-1" aria-hidden>
-            <Video className="size-[18px]" />
+            <Video className="size-4.5" />
             <Phone className="size-4" />
             <MoreVertical className="size-4" />
           </span>
@@ -519,11 +495,11 @@ export function PhoneFrame({
             <div className="flex h-9 flex-1 items-center gap-2 rounded-full bg-white px-3" style={{ color: WA.meta, fontSize: 13.5 }}>
               <Smile className="size-5 shrink-0" />
               <span className="flex-1">Message</span>
-              <Paperclip className="size-[18px] shrink-0 -rotate-45" />
-              <Camera className="size-[18px] shrink-0" />
+              <Paperclip className="size-4.5 shrink-0 -rotate-45" />
+              <Camera className="size-4.5 shrink-0" />
             </div>
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full text-white" style={{ background: WA.green }}>
-              <Mic className="size-[18px]" />
+              <Mic className="size-4.5" />
             </span>
           </div>
         )}
@@ -549,7 +525,7 @@ export function WhatsAppPreview({ draft }: { draft: RichReplyDraft }) {
       }
     >
       <Bubble out>
-        <span className="break-words">{sampleCustomerText(draft.trigger, draft.type)}</span>
+        <span className="wrap-break-word">{sampleCustomerText(draft.trigger, draft.type)}</span>
         <Meta out />
       </Bubble>
       <BusinessMessage draft={draft} onOpenList={() => setListOpen(true)} />

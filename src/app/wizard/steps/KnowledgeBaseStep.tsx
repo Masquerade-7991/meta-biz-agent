@@ -1069,22 +1069,6 @@ function normalizeUrl(url: string): string {
   return url.replace(/\/$/, '').toLowerCase()
 }
 
-const SUBPAGE_SEGMENTS = [
-  'about', 'contact', 'products', 'services', 'faq', 'blog', 'pricing',
-  'support', 'returns', 'shipping', 'privacy-policy', 'terms', 'careers',
-  'reviews', 'help', 'locations', 'gallery', 'testimonials', 'catalog', 'store',
-]
-
-/** Fake sub-level navigation paths for a crawled site, one per page the mock crawl "read". */
-export function generateFakeSubpages(baseUrl: string, count: number): string[] {
-  const root = baseUrl.replace(/\/$/, '')
-  return Array.from({ length: count }, (_, i) => {
-    const segment = SUBPAGE_SEGMENTS[i % SUBPAGE_SEGMENTS.length]
-    const suffix = i >= SUBPAGE_SEGMENTS.length ? `-${Math.floor(i / SUBPAGE_SEGMENTS.length) + 1}` : ''
-    return `${root}/${segment}${suffix}`
-  })
-}
-
 export function WebsiteTab({
   websites,
   loading,

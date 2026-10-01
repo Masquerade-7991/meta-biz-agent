@@ -579,7 +579,7 @@ function OutcomeBar({ row }: { row: ToolRow }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div tabIndex={0} role="img" aria-label={`${row.tool}: ${text}`} className="flex h-2.5 gap-[2px] overflow-hidden rounded-full bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <div tabIndex={0} role="img" aria-label={`${row.tool}: ${text}`} className="flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {total > 0 &&
             parts.map((p) => <span key={p.key} className={p.className} style={{ width: `${(p.value / total) * 100}%` }} />)}
         </div>

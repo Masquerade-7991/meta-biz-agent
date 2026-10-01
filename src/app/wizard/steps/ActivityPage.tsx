@@ -746,7 +746,7 @@ function ChangeHistorySection({ rows }: { rows: AuditRow[] }) {
                       {failed && ` (failed, ${r.status})`}
                     </td>
                     <td className="px-3 py-2">{r.resource}</td>
-                    <td className="px-3 py-2 break-words text-muted-foreground">
+                    <td className="px-3 py-2 wrap-break-word text-muted-foreground">
                       {Object.entries(r.summary ?? {})
                         .map(([k, v]) => `${k}: ${v}`)
                         .join(', ')}

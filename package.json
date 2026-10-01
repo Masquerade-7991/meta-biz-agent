@@ -8,6 +8,7 @@
     "dev:server": "node --watch server/index.ts",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "lint:tw": "node scripts/check-tailwind.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

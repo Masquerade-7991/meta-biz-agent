@@ -7,6 +7,8 @@
     "types": ["vite/client"],
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
+    // TypeScript 6 defaults to strict; set it explicitly so editors running another TS version (e.g. the TS 7 native preview) agree.
+    "strict": true,
 
     /* Bundler mode */
     "moduleResolution": "bundler",

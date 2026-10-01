@@ -360,7 +360,7 @@ export function CreateAgentModal({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && handleClose()}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent className="sm:max-w-130">
         <DialogHeader>
           <DialogTitle>Create an AI agent</DialogTitle>
           <DialogDescription>

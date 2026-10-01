@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - The user has no Meta token, app ID or app secret. Don't ask for them.
   - To test wiring while it's down, use a throwaway local stand-in server as the upstream: `BASE_URL_2=http://localhost:<port> node server/index.ts`.
 - **IDs stay on the server:** client paths use the literal placeholders `PHONE_NUMBER_ID` / `WABA_ID`, and the server fills them in from `.env`. Never put real IDs in client code.
-- **There is no test suite.** Verify with `npm run build` (type-checks `src/` and `server/`) and `npm run lint`. The existing `only-export-components` warnings are accepted.
+- **There is no test suite.** Verify with `npm run build` (type-checks `src/` and `server/`) and `npm run lint`. Lint is clean; keep it that way. Context hooks are allowed by name in `.oxlintrc.json`; other shared helpers go in a `.ts` file, not next to a component.
 
 ## Rules for Meta wiring
 

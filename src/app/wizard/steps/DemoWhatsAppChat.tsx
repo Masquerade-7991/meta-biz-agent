@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { CheckCircle2, CreditCard, ExternalLink, Landmark, Loader2, Mic, Package, Send, ShieldCheck, Smartphone, X } from 'lucide-react'
 import { BUY, PAID, rupees, type DummyRich, type Order } from '@/app/api/dummyMeta'
-import { Bubble, BubbleButton, Meta, PhoneFrame, WA } from './WhatsAppPreview'
+import { Bubble, BubbleButton, Meta, PhoneFrame } from './WhatsAppPreview'
+import { WA } from './whatsappTheme'
 
 export interface DemoChatMessage {
   from: 'customer' | 'agent' | 'system'
@@ -102,7 +103,7 @@ export function DemoWhatsAppChat({
             className="flex size-9 shrink-0 items-center justify-center rounded-full text-white"
             style={{ background: WA.green }}
           >
-            {draft.trim() ? <Send className="size-4" /> : <Mic className="size-[18px]" />}
+            {draft.trim() ? <Send className="size-4" /> : <Mic className="size-4.5" />}
           </button>
         </form>
       }
@@ -126,7 +127,7 @@ export function DemoWhatsAppChat({
         if (m.from === 'customer')
           return (
             <Bubble key={i} out>
-              <span className="whitespace-pre-wrap break-words">{m.text}</span>
+              <span className="whitespace-pre-wrap wrap-break-word">{m.text}</span>
               <Meta out time={clock(m.at)} />
             </Bubble>
           )
@@ -192,7 +193,7 @@ function AgentMessage({
   const time = clock(m.at)
   const text = (
     <>
-      <span className="whitespace-pre-wrap break-words">{m.text}</span>
+      <span className="whitespace-pre-wrap wrap-break-word">{m.text}</span>
       <Meta time={time} />
     </>
   )
@@ -206,11 +207,11 @@ function AgentMessage({
           {rich.cards.map((p) => (
             <div
               key={p.id}
-              className="w-[200px] shrink-0 snap-start overflow-hidden shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
+              className="w-50 shrink-0 snap-start overflow-hidden shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]"
               style={{ background: WA.bubbleIn, borderRadius: 7.5 }}
             >
-              <div className="p-[3px]">
-                <img src={p.image} alt="" className="block h-[110px] w-full object-cover" style={{ borderRadius: 6 }} />
+              <div className="p-0.75">
+                <img src={p.image} alt="" className="block h-27.5 w-full object-cover" style={{ borderRadius: 6 }} />
               </div>
               <div className="px-2 pb-1.5 pt-1" style={{ color: WA.text, lineHeight: '17px' }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</div>

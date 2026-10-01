@@ -7,7 +7,7 @@ import { storageKey } from '@/app/api/dummy'
 
 const STORAGE_KEY = storageKey('meta-agent-wizard-state-v1')
 
-export function createInitialState(): WizardState {
+function createInitialState(): WizardState {
   return {
     gate: {
       selectedWabaId: null,

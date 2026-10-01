@@ -534,7 +534,7 @@ function RichReplyEditorDialog({
                   <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
                   Instruction the agent will read
                 </summary>
-                <p className="whitespace-pre-wrap break-words border-t border-border px-3 py-2 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <p className="whitespace-pre-wrap wrap-break-word border-t border-border px-3 py-2 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
                   {compileRichReplySentence(editor)}
                 </p>
               </details>
