@@ -3,8 +3,9 @@ import type { SliceKey, StepId, StudioSectionId, WizardState } from './types'
 import { DEFAULT_BUSINESS_HOURS, DEFAULT_REPLIES } from './mockData'
 import { migrateRichReply } from './richReplies'
 import { getDraftSyncPhone, putDraft } from '@/app/api/store'
+import { storageKey } from '@/app/api/dummy'
 
-const STORAGE_KEY = 'meta-agent-wizard-state-v1'
+const STORAGE_KEY = storageKey('meta-agent-wizard-state-v1')
 
 export function createInitialState(): WizardState {
   return {

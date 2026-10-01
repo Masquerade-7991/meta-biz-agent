@@ -19,6 +19,8 @@ import type {
 import { compileConfig } from '../wizard/compiler'
 import { validateRichReply } from '../wizard/richReplies'
 import type { EvalConversationResult, EvalScenario, TranscriptLine } from '../wizard/steps/evalData'
+import { isDummyMode } from './dummy'
+import { dummyAssets, dummyMeta, type DummyRich } from './dummyMeta'
 
 // The number every call targets. Unset → the PHONE_NUMBER_ID placeholder the server fills from .env.
 let activePhoneNumberId: string | null = null
@@ -52,7 +54,14 @@ async function parse<T>(res: Response): Promise<T> {
   return json as T
 }
 
+/** Dummy mode answers in this browser; the reply goes through the same parse() as a real one. */
+async function dummyFetch<T>(method: string, path: string, body?: unknown, form?: FormData): Promise<T> {
+  const r = await dummyMeta(method, path, (body ?? {}) as Record<string, unknown>, form)
+  return parse<T>(new Response(r.json === undefined || r.status === 204 ? null : JSON.stringify(r.json), { status: r.status }))
+}
+
 export async function metaFetch<T = unknown>(path: string, method = 'GET', body?: unknown): Promise<T> {
+  if (isDummyMode()) return dummyFetch<T>(method, path, body)
   const res = await fetch(`/api/meta${path}`, {
     method,
     headers: body === undefined ? undefined : { 'content-type': 'application/json' },
@@ -63,11 +72,13 @@ export async function metaFetch<T = unknown>(path: string, method = 'GET', body?
 
 /** GET on the Graph API (WABAs, phone numbers), via the server's /api/graph route. */
 export async function graphFetch<T = unknown>(path: string): Promise<T> {
+  if (isDummyMode()) return dummyFetch<T>('GET', path)
   return parse<T>(await fetch(`/api/graph${path}`))
 }
 
 /** multipart/form-data upload; the browser sets the boundary, the server passes it through. */
 async function metaUpload<T>(path: string, form: FormData): Promise<T> {
+  if (isDummyMode()) return dummyFetch<T>('POST', path, undefined, form)
   return parse<T>(await fetch(`/api/meta${path}`, { method: 'POST', body: form }))
 }
 
@@ -118,6 +129,10 @@ export interface ServerHealth {
   phoneName?: string
 }
 export async function getServerHealth(): Promise<ServerHealth | null> {
+  if (isDummyMode()) {
+    const a = await dummyAssets()
+    return { ok: true, upstream: 'dummy', hasToken: false, ...a }
+  }
   try {
     const res = await fetch('/api/health')
     return res.ok ? ((await res.json()) as ServerHealth) : null
@@ -131,14 +146,12 @@ export interface MetaWaba {
   id: string
   name: string
 }
-/** Owned + client WABAs, de-duplicated. One side failing is fine; both failing throws. */
+/** Only the WABA set in .env (the server fills in WABA_ID). The token can see every client WABA in
+ *  the business, and listing those would check every client number for an agent.
+ *  ponytail: one WABA; list `/BUSINESS_ID/owned_whatsapp_business_accounts` again when the console serves several. */
 export async function listWabas(): Promise<MetaWaba[]> {
-  const results = await Promise.allSettled(
-    ['owned', 'client'].map((k) => listAllPages<MetaWaba>(`/BUSINESS_ID/${k}_whatsapp_business_accounts?fields=id,name`, graphFetch)),
-  )
-  const ok = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
-  if (!ok.length) throw (results[0] as PromiseRejectedResult).reason
-  return [...new Map(ok.flat().map((w) => [w.id, w])).values()]
+  const w = await graphFetch<MetaWaba>('/WABA_ID?fields=id,name')
+  return [{ id: w.id, name: w.name }]
 }
 
 export interface MetaPhoneNumber {
@@ -176,7 +189,7 @@ export interface AgentOnNumber {
 /** The agent already on a number, or null when there is none (Meta answers 404). */
 export async function getAgentOnNumber(phoneId: string): Promise<AgentOnNumber | null> {
   try {
-    const s = await metaFetch<MetaSettings & { agent_id?: string }>(`${agent(phoneId)}/agent_config/settings`)
+    const s = await getSettings(phoneId)
     return s.agent_id ? { agentId: s.agent_id, enabled: !!s.rollout?.enabled, audience: s.ai_audience } : null
   } catch (err) {
     if (err instanceof MetaError && err.status === 404) return null
@@ -198,6 +211,8 @@ export interface AgentTestReply {
   handoff_reason?: string
   no_response_reason?: string
   quick_replies?: string[]
+  /** Dummy mode only (dummyMeta.ts): the carousel / order parts of a scripted reply. */
+  dummy_rich?: DummyRich
 }
 export const sendTestMessage = (user_msg: string, conversation_id?: string) =>
   metaFetch<AgentTestReply>(`${agent()}/agent_test`, 'POST', { user_msg, conversation_id })
@@ -236,6 +251,12 @@ export const setRollout = (enabled: boolean, audienceMode: WizardState['publish'
     rollout: { enabled },
     ai_audience: audienceMode === 'allowlisted' ? 'ALLOWLISTED_ONLY' : 'EVERYONE',
   })
+
+/** Meta answers settings GET with a one-item list (the docs show a plain object); accept both. */
+async function getSettings(phoneId?: string): Promise<MetaSettings & { agent_id?: string }> {
+  const r = await metaFetch<MetaSettings | MetaSettings[]>(`${agent(phoneId)}/agent_config/settings`)
+  return (Array.isArray(r) ? r[0] : r) ?? {}
+}
 
 interface MetaSettings {
   rollout?: { enabled?: boolean }
@@ -858,7 +879,7 @@ export async function hydrateFromMeta(state: WizardState): Promise<{ patch: Patc
     }
   }
   const [settings, businessInfo, faqs, files, websites, uiSkills, skills, allowlist, connectors] = await Promise.all([
-    get('settings', () => metaFetch<MetaSettings>(`${agent()}/agent_config/settings`)),
+    get('settings', () => getSettings()),
     get('business info', () => metaFetch<Record<string, unknown>>(`${agent()}/agent_config/business_info`)),
     get('FAQs', () => metaFetch<MetaFaq[]>(`${agent()}/agent_config/faq`)),
     get('documents', () => metaFetch<{ id: string; file_name: string }[]>(`${agent()}/agent_config/files`)),

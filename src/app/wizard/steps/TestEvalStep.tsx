@@ -25,6 +25,9 @@ import type { Connection, ConnectionAction, WizardState } from '@/app/wizard/typ
 import { cn } from '@/app/lib/utils'
 import { checkEligibility, errorText, MetaError, sendTestMessage } from '@/app/api/meta'
 import { listTestConversations } from '@/app/api/store'
+import { isDummyMode, storageKey } from '@/app/api/dummy'
+import type { DummyRich } from '@/app/api/dummyMeta'
+import { DemoWhatsAppChat } from './DemoWhatsAppChat'
 import { InlineError } from '@/app/components/wizard/RetryBanner'
 
 interface ChatMessage {
@@ -32,6 +35,7 @@ interface ChatMessage {
   text: string
   at: number
   quickReplies?: string[]
+  rich?: DummyRich
 }
 interface TestConversation {
   id: string
@@ -41,7 +45,7 @@ interface TestConversation {
 
 // Meta has no history API for test conversations (PRD 5.4.1 AC6b-f). The server records every test
 // message in its store; without a database, past ones are kept in this browser instead.
-const TEST_HISTORY_KEY = 'meta-agent-test-history-v1'
+const TEST_HISTORY_KEY = storageKey('meta-agent-test-history-v1')
 function loadTestHistory(): TestConversation[] {
   try {
     return JSON.parse(localStorage.getItem(TEST_HISTORY_KEY) ?? '[]') as TestConversation[]
@@ -166,18 +170,21 @@ export function TestEvalStep() {
     state.knowledge.websites.length > 0 ||
     state.business.businessDescription.trim() !== ''
 
-  async function sendQuickTest(textArg?: string) {
+  /** `shown` replaces the customer's bubble text when `text` is a dummy-mode tap token. */
+  async function sendQuickTest(textArg?: string, shown?: string) {
     const text = (textArg ?? chatDraft).trim()
     if (!text || sending) return
     if (!textArg) setChatDraft('')
-    setChatMessages((prev) => [...prev, { from: 'customer', text, at: Date.now() }])
+    setChatMessages((prev) => [...prev, { from: 'customer', text: shown ?? text, at: Date.now() }])
     setSending(true)
     try {
       const r = await sendTestMessage(text, conversationId)
       setConversationId(r.conversation_id)
       setChatMessages((prev) => [
         ...prev,
-        ...(r.agent_response ? [{ from: 'agent' as const, text: r.agent_response, at: Date.now(), quickReplies: r.quick_replies }] : []),
+        ...(r.agent_response
+          ? [{ from: 'agent' as const, text: r.agent_response, at: Date.now(), quickReplies: r.quick_replies, rich: r.dummy_rich }]
+          : []),
         ...(r.handoff_reason ? [{ from: 'system' as const, text: 'This message would hand off to a human agent here.', at: Date.now() }] : []),
         ...(!r.agent_response && !r.handoff_reason && r.no_response_reason
           ? [{ from: 'system' as const, text: `The agent did not reply: ${r.no_response_reason}`, at: Date.now() }]
@@ -379,87 +386,97 @@ export function TestEvalStep() {
             </div>
           )}
 
-          <div className="space-y-2 rounded-lg border border-border p-4">
-            {viewing && (
-              <div className="flex items-center justify-between gap-2 rounded-md bg-muted px-2 py-1" style={{ fontSize: 'var(--text-xs)' }}>
-                <span className="text-muted-foreground">Read-only: conversation from {new Date(viewing.startedAt).toLocaleString()}</span>
-                <button type="button" className="text-primary" onClick={() => setViewing(null)}>
-                  Back to testing
-                </button>
-              </div>
-            )}
-            <div className="max-h-64 space-y-2 overflow-y-auto">
-              {(viewing ? viewing.messages : chatMessages).length === 0 ? (
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                  No messages yet.
-                </p>
-              ) : (
-                (viewing ? viewing.messages : chatMessages).map((m, i, all) =>
-                  m.from === 'system' ? (
-                    <p key={i} className="text-center text-muted-foreground italic" style={{ fontSize: 'var(--text-xs)' }}>
-                      {m.text}
-                    </p>
-                  ) : (
-                    <div key={i} className={cn('flex flex-col', m.from === 'customer' ? 'items-end' : 'items-start')}>
-                      <p
-                        className={cn(
-                          'max-w-[80%] rounded-lg px-3 py-1.5 whitespace-pre-wrap',
-                          m.from === 'customer' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted',
-                        )}
-                        style={{ fontSize: 'var(--text-sm)' }}
-                      >
+          {isDummyMode() && !viewing ? (
+            <DemoWhatsAppChat
+              name={state.identity.companyName.trim() || state.gate.selectedWabaName?.trim() || state.identity.agentName.trim() || 'Your business'}
+              messages={chatMessages}
+              sending={sending}
+              disabled={ineligible || !!limitMessage}
+              onSend={(text, shown) => void sendQuickTest(text, shown)}
+            />
+          ) : (
+            <div className="space-y-2 rounded-lg border border-border p-4">
+              {viewing && (
+                <div className="flex items-center justify-between gap-2 rounded-md bg-muted px-2 py-1" style={{ fontSize: 'var(--text-xs)' }}>
+                  <span className="text-muted-foreground">Read-only: conversation from {new Date(viewing.startedAt).toLocaleString()}</span>
+                  <button type="button" className="text-primary" onClick={() => setViewing(null)}>
+                    Back to testing
+                  </button>
+                </div>
+              )}
+              <div className="max-h-64 space-y-2 overflow-y-auto">
+                {(viewing ? viewing.messages : chatMessages).length === 0 ? (
+                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                    No messages yet.
+                  </p>
+                ) : (
+                  (viewing ? viewing.messages : chatMessages).map((m, i, all) =>
+                    m.from === 'system' ? (
+                      <p key={i} className="text-center text-muted-foreground italic" style={{ fontSize: 'var(--text-xs)' }}>
                         {m.text}
                       </p>
-                      {viewing && (
-                        <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                          {new Date(m.at).toLocaleTimeString()}
-                        </span>
-                      )}
-                      {/* Quick replies on the latest agent message, tappable like on WhatsApp. */}
-                      {!viewing && m.quickReplies && m.quickReplies.length > 0 && i === all.length - 1 && (
-                        <div className="mt-1 flex flex-wrap gap-1.5">
-                          {m.quickReplies.map((qr) => (
-                            <button
-                              key={qr}
-                              type="button"
-                              onClick={() => void sendQuickTest(qr)}
-                              disabled={sending || !!limitMessage || ineligible}
-                              className="rounded-full border border-primary px-2.5 py-0.5 text-primary hover:bg-accent"
-                              style={{ fontSize: 'var(--text-xs)' }}
-                            >
-                              {qr}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ),
-                )
-              )}
-              {sending && !viewing && (
-                <p className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                  <Loader2 className="size-3 animate-spin" /> The agent is replying...
-                </p>
+                    ) : (
+                      <div key={i} className={cn('flex flex-col', m.from === 'customer' ? 'items-end' : 'items-start')}>
+                        <p
+                          className={cn(
+                            'max-w-[80%] rounded-lg px-3 py-1.5 whitespace-pre-wrap',
+                            m.from === 'customer' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted',
+                          )}
+                          style={{ fontSize: 'var(--text-sm)' }}
+                        >
+                          {m.text}
+                        </p>
+                        {viewing && (
+                          <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                            {new Date(m.at).toLocaleTimeString()}
+                          </span>
+                        )}
+                        {/* Quick replies on the latest agent message, tappable like on WhatsApp. */}
+                        {!viewing && m.quickReplies && m.quickReplies.length > 0 && i === all.length - 1 && (
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {m.quickReplies.map((qr) => (
+                              <button
+                                key={qr}
+                                type="button"
+                                onClick={() => void sendQuickTest(qr)}
+                                disabled={sending || !!limitMessage || ineligible}
+                                className="rounded-full border border-primary px-2.5 py-0.5 text-primary hover:bg-accent"
+                                style={{ fontSize: 'var(--text-xs)' }}
+                              >
+                                {qr}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ),
+                  )
+                )}
+                {sending && !viewing && (
+                  <p className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                    <Loader2 className="size-3 animate-spin" /> The agent is replying...
+                  </p>
+                )}
+              </div>
+              {limitMessage && <InlineError message={limitMessage} onRetry={() => setLimitMessage(null)} />}
+              {!viewing && (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={chatDraft}
+                    onChange={(e) => setChatDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void sendQuickTest()
+                    }}
+                    placeholder="Type a message to try..."
+                    disabled={ineligible || !!limitMessage}
+                  />
+                  <Button size="icon" onClick={() => void sendQuickTest()} disabled={!chatDraft.trim() || sending || ineligible || !!limitMessage}>
+                    <Send className="size-4" />
+                  </Button>
+                </div>
               )}
             </div>
-            {limitMessage && <InlineError message={limitMessage} onRetry={() => setLimitMessage(null)} />}
-            {!viewing && (
-              <div className="flex items-center gap-2">
-                <Input
-                  value={chatDraft}
-                  onChange={(e) => setChatDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') void sendQuickTest()
-                  }}
-                  placeholder="Type a message to try..."
-                  disabled={ineligible || !!limitMessage}
-                />
-                <Button size="icon" onClick={() => void sendQuickTest()} disabled={!chatDraft.trim() || sending || ineligible || !!limitMessage}>
-                  <Send className="size-4" />
-                </Button>
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
         {/* Standard checks */}

@@ -1,6 +1,7 @@
 // Typed client for the server's MongoDB-backed /api/store and /api/analytics routes.
 // Every call returns null when the database isn't configured (503), the server can't be reached,
 // or the route fails, so callers fall back to what they did before (localStorage, live Meta calls).
+import { isDummyMode } from './dummy'
 import { getActivePhoneNumberId, q } from './meta'
 import type { AgentEventRow, AgentEventStatus, WizardState } from '../wizard/types'
 import type { EvalConversationResult, TranscriptLine } from '../wizard/steps/evalData'
@@ -10,6 +11,7 @@ export type Stamp = number | string
 export const ms = (t: Stamp | undefined | null): number => (typeof t === 'number' ? t : t ? Date.parse(t) || 0 : 0)
 
 async function storeFetch<T>(path: string, method = 'GET', body?: unknown): Promise<T | null> {
+  if (isDummyMode()) return null // keep demo data out of the database
   try {
     const res = await fetch(path, {
       method,

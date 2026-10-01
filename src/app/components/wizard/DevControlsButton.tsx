@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { FlaskConical } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover'
+import { Switch } from '@/app/components/ui/switch'
 import { useDevControlsEntries } from '@/app/wizard/DevControlsContext'
+import { isDummyMode, setDummyMode } from '@/app/api/dummy'
+import { DemoControlsGroup } from './DemoControlsGroup'
 
 /** The single, app-wide demo-controls panel. Rendered once at the app root, fixed to the true
  *  bottom-right of the viewport (toasts use bottom-left, see components/ui/sonner.tsx, so the two
@@ -30,8 +33,10 @@ export function DevControlsButton() {
     <div data-demo-panel className="pointer-events-auto fixed right-6 bottom-6 z-[60] hidden lg:block">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="icon" aria-label="Demo controls" className="rounded-full shadow-md">
+          <Button variant="outline" size="icon" aria-label="Demo controls" className="relative rounded-full shadow-md">
             <FlaskConical className="size-4" />
+            {/* A quiet cue for the presenter only; nothing on the page itself says "dummy". */}
+            {isDummyMode() && <span className="absolute top-0.5 right-0.5 size-2 rounded-full bg-warning" aria-hidden />}
           </Button>
         </PopoverTrigger>
         <PopoverContent
@@ -42,6 +47,12 @@ export function DevControlsButton() {
           onFocusOutside={(event) => event.preventDefault()}
           className="pointer-events-auto z-[60] w-96 space-y-4"
         >
+          <DemoControlsGroup label="Dummy mode">
+            <label className="flex w-full items-center justify-between gap-3" style={{ fontSize: 'var(--text-xs)' }}>
+              <span className="text-muted-foreground">Uses sample data in this browser. No calls to Meta. The page reloads.</span>
+              <Switch checked={isDummyMode()} onCheckedChange={setDummyMode} aria-label="Dummy mode" />
+            </label>
+          </DemoControlsGroup>
           {rendered.length === 0 ? (
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
               No demo controls for this step

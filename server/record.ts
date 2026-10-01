@@ -2,7 +2,9 @@
 // response was sent; never throws (errors are logged) and the relay never awaits it.
 import { createHash } from 'node:crypto'
 import { col, db, WS } from './db.ts'
-import { parseJson, type Kind } from './upstream.ts'
+import { isConfigCollection, mirror, mirrorCollection } from './mirror.ts'
+import { stripSecrets } from './store.ts'
+import { parseJson, type CallLog, type Kind } from './upstream.ts'
 
 type Obj = Record<string, unknown>
 const obj = (v: unknown): Obj => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : {})
@@ -71,6 +73,16 @@ export interface Exchange {
   resText: string
 }
 
+/** api_calls: one document per call to Meta. Never throws; a failed write is only logged. */
+export function logApiCall(c: CallLog): void {
+  if (!db) return
+  const u = new URL(c.url)
+  const { phone } = c.kind === 'meta' ? splitPhone(u.pathname) : { phone: null }
+  col('api_calls')
+    .insertOne({ workspaceId: WS, phoneNumberId: phone, ...c, host: u.host, ...resourceOf(splitPhone(u.pathname).rest), ok: c.status >= 200 && c.status < 300 })
+    .catch((err) => console.log(`api_calls write failed: ${err instanceof Error ? err.message : err}`))
+}
+
 export function record(x: Exchange): void {
   if (!db) return
   recordAsync(x).catch((err) => console.log(`record ${x.method} ${x.path} failed: ${err instanceof Error ? err.message : err}`))
@@ -89,10 +101,16 @@ async function recordAsync(x: Exchange) {
   const jobs: Promise<unknown>[] = []
 
   if (x.method !== 'GET') {
+    const r = resourceOf(rest)
+    // A create has no id in its path; Meta returns the new item's id in the response.
+    const resourceId = r.resourceId ?? (str(res.id) ? String(res.id) : null)
+    // Configuration changes keep their full contents (secrets blanked), so the log shows what changed to what.
+    const data = x.kind === 'meta' && isConfigCollection(mirrorCollection(rest)) ? stripSecrets(body, true) : undefined
     jobs.push(
-      col('audit_log').insertOne({ ...base, at, action: actionOf(x.method, rest), ...resourceOf(rest), status: x.status, summary: summarize(body) }),
+      col('audit_log').insertOne({ ...base, at, action: actionOf(x.method, rest), ...r, resourceId, status: x.status, summary: summarize(body), ...(data ? { data } : {}) }),
     )
   }
+  if (x.kind === 'meta' && phone) jobs.push(mirror(phone, x.method, rest, u.searchParams, body, json))
   if (x.kind === 'meta' && phone) {
     if (x.method === 'POST' && rest === 'agent_test' && str(res.conversation_id)) {
       jobs.push(
@@ -190,8 +208,13 @@ async function recordAsync(x: Exchange) {
       )
     } else if (rest === 'delete_agent' && x.method === 'DELETE') {
       jobs.push(col('agents').updateOne({ _id: phone as never }, { $set: { deletedAt: at } }))
-    } else if (rest === 'agent_config/settings' && x.method === 'GET') {
-      // A number that answers settings has an agent: make it known to the collectors.
+    } else if (
+      rest === 'agent_config/settings' &&
+      x.method === 'GET' &&
+      // Meta answers 200 with an empty list for a number with no agent; only an agent_id means one exists.
+      obj(Array.isArray(json) ? json[0] : json).agent_id
+    ) {
+      // A number whose settings carry an agent_id has an agent: make it known to the collectors.
       jobs.push(col('agents').updateOne({ _id: phone as never }, { $setOnInsert: { workspaceId: WS, createdAt: at } }, { upsert: true }))
     }
   }

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState, type ReactNode, type Ref } from 'react'
 import {
   ArrowLeft,
   BatteryFull,
@@ -31,7 +31,7 @@ export type RichReplyDraft = {
 
 // WhatsApp's own light-mode palette. Local on purpose: this file mocks another product's UI, so
 // these must not leak into the app's tokens.
-const WA = {
+export const WA = {
   header: '#008069',
   wallpaper: '#efeae2',
   doodle: '#d9d1c4',
@@ -109,17 +109,17 @@ function Ph({ value, placeholder }: { value: string | undefined; placeholder: st
   return value?.trim() ? <>{value}</> : <span style={{ color: WA.faint }}>{placeholder}</span>
 }
 
-function Meta({ out }: { out?: boolean }) {
+export function Meta({ out, time }: { out?: boolean; time?: string }) {
   return (
     <span className="float-right -mb-1 ml-2 mt-1.5 inline-flex items-center gap-0.5" style={{ fontSize: 10.5, color: WA.meta }}>
-      {out ? TIME_OUT : TIME_IN}
+      {time ?? (out ? TIME_OUT : TIME_IN)}
       {out && <CheckCheck className="size-3.5" style={{ color: WA.tick }} />}
     </span>
   )
 }
 
 /** A chat bubble with WhatsApp's little corner tail. `flush` drops the padding for media. */
-function Bubble({ out, children, footer, flush }: { out?: boolean; children: ReactNode; footer?: ReactNode; flush?: boolean }) {
+export function Bubble({ out, children, footer, flush }: { out?: boolean; children: ReactNode; footer?: ReactNode; flush?: boolean }) {
   const bg = out ? WA.bubbleOut : WA.bubbleIn
   return (
     <div className={out ? 'flex justify-end pl-10' : 'flex justify-start pr-8'}>
@@ -153,7 +153,7 @@ function Bubble({ out, children, footer, flush }: { out?: boolean; children: Rea
   )
 }
 
-function BubbleButton({ icon: Icon, label, placeholder, onClick }: { icon: typeof Reply; label: string; placeholder: string; onClick?: () => void }) {
+export function BubbleButton({ icon: Icon, label, placeholder, onClick }: { icon: typeof Reply; label: string; placeholder: string; onClick?: () => void }) {
   const content = (
     <>
       <Icon className="size-4 shrink-0" />
@@ -439,15 +439,27 @@ function BusinessMessage({ draft, onOpenList }: { draft: RichReplyDraft; onOpenL
   }
 }
 
-export function WhatsAppPreview({ draft }: { draft: RichReplyDraft }) {
-  const { state } = useWizard()
-  const [listOpen, setListOpen] = useState(false)
-  const name = state.identity.companyName.trim() || state.gate.selectedWabaName?.trim() || state.identity.agentName.trim() || 'Your business'
-
+/** The phone: status bar, chat header, wallpaper, composer. `children` is the conversation;
+ *  `composer` replaces the static one, `overlay` covers the screen (bottom sheets). */
+export function PhoneFrame({
+  name,
+  children,
+  composer,
+  overlay,
+  scrollRef,
+  label = 'Preview of the message the customer will see',
+}: {
+  name: string
+  children: ReactNode
+  composer?: ReactNode
+  overlay?: ReactNode
+  scrollRef?: Ref<HTMLDivElement>
+  label?: string
+}) {
   return (
     <section
       tabIndex={0}
-      aria-label="Preview of the message the customer will see"
+      aria-label={label}
       className="mx-auto w-full max-w-[320px] rounded-[2.4rem] p-[9px] shadow-lg outline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
       style={{ background: '#1f2328', fontFamily: WA.font }}
     >
@@ -487,7 +499,7 @@ export function WhatsAppPreview({ draft }: { draft: RichReplyDraft }) {
         </div>
 
         {/* Conversation */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-2" style={{ backgroundImage: DOODLE }}>
+        <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-2" style={{ backgroundImage: DOODLE }}>
           <div className="mt-auto space-y-2">
             <div className="flex justify-center">
               <span className="rounded-md px-2 py-0.5 shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]" style={{ background: WA.chip, color: WA.noticeText, fontSize: 11 }}>
@@ -497,31 +509,50 @@ export function WhatsAppPreview({ draft }: { draft: RichReplyDraft }) {
             <div className="mx-3 rounded-md px-2 py-1 text-center" style={{ background: WA.notice, color: WA.noticeText, fontSize: 10.5, lineHeight: '14px' }}>
               This business uses a secure service from Meta to manage this chat.
             </div>
-            <Bubble out>
-              <span className="break-words">{sampleCustomerText(draft.trigger, draft.type)}</span>
-              <Meta out />
-            </Bubble>
-            <BusinessMessage draft={draft} onOpenList={() => setListOpen(true)} />
+            {children}
           </div>
         </div>
 
         {/* Composer */}
-        <div className="flex items-center gap-1.5 px-1.5 pb-3 pt-1.5" aria-hidden>
-          <div className="flex h-9 flex-1 items-center gap-2 rounded-full bg-white px-3" style={{ color: WA.meta, fontSize: 13.5 }}>
-            <Smile className="size-5 shrink-0" />
-            <span className="flex-1">Message</span>
-            <Paperclip className="size-[18px] shrink-0 -rotate-45" />
-            <Camera className="size-[18px] shrink-0" />
+        {composer ?? (
+          <div className="flex items-center gap-1.5 px-1.5 pb-3 pt-1.5" aria-hidden>
+            <div className="flex h-9 flex-1 items-center gap-2 rounded-full bg-white px-3" style={{ color: WA.meta, fontSize: 13.5 }}>
+              <Smile className="size-5 shrink-0" />
+              <span className="flex-1">Message</span>
+              <Paperclip className="size-[18px] shrink-0 -rotate-45" />
+              <Camera className="size-[18px] shrink-0" />
+            </div>
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full text-white" style={{ background: WA.green }}>
+              <Mic className="size-[18px]" />
+            </span>
           </div>
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-full text-white" style={{ background: WA.green }}>
-            <Mic className="size-[18px]" />
-          </span>
-        </div>
-
-        {listOpen && draft.type === 'interactive_list' && (
-          <ListSheet title={draft.blanks.menuButtonLabel} draft={draft} onClose={() => setListOpen(false)} />
         )}
+
+        {overlay}
       </div>
     </section>
+  )
+}
+
+export function WhatsAppPreview({ draft }: { draft: RichReplyDraft }) {
+  const { state } = useWizard()
+  const [listOpen, setListOpen] = useState(false)
+  const name = state.identity.companyName.trim() || state.gate.selectedWabaName?.trim() || state.identity.agentName.trim() || 'Your business'
+
+  return (
+    <PhoneFrame
+      name={name}
+      overlay={
+        listOpen && draft.type === 'interactive_list' ? (
+          <ListSheet title={draft.blanks.menuButtonLabel} draft={draft} onClose={() => setListOpen(false)} />
+        ) : null
+      }
+    >
+      <Bubble out>
+        <span className="break-words">{sampleCustomerText(draft.trigger, draft.type)}</span>
+        <Meta out />
+      </Bubble>
+      <BusinessMessage draft={draft} onOpenList={() => setListOpen(true)} />
+    </PhoneFrame>
   )
 }

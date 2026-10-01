@@ -46,10 +46,11 @@ import {
   setRollout,
 } from '@/app/api/meta'
 import { listStoredAgents, ms, putStoredAgent, putStoredAgents } from '@/app/api/store'
+import { storageKey } from '@/app/api/dummy'
 import { useWizard } from '@/app/wizard/WizardContext'
 import type { AgentInstanceSummary, AgentRolloutStatus } from '@/app/wizard/types'
 
-const CREATED_AGENTS_KEY = 'meta-agent-wizard-created-agents-v1'
+const CREATED_AGENTS_KEY = storageKey('meta-agent-wizard-created-agents-v1')
 
 function loadCreatedAgents(): AgentInstanceSummary[] {
   try {
@@ -67,7 +68,7 @@ function persistCreatedAgents(agents: AgentInstanceSummary[]) {
 // What Meta doesn't hold about an agent, keyed by phone number id: the display name given at
 // creation, when it was last touched here, and whether it has ever gone live (Stopped vs In progress).
 // The server's store (/api/store/agents) is the record; this localStorage key is the fallback cache.
-const NUMBER_META_KEY = 'meta-agent-wizard-numbers-v1'
+const NUMBER_META_KEY = storageKey('meta-agent-wizard-numbers-v1')
 interface NumberMeta {
   name?: string
   updatedAt?: number
@@ -138,9 +139,14 @@ async function loadMetaRows(): Promise<AgentRow[]> {
       const numbers = await listPhoneNumbers(waba.id)
       return Promise.all(
         numbers.map(async (n): Promise<AgentRow | null> => {
-          const agent = await getAgentOnNumber(n.id)
-          if (!agent) return null
           const m = stored[n.id] ?? {}
+          // Meta can refuse the check (e.g. 429 rate limit). A number we've already recorded as an
+          // agent still gets its row, with on/off status unknown until Meta answers again.
+          const agent = await getAgentOnNumber(n.id).catch((err: unknown) => {
+            if (stored[n.id]) return { agentId: '', enabled: false, audience: undefined }
+            throw err
+          })
+          if (!agent) return null
           if (agent.enabled && !m.launched) saveNumberMeta(n.id, { launched: true })
           return {
             id: n.id,

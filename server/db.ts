@@ -55,6 +55,12 @@ const INDEXES: Record<string, IndexDescription[]> = {
     { key: { phoneNumberId: 1, at: -1 } },
     { key: { at: 1 }, expireAfterSeconds: Y2 },
   ],
+  // Every call to Meta (relay and collectors), success or failure: the relay log, kept 90 days.
+  api_calls: [
+    { key: { phoneNumberId: 1, at: -1 } },
+    { key: { status: 1, at: -1 } },
+    { key: { at: 1 }, expireAfterSeconds: D90 },
+  ],
   webhook_events: [
     { key: { messageId: 1 }, unique: true },
     { key: { receivedAt: 1 }, expireAfterSeconds: D90 },
@@ -62,6 +68,20 @@ const INDEXES: Record<string, IndexDescription[]> = {
   notifications: [{ key: { workspaceId: 1, phoneNumberId: 1, dismissedAt: 1, createdAt: -1 } }],
   metrics_daily: [{ key: { 'meta.phoneNumberId': 1, 'meta.metric': 1, ts: 1 } }],
   handoff_snapshots: [{ key: { 'meta.phoneNumberId': 1, ts: 1 } }],
+  // Configuration copies (mirror.ts): one document per item on Meta, kept after delete (deletedAt).
+  ...Object.fromEntries(
+    ['faqs', 'skills', 'rich_replies', 'websites', 'documents', 'allowlist', 'connectors', 'connector_tools'].map((c) => [
+      c,
+      [{ key: { workspaceId: 1, phoneNumberId: 1, metaId: 1 }, unique: true }],
+    ]),
+  ),
+  // One document per agent: Meta's singletons, and the console screens taken from the draft.
+  ...Object.fromEntries(
+    ['business_info', 'agent_settings', 'identity', 'personality', 'guardrails', 'system_replies'].map((c) => [
+      c,
+      [{ key: { workspaceId: 1, phoneNumberId: 1 }, unique: true }],
+    ]),
+  ),
 }
 
 export async function ensureSchema(d: Db) {

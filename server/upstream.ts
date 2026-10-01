@@ -7,13 +7,17 @@ try {
 }
 export const env = (k: string) => (process.env[k] ?? '').trim()
 
-// UPSTREAM=meta → BASE_URL_1 (needs META_TOKEN); anything else → BASE_URL_2 (Helo.ai server).
-export const upstream = (env('UPSTREAM') === 'meta' ? env('BASE_URL_1') : env('BASE_URL_2')).replace(/\/+$/, '')
+// UPSTREAM=meta → straight to Meta with our own token (META_TOKEN or BEARER_TOKEN): agent calls to
+// BASE_URL_1 (api.facebook.com), WABA / number lists to Graph. Anything else → BASE_URL_2 (Helo.ai server).
+const direct = env('UPSTREAM') === 'meta'
+const token = env('META_TOKEN') || env('BEARER_TOKEN')
+export const upstream = (direct ? env('GRAPH_BASE_URL') || 'https://graph.facebook.com/v23.0' : env('BASE_URL_2')).replace(/\/+$/, '')
 const GRAPH_PREFIX = env('GRAPH_PREFIX').replace(/\/+$/, '')
 // Meta Business Agent endpoints live on api.facebook.com, not graph.facebook.com (Graph answers
 // "Unknown path components", code 2500). AGENT_BASE_URL points agent calls at a route that reaches
 // api.facebook.com; Graph calls (WABA / phone-number lists) keep using the upstream above.
-export const agentUpstream = (env('AGENT_BASE_URL') || upstream).replace(/\/+$/, '')
+export const agentUpstream = (env('AGENT_BASE_URL') || (direct ? env('BASE_URL_1') : upstream)).replace(/\/+$/, '')
+export const hasToken = !!token
 export const ids: Record<string, string> = {
   WABA_ID: env('WABA_ID'),
   PHONE_NUMBER_ID: env('PHONE_NUMBER_ID'),
@@ -31,20 +35,6 @@ export interface UpstreamReply {
   contentType: string
 }
 
-/** `path` is already resolved (real IDs). Throws on network failure or timeout. */
-export async function callUpstream(kind: Kind, method: string, path: string, body?: Buffer, contentType?: string): Promise<UpstreamReply> {
-  const headers: Record<string, string> = {}
-  // Thread Control is the one endpoint on the 1.0.0 contract; Graph calls send no version.
-  if (kind === 'meta') headers['X-API-Version'] = path.includes('/thread_control') ? '1.0.0' : '2.0.0'
-  if (contentType) headers['content-type'] = contentType
-  if (env('META_TOKEN')) headers.authorization = `Bearer ${env('META_TOKEN')}`
-  const target = (kind === 'meta' ? agentUpstream : upstream + GRAPH_PREFIX) + path
-  const r = await fetch(target, { method, headers, body, signal: AbortSignal.timeout(20_000) })
-  const text = await r.text()
-  console.log(`${method} ${target} → ${r.status}`)
-  return { status: r.status, text, contentType: r.headers.get('content-type') ?? 'application/json' }
-}
-
 export const parseJson = (text: string): unknown => {
   try {
     return text ? JSON.parse(text) : null
@@ -53,9 +43,64 @@ export const parseJson = (text: string): unknown => {
   }
 }
 
-/** GET on the Meta API returning parsed JSON; throws on non-2xx (err.status set) or network failure. */
+/** One call to Meta, as the api_calls log stores it (no token, no bodies). */
+export interface CallLog {
+  at: Date
+  source: 'relay' | 'collector'
+  kind: Kind
+  method: string
+  url: string
+  status: number // 0 = no answer (network error or timeout)
+  ms: number
+  error?: string
+  fbtraceId?: string
+}
+// Set by the server once MongoDB is up (record.ts writes to api_calls); a no-op until then.
+let logCall: (c: CallLog) => void = () => {}
+export const setCallLogger = (f: (c: CallLog) => void) => void (logCall = f)
+// Token-like query params never reach the log.
+const safeUrl = (u: string) => u.replace(/([?&](?:access_token|input_token)=)[^&]*/g, '$1<hidden>')
+
+/** `path` is already resolved (real IDs). Throws on network failure or timeout. */
+export async function callUpstream(
+  kind: Kind,
+  method: string,
+  path: string,
+  body?: Buffer,
+  contentType?: string,
+  source: CallLog['source'] = 'relay',
+): Promise<UpstreamReply> {
+  const headers: Record<string, string> = {}
+  // Thread Control is the one endpoint on the 1.0.0 contract; Graph calls send no version.
+  if (kind === 'meta') headers['X-API-Version'] = path.includes('/thread_control') ? '1.0.0' : '2.0.0'
+  if (contentType) headers['content-type'] = contentType
+  if (token) headers.authorization = `Bearer ${token}`
+  const target = (kind === 'meta' ? agentUpstream : upstream + GRAPH_PREFIX) + path
+  // A test message waits for the agent's model to answer (25 s seen on the real agent); others are quick.
+  const timeout = path.includes('/agent_test') ? 90_000 : 20_000
+  const at = new Date()
+  const base = { at, source, kind, method, url: safeUrl(target) }
+  try {
+    const r = await fetch(target, { method, headers, body, signal: AbortSignal.timeout(timeout) })
+    const text = await r.text()
+    console.log(`${method} ${safeUrl(target)} → ${r.status}`)
+    // Errors keep Meta's message and trace id (StandardError {title, detail, fbtrace_id} or Graph {error: {...}}).
+    const e = r.ok ? null : (parseJson(text) as { title?: string; detail?: string; fbtrace_id?: string; error?: { message?: string; fbtrace_id?: string } } | null)
+    logCall({
+      ...base,
+      status: r.status,
+      ms: Date.now() - at.getTime(),
+      ...(e ? { error: [e.title, e.detail ?? e.error?.message].filter(Boolean).join(': ').slice(0, 500) || text.slice(0, 300) } : {}),
+      ...(e?.fbtrace_id || e?.error?.fbtrace_id ? { fbtraceId: e.fbtrace_id ?? e.error?.fbtrace_id } : {}),
+    })
+    return { status: r.status, text, contentType: r.headers.get('content-type') ?? 'application/json' }
+  } catch (err) {
+    logCall({ ...base, status: 0, ms: Date.now() - at.getTime(), error: err instanceof Error ? `${err.name}: ${err.message}` : String(err) })
+    throw err
+  }
+}
 export async function metaGet<T = Record<string, unknown>>(path: string): Promise<T> {
-  const r = await callUpstream('meta', 'GET', path).catch((err: unknown) => Promise.reject(Object.assign(new Error(String(err)), { down: true })))
+  const r = await callUpstream('meta', 'GET', path, undefined, undefined, 'collector').catch((err: unknown) => Promise.reject(Object.assign(new Error(String(err)), { down: true })))
   if (r.status < 200 || r.status >= 300) throw Object.assign(new Error(`HTTP ${r.status} for ${path}`), { status: r.status })
   return parseJson(r.text) as T
 }

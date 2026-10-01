@@ -10,6 +10,7 @@ import { DevControlsButton } from '@/app/components/wizard/DevControlsButton'
 import { GateScreen } from '@/app/components/GateScreen'
 import { SetupFrontDoor } from '@/app/components/SetupFrontDoor'
 import { ProductShell } from '@/app/components/shell/ProductShell'
+import { isDummyMode } from '@/app/api/dummy'
 
 function AgentBuilderFlow({ onExitToShell }: { onExitToShell: () => void }) {
   const { state } = useWizard()
@@ -37,7 +38,8 @@ export default function App() {
           {view === 'shell' && (
             <ProductShell
               onOpenAgentBuilder={() => setView('agent-flow')}
-              onAgentCreated={() => setView('setup')}
+              // Dummy demos fill every field by hand, so the guided setup is skipped.
+              onAgentCreated={() => setView(isDummyMode() ? 'agent-flow' : 'setup')}
               onOpenAgentActivity={() => setView('agent-flow')}
             />
           )}

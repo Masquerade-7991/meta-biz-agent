@@ -9,9 +9,9 @@ import http from 'node:http'
 import { allow, getCached, invalidatePhone, putCached, ttlFor } from './cache.ts'
 import { startCollectors } from './collectors.ts'
 import { initDb } from './db.ts'
-import { record, resourceOf, splitPhone } from './record.ts'
+import { logApiCall, record, resourceOf, splitPhone } from './record.ts'
 import { handleStore } from './store.ts'
-import { agentUpstream, callUpstream, env, ids, resolveIds, upstream, type Kind } from './upstream.ts'
+import { agentUpstream, callUpstream, env, hasToken, ids, resolveIds, setCallLogger, upstream, type Kind } from './upstream.ts'
 
 const PORT = Number(env('SERVER_PORT') || 8787)
 
@@ -69,7 +69,7 @@ async function forward(req: http.IncomingMessage, res: http.ServerResponse, kind
   } catch (err) {
     const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
     console.log(`${method} ${path} → 502 (${detail})`)
-    sendError(res, 502, 'Upstream unreachable', `${upstream} did not respond. ${detail}`)
+    sendError(res, 502, 'Upstream unreachable', `${kind === 'meta' ? agentUpstream : upstream} did not respond. ${detail}`)
   }
 }
 
@@ -82,7 +82,7 @@ const server = http.createServer(async (req, res) => {
       JSON.stringify({
         ok: true,
         upstream,
-        hasToken: !!env('META_TOKEN'),
+        hasToken,
         businessName: env('BUSINESS_NAME'),
         wabaId: ids.WABA_ID,
         // Display labels for the offline fallback, matching WhatsApp Manager (not IDs, not secrets).
@@ -101,5 +101,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => console.log(`API proxy on :${PORT} → graph: ${upstream || '(no upstream set)'} · agent: ${agentUpstream || '(no upstream set)'}`))
 if (await initDb()) {
+  setCallLogger(logApiCall)
   if (env('COLLECTORS') !== 'off') startCollectors()
 } else if (!env('MONGODB_URI')) console.log('No MONGODB_URI: running without a database (store routes return 503)')

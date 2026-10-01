@@ -1,5 +1,6 @@
 // /api/store/* and /api/analytics/* routes, served from MongoDB.
 import type http from 'node:http'
+import { mirrorDraft } from './mirror.ts'
 import { col, db, dbOffReason, WS } from './db.ts'
 import { addDays, dayIn, ensureDays } from './collectors.ts'
 import { metaGet, ids } from './upstream.ts'
@@ -177,6 +178,7 @@ async function route(req: http.IncomingMessage, u: URL): Promise<unknown> {
         { $set: { state: stripSecrets(body.state), updatedAt } },
         { upsert: true },
       )
+      await mirrorDraft(phone, stripSecrets(body.state) as Obj)
       return { ok: true, updatedAt }
     }
   }
