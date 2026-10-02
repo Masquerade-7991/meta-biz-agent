@@ -39,7 +39,11 @@ export class MetaError extends Error {
 
 export const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
-async function parse<T>(res: Response): Promise<T> {
+/** Fired when the server says the session has ended; AuthContext shows the login screen. */
+export const UNAUTHORIZED_EVENT = 'helo:unauthorized'
+
+export async function parse<T>(res: Response): Promise<T> {
+  if (res.status === 401) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
   const text = await res.text()
   let json: unknown = null
   try {

@@ -1,4 +1,48 @@
-# Logs
+# ---------------------------------------------------------------------------------------------
+# Secrets and credentials: never commit. The relay reads them from .env at runtime.
+# (.env holds the Meta bearer token, MongoDB URI, Gmail App password, IDs.)
+# ---------------------------------------------------------------------------------------------
+.env
+.env.*
+*.env
+!.env.example
+.envrc
+*.pem
+*.key
+*.crt
+*.cer
+*.csr
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.secret
+*secret*.json
+*credentials*.json
+service-account*.json
+client_secret*.json
+id_rsa*
+id_ed25519*
+.npmrc
+.netrc
+
+# ---------------------------------------------------------------------------------------------
+# Dependencies and build output
+# ---------------------------------------------------------------------------------------------
+node_modules
+dist
+dist-ssr
+build
+*.local
+*.tsbuildinfo
+.vite
+.cache
+.eslintcache
+.parcel-cache
+
+# ---------------------------------------------------------------------------------------------
+# Logs, dumps, local data (may contain request data, emails or magic links)
+# ---------------------------------------------------------------------------------------------
 logs
 *.log
 npm-debug.log*
@@ -6,22 +50,48 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+*.pid
+*.seed
+*.sqlite
+*.sqlite3
+*.db
+dump/
+*.bson
+*.dump
+coverage
+.nyc_output
 
-node_modules
-dist
-dist-ssr
-*.local
+# Test artefacts (Playwright screenshots, reports)
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 
-# Editor directories and files
+# ---------------------------------------------------------------------------------------------
+# Deploy and tooling state
+# ---------------------------------------------------------------------------------------------
+.vercel
+.netlify
+
+# Claude Code: keep shared project config (skills) tracked; personal settings stay local.
+.claude/settings.local.json
+.claude/*.local.*
+# Serena (code-intelligence tool): local cache and memories
+.serena/
+
+# ---------------------------------------------------------------------------------------------
+# Editors and OS
+# ---------------------------------------------------------------------------------------------
 .vscode/*
 !.vscode/extensions.json
 .idea
+*.iml
 .DS_Store
+Thumbs.db
+desktop.ini
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-
-# Local secrets / IDs (read only by server/index.ts)
-.env
+*~

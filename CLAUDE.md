@@ -14,6 +14,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - It's VPN-only and started manually each day, so it is often unreachable. That's expected, not a bug.
   - The user has no Meta token, app ID or app secret. Don't ask for them.
   - To test wiring while it's down, use a throwaway local stand-in server as the upstream: `BASE_URL_2=http://localhost:<port> node server/index.ts`.
+- **Accounts gate the API (`server/auth.ts`):**
+  - Every `/api/*` route except `/api/health` and the account routes needs a signed-in workspace member, and runs inside that member's workspace (`ws()` in `server/db.ts`).
+  - Accounts need MongoDB.
+  - Emails go through Gmail SMTP (`SMTP_USER` / `SMTP_PASS` App password). Without `SMTP_PASS`, emails, including magic links, print to the relay log.
+  - Dummy mode skips login entirely.
 - **IDs stay on the server:** client paths use the literal placeholders `PHONE_NUMBER_ID` / `WABA_ID`, and the server fills them in from `.env`. Never put real IDs in client code.
 - **There is no test suite.** Verify with `npm run build` (type-checks `src/` and `server/`) and `npm run lint`. Lint is clean; keep it that way. Context hooks are allowed by name in `.oxlintrc.json`; other shared helpers go in a `.ts` file, not next to a component.
 

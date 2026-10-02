@@ -92,9 +92,9 @@ export function dummyAssets(): Promise<Assets> {
     .then((h: Partial<Assets> | null) => ({
       businessId: 'BUSINESS_ID',
       businessName: h?.businessName || 'Helo Demo Store',
-      wabaId: h?.wabaId || '106769052057950',
+      wabaId: h?.wabaId || '990000000000001', // fake: real IDs never live in client code
       wabaName: h?.wabaName || h?.businessName || 'Helo Demo Store',
-      phoneNumberId: h?.phoneNumberId || '100563996021650',
+      phoneNumberId: h?.phoneNumberId || '990000000000002',
       phoneNumber: h?.phoneNumber || '+91 98765 43210',
       phoneName: h?.phoneName || 'Helo Demo Store',
     }))

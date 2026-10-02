@@ -4,6 +4,7 @@ import { AppSidebar } from './AppSidebar'
 import { PlaceholderPage } from './PlaceholderPage'
 import { AgentsListPage } from './AgentsListPage'
 import { NAV_ITEMS, type NavId } from '@/app/nav'
+import { SettingsPage, type SettingsTab } from './SettingsPage'
 
 export function ProductShell({
   onOpenAgentBuilder,
@@ -15,6 +16,7 @@ export function ProductShell({
   onOpenAgentActivity: () => void
 }) {
   const [active, setActive] = useState<NavId>('ai-agents')
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('profile')
 
   const activeItem = NAV_ITEMS.find((item) => item.id === active)!
 
@@ -28,6 +30,8 @@ export function ProductShell({
             onOpenActivity={onOpenAgentActivity}
           />
         )
+      case 'settings':
+        return <SettingsPage tab={settingsTab} onTabChange={setSettingsTab} />
       default:
         return <PlaceholderPage item={activeItem} />
     }
@@ -35,7 +39,14 @@ export function ProductShell({
 
   return (
     <div className="flex h-screen bg-background">
-      <AppSidebar active={active} onNavigate={setActive} />
+      <AppSidebar
+        active={active}
+        onNavigate={setActive}
+        onOpenSettings={(tab) => {
+          setSettingsTab(tab)
+          setActive('settings')
+        }}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-6">
           <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{activeItem.label}</p>

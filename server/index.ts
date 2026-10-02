@@ -8,7 +8,8 @@
 import http from 'node:http'
 import { allow, getCached, invalidatePhone, putCached, ttlFor } from './cache.ts'
 import { startCollectors } from './collectors.ts'
-import { initDb } from './db.ts'
+import { getSession, handleAuth } from './auth.ts'
+import { db, dbOffReason, initDb, withWorkspace } from './db.ts'
 import { logApiCall, record, resourceOf, splitPhone } from './record.ts'
 import { handleStore } from './store.ts'
 import { agentUpstream, callUpstream, env, hasToken, ids, resolveIds, setCallLogger, upstream, type Kind } from './upstream.ts'
@@ -94,9 +95,18 @@ const server = http.createServer(async (req, res) => {
     )
     return
   }
-  if (url.startsWith('/api/meta/')) await forward(req, res, 'meta', resolveIds(url.slice('/api/meta'.length)))
-  else if (url.startsWith('/api/graph/')) await forward(req, res, 'graph', resolveIds(url.slice('/api/graph'.length)))
-  else if (!(await handleStore(req, res))) res.writeHead(404).end()
+  if (await handleAuth(req, res)) return
+  // Everything else needs a signed-in workspace member, and runs inside that member's workspace.
+  if (!db) return sendError(res, 503, dbOffReason, 'Accounts need the database. Set MONGODB_URI in .env and restart the server.')
+  const s = await getSession(req)
+  if (!s) return sendError(res, 401, 'Not logged in', 'Log in to continue.')
+  if (s.setup !== 'complete') return sendError(res, 403, 'Setup not finished', 'Finish setting up your account first.')
+  if (!s.workspace) return sendError(res, 403, 'No workspace', 'Create or join a workspace first.')
+  await withWorkspace(s.workspace._id, async () => {
+    if (url.startsWith('/api/meta/')) await forward(req, res, 'meta', resolveIds(url.slice('/api/meta'.length)))
+    else if (url.startsWith('/api/graph/')) await forward(req, res, 'graph', resolveIds(url.slice('/api/graph'.length)))
+    else if (!(await handleStore(req, res))) res.writeHead(404).end()
+  })
 })
 
 server.listen(PORT, () => console.log(`API proxy on :${PORT} → graph: ${upstream || '(no upstream set)'} · agent: ${agentUpstream || '(no upstream set)'}`))

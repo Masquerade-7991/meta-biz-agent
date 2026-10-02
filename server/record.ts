@@ -1,7 +1,7 @@
 // Write-through recording of relayed Meta traffic. Called after the upstream answered and the
 // response was sent; never throws (errors are logged) and the relay never awaits it.
 import { createHash } from 'node:crypto'
-import { col, db, WS } from './db.ts'
+import { col, db, ws } from './db.ts'
 import { isConfigCollection, mirror, mirrorCollection } from './mirror.ts'
 import { stripSecrets } from './store.ts'
 import { parseJson, type CallLog, type Kind } from './upstream.ts'
@@ -79,7 +79,7 @@ export function logApiCall(c: CallLog): void {
   const u = new URL(c.url)
   const { phone } = c.kind === 'meta' ? splitPhone(u.pathname) : { phone: null }
   col('api_calls')
-    .insertOne({ workspaceId: WS, phoneNumberId: phone, ...c, host: u.host, ...resourceOf(splitPhone(u.pathname).rest), ok: c.status >= 200 && c.status < 300 })
+    .insertOne({ workspaceId: ws(), phoneNumberId: phone, ...c, host: u.host, ...resourceOf(splitPhone(u.pathname).rest), ok: c.status >= 200 && c.status < 300 })
     .catch((err) => console.log(`api_calls write failed: ${err instanceof Error ? err.message : err}`))
 }
 
@@ -97,7 +97,7 @@ async function recordAsync(x: Exchange) {
   const res = obj(json)
   const body = x.method === 'GET' ? {} : bodyOf(x.reqBody, x.contentType)
   const b = obj(body)
-  const base = { workspaceId: WS, phoneNumberId: phone }
+  const base = { workspaceId: ws(), phoneNumberId: phone }
   const jobs: Promise<unknown>[] = []
 
   if (x.method !== 'GET') {
@@ -204,7 +204,7 @@ async function recordAsync(x: Exchange) {
       jobs.push(saveTurns(phone, consumer, res.data))
     } else if (rest === 'agent_onboarding' && x.method === 'POST') {
       jobs.push(
-        col('agents').updateOne({ _id: phone as never }, { $set: { workspaceId: WS, onboardedAt: at }, $unset: { deletedAt: '' } }, { upsert: true }),
+        col('agents').updateOne({ _id: phone as never }, { $set: { workspaceId: ws(), onboardedAt: at }, $unset: { deletedAt: '' } }, { upsert: true }),
       )
     } else if (rest === 'delete_agent' && x.method === 'DELETE') {
       jobs.push(col('agents').updateOne({ _id: phone as never }, { $set: { deletedAt: at } }))
@@ -215,7 +215,7 @@ async function recordAsync(x: Exchange) {
       obj(Array.isArray(json) ? json[0] : json).agent_id
     ) {
       // A number whose settings carry an agent_id has an agent: make it known to the collectors.
-      jobs.push(col('agents').updateOne({ _id: phone as never }, { $setOnInsert: { workspaceId: WS, createdAt: at } }, { upsert: true }))
+      jobs.push(col('agents').updateOne({ _id: phone as never }, { $setOnInsert: { workspaceId: ws(), createdAt: at } }, { upsert: true }))
     }
   }
   await Promise.all(jobs)
@@ -232,7 +232,7 @@ export async function saveTurns(phone: string, consumer: string, data: unknown) 
         filter: { turnId: t.turn_id },
         update: {
           $set: {
-            workspaceId: WS,
+            workspaceId: ws(),
             phoneNumberId: phone,
             consumer,
             conversationId: str(t.conversation_id) ?? null,

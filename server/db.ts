@@ -1,9 +1,14 @@
 // MongoDB: one client, collections + indexes + TTLs created idempotently at startup.
 // No MONGODB_URI → `db` stays null and everything that stores data is a no-op (or a 503 route).
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { MongoClient, type Collection, type Db, type Document, type IndexDescription } from 'mongodb'
 import { env } from './upstream.ts'
 
-export const WS = env('WORKSPACE_ID') || 'default'
+// The workspace a piece of work belongs to: set per request from the session (index.ts), and per
+// workspace for background collectors. Records made before accounts existed use 'default'.
+const wsStore = new AsyncLocalStorage<string>()
+export const ws = () => wsStore.getStore() ?? 'default'
+export const withWorkspace = <T>(workspaceId: string, fn: () => T): T => wsStore.run(workspaceId, fn)
 const DAY = 86400
 const D90 = 90 * DAY
 const Y2 = 730 * DAY
@@ -68,6 +73,20 @@ const INDEXES: Record<string, IndexDescription[]> = {
   notifications: [{ key: { workspaceId: 1, phoneNumberId: 1, dismissedAt: 1, createdAt: -1 } }],
   metrics_daily: [{ key: { 'meta.phoneNumberId': 1, 'meta.metric': 1, ts: 1 } }],
   handoff_snapshots: [{ key: { 'meta.phoneNumberId': 1, ts: 1 } }],
+  // Accounts (auth.ts). Tokens and session ids are stored as sha256 only; both expire via TTL.
+  users: [{ key: { email: 1 }, unique: true }],
+  workspaces: [{ key: { createdAt: 1 } }],
+  memberships: [{ key: { userId: 1 }, unique: true }, { key: { workspaceId: 1 } }],
+  magic_links: [
+    { key: { tokenHash: 1 }, unique: true },
+    { key: { workspaceId: 1, purpose: 1 } },
+    { key: { expiresAt: 1 }, expireAfterSeconds: 0 },
+  ],
+  sessions: [
+    { key: { tokenHash: 1 }, unique: true },
+    { key: { userId: 1 } },
+    { key: { expiresAt: 1 }, expireAfterSeconds: 0 },
+  ],
   // Configuration copies (mirror.ts): one document per item on Meta, kept after delete (deletedAt).
   ...Object.fromEntries(
     ['faqs', 'skills', 'rich_replies', 'websites', 'documents', 'allowlist', 'connectors', 'connector_tools'].map((c) => [

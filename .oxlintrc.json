@@ -13,7 +13,8 @@
           "useNavigationGuard",
           "useRegisterNavGuard",
           "useRegisterDevControls",
-          "useDevControlsEntries"
+          "useDevControlsEntries",
+          "useAuth"
         ]
       }
     ]

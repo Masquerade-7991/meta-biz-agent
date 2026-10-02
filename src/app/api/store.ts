@@ -2,7 +2,7 @@
 // Every call returns null when the database isn't configured (503), the server can't be reached,
 // or the route fails, so callers fall back to what they did before (localStorage, live Meta calls).
 import { isDummyMode } from './dummy'
-import { getActivePhoneNumberId, q } from './meta'
+import { getActivePhoneNumberId, q, UNAUTHORIZED_EVENT } from './meta'
 import type { AgentEventRow, AgentEventStatus, WizardState } from '../wizard/types'
 import type { EvalConversationResult, TranscriptLine } from '../wizard/steps/evalData'
 
@@ -18,6 +18,7 @@ async function storeFetch<T>(path: string, method = 'GET', body?: unknown): Prom
       headers: body === undefined ? undefined : { 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
+    if (res.status === 401) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
     if (!res.ok) return null
     const text = await res.text()
     return (text ? JSON.parse(text) : {}) as T

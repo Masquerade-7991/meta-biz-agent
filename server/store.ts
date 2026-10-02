@@ -1,12 +1,12 @@
 // /api/store/* and /api/analytics/* routes, served from MongoDB.
 import type http from 'node:http'
 import { mirrorDraft } from './mirror.ts'
-import { col, db, dbOffReason, WS } from './db.ts'
+import { col, db, dbOffReason, ws } from './db.ts'
 import { addDays, dayIn, ensureDays } from './collectors.ts'
 import { metaGet, ids } from './upstream.ts'
 
 type Obj = Record<string, unknown>
-class HttpError extends Error {
+export class HttpError extends Error {
   status: number
   constructor(status: number, message: string) {
     super(message)
@@ -16,12 +16,12 @@ class HttpError extends Error {
 const TITLES: Record<number, string> = { 400: 'Bad request', 404: 'Not found', 413: 'Payload too large', 502: 'Upstream unreachable' }
 const MAX_BODY = 1024 * 1024
 
-function send(res: http.ServerResponse, status: number, data: unknown) {
+export function send(res: http.ServerResponse, status: number, data: unknown) {
   res.writeHead(status, { 'content-type': 'application/json' })
   res.end(JSON.stringify(data))
 }
 
-async function readJson(req: http.IncomingMessage): Promise<unknown> {
+export async function readJson(req: http.IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
   let size = 0
   for await (const c of req) {
@@ -80,9 +80,9 @@ function agentFields(b: unknown): Obj {
   return out
 }
 const upsertAgent = (phone: string, fields: Obj) =>
-  col('agents').findOneAndUpdate({ _id: phone as never }, { $set: { workspaceId: WS, ...fields } }, { upsert: true, returnDocument: 'after' })
+  col('agents').findOneAndUpdate({ _id: phone as never }, { $set: { workspaceId: ws(), ...fields } }, { upsert: true, returnDocument: 'after' })
 const listAgents = async () =>
-  (await col('agents').find({ workspaceId: WS, deletedAt: { $exists: false } }).sort({ _id: 1 }).toArray()).map(agentOut)
+  (await col('agents').find({ workspaceId: ws(), deletedAt: { $exists: false } }).sort({ _id: 1 }).toArray()).map(agentOut)
 
 // ---- drafts: secrets are blanked before anything is stored ----
 const SECRET_KEYS = new Set(['clientSecret', 'client_secret', 'token', 'password', 'apiKey', 'api_key', 'secretKey'])
@@ -166,7 +166,7 @@ async function route(req: http.IncomingMessage, u: URL): Promise<unknown> {
   if ((seg = path.match(/^\/api\/store\/drafts\/([^/]+)$/))) {
     const phone = phoneParam(seg[1])
     if (m === 'GET') {
-      const d = await col('agent_drafts').findOne({ workspaceId: WS, phoneNumberId: phone })
+      const d = await col('agent_drafts').findOne({ workspaceId: ws(), phoneNumberId: phone })
       return { state: d?.state ?? null, updatedAt: d?.updatedAt ?? null }
     }
     if (m === 'PUT') {
@@ -174,7 +174,7 @@ async function route(req: http.IncomingMessage, u: URL): Promise<unknown> {
       if (!body || typeof body.state !== 'object' || body.state === null || Array.isArray(body.state)) throw new HttpError(400, 'Expected {state: {...}}.')
       const updatedAt = new Date()
       await col('agent_drafts').updateOne(
-        { workspaceId: WS, phoneNumberId: phone },
+        { workspaceId: ws(), phoneNumberId: phone },
         { $set: { state: stripSecrets(body.state), updatedAt } },
         { upsert: true },
       )
@@ -185,7 +185,7 @@ async function route(req: http.IncomingMessage, u: URL): Promise<unknown> {
   if (m === 'GET') {
     if (path === '/api/store/test-conversations') {
       const rows = await col('test_conversations')
-        .find({ workspaceId: WS, phoneNumberId: phoneParam(p('phone')) }, { projection: { _id: 0, workspaceId: 0 } })
+        .find({ workspaceId: ws(), phoneNumberId: phoneParam(p('phone')) }, { projection: { _id: 0, workspaceId: 0 } })
         .sort({ updatedAt: -1 })
         .limit(100)
         .toArray()

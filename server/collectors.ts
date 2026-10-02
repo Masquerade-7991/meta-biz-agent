@@ -1,6 +1,6 @@
 // Background collectors (in-process setInterval). Each job has an in-flight lock, and a run stops
 // quietly when the upstream is unreachable (it's VPN-only and often down).
-import { col, db, WS } from './db.ts'
+import { col, db, withWorkspace, ws } from './db.ts'
 import { hash, saveTurns } from './record.ts'
 import { metaGet } from './upstream.ts'
 
@@ -20,7 +20,7 @@ const isHttp = (err: unknown) => typeof (err as { status?: unknown })?.status ==
 const orSkip = <T>(fallback: T) => (err: unknown): T | Promise<never> => (isHttp(err) ? fallback : Promise.reject(err))
 
 export const agentPhones = async () =>
-  (await col('agents').find({ workspaceId: WS, deletedAt: { $exists: false } }, { projection: { _id: 1 } }).toArray()).map((a) => String(a._id))
+  (await col('agents').find({ workspaceId: ws(), deletedAt: { $exists: false } }, { projection: { _id: 1 } }).toArray()).map((a) => String(a._id))
 
 // ---- metrics_daily: one doc per (phone, metric, closed day); each day fetched once ----
 const METRICS = {
@@ -81,7 +81,7 @@ export async function ensureDays(phone: string, metric: Metric, days: string[]):
       const key = `${phone}|${metric}|${day}`
       inFlight.add(key)
       try {
-        const doc = { ts: dayTs(day), meta: { workspaceId: WS, phoneNumberId: phone, metric }, ...(await fetchMetric(phone, metric, day)) }
+        const doc = { ts: dayTs(day), meta: { workspaceId: ws(), phoneNumberId: phone, metric }, ...(await fetchMetric(phone, metric, day)) }
         await col('metrics_daily').insertOne(doc)
         out.set(day, doc)
       } catch (err) {
@@ -111,7 +111,7 @@ async function handoffs() {
     const r = await metaGet<{ data?: { ai_handoffs?: { count?: number } }[] }>(
       `/${phone}/insights/conversations` + q({ start_date: addDays(today, -1), end_date: today, metrics: 'ai_handoffs' }),
     ).catch(orSkip(null))
-    if (r) await col('handoff_snapshots').insertOne({ ts: new Date(), meta: { workspaceId: WS, phoneNumberId: phone }, count: r.data?.[0]?.ai_handoffs?.count ?? 0 })
+    if (r) await col('handoff_snapshots').insertOne({ ts: new Date(), meta: { workspaceId: ws(), phoneNumberId: phone }, count: r.data?.[0]?.ai_handoffs?.count ?? 0 })
   }
 }
 
@@ -131,7 +131,7 @@ async function connectorLogs() {
           filter: { dedupeKey: hash(connectorId, l.event_time, l.failure_code_name, l.tool_name, l.error_message) },
           update: {
             $setOnInsert: {
-              workspaceId: WS,
+              workspaceId: ws(),
               phoneNumberId: phone,
               connectorId,
               at: l.event_time ? new Date(String(l.event_time)) : new Date(),
@@ -149,7 +149,7 @@ async function connectorLogs() {
       if (s?.stats)
         await col('connector_stats').updateOne(
           { connectorId, day: today },
-          { $set: { workspaceId: WS, phoneNumberId: phone, date: dayTs(today), ...s.stats, updatedAt: new Date() } },
+          { $set: { workspaceId: ws(), phoneNumberId: phone, date: dayTs(today), ...s.stats, updatedAt: new Date() } },
           { upsert: true },
         )
     }
@@ -188,7 +188,8 @@ export async function runOnce(job: Job): Promise<void> {
   if (!db || running.has(job)) return
   running.add(job)
   try {
-    await JOBS[job]()
+    // Each workspace's agents are collected inside that workspace.
+    for (const w of (await col('agents').distinct('workspaceId')) as string[]) await withWorkspace(w, JOBS[job])
   } catch (err) {
     console.log(`collector ${job} skipped: ${(err as { down?: boolean }).down ? 'upstream unreachable' : err instanceof Error ? err.message : err}`)
   } finally {

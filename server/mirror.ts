@@ -2,7 +2,7 @@
 // Kept in step with Meta from relayed traffic: creates and edits upsert, deletes keep the document
 // with deletedAt set (the trace stays), and a full list read (every agent open) reconciles both ways,
 // which also backfills anything created before this existed. Secrets are blanked (stripSecrets).
-import { col, WS } from './db.ts'
+import { col, ws } from './db.ts'
 import { stripSecrets } from './store.ts'
 
 type Obj = Record<string, unknown>
@@ -45,7 +45,7 @@ const createdFrom = (v: Obj) => {
 async function upsert(coll: string, phone: string, metaId: string, data: Obj, parent?: string) {
   const at = new Date()
   await col(coll).updateOne(
-    { workspaceId: WS, phoneNumberId: phone, metaId },
+    { workspaceId: ws(), phoneNumberId: phone, metaId },
     {
       $set: { ...fields(data), ...(parent ? { connectorId: parent } : {}), updatedAt: at, syncedAt: at },
       $setOnInsert: { createdAt: createdFrom(data) },
@@ -63,7 +63,7 @@ export async function mirror(phone: string, method: string, rest: string, query:
     if (!Object.keys(data).length || (method !== 'GET' && method !== 'PUT')) return
     const at = new Date()
     await col(single).updateOne(
-      { workspaceId: WS, phoneNumberId: phone },
+      { workspaceId: ws(), phoneNumberId: phone },
       { $set: { ...fields(data), updatedAt: at, syncedAt: at }, $setOnInsert: { createdAt: at } },
       { upsert: true },
     )
@@ -86,13 +86,13 @@ export async function mirror(phone: string, method: string, rest: string, query:
     const paging = obj(res.paging)
     if (!query.get('after') && !paging.next)
       await col(spec.coll).updateMany(
-        { workspaceId: WS, phoneNumberId: phone, ...(parent ? { connectorId: parent } : {}), metaId: { $nin: ids }, deletedAt: { $exists: false } },
+        { workspaceId: ws(), phoneNumberId: phone, ...(parent ? { connectorId: parent } : {}), metaId: { $nin: ids }, deletedAt: { $exists: false } },
         { $set: { deletedAt: new Date() } },
       )
     return
   }
   if (id && method === 'DELETE') {
-    await col(spec.coll).updateOne({ workspaceId: WS, phoneNumberId: phone, metaId: id }, { $set: { deletedAt: new Date() } })
+    await col(spec.coll).updateOne({ workspaceId: ws(), phoneNumberId: phone, metaId: id }, { $set: { deletedAt: new Date() } })
     return
   }
   // Create, edit, or a single read: the request body plus Meta's answer (which carries the id).
@@ -116,7 +116,7 @@ export async function mirrorDraft(phone: string, state: Obj) {
     for (const k of drop) delete data[k]
     if (!Object.keys(data).length) continue
     await col(coll).updateOne(
-      { workspaceId: WS, phoneNumberId: phone },
+      { workspaceId: ws(), phoneNumberId: phone },
       { $set: { ...data, updatedAt: at }, $setOnInsert: { createdAt: at } },
       { upsert: true },
     )
