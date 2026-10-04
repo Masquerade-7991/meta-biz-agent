@@ -7,8 +7,11 @@ export interface SampleMessage {
   body: string
 }
 export interface SampleChat {
+  /** A phone number, or a BSUID for a customer who hides their number (src/app/lib/customer.ts). */
   phone: string
   name: string
+  /** WhatsApp username, shown for a customer who hides their number and has no saved name. */
+  username?: string
   owner: 'ai' | 'human'
   tags: string[]
   messages: SampleMessage[]
@@ -61,4 +64,19 @@ export const SAMPLE_CHATS: SampleChat[] = [
       { ago: 8, author: 'ai', body: 'Yes. Data is hosted in India on Helo.ai’s own infrastructure, and we are SOC 2 Type II and ISO 27001 certified.' },
     ],
   },
+  {
+    // Hides their phone number behind a WhatsApp username, so Meta names them by BSUID only.
+    phone: 'IN.HELOSAMPLE0105',
+    name: '',
+    username: 'meera.designs',
+    owner: 'ai',
+    tags: ['sales'],
+    messages: [
+      { ago: 95, author: 'customer', body: 'Do you have a plan for a 3-person design studio?' },
+      { ago: 94, author: 'ai', body: 'Yes. Helo Messaging Starter covers up to 5 people and includes the AI agent. Want me to send the pricing sheet here?' },
+    ],
+  },
 ]
+
+/** The name lists show for a sample customer: their saved name, else @username. */
+export const sampleName = (c: SampleChat) => c.name || (c.username ? `@${c.username}` : '')

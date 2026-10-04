@@ -31,6 +31,7 @@ import {
 import { parseCsv, toCsv, toImportRows, type ImportRow } from '@/app/contacts/csv'
 import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { SearchInput } from '@/app/components/Filters'
+import { customerLabel, isBsuid } from '@/app/lib/customer'
 
 const tagList = (s: string) => [...new Set(s.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean))]
 const ago = (iso?: string) => {
@@ -83,8 +84,8 @@ function ContactDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{initial ? initial.name || `+${initial.phone}` : 'Add a contact'}</DialogTitle>
-          <DialogDescription>{initial ? `+${initial.phone} · added ${ago(initial.createdAt).toLowerCase()}` : 'Phone number with country code, as on WhatsApp.'}</DialogDescription>
+          <DialogTitle>{initial ? initial.name || customerLabel(initial.phone, initial.username) : 'Add a contact'}</DialogTitle>
+          <DialogDescription>{initial ? `${customerLabel(initial.phone, initial.username)} · added ${ago(initial.createdAt).toLowerCase()}` : 'Phone number with country code, as on WhatsApp.'}</DialogDescription>
         </DialogHeader>
         <form
           className="space-y-4"
@@ -176,7 +177,7 @@ function ContactDialog({
         </form>
         <ConfirmDialog
           open={confirming}
-          title={`Delete ${initial?.name || `+${initial?.phone}`}?`}
+          title={`Delete ${initial?.name || customerLabel(initial?.phone ?? '', initial?.username)}?`}
           description="This also deletes their chat history and tickets. It can't be undone."
           confirmLabel="Delete contact"
           onCancel={() => setConfirming(false)}
@@ -403,7 +404,7 @@ export function ContactsPage({ onOpenChat }: { onOpenChat: (phone: string) => vo
     const list = rows ?? []
     const csv = toCsv([
       ['Phone', 'Name', 'Email', 'Tags', ...fields.map((f) => f.label), 'Opted out', 'Last message'],
-      ...list.map((c) => [`+${c.phone}`, c.name ?? '', c.email ?? '', c.tags.join(', '), ...fields.map((f) => c.fields[f.key] ?? ''), c.optedOut ? 'yes' : 'no', c.lastSeenAt ?? '']),
+      ...list.map((c) => [isBsuid(c.phone) ? c.phone : `+${c.phone}`, c.name ?? '', c.email ?? '', c.tags.join(', '), ...fields.map((f) => c.fields[f.key] ?? ''), c.optedOut ? 'yes' : 'no', c.lastSeenAt ?? '']),
     ])
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
@@ -508,7 +509,7 @@ export function ContactsPage({ onOpenChat }: { onOpenChat: (phone: string) => vo
               {rows.map((c) => (
                 <TableRow key={c.phone} className="cursor-pointer" onClick={() => setEditing(c)}>
                   <TableCell style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-medium)' }}>{c.name || <span className="text-muted-foreground">No name</span>}</TableCell>
-                  <TableCell style={TEXT_SM}>+{c.phone}</TableCell>
+                  <TableCell style={TEXT_SM}>{customerLabel(c.phone, c.username)}</TableCell>
                   <TableCell>
                     <span className="flex flex-wrap gap-1">
                       {c.tags.map((t) => (

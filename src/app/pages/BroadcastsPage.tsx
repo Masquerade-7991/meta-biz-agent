@@ -30,11 +30,16 @@ import {
   type NewTemplate,
   type SlotMapping,
   type WaTemplate,
+  preflightBroadcast,
+  type Preflight,
 } from '@/app/api/broadcasts'
 import { renderTemplate, slotsOf } from '@/app/broadcasts/templates'
 import { cn } from '@/app/lib/utils'
 import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { usePolling } from '@/app/lib/usePolling'
+import { customerLabel } from '@/app/lib/customer'
+import { FAILURE_HELP, FAILURE_LABEL } from '@/app/broadcasts/sendErrors'
+import { formatMoney } from '@/app/lib/money'
 
 const LIVE_BROADCASTS = ['broadcast.']
 
@@ -59,6 +64,40 @@ export function TemplatePreview({ text }: { text: string }) {
   )
 }
 
+/** Before sending: reach, people WhatsApp may hold back today, and the estimated cost. */
+function SendCheck({ check, error, category }: { check: Preflight | null; error: string | null; category: string }) {
+  if (error) return <p className="text-destructive" style={TEXT_XS}>Couldn&rsquo;t check the audience: {error}</p>
+  if (!check) return <Loader2 className="size-4 animate-spin text-muted-foreground" />
+  const e = check.estimate
+  const real = check.audience - check.sample
+  return (
+    <div className="space-y-2 rounded-lg border border-border p-3" style={TEXT_XS}>
+      <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
+        Reaches {check.audience} {check.audience === 1 ? 'person' : 'people'}
+      </p>
+      {real > 0 && (
+        <p>
+          Estimated cost: <strong>{e.total > 0 ? formatMoney(e.total, e.currency) : '–'}</strong>
+          {e.unpriced > 0 && (
+            <span className="text-muted-foreground">
+              {' '}
+              ({e.unpriced} {e.unpriced === 1 ? 'person' : 'people'} in countries you haven&rsquo;t sent {category.toLowerCase()} messages to lately aren&rsquo;t counted)
+            </span>
+          )}
+        </p>
+      )}
+      {real > 0 && <p className="text-muted-foreground">Based on what WhatsApp charged you for {category.toLowerCase()} messages in the last 30 days.</p>}
+      {check.sample > 0 && <p className="text-muted-foreground">{check.sample} sample contacts are only stored, never sent to WhatsApp.</p>}
+      {check.gotMarketingToday > 0 && (
+        <p className="text-amber-700 dark:text-amber-400">
+          {check.gotMarketingToday} already got a marketing message from you today. WhatsApp may hold theirs back under its daily limit; we&rsquo;ll retry tomorrow.
+        </p>
+      )}
+      {check.hiddenNumbers > 0 && <p className="text-muted-foreground">{check.hiddenNumbers} hide their phone number behind a WhatsApp username. They still get it.</p>}
+    </div>
+  )
+}
+
 function NewBroadcastDialog({ templates, segments, fields, onClose, onCreated }: { templates: WaTemplate[]; segments: Segment[]; fields: FieldDef[]; onClose: () => void; onCreated: (b: BroadcastDetail) => void }) {
   const approved = templates.filter((t) => t.status === 'APPROVED')
   const [name, setName] = useState('')
@@ -73,6 +112,23 @@ function NewBroadcastDialog({ templates, segments, fields, onClose, onCreated }:
   const slots = useMemo(() => (tpl ? slotsOf(tpl) : []), [tpl])
   const sample = Object.fromEntries(slots.map((s) => [s.id, mapping[s.id]?.source === 'text' ? mapping[s.id]?.text || s.label : mapping[s.id] ? `[${mapping[s.id].source === 'name' ? 'first name' : mapping[s.id].source.replace('field:', '')}]` : s.label]))
   const seg = segments.find((s) => s.id === segmentId)
+  const [check, setCheck] = useState<Preflight | null>(null)
+  const [checkError, setCheckError] = useState<string | null>(null)
+  // Who it reaches and what it costs, refreshed whenever the template or audience changes.
+  useEffect(() => {
+    if (!tpl) return
+    let live = true
+    const t = setTimeout(() => {
+      preflightBroadcast({ segmentId: segmentId === 'all' ? null : segmentId, category: tpl.category }).then(
+        (r) => live && (setCheck(r), setCheckError(null)),
+        (err) => live && setCheckError(errorDetail(err)),
+      )
+    }, 250)
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
+  }, [tpl, segmentId])
 
   async function go() {
     if (!tpl) return
@@ -184,6 +240,7 @@ function NewBroadcastDialog({ templates, segments, fields, onClose, onCreated }:
               Preview
             </p>
             {tpl ? <TemplatePreview text={renderTemplate(tpl, sample)} /> : <p className="text-muted-foreground" style={TEXT_SM}>Pick a template to see it.</p>}
+            {tpl && <SendCheck check={check} error={checkError} category={tpl.category} />}
           </div>
         </div>
         {error && <FormError>{error}</FormError>}
@@ -243,6 +300,27 @@ function BroadcastDetailDialog({ id, onClose, onChanged }: { id: string; onClose
             <p className="text-muted-foreground" style={TEXT_XS}>
               Delivered and read ticks arrive once WhatsApp webhooks are connected to this app.
             </p>
+            {b.failures.length > 0 && (
+              <div className="space-y-2">
+                <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>What didn&rsquo;t go out</p>
+                <ul className="divide-y divide-border rounded-lg border border-border">
+                  {b.failures.map((f) => (
+                    <li key={`${f.reason}:${f.retrying}`} className="flex items-start justify-between gap-4 px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p style={TEXT_SM}>{FAILURE_LABEL[f.reason]}</p>
+                        <p className="text-muted-foreground" style={TEXT_XS}>
+                          {f.retrying && f.nextAt ? `Trying again ${when(f.nextAt)}. ` : ''}
+                          {FAILURE_HELP[f.reason] ?? ''}
+                        </p>
+                      </div>
+                      <span className={cn('shrink-0', !f.retrying && 'text-destructive')} style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
+                        {f.count}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="max-h-64 overflow-y-auto rounded-lg border border-border">
               <Table>
                 <TableHeader>
@@ -255,13 +333,14 @@ function BroadcastDetailDialog({ id, onClose, onChanged }: { id: string; onClose
                 <TableBody>
                   {b.recipients.map((r) => (
                     <TableRow key={r.phone}>
-                      <TableCell style={TEXT_SM}>{r.name || `+${r.phone}`}</TableCell>
+                      <TableCell style={TEXT_SM}>{r.name || customerLabel(r.phone)}</TableCell>
                       <TableCell style={TEXT_SM} className={cn(r.status === 'failed' && 'text-destructive')}>
-                        {r.status}
+                        {r.status === 'queued' && r.retryAt ? 'retrying' : r.status}
                         {r.repliedAt ? ' · replied' : ''}
                       </TableCell>
-                      <TableCell className="text-muted-foreground" style={TEXT_XS}>
-                        {r.error ?? ''}
+                      <TableCell className="text-muted-foreground" style={TEXT_XS} title={r.error}>
+                        {r.reason ? FAILURE_LABEL[r.reason] : (r.error ?? '')}
+                        {r.retryAt ? ` · again ${when(r.retryAt)}` : ''}
                       </TableCell>
                     </TableRow>
                   ))}

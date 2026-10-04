@@ -127,7 +127,7 @@ export async function metaJson(kind: Kind, method: string, path: string, body?: 
   const json = obj(parseJson(r.text))
   if (r.status >= 300) {
     const e = obj(json.error)
-    throw new HttpError(failStatus ?? (r.status === 400 ? 400 : 502), str(e.error_user_msg) ?? str(e.message) ?? `${kind === 'graph' ? 'WhatsApp' : 'Meta'} answered ${r.status}.`)
+    throw new HttpError(failStatus ?? (r.status === 400 ? 400 : 502), str(e.error_user_msg) ?? str(e.message) ?? `${kind === 'graph' ? 'WhatsApp' : 'Meta'} answered ${r.status}.`, typeof e.code === 'number' ? e.code : undefined)
   }
   return json
 }

@@ -11,6 +11,11 @@ import { col, db, dbOffReason, needMetaAssets, ownsMetaAssets, withWorkspace, ws
 import { callUpstream, env, metaJson, parseJson, resolveIds } from './upstream.ts'
 import { currentAssets } from './context.ts'
 import { trace } from './trace.ts'
+import { contactFor, resolveCustomer, webhookContacts } from './customers.ts'
+import { recipientFailed } from './broadcasts.ts'
+import { onAccountWebhook } from './health.ts'
+import { reasonOf } from '../src/app/broadcasts/sendErrors.ts'
+import { isBsuid, NO_CONTROL_HIDDEN, parseCustomerKey, sendTarget } from '../src/app/lib/customer.ts'
 import { accounts, assetsFor, workspaceForNumber } from './accounts.ts'
 import { SAMPLE_CHATS } from '../src/app/inbox/sampleData.ts'
 import { ensureTicket, onAgentReply, onCustomerMessage } from './tickets.ts'
@@ -28,9 +33,10 @@ export const conversations = () => col('conversations')
 const messages = () => col('messages')
 const contacts = () => col('contacts')
 
+/** A chat's key from a URL: a phone number (8 to 15 digits) or, for a customer who hides it, their BSUID. */
 function phoneParam(v: string): string {
-  const p = digits(v)
-  if (!/^\d{8,15}$/.test(p)) throw new HttpError(400, 'Phone must be 8 to 15 digits, country code first.')
+  const p = parseCustomerKey(v)
+  if (!isBsuid(p) && !/^\d{8,15}$/.test(p)) throw new HttpError(400, 'Phone must be 8 to 15 digits, country code first.')
   return p
 }
 function text(v: unknown, what: string, max = 4096): string {
@@ -58,11 +64,15 @@ interface Msg {
 }
 
 /** Makes sure the customer has a contact and a conversation (AI-handled until someone takes over). */
-export async function ensureConversation(phone: string, name?: string, sample = false) {
+export async function ensureConversation(phone: string, name?: string, sample = false, link: Obj = {}) {
   const now = new Date()
+  const set = { ...(name && { name }), ...link }
   await contacts().updateOne(
     { workspaceId: ws(), phone },
-    { $setOnInsert: { workspaceId: ws(), phone, tags: [], fields: {}, createdAt: now, source: sample ? 'sample' : 'whatsapp', ...(sample && { sample }) }, ...(name && { $set: { name } }) },
+    {
+      $setOnInsert: { workspaceId: ws(), phone, tags: [], fields: {}, createdAt: now, source: sample ? 'sample' : 'whatsapp', ...(sample && { sample }), ...(isBsuid(phone) && !link.bsuid && { bsuid: phone }) },
+      ...(Object.keys(set).length && { $set: set }),
+    },
     { upsert: true },
   )
   await conversations().updateOne(
@@ -111,7 +121,8 @@ interface Turn {
 /** Pulls the customer's recent turns from Meta into the chat (throttled per customer). */
 const lastSync = new Map<string, number>()
 async function syncTurns(phone: string, force = false) {
-  if (!ownsMetaAssets()) return
+  // Meta's turns are looked up by phone number; a number-hidden customer's arrive by webhook only.
+  if (!ownsMetaAssets() || isBsuid(phone)) return
   const key = `${ws()}|${phone}`
   if (!force && Date.now() - (lastSync.get(key) ?? 0) < 15_000) return
   lastSync.set(key, Date.now())
@@ -148,13 +159,17 @@ async function syncRoster() {
 // ---- webhook ----
 /** Turns one webhook `value` into chat updates. `field` is messages | standby | messaging_handovers. */
 async function processChange(field: string, value: Obj) {
+  // Account events: number quality and limits, template reviews (health.ts).
+  if (await onAccountWebhook(field, value)) return
   const v = field === 'standby' ? obj(value.standby) : value
-  const names = new Map(arr(v.contacts).map((c) => [digits(obj(c).wa_id), str(obj(obj(c).profile).name)]))
+  const people = webhookContacts(v)
   for (const raw of arr(v.messages)) {
     const m = obj(raw)
-    const phone = digits(m.from)
+    // `from` (the phone number) is left out when the customer hides it behind a username; `from_user_id` is their BSUID.
+    const who = contactFor(people, digits(m.from), str(m.from_user_id) ?? '')
+    const { key: phone, link } = await resolveCustomer(m.from, m.from_user_id ?? who?.bsuid, { username: who?.username })
     if (!phone) continue
-    await ensureConversation(phone, names.get(phone))
+    await ensureConversation(phone, who?.name, false, link)
     const type = str(m.type) ?? 'text'
     const body =
       type === 'text'
@@ -182,9 +197,9 @@ async function processChange(field: string, value: Obj) {
   for (const raw of arr(v.message_echoes)) {
     const e = obj(raw)
     const msg = obj(e.message)
-    const phone = digits(msg.to)
+    const { key: phone, link } = await resolveCustomer(msg.to, msg.recipient)
     if (!phone) continue
-    await ensureConversation(phone)
+    await ensureConversation(phone, undefined, false, link)
     const body = str(obj(msg.text).body) ?? str(obj(obj(msg.interactive).body).text) ?? `Sent a ${str(msg.type) ?? 'message'}`
     const at = fromSeconds(e.timestamp)
     await addMessage({ phone, direction: 'out', author: 'ai', kind: 'text', body, at, waMessageId: str(e.id) })
@@ -199,14 +214,25 @@ async function processChange(field: string, value: Obj) {
       const error = str(obj(arr(s.errors)[0]).title)
       const code = obj(arr(s.errors)[0]).code
       if (msg) trace('message.status', { status, ...(error && { error, code }) }, { entity: 'conversation', id: String(msg.phone) })
-      const rec = await col('broadcast_recipients').findOneAndUpdate({ workspaceId: ws(), waMessageId: String(s.id) }, { $set: { status, ...(error && { error }) } }, { projection: { broadcastId: 1, traceId: 1 } })
       // Same trace as the broadcast that sent it, so one id follows click → send → delivery.
-      if (rec) withWorkspace(ws(), () => trace('broadcast.recipient', { status, ...(error && { error, code }) }, { entity: 'broadcast', id: String(rec.broadcastId) }), currentAssets() ?? null, { traceId: rec.traceId })
+      const rec = await col('broadcast_recipients').findOne({ workspaceId: ws(), waMessageId: String(s.id) })
+      if (rec)
+        await withWorkspace(
+          ws(),
+          async () => {
+            // A failure Meta reports later (e.g. the daily marketing cap) may be retried.
+            if (status === 'failed') await recipientFailed(rec, reasonOf(code), error ?? 'WhatsApp couldn’t deliver it.', typeof code === 'number' ? code : undefined)
+            else await col('broadcast_recipients').updateOne({ _id: rec._id }, { $set: { status } })
+            trace('broadcast.recipient', { status, ...(error && { error, code }) }, { entity: 'broadcast', id: String(rec.broadcastId) })
+          },
+          currentAssets() ?? null,
+          { traceId: rec.traceId },
+        )
     }
   }
   if (field === 'messaging_handovers') {
     // control_taken goes to the app that lost control: someone else (a person or another app) now owns the chat.
-    const phone = digits(value.recipient_id ?? obj(value.recipient).id ?? value.wa_id ?? value.to)
+    const { key: phone } = await resolveCustomer(value.recipient_id ?? obj(value.recipient).id ?? value.wa_id ?? value.to, value.recipient_user_id ?? obj(value.recipient).user_id)
     if (phone && value.type === 'control_taken') {
       await ensureConversation(phone)
       await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { owner: 'human' } })
@@ -350,7 +376,7 @@ async function deliver(phone: string, payload: Obj, msg: Omit<Msg, 'phone' | 'di
   let waMessageId: string | undefined
   if (!sample) {
     needMetaAssets()
-    const r = await metaJson('graph', 'POST', '/PHONE_NUMBER_ID/messages', { messaging_product: 'whatsapp', recipient_type: 'individual', to: phone, ...payload })
+    const r = await metaJson('graph', 'POST', '/PHONE_NUMBER_ID/messages', { messaging_product: 'whatsapp', recipient_type: 'individual', ...sendTarget(phone), ...payload })
     waMessageId = str(obj(arr(r.messages)[0]).id)
   }
   await addMessage({ ...msg, phone, direction: 'out', at: new Date(), waMessageId, status: 'sent', ...(sample && { sample: true }) })
@@ -385,6 +411,8 @@ async function reply(me: Actor, phone: string, body: string) {
 export async function setControl(me: Actor, phone: string, action: 'take' | 'release') {
   const conv = await conversations().findOne({ workspaceId: ws(), phone })
   if (!conv) throw new HttpError(404, 'No chat with this number yet.')
+  // Sample chats follow the same rule, so demos show what real ones do.
+  if (isBsuid(phone)) throw new HttpError(400, NO_CONTROL_HIDDEN)
   if (!conv.sample) {
     needMetaAssets()
     // Thread control refusals are the caller's to fix (e.g. another app owns the chat): always 400.
@@ -425,7 +453,7 @@ async function saveCanned(me: Actor, body: Obj, id?: string) {
 async function seedSamples(me: Actor) {
   const now = Date.now()
   for (const c of SAMPLE_CHATS) {
-    await ensureConversation(c.phone, c.name, true)
+    await ensureConversation(c.phone, c.name || undefined, true, c.username ? { username: c.username } : {})
     await contacts().updateOne({ workspaceId: ws(), phone: c.phone }, { $set: { tags: c.tags } })
     for (const m of c.messages) {
       const at = new Date(now - m.ago * 60_000)

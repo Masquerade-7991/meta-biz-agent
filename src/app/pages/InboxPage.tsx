@@ -40,6 +40,7 @@ import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { useMembers } from '@/app/auth/useMembers'
 import { usePolling } from '@/app/lib/usePolling'
 import { PillTabs, SearchInput } from '@/app/components/Filters'
+import { customerLabel, isBsuid, NO_CONTROL_HIDDEN } from '@/app/lib/customer'
 
 // Live events that change the chat list, and the open chat.
 const LIVE_INBOX = ['message.', 'conversation.', 'ticket.']
@@ -53,7 +54,7 @@ const FILTERS: { id: ChatFilter; label: string }[] = [
   { id: 'ai', label: 'AI handling' },
 ]
 
-const display = (c: { name?: string | null; phone: string }) => c.name || `+${c.phone}`
+const display = (c: { name?: string | null; phone: string; username?: string }) => c.name || customerLabel(c.phone, c.username)
 const initials = (c: { name?: string | null; phone: string }) => (c.name ? initialsOf(c.name) : '#')
 function when(iso: string | null) {
   if (!iso) return ''
@@ -391,11 +392,11 @@ function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Me
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
       <div className="min-w-0">
         <p className="truncate" style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>
-          {display({ name: contact?.name, phone: conv.phone })}
+          {display({ name: contact?.name, phone: conv.phone, username: contact?.username })}
         </p>
         <p className="text-muted-foreground" style={TEXT_XS}>
           {conv.owner === 'ai' ? 'The AI agent is answering this chat' : assignee ? `With ${assignee.name}` : 'With your team, unassigned'}
-          {contact?.name ? ` · +${conv.phone}` : ''}
+          {contact?.name ? ` · ${customerLabel(conv.phone, contact.username)}` : ''}
         </p>
         {!!chat.viewers?.length && (
           <p className="text-primary" style={TEXT_XS}>
@@ -417,7 +418,15 @@ function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Me
             ))}
           </SelectContent>
         </Select>
-        {conv.owner === 'ai' ? (
+        {isBsuid(conv.phone) ? (
+          // Thread control needs a phone number, so this chat can't change hands yet.
+          <span title={NO_CONTROL_HIDDEN}>
+            <Button variant="outline" size="sm" disabled>
+              {conv.owner === 'ai' ? <Hand className="size-4" /> : <Undo2 className="size-4" />}
+              {conv.owner === 'ai' ? 'Take over' : 'Hand back to AI'}
+            </Button>
+          </span>
+        ) : conv.owner === 'ai' ? (
           <Button variant="outline" size="sm" disabled={busy} onClick={() => void run(() => setChatControl(conv.phone, 'take'), 'You took over. The AI agent stays quiet in this chat.')}>
             <Hand className="size-4" />
             Take over
@@ -444,7 +453,7 @@ function CustomerPanel({ chat, version, onChanged }: { chat: ChatDetail; version
         </span>
         <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{contact?.name ?? 'Unknown name'}</p>
         <p className="text-muted-foreground" style={TEXT_SM}>
-          +{conv.phone}
+          {customerLabel(conv.phone, contact?.username)}
         </p>
       </div>
       <TicketPanel phone={conv.phone} windowOpen={conv.windowOpen} version={version} onChanged={onChanged} />

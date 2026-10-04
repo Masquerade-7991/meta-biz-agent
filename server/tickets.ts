@@ -7,6 +7,8 @@ import { HttpError, type Obj, type Titles, obj, readJson, serveJson } from './ht
 import { col, db, dbOffReason, ws } from './db.ts'
 import { env } from './upstream.ts'
 import { trace } from './trace.ts'
+import { customerLabel, isBsuid, parseCustomerKey } from '../src/app/lib/customer.ts'
+import { dismissAlert, openAlerts } from './alerts.ts'
 import { addBusinessMinutes, DAYS, DEFAULT_HOURS, isOpen, type Hours } from './businessHours.ts'
 import { contactNames } from './contacts.ts'
 import { addMessage, conversations, sendInteractive, sendText, setControl, type Actor } from './inbox.ts'
@@ -248,7 +250,8 @@ async function resolve(number: number, b: Obj, me: Actor) {
   await addMessage({ phone: String(t.phone), direction: 'out', author: 'system', kind: 'event', body: `${me.name} resolved ticket #${number}.`, at: now })
   trace('ticket.resolved', { number, askCsat, handBack: b.handBack !== false }, { entity: 'ticket', id: String(number) })
   if (askCsat) await sendInteractive(String(t.phone), s.csat.question, CSAT, { sample: !!conv?.sample })
-  if (b.handBack !== false && conv?.owner === 'human') await setControl(me, String(t.phone), 'release')
+  // A number-hidden customer can't be handed back yet (thread control needs a phone number).
+  if (b.handBack !== false && conv?.owner === 'human' && !isBsuid(String(t.phone))) await setControl(me, String(t.phone), 'release')
   return one(number)
 }
 
@@ -264,7 +267,7 @@ async function notifications(me: Actor) {
   const open = await tickets().find({ workspaceId: ws(), status: OPEN, $or: [{ assigneeId: me._id }, { assigneeId: null }] }).sort({ createdAt: -1 }).limit(100).toArray()
   const names = await contactNames(open.map((t) => String(t.phone)))
   const items = open.flatMap((t) => {
-    const who = names.get(String(t.phone)) || `+${t.phone}`
+    const who = names.get(String(t.phone)) || customerLabel(String(t.phone))
     const sla = slaState(t, now)
     const list: { id: string; kind: string; text: string; at: Date; number: number; phone: string }[] = []
     if (sla.at && (sla.breached || +sla.at - now < 15 * 60_000))
@@ -272,7 +275,12 @@ async function notifications(me: Actor) {
     list.push({ id: `new:${t.number}`, kind: t.assigneeId ? 'assigned' : 'unassigned', text: t.assigneeId ? `#${t.number} ${who} is assigned to you` : `#${t.number} ${who} needs someone`, at: t.createdAt as Date, number: Number(t.number), phone: String(t.phone) })
     return list
   })
-  return items.sort((a, z) => +z.at - +a.at).slice(0, 30)
+  // Account alerts (budget, number quality, templates) are for owners, and stay on top until dismissed.
+  const alerts =
+    me.role === 'owner'
+      ? (await openAlerts(me._id)).map((a) => ({ id: `alert:${String(a.key)}`, kind: a.severity === 'critical' ? 'alert_critical' : 'alert', text: `${String(a.title)}. ${String(a.detail)}`, at: a.createdAt as Date, target: String(a.target) }))
+      : []
+  return [...alerts, ...items.sort((a, z) => +z.at - +a.at)].slice(0, 30)
 }
 
 // ---- support analytics ----
@@ -339,7 +347,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   if (path === '/api/tickets' && m === 'GET') return list(u, me)
   if (path === '/api/tickets' && m === 'POST') {
     const b = obj(await readJson(req))
-    const phone = String(b.phone ?? '').replace(/\D/g, '')
+    const phone = parseCustomerKey(String(b.phone ?? ''))
     if (!(await conversations().findOne({ workspaceId: ws(), phone }))) throw new HttpError(404, 'No chat with this number yet.')
     const priority = PRIORITIES.includes(b.priority as Priority) ? (b.priority as Priority) : 'normal'
     if (await tickets().findOne({ workspaceId: ws(), phone, status: OPEN })) throw new HttpError(409, 'This chat already has an open ticket.')
@@ -371,6 +379,10 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     return { ...settings, aiSummary: !!env('ANTHROPIC_API_KEY') }
   }
   if (path === '/api/support/notifications' && m === 'GET') return notifications(me)
+  if ((seg = path.match(/^\/api\/support\/notifications\/alert:(.+)\/dismiss$/)) && m === 'POST') {
+    await dismissAlert(decodeURIComponent(seg[1]), me._id)
+    return { ok: true }
+  }
   if (path === '/api/support/analytics' && m === 'GET') {
     const days = Number(u.searchParams.get('days') ?? 7)
     if (![7, 30, 90].includes(days)) throw new HttpError(400, 'days must be 7, 30 or 90.')

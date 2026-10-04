@@ -10,6 +10,7 @@ import { errorDetail } from '@/app/api/meta'
 import { disconnectAccount, getSignupConfig, listAccounts, revealPin, type SignupConfig, type WaAccount } from '@/app/api/whatsapp'
 import { AccountSteps, ConnectWhatsApp } from '@/app/whatsapp/ConnectWhatsApp'
 import { SettingsSection } from './SettingsSection'
+import { NumberHealthCard } from '@/app/whatsapp/NumberHealthCard'
 import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 
 const SOURCE: Record<WaAccount['source'], string> = { env: 'Set up by Helo.ai', signup: 'Connected with Embedded Signup', coexistence: 'WhatsApp Business app number' }
@@ -97,6 +98,11 @@ export function WhatsAppSettings() {
           </ul>
         )}
       </SettingsSection>
+      {!!rows?.length && (
+        <SettingsSection wide title="Number health" description="WhatsApp rates each number on how customers react to your messages, and limits how many new conversations it can start a day. Checked every hour.">
+          <NumberHealthCard />
+        </SettingsSection>
+      )}
       <SettingsSection wide title={rows?.length ? 'Connect another number' : 'Connect a number'} description="Log in with Facebook and pick your business, WhatsApp account and number. About 5 minutes.">
         <ConnectWhatsApp config={config} isOwner={isOwner} workspaceName={me?.workspace?.name ?? 'this workspace'} variant="compact" onConnected={upsert} />
       </SettingsSection>

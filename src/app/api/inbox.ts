@@ -36,7 +36,7 @@ export interface ChatDetail {
   /** Teammates with this chat open in the last 20 seconds. */
   viewers?: { name: string; typing: boolean }[]
   conversation: { phone: string; owner: ChatOwner; assigneeId: string | null; lastInboundAt: string | null; windowOpen: boolean; sample: boolean }
-  contact: { phone: string; name?: string; tags: string[]; fields: Record<string, string> } | null
+  contact: { phone: string; name?: string; username?: string; tags: string[]; fields: Record<string, string> } | null
   messages: ChatMessage[]
 }
 export interface CannedResponse {

@@ -14,6 +14,8 @@ import { allow } from './cache.ts'
 import { seal, open } from './crypto.ts'
 import { accounts, forgetAssets, tokenKey, type Account, type StepState } from './accounts.ts'
 import type { Actor } from './inbox.ts'
+import { trace } from './trace.ts'
+import { enqueue } from './jobs.ts'
 
 type Step = keyof Account['steps']
 const cfg = () => ({
@@ -159,6 +161,10 @@ async function connect(b: Obj, me: Actor) {
   const { _id: _ignored, ...doc } = done as Account & { _id?: unknown }
   await accounts().updateOne({ wabaId }, { $set: doc }, { upsert: true })
   forgetAssets(ws())
+  trace('whatsapp.connected', { wabaId, flow })
+  // A new number gets its health and spend checks now, then on their usual schedule.
+  await enqueue('health.check', {}, { key: 'health.check' })
+  await enqueue('billing.sync', {}, { key: 'billing.sync' })
   return { account: view(done), ...(pin && done.steps.register?.state === 'done' && { pin }) }
 }
 

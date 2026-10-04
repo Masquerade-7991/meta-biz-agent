@@ -4,8 +4,11 @@ import { dummyContacts } from './supportDummy'
 import type { ImportRow } from '../contacts/csv'
 
 export interface Contact {
+  /** Phone number, or BSUID for a customer who hides their number. */
   phone: string
   name: string | null
+  /** WhatsApp username, when the customer has one. */
+  username?: string
   email: string | null
   tags: string[]
   fields: Record<string, string>

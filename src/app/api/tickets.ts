@@ -37,7 +37,8 @@ export interface SupportSettings {
   /** Whether the server can write AI summaries (ANTHROPIC_API_KEY set). */
   aiSummary: boolean
 }
-export interface Notice {
+/** Something about one ticket: an SLA due or overdue, or a ticket that's yours or nobody's. */
+export interface TicketNotice {
   id: string
   kind: 'breached' | 'due' | 'assigned' | 'unassigned'
   text: string
@@ -45,6 +46,16 @@ export interface Notice {
   number: number
   phone: string
 }
+/** Something about the account, for owners: budget, number quality, a paused template. */
+export interface AlertNotice {
+  id: string
+  kind: 'alert' | 'alert_critical'
+  text: string
+  at: string
+  target: 'billing' | 'whatsapp' | 'broadcasts'
+}
+export type Notice = TicketNotice | AlertNotice
+export const isAlert = (n: Notice): n is AlertNotice => n.kind === 'alert' || n.kind === 'alert_critical'
 
 const call = jsonClient(dummyTickets)
 const qs = (p: Record<string, string | undefined>) =>
@@ -61,6 +72,7 @@ export const bulkTickets = (numbers: number[], o: { action: 'resolve' } | { patc
 export const getSupportSettings = () => call<SupportSettings>('/api/support/settings')
 export const saveSupportSettings = (s: Omit<SupportSettings, 'aiSummary'>) => call<SupportSettings>('/api/support/settings', 'PUT', s)
 export const listNotices = () => call<Notice[]>('/api/support/notifications')
+export const dismissNotice = (id: string) => call<{ ok: true }>(`/api/support/notifications/${encodeURIComponent(id).replace('alert%3A', 'alert:')}/dismiss`, 'POST', {})
 export interface SupportAnalytics {
   days: number
   timezone: string

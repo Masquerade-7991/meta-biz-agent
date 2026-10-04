@@ -9,7 +9,8 @@ import { AgentStudioShell } from '@/app/components/shell/AgentStudioShell'
 import { DevControlsButton } from '@/app/components/wizard/DevControlsButton'
 import { GateScreen } from '@/app/components/GateScreen'
 import { SetupFrontDoor } from '@/app/components/SetupFrontDoor'
-import type { NavId } from '@/app/nav'
+import { NAV_ITEMS, type NavId } from '@/app/nav'
+import type { SettingsTab } from '@/app/components/shell/SettingsPage'
 import { ProductShell } from '@/app/components/shell/ProductShell'
 import { isDummyMode } from '@/app/api/dummy'
 import { AuthProvider, useAuth } from '@/app/auth/AuthContext'
@@ -38,7 +39,15 @@ function AgentBuilderFlow({ onExitToShell }: { onExitToShell: () => void }) {
 function Gate() {
   const { me, setMe } = useAuth()
   const [view, setView] = useState<'shell' | 'setup' | 'agent-flow'>('shell')
-  const [nav, setNav] = useState<NavId>('home')
+  // Links in emails open a page or a Settings tab: /?page=broadcasts, /?settings=billing.
+  const [start] = useState(() => {
+    const q = new URLSearchParams(window.location.search)
+    const tab = q.get('settings') as SettingsTab | null
+    const page = q.get('page') as NavId | null
+    if (tab || page) window.history.replaceState(null, '', '/')
+    return { nav: tab ? ('settings' as NavId) : page && NAV_ITEMS.some((i) => i.id === page) ? page : ('home' as NavId), tab: tab ?? undefined }
+  })
+  const [nav, setNav] = useState<NavId>(start.nav)
   const [linkToken, setLinkToken] = useState(() =>
     window.location.pathname === '/auth/verify' ? new URLSearchParams(window.location.search).get('token') : null,
   )
@@ -65,6 +74,7 @@ function Gate() {
       {view === 'shell' && (
         <ProductShell
           active={nav}
+          initialSettingsTab={start.tab}
           onNavigate={setNav}
           onOpenAgentBuilder={() => setView('agent-flow')}
           // Dummy demos fill every field by hand, so the guided setup is skipped.

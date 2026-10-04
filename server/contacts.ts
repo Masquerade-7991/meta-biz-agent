@@ -31,9 +31,14 @@ function phoneOf(v: unknown): string {
 const tagsOf = (v: unknown) =>
   [...new Set((Array.isArray(v) ? v : String(v ?? '').split(/[,;|]/)).map((t) => String(t).trim().toLowerCase()).filter(Boolean))].slice(0, 30).map((t) => t.slice(0, 40))
 
-/** Phone → saved name, for lists that show customers by name. */
+/** Phone → saved name (or @username for a customer who hides their number), for lists that show customers by name. */
 export async function contactNames(phones: string[]) {
-  return new Map((await contacts().find({ workspaceId: ws(), phone: { $in: phones } }).toArray()).map((c) => [String(c.phone), String(c.name ?? '')]))
+  return new Map(
+    (await contacts().find({ workspaceId: ws(), phone: { $in: phones } }, { projection: { phone: 1, name: 1, username: 1 } }).toArray()).map((c) => [
+      String(c.phone),
+      String(c.name || (c.username ? `@${String(c.username)}` : '')),
+    ]),
+  )
 }
 
 export async function fieldDefs(): Promise<FieldDef[]> {
@@ -90,7 +95,7 @@ async function list(u: URL) {
   const needle = p('q').trim()
   if (needle) {
     const rx = { $regex: needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' }
-    q.$or = [{ name: rx }, { email: rx }, { phone: { $regex: digits(needle) || '^$' } }]
+    q.$or = [{ name: rx }, { email: rx }, { username: rx }, { phone: { $regex: digits(needle) || '^$' } }]
   }
   const rows = await contacts().find(q).sort({ lastSeenAt: -1, createdAt: -1 }).limit(5000).toArray()
   const open = new Set((await col('tickets').distinct('phone', { workspaceId: ws(), status: { $in: ['open', 'pending'] } })).map(String))
@@ -196,7 +201,8 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     await col('segments').deleteOne({ workspaceId: ws(), _id: new ObjectId(seg[1]) })
     return { ok: true }
   }
-  if ((seg = path.match(/^\/api\/contacts\/(\d{8,15})$/))) {
+  // A contact is addressed by phone number, or by BSUID for a customer who hides their number.
+  if ((seg = path.match(/^\/api\/contacts\/(\d{8,15}|[A-Z]{2}\.[A-Za-z0-9.]{1,140})$/))) {
     const phone = seg[1]
     if (m === 'GET') {
       const c = await contacts().findOne({ workspaceId: ws(), phone })

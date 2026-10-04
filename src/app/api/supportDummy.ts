@@ -1,8 +1,9 @@
 // Dummy mode for the support platform: the server's /api/inbox, /api/tickets, /api/support, /api/contacts
 // and /api/broadcasts routes, answered in this browser from the sample chats.
 // Changes live in memory for the session only. Replies go into the chat; nothing is sent.
-import { SAMPLE_CHATS } from '../inbox/sampleData'
+import { SAMPLE_CHATS, sampleName } from '../inbox/sampleData'
 import { MetaError } from './meta'
+import { isBsuid, NO_CONTROL_HIDDEN } from '../lib/customer'
 import type { CannedResponse, ChatDetail, ChatMessage, ChatSummary } from './inbox'
 import type { Priority, SupportSettings, Ticket } from './tickets'
 import type { Contact, FieldDef, Segment } from './contacts'
@@ -33,7 +34,7 @@ function load(): Chat[] {
   const now = Date.now()
   chats = SAMPLE_CHATS.map((c) => ({
     phone: c.phone,
-    name: c.name,
+    name: sampleName(c),
     tags: c.tags,
     owner: c.owner,
     assigneeId: c.owner === 'human' && c.phone.endsWith('103') ? ME.id : null,
@@ -110,6 +111,7 @@ export async function dummyInbox<T>(method: string, path: string, body: unknown)
     if (m[2] === 'assign') c.assigneeId = b.userId ?? null
     if (m[2] === 'read') c.unread = 0
     if (m[2] === 'control') {
+      if (isBsuid(c.phone)) throw new MetaError(400, 'Check the details', NO_CONTROL_HIDDEN)
       c.owner = b.action === 'take' ? 'human' : 'ai'
       if (b.action === 'take') {
         c.assigneeId ??= ME.id
@@ -231,7 +233,7 @@ export async function dummyTickets<T>(method: string, path: string, body: unknow
       if (c) {
         push(c, { direction: 'out', author: 'system', kind: 'event', body: `You resolved ticket #${t.number}.` })
         if (b.askFeedback !== false && settings.csat.enabled && windowOpen(c)) push(c, { direction: 'out', author: 'system', kind: 'interactive', body: `${settings.csat.question} [Good · Okay · Bad]` })
-        if (b.handBack !== false) c.owner = 'ai'
+        if (b.handBack !== false && !isBsuid(c.phone)) c.owner = 'ai'
       }
     } else if (method === 'PATCH') {
       Object.assign(t, b, { updatedAt: new Date().toISOString() })
@@ -244,6 +246,7 @@ export async function dummyTickets<T>(method: string, path: string, body: unknow
     if (method === 'PUT') settings = { ...(b as unknown as SupportSettings), aiSummary: false }
     return settings as T
   }
+  if (u.pathname.startsWith('/api/support/notifications/')) return { ok: true } as T
   if (u.pathname === '/api/support/notifications') return [] as T
   if (u.pathname === '/api/support/analytics') {
     const days = Number(u.searchParams.get('days') ?? 7)
@@ -355,12 +358,27 @@ export async function dummyBroadcasts<T>(method: string, path: string, body: unk
     }
     return { ok: true } as T
   }
+  if (u.pathname === '/api/broadcasts/preflight') {
+    const seg = segmentsDemo.find((x) => x.id === b.segmentId)
+    const audience = contactsNow().filter((c) => !c.optedOut && (!seg || matches(c, seg.filter)))
+    const marketing = String(b.category).toUpperCase() === 'MARKETING'
+    return {
+      audience: audience.length,
+      sample: audience.length,
+      hiddenNumbers: audience.filter((c) => isBsuid(c.phone)).length,
+      gotMarketingToday: marketing && demoBroadcasts.some((x) => Date.now() - Date.parse(x.createdAt) < 86_400_000) ? Math.min(2, audience.length) : 0,
+      estimate: { currency: 'INR', total: audience.length * (marketing ? 0.86 : 0.13), unpriced: 0, countries: [{ country: 'IN', people: audience.length, rate: marketing ? 0.86 : 0.13 }] },
+    } as T
+  }
   if (u.pathname === '/api/broadcasts' && method === 'GET') return demoBroadcasts as unknown as T
   if (u.pathname === '/api/broadcasts' && method === 'POST') {
     const tpl = demoTemplates.find((x) => x.name === (b.template as { name: string }).name)!
     const seg = segmentsDemo.find((x) => x.id === b.segmentId)
     const audience = contactsNow().filter((c) => !c.optedOut && (!seg || matches(c, seg.filter)))
     const later = b.scheduledAt && Date.parse(String(b.scheduledAt)) > Date.now()
+    // Like the real thing: a marketing send to 3+ people meets WhatsApp's daily marketing limit once.
+    const capped = !later && tpl.category === 'MARKETING' && audience.length >= 3 ? audience.at(-1)!.phone : null
+    const retryAt = new Date(Date.now() + 86_400_000).toISOString()
     const row: BroadcastDetail = {
       id: `b${++seq}`,
       name: String(b.name),
@@ -368,13 +386,18 @@ export async function dummyBroadcasts<T>(method: string, path: string, body: unk
       segmentId: seg?.id ?? null,
       segmentName: seg?.name ?? 'All contacts',
       audienceCount: audience.length,
-      status: later ? 'scheduled' : 'completed',
+      status: later ? 'scheduled' : capped ? 'sending' : 'completed',
       scheduledAt: String(b.scheduledAt ?? new Date().toISOString()),
       createdByName: ME.name,
       createdAt: new Date().toISOString(),
-      stats: { queued: later ? audience.length : 0, sent: later ? 0 : audience.length, delivered: 0, read: 0, failed: 0, skipped: 0, replied: 0 },
+      stats: { queued: later ? audience.length : capped ? 1 : 0, sent: later ? 0 : audience.length - (capped ? 1 : 0), delivered: 0, read: 0, failed: 0, skipped: 0, replied: 0, retrying: capped ? 1 : 0 },
       preview: renderTemplate(tpl, {}),
-      recipients: audience.map((c) => ({ phone: c.phone, name: c.name, status: later ? 'queued' : 'sent' })),
+      failures: capped ? [{ reason: 'marketing_limit', retrying: true, count: 1, nextAt: retryAt }] : [],
+      recipients: audience.map((c) =>
+        c.phone === capped
+          ? { phone: c.phone, name: c.name, status: 'queued', reason: 'marketing_limit', error: 'This message was not delivered to maintain healthy ecosystem engagement.', retryAt }
+          : { phone: c.phone, name: c.name, status: later ? 'queued' : 'sent' },
+      ),
     }
     demoBroadcasts = [row, ...demoBroadcasts]
     return row as T
@@ -411,6 +434,10 @@ export async function dummyWhatsApp<T>(method: string, path: string, body: unkno
   const b = (body ?? {}) as Record<string, string>
   waAccounts ??= [dummyAccountNow()]
   const u = new URL(path, 'http://x')
+  if (u.pathname === '/api/whatsapp/health')
+    return waAccounts.flatMap((a) =>
+      a.phoneNumbers.map((n) => ({ phoneNumberId: n.id, display: n.display, name: n.verifiedName, quality: 'GREEN', nameStatus: 'APPROVED', status: 'CONNECTED', limit: 'TIER_2K', limitLabel: '2,000', checkedAt: new Date().toISOString() })),
+    ) as T
   if (u.pathname === '/api/whatsapp/config') return { ready: true, missing: [], appId: 'demo', configId: 'demo', sdkVersion: 'v23.0', partnerCredit: true } as T
   if (u.pathname === '/api/whatsapp/accounts' && method === 'GET') return waAccounts as T
   if (u.pathname === '/api/whatsapp/connect') {
@@ -456,4 +483,27 @@ export async function dummyWhatsApp<T>(method: string, path: string, body: unkno
   }
   if (m[2] === 'pin') return { pin: '482913' } as T
   return acc as T
+}
+
+// ---- billing (dummy): a month of made-up spend in rupees ----
+let demoBudget: number | null = 5000
+export async function dummyBilling<T>(method: string, path: string, body: unknown): Promise<T> {
+  if (method === 'PUT') demoBudget = ((body ?? {}) as { budget: number | null }).budget
+  const today = new Date()
+  const days = Array.from({ length: 30 }, (_, i) => {
+    const d = new Date(today.getTime() - (29 - i) * 86_400_000)
+    const volume = 40 + ((i * 37) % 90)
+    return { day: d.toISOString().slice(0, 10), volume, cost: Math.round(volume * 0.62 * 100) / 100 }
+  })
+  const thisMonth = days.filter((d) => d.day.startsWith(today.toISOString().slice(0, 7)))
+  const total = thisMonth.reduce((n, d) => n + d.cost, 0)
+  void path
+  return {
+    currency: 'INR',
+    budget: demoBudget,
+    lastSyncAt: new Date(today.getTime() - 2 * 3_600_000).toISOString(),
+    lastSyncError: null,
+    month: { total, byCategory: [{ category: 'MARKETING', cost: total * 0.78, volume: 0 }, { category: 'UTILITY', cost: total * 0.17, volume: 0 }, { category: 'AUTHENTICATION', cost: total * 0.05, volume: 0 }] },
+    days,
+  } as T
 }

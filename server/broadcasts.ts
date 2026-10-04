@@ -9,7 +9,10 @@ import { col, db, dbOffReason, needMetaAssets, withWorkspace, ws } from './db.ts
 import { metaJson } from './upstream.ts'
 import { traceId } from './context.ts'
 import { trace } from './trace.ts'
+import { isBsuid, parseCustomerKey } from '../src/app/lib/customer.ts'
+import { reasonOf, retryAt, type FailureReason } from '../src/app/broadcasts/sendErrors.ts'
 import { defineJob, enqueue, type JobResult } from './jobs.ts'
+import { estimate } from './billing.ts'
 import { conversations, ensureConversation, sendTemplateMessage, type Actor } from './inbox.ts'
 import { contactNames, segmentQuery, type SegmentFilter } from './contacts.ts'
 import { renderTemplate, slotsOf, templatePayload, type Template } from '../src/app/broadcasts/templates.ts'
@@ -99,6 +102,41 @@ function valuesFor(slots: ReturnType<typeof slotsOf>, mapping: Mapping, c: Obj):
 }
 
 // ---- broadcasts ----
+/** Everyone a broadcast to this segment (or all contacts) would reach: never people who opted out. */
+async function audienceFor(segmentId: unknown) {
+  let filter: SegmentFilter = {}
+  let segmentName = 'All contacts'
+  if (segmentId) {
+    const seg = await col('segments').findOne({ workspaceId: ws(), _id: new ObjectId(String(segmentId)) })
+    if (!seg) throw new HttpError(404, 'That segment no longer exists.')
+    filter = { ...(seg.filter as SegmentFilter), includeOptedOut: false }
+    segmentName = String(seg.name)
+  }
+  const audience = await col('contacts').find(segmentQuery(filter), { projection: { phone: 1, sample: 1 } }).toArray()
+  return { audience, segmentName }
+}
+
+/**
+ * What to know before sending: who it reaches, who already got a marketing message from us today
+ * (WhatsApp may hold theirs back under its daily limit), and the cost from this workspace's own rates.
+ */
+async function preflight(b: Obj) {
+  const { audience } = await audienceFor(b.segmentId)
+  const keys = audience.map((c) => String(c.phone))
+  const category = String(b.category ?? 'MARKETING').toUpperCase()
+  const gotMarketingToday =
+    category === 'MARKETING'
+      ? (await recipients().distinct('phone', { workspaceId: ws(), phone: { $in: keys }, category: 'MARKETING', sentAt: { $gte: new Date(Date.now() - 86_400_000) } })).length
+      : 0
+  return {
+    audience: keys.length,
+    sample: audience.filter((c) => c.sample).length,
+    hiddenNumbers: keys.filter(isBsuid).length,
+    gotMarketingToday,
+    estimate: await estimate(keys.filter((_, i) => !audience[i].sample), category),
+  }
+}
+
 async function createBroadcast(b: Obj, me: Actor) {
   needMetaAssets()
   const name = String(b.name ?? '').trim().slice(0, 100)
@@ -110,15 +148,7 @@ async function createBroadcast(b: Obj, me: Actor) {
     const m = mapping[s.id]
     if (!m || (m.source === 'text' && !String(m.text ?? '').trim())) throw new HttpError(400, `Choose what goes in ${s.label}.`)
   }
-  let filter: SegmentFilter = {}
-  let segmentName = 'All contacts'
-  if (b.segmentId) {
-    const seg = await col('segments').findOne({ workspaceId: ws(), _id: new ObjectId(String(b.segmentId)) })
-    if (!seg) throw new HttpError(404, 'That segment no longer exists.')
-    filter = { ...(seg.filter as SegmentFilter), includeOptedOut: false }
-    segmentName = String(seg.name)
-  }
-  const audience = await col('contacts').find(segmentQuery(filter), { projection: { phone: 1, sample: 1 } }).toArray()
+  const { audience, segmentName } = await audienceFor(b.segmentId)
   if (!audience.length) throw new HttpError(400, 'Nobody to send to: the segment has no contacts who accept messages.')
   const at = b.scheduledAt ? new Date(String(b.scheduledAt)) : null
   if (at && (Number.isNaN(at.getTime()) || at.getTime() < Date.now() - 60_000)) throw new HttpError(400, 'Pick a time in the future.')
@@ -143,21 +173,35 @@ async function createBroadcast(b: Obj, me: Actor) {
   return one(String(r.insertedId))
 }
 
+const EMPTY_STATS = { queued: 0, sent: 0, delivered: 0, read: 0, failed: 0, skipped: 0, replied: 0, retrying: 0 }
 async function stats(ids: ObjectId[]) {
-  const rows = await recipients().aggregate([{ $match: { workspaceId: ws(), broadcastId: { $in: ids } } }, { $group: { _id: { b: '$broadcastId', s: '$status' }, n: { $sum: 1 }, replied: { $sum: { $cond: [{ $ifNull: ['$repliedAt', false] }, 1, 0] } } } }]).toArray()
+  const rows = await recipients()
+    .aggregate([
+      { $match: { workspaceId: ws(), broadcastId: { $in: ids } } },
+      {
+        $group: {
+          _id: { b: '$broadcastId', s: '$status' },
+          n: { $sum: 1 },
+          replied: { $sum: { $cond: [{ $ifNull: ['$repliedAt', false] }, 1, 0] } },
+          retrying: { $sum: { $cond: [{ $ifNull: ['$retryAt', false] }, 1, 0] } },
+        },
+      },
+    ])
+    .toArray()
   const by = new Map<string, Record<string, number>>()
   for (const r of rows) {
     const k = String(r._id.b)
-    const m = by.get(k) ?? { queued: 0, sent: 0, delivered: 0, read: 0, failed: 0, skipped: 0, replied: 0 }
+    const m = by.get(k) ?? { ...EMPTY_STATS }
     m[r._id.s] = (m[r._id.s] ?? 0) + r.n
     m.replied += r.replied
+    if (r._id.s === 'queued') m.retrying += r.retrying
     by.set(k, m)
   }
   return by
 }
 const out = (b: Obj, s?: Record<string, number>) => {
   const { _id, workspaceId: _w, mapping: _m, ...rest } = b
-  return { id: String(_id), ...rest, template: { name: obj(b.template).name, language: obj(b.template).language }, stats: s ?? { queued: 0, sent: 0, delivered: 0, read: 0, failed: 0, skipped: 0, replied: 0 } }
+  return { id: String(_id), ...rest, template: { name: obj(b.template).name, language: obj(b.template).language }, stats: s ?? { ...EMPTY_STATS } }
 }
 async function list() {
   const rows = await broadcasts().find({ workspaceId: ws() }).sort({ createdAt: -1 }).limit(200).toArray()
@@ -170,12 +214,41 @@ async function one(id: string) {
   const s = await stats([b._id])
   const rec = await recipients().find({ workspaceId: ws(), broadcastId: b._id }).sort({ status: 1 }).limit(500).toArray()
   const names = await contactNames(rec.map((r) => String(r.phone)))
-  return { ...out(b, s.get(String(b._id))), preview: renderTemplate(b.template as Template, {}), recipients: rec.map(({ _id, workspaceId: _w, broadcastId: _b, ...r }) => ({ ...r, name: names.get(String(r.phone)) || null })) }
+  // Why people didn't get it, biggest group first (the report groups failures by reason).
+  const failures = await recipients()
+    .aggregate([
+      { $match: { workspaceId: ws(), broadcastId: b._id, $or: [{ status: { $in: ['failed', 'skipped'] } }, { retryAt: { $exists: true }, status: 'queued' }] } },
+      { $group: { _id: { reason: { $ifNull: ['$reason', 'other'] }, retrying: { $eq: ['$status', 'queued'] } }, count: { $sum: 1 }, nextAt: { $min: '$retryAt' } } },
+      { $sort: { count: -1 } },
+    ])
+    .toArray()
+  return {
+    ...out(b, s.get(String(b._id))),
+    failures: failures.map((f) => ({ reason: f._id.reason, retrying: f._id.retrying, count: f.count, nextAt: f.nextAt ?? null })),
+    preview: renderTemplate(b.template as Template, {}), recipients: rec.map(({ _id, workspaceId: _w, broadcastId: _b, ...r }) => ({ ...r, name: names.get(String(r.phone)) || null })) }
 }
 
 // ---- sending (a job per broadcast, jobs.ts) ----
 const BATCH = 20
 const jobKey = (id: unknown) => `broadcast:${String(id)}`
+
+/**
+ * Records why a recipient didn't get the message. Reasons Meta asks us to retry (the daily marketing
+ * cap, throttling) go back in the queue for later and the broadcast's job is woken by then.
+ * Used when the send call is refused and when a failed-status webhook arrives later.
+ */
+export async function recipientFailed(r: Obj, reason: FailureReason, error: string, code?: number) {
+  const again = retryAt(reason, Number(r.retries ?? 0))
+  const base = { reason, error: error.slice(0, 300), ...(code !== undefined && { code }) }
+  if (again) {
+    await recipients().updateOne({ _id: r._id as ObjectId }, { $set: { ...base, status: 'queued', retryAt: again }, $inc: { retries: 1 }, $unset: { waMessageId: '' } })
+    await enqueue('broadcast.send', { broadcastId: String(r.broadcastId) }, { runAt: again, key: jobKey(r.broadcastId) })
+    // A finished broadcast with someone to retry is sending again.
+    await broadcasts().updateOne({ _id: r.broadcastId as ObjectId, status: 'completed' }, { $set: { status: 'sending' }, $unset: { completedAt: '' } })
+  } else await recipients().updateOne({ _id: r._id as ObjectId }, { $set: { ...base, status: 'failed' }, $unset: { retryAt: '' } })
+  trace(again ? 'broadcast.retry_scheduled' : 'broadcast.recipient_failed', { reason, ...(code !== undefined && { code }), ...(again && { at: again }) }, { entity: 'broadcast', id: String(r.broadcastId) })
+  return again
+}
 
 /** Sends one batch of a broadcast, then asks to run again until nobody is left in the queue. */
 async function sendBatch(p: Record<string, unknown>): Promise<JobResult> {
@@ -186,16 +259,23 @@ async function sendBatch(p: Record<string, unknown>): Promise<JobResult> {
     await broadcasts().updateOne({ _id: b._id }, { $set: { status: 'sending', startedAt: new Date() } })
     trace('broadcast.started', { audience: b.audienceCount }, ref)
   }
-  const batch = await recipients().find({ workspaceId: ws(), broadcastId: b._id, status: 'queued' }).limit(BATCH).toArray()
+  const due = { workspaceId: ws(), broadcastId: b._id, status: 'queued', $or: [{ retryAt: { $exists: false } }, { retryAt: { $lte: new Date() } }] }
+  const batch = await recipients().find(due).limit(BATCH).toArray()
   const template = b.template as Template
   const slots = slotsOf(template)
-  const tally = { sent: 0, failed: 0, skipped: 0 }
+  const tally = { sent: 0, failed: 0, skipped: 0, retrying: 0 }
   for (const r of batch) {
     // A cancel lands between messages, not only between batches.
     if ((await broadcasts().findOne({ _id: b._id }, { projection: { status: 1 } }))?.status === 'cancelled') return
     const c = await col('contacts').findOne({ workspaceId: ws(), phone: r.phone })
     if (!c || c.optedOut) {
-      await recipients().updateOne({ _id: r._id }, { $set: { status: 'skipped', error: c ? 'Opted out' : 'Contact deleted' } })
+      await recipients().updateOne({ _id: r._id }, { $set: { status: 'skipped', reason: c ? 'opted_out' : 'other', error: c ? 'Opted out' : 'Contact deleted' } })
+      tally.skipped++
+      continue
+    }
+    // WhatsApp sends authentication templates to phone numbers only, never to a BSUID.
+    if (isBsuid(String(r.phone)) && template.category === 'AUTHENTICATION') {
+      await recipients().updateOne({ _id: r._id }, { $set: { status: 'skipped', reason: 'no_phone', error: 'Hides their phone number (login codes need one)' } })
       tally.skipped++
       continue
     }
@@ -204,15 +284,19 @@ async function sendBatch(p: Record<string, unknown>): Promise<JobResult> {
       const payload = templatePayload(template, values)
       await ensureConversation(String(r.phone))
       const waMessageId = await sendTemplateMessage(String(r.phone), payload, renderTemplate(template, values), { sample: !!(r.sample || c.sample), label: `Broadcast: ${b.name}` })
-      await recipients().updateOne({ _id: r._id }, { $set: { status: 'sent', sentAt: new Date(), traceId: traceId(), ...(waMessageId && { waMessageId }) } })
+      await recipients().updateOne({ _id: r._id }, { $set: { status: 'sent', sentAt: new Date(), category: template.category ?? null, traceId: traceId(), ...(waMessageId && { waMessageId }) }, $unset: { retryAt: '', reason: '', error: '' } })
       tally.sent++
     } catch (err) {
-      await recipients().updateOne({ _id: r._id }, { $set: { status: 'failed', error: err instanceof Error ? err.message : String(err) } })
-      tally.failed++
+      const code = err instanceof HttpError ? err.code : undefined
+      if (await recipientFailed(r, reasonOf(code), err instanceof Error ? err.message : String(err), code)) tally.retrying++
+      else tally.failed++
     }
   }
   trace('broadcast.progress', tally, ref)
   if (batch.length === BATCH) return { again: new Date() }
+  // People waiting for a retry keep the broadcast open until their time comes.
+  const next = await recipients().findOne({ workspaceId: ws(), broadcastId: b._id, status: 'queued' }, { sort: { retryAt: 1 }, projection: { retryAt: 1 } })
+  if (next) return { again: (next.retryAt as Date | undefined) ?? new Date() }
   await broadcasts().updateOne({ _id: b._id, status: 'sending' }, { $set: { status: 'completed', completedAt: new Date() } })
   trace('broadcast.completed', {}, ref)
 }
@@ -245,7 +329,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   if (path === '/api/broadcasts/send-one' && m === 'POST') {
     // One template to one chat, e.g. to restart a conversation after the 24-hour window.
     const b = obj(await readJson(req))
-    const phone = String(b.phone ?? '').replace(/\D/g, '')
+    const phone = parseCustomerKey(String(b.phone ?? ''))
     const conv = await conversations().findOne({ workspaceId: ws(), phone })
     if (!conv) throw new HttpError(404, 'No chat with this number yet.')
     const tpl = obj(b.template)
@@ -261,6 +345,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { owner: 'human', ...(!conv.assigneeId && { assigneeId: me._id }) } })
     return { ok: true }
   }
+  if (path === '/api/broadcasts/preflight' && m === 'POST') return preflight(obj(await readJson(req)))
   if (path === '/api/broadcasts' && m === 'GET') return list()
   if (path === '/api/broadcasts' && m === 'POST') return createBroadcast(obj(await readJson(req)), me)
   if ((seg = path.match(/^\/api\/broadcasts\/([a-f0-9]{24})(\/cancel)?$/))) {

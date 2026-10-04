@@ -10,6 +10,7 @@ import { errorDetail } from '@/app/api/meta'
 import { listTemplates, sendTemplateToChat, type WaTemplate } from '@/app/api/broadcasts'
 import { renderTemplate, slotsOf } from '@/app/broadcasts/templates'
 import { TemplatePreview } from './BroadcastsPage'
+import { customerLabel } from '@/app/lib/customer'
 
 /** Reopens a chat after the 24-hour window with one approved template. */
 export function SendTemplateDialog({ phone, name, onClose, onSent }: { phone: string; name?: string | null; onClose: () => void; onSent: () => void }) {
@@ -40,7 +41,7 @@ export function SendTemplateDialog({ phone, name, onClose, onSent }: { phone: st
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Send a template to {name || `+${phone}`}</DialogTitle>
+          <DialogTitle>Send a template to {name || customerLabel(phone)}</DialogTitle>
           <DialogDescription>Outside the 24-hour window WhatsApp only allows approved templates. Once the customer replies, you can chat freely again.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

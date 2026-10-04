@@ -19,6 +19,8 @@ import { handleTickets } from './tickets.ts'
 import { handleContacts } from './contacts.ts'
 import { handleBroadcasts, resumeBroadcasts } from './broadcasts.ts'
 import { startJobs } from './jobs.ts'
+import { handleBilling, startBilling } from './billing.ts'
+import { handleHealth, startHealth } from './health.ts'
 import { agentUpstream, callUpstream, env, hasToken, pathIds, resolveIds, setCallLogger, upstream, type Kind } from './upstream.ts'
 import { accounts, assetsFor } from './accounts.ts'
 import { handleWhatsApp } from './whatsapp.ts'
@@ -139,11 +141,13 @@ const server = http.createServer(async (req, res) => {
       if (pathIds(path).some((id) => !assets!.ids.has(id))) return sendError(res, 403, 'Not your WhatsApp account', 'That WhatsApp ID isn’t connected to this workspace.')
       await forward(req, res, metaRoute[1] as Kind, path)
     }
+    else if (await handleHealth(req, res)) return
     else if (await handleWhatsApp(req, res, me)) return
     else if (await handleInbox(req, res, me)) return
     else if (await handleTickets(req, res, me)) return
     else if (await handleContacts(req, res, me)) return
     else if (await handleBroadcasts(req, res, me)) return
+    else if (await handleBilling(req, res, me)) return
     else if (!(await handleStore(req, res))) res.writeHead(404).end()
   }, assets, { traceId: tid, userId: String(me._id) })
 })
@@ -152,6 +156,8 @@ server.listen(PORT, () => console.log(`API proxy on :${PORT} → graph: ${upstre
 if (await initDb()) {
   setCallLogger(logApiCall)
   await resumeBroadcasts()
+  await startBilling()
+  await startHealth()
   startJobs()
   if (env('COLLECTORS') !== 'off') startCollectors()
 } else if (!env('MONGODB_URI')) console.log('No MONGODB_URI: running without a database (store routes return 503)')

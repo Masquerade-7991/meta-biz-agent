@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { AlarmClock, Bell, Inbox, UserCheck } from 'lucide-react'
+import { AlarmClock, AlertTriangle, Bell, Inbox, UserCheck, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover'
-import { listNotices, type Notice } from '@/app/api/tickets'
+import { dismissNotice, isAlert, listNotices, type AlertNotice, type Notice } from '@/app/api/tickets'
 import { cn } from '@/app/lib/utils'
 import { usePolling } from '@/app/lib/usePolling'
 
-const LIVE_TICKETS = ['ticket.']
+const LIVE_NOTICES = ['ticket.', 'alert.']
 
 const SEEN_KEY = 'helo-notices-seen'
 const readSeen = () => {
@@ -15,15 +15,15 @@ const readSeen = () => {
     return 0
   }
 }
-const ICON = { breached: AlarmClock, due: AlarmClock, assigned: UserCheck, unassigned: Inbox }
+const ICON = { breached: AlarmClock, due: AlarmClock, assigned: UserCheck, unassigned: Inbox, alert: AlertTriangle, alert_critical: AlertTriangle }
 
-/** Header bell: overdue or due-soon SLAs, tickets assigned to you, and tickets nobody has. */
-export function NotificationsBell({ onOpenChat }: { onOpenChat: (phone: string) => void }) {
+/** Header bell: account alerts (owners), overdue or due-soon SLAs, tickets assigned to you, and tickets nobody has. */
+export function NotificationsBell({ onOpenChat, onOpenTarget }: { onOpenChat: (phone: string) => void; onOpenTarget: (target: AlertNotice['target']) => void }) {
   const [items, setItems] = useState<Notice[]>([])
   const [seen, setSeen] = useState(readSeen)
   const [open, setOpen] = useState(false)
-  usePolling(() => void listNotices().then(setItems, () => {}), 30_000, [], true, LIVE_TICKETS)
-  const fresh = items.filter((n) => Date.parse(n.at) > seen || n.kind === 'breached').length
+  usePolling(() => void listNotices().then(setItems, () => {}), 30_000, [], true, LIVE_NOTICES)
+  const fresh = items.filter((n) => Date.parse(n.at) > seen || n.kind === 'breached' || n.kind === 'alert_critical').length
   return (
     <Popover
       open={open}
@@ -62,18 +62,34 @@ export function NotificationsBell({ onOpenChat }: { onOpenChat: (phone: string) 
             {items.map((n) => {
               const Icon = ICON[n.kind]
               return (
-                <li key={n.id}>
+                <li key={n.id} className="group relative">
                   <button
                     type="button"
                     className="flex w-full gap-3 px-4 py-3 text-left hover:bg-muted"
                     onClick={() => {
                       setOpen(false)
-                      onOpenChat(n.phone)
+                      if (isAlert(n)) onOpenTarget(n.target)
+                      else onOpenChat(n.phone)
                     }}
                   >
-                    <Icon className={cn('mt-0.5 size-4 shrink-0', n.kind === 'breached' ? 'text-destructive' : 'text-muted-foreground')} />
-                    <span style={{ fontSize: 'var(--text-sm)', lineHeight: 1.4 }}>{n.text}</span>
+                    <Icon className={cn('mt-0.5 size-4 shrink-0', n.kind === 'breached' || n.kind === 'alert_critical' ? 'text-destructive' : n.kind === 'alert' ? 'text-amber-600' : 'text-muted-foreground')} />
+                    <span className={cn(isAlert(n) && 'pr-6')} style={{ fontSize: 'var(--text-sm)', lineHeight: 1.4 }}>
+                      {n.text}
+                    </span>
                   </button>
+                  {isAlert(n) && (
+                    <button
+                      type="button"
+                      aria-label="Dismiss"
+                      className="absolute top-2.5 right-2 rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground"
+                      onClick={() => {
+                        setItems((xs) => xs.filter((x) => x.id !== n.id))
+                        void dismissNotice(n.id).catch(() => {})
+                      }}
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  )}
                 </li>
               )
             })}

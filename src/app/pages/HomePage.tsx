@@ -11,6 +11,7 @@ import type { NavId } from '@/app/nav'
 import type { SettingsTab } from '@/app/components/shell/SettingsPage'
 import { getSignupConfig, listAccounts, type SignupConfig, type WaAccount } from '@/app/api/whatsapp'
 import { AccountSteps, ConnectWhatsApp } from '@/app/whatsapp/ConnectWhatsApp'
+import { NumberHealthCard } from '@/app/whatsapp/NumberHealthCard'
 import { isDummyMode } from '@/app/api/dummy'
 import { resetDummyWhatsApp } from '@/app/api/supportDummy'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
@@ -243,6 +244,9 @@ function AgentHome({ snap, onNavigate, onOpenSettings }: { snap: Snapshot; onNav
           <Ticket className="size-4" />
           View tickets
         </Button>
+      </div>
+      <div className="mt-5 border-t border-border pt-4">
+        <NumberHealthCard compact />
       </div>
       <p className="mt-5 border-t border-border pt-4 text-muted-foreground" style={TEXT_SM_OPEN}>
         Running more than one WhatsApp number?{' '}

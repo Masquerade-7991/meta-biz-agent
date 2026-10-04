@@ -45,6 +45,21 @@ export const disconnectAccount = (wabaId: string) => call<{ ok: true }>(`/api/wh
 export const revealPin = (wabaId: string) => call<{ pin: string }>(`/api/whatsapp/accounts/${wabaId}/pin`)
 
 /** Where a business adds its own payment method for WhatsApp conversations. */
+/** Quality and limits per number, from Meta (server/health.ts). */
+export interface NumberHealth {
+  phoneNumberId: string
+  display: string
+  name: string | null
+  /** GREEN | YELLOW | RED | UNKNOWN */
+  quality: string
+  nameStatus: string | null
+  status: string | null
+  limit: string | null
+  limitLabel: string | null
+  checkedAt: string
+}
+export const getNumberHealth = () => call<NumberHealth[]>('/api/whatsapp/health')
+export const refreshNumberHealth = () => call<NumberHealth[]>('/api/whatsapp/health', 'POST', {})
 export const PAYMENT_URL = 'https://business.facebook.com/wa/manage/home/'
 export const STEP_LABEL: Record<StepName, string> = {
   exchange: 'Secure access to your account',

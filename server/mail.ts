@@ -79,6 +79,9 @@ async function send(to: string, subject: string, body: Parameters<typeof layout>
 const link = (token: string) => `${appUrl}/auth/verify?token=${encodeURIComponent(token)}`
 
 export const mail = {
+  /** A workspace alert for owners (budget, number quality, template paused). `path` opens the app there. */
+  alert: (to: string, title: string, detail: string, action?: { label: string; path: string }) =>
+    send(to, title, { heading: title, lines: [detail], ...(action && { button: { label: action.label, url: `${appUrl}${action.path}` } }) }),
   signup: (to: string, token: string) =>
     send(to, 'Verify your email for Helo.ai', {
       heading: 'Verify your email',

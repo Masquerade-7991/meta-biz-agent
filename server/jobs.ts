@@ -21,14 +21,16 @@ export function defineJob(type: string, run: Handler, opts: { maxAttempts?: numb
   handlers.set(type, { run, maxAttempts: opts.maxAttempts ?? 5 })
 }
 
-/** Queues a job in the current workspace. With `key`, a job still queued under that key is updated instead. */
+/** Queues a job in the current workspace. With `key`, a job still queued under that key is reused (earliest time wins). */
 export async function enqueue(type: string, payload: Record<string, unknown>, opts: { runAt?: Date; key?: string } = {}) {
   const now = new Date()
   const doc = { type, payload, runAt: opts.runAt ?? now, traceId: traceId(), updatedAt: now }
   if (opts.key) {
+    // A job already queued under the key runs at whichever time is earlier.
+    const { runAt, ...rest } = doc
     await jobs().updateOne(
       { workspaceId: ws(), key: opts.key, status: 'queued' },
-      { $set: doc, $setOnInsert: { workspaceId: ws(), key: opts.key, status: 'queued', attempts: 0, createdAt: now } },
+      { $set: rest, $min: { runAt }, $setOnInsert: { workspaceId: ws(), key: opts.key, status: 'queued', attempts: 0, createdAt: now } },
       { upsert: true, ignoreUndefined: true },
     )
   } else await jobs().insertOne({ ...doc, workspaceId: ws(), status: 'queued', attempts: 0, createdAt: now }, { ignoreUndefined: true })
@@ -57,8 +59,15 @@ async function runJob(j: Record<string, unknown> & { _id: ObjectId }) {
       try {
         if (!h) throw new Error(`No handler for job type ${String(j.type)}`)
         const r = await h.run((j.payload ?? {}) as Record<string, unknown>)
-        if (r?.again) await jobs().updateOne({ _id: j._id }, { $set: { status: 'queued', runAt: r.again, attempts: 0, updatedAt: new Date() }, $unset: { lockedUntil: '' } })
-        else await jobs().updateOne({ _id: j._id }, { $set: { status: 'done', finishedAt: new Date(), updatedAt: new Date() }, $unset: { lockedUntil: '' } })
+        if (r?.again) {
+          // Another queued job with the same key (queued meanwhile) already carries the work on.
+          await jobs()
+            .updateOne({ _id: j._id }, { $set: { status: 'queued', runAt: r.again, attempts: 0, updatedAt: new Date() }, $unset: { lockedUntil: '' } })
+            .catch(async (err: { code?: number }) => {
+              if (err.code !== 11000) throw err
+              await jobs().updateOne({ _id: j._id }, { $set: { status: 'done', finishedAt: new Date(), updatedAt: new Date() }, $unset: { lockedUntil: '' } })
+            })
+        } else await jobs().updateOne({ _id: j._id }, { $set: { status: 'done', finishedAt: new Date(), updatedAt: new Date() }, $unset: { lockedUntil: '' } })
         if (!r?.again) trace('job.done', { type: j.type, ms: Date.now() - started })
       } catch (err) {
         const error = (err instanceof Error ? err.message : String(err)).slice(0, 500)

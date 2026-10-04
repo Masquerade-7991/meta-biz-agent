@@ -11,9 +11,12 @@ export const digits = (v: unknown) => String(v ?? '').replace(/\D/g, '')
 
 export class HttpError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  /** Meta's error code when Meta refused the call (e.g. 131049), so callers can react to the reason. */
+  code?: number
+  constructor(status: number, message: string, code?: number) {
     super(message)
     this.status = status
+    this.code = code
   }
 }
 

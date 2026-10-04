@@ -95,6 +95,13 @@ const INDEXES: Record<string, IndexDescription[]> = {
     { key: { traceId: 1 } },
     { key: { at: 1 }, expireAfterSeconds: Y2 },
   ],
+  // Account alerts for owners (alerts.ts): one per condition key.
+  alerts: [{ key: { workspaceId: 1, key: 1 }, unique: true }, { key: { workspaceId: 1, createdAt: -1 } }],
+  // Meta's own billing figures (billing.ts): one row per day, country, category and pricing type.
+  spend_daily: [{ key: { workspaceId: 1, day: 1, country: 1, category: 1, type: 1 }, unique: true }],
+  billing: [{ key: { workspaceId: 1 }, unique: true }],
+  // Latest quality and limits per WhatsApp number (health.ts).
+  number_health: [{ key: { workspaceId: 1, phoneNumberId: 1 }, unique: true }],
   // Background jobs (jobs.ts): due ones are claimed oldest first; finished ones are kept 7 days.
   jobs: [
     { key: { status: 1, runAt: 1 } },

@@ -12,6 +12,7 @@ import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { useMembers } from '@/app/auth/useMembers'
 import { usePolling } from '@/app/lib/usePolling'
 import { PillTabs, SearchInput } from '@/app/components/Filters'
+import { customerLabel } from '@/app/lib/customer'
 
 const LIVE_TICKETS = ['ticket.']
 
@@ -214,7 +215,7 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
                     )}
                   </TableCell>
                   <TableCell style={TEXT_SM}>
-                    {t.name || `+${t.phone}`}
+                    {t.name || customerLabel(t.phone)}
                     {t.sample && (
                       <span className="ml-1.5 rounded bg-muted px-1.5 text-muted-foreground" style={{ fontSize: '0.6875rem' }}>
                         Sample

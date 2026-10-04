@@ -11,6 +11,7 @@ import { useAuth } from '@/app/auth/AuthContext'
 import { Field, FormError } from '@/app/auth/AuthLayout'
 import { CannedResponsesSettings } from './CannedResponsesSettings'
 import { SupportSettingsTab } from './SupportSettings'
+import { BillingSettingsTab } from './BillingSettings'
 import { ContactFieldsSettings } from './ContactFieldsSettings'
 import { authApi, type Invite, type Member, type Role } from '@/app/auth/api'
 import { errorDetail } from '@/app/api/meta'
@@ -18,7 +19,7 @@ import { SECTION_TITLE } from '@/app/lib/text'
 import { SettingsSection } from './SettingsSection'
 import { WhatsAppSettings } from './WhatsAppSettings'
 
-export type SettingsTab = 'profile' | 'whatsapp' | 'members' | 'canned' | 'support' | 'fields'
+export type SettingsTab = 'profile' | 'whatsapp' | 'billing' | 'members' | 'canned' | 'support' | 'fields'
 
 
 const days = (from: string, to = Date.now()) => Math.round((to - Date.parse(from)) / 86_400_000)
@@ -333,6 +334,7 @@ export function SettingsPage({ tab, onTabChange }: { tab: SettingsTab; onTabChan
         <TabsList className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
+          <TabsTrigger value="billing">Billing</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
           <TabsTrigger value="canned">Canned responses</TabsTrigger>
           <TabsTrigger value="support">Support rules</TabsTrigger>
@@ -343,6 +345,9 @@ export function SettingsPage({ tab, onTabChange }: { tab: SettingsTab; onTabChan
         </TabsContent>
         <TabsContent value="whatsapp" className="pt-2">
           <WhatsAppSettings />
+        </TabsContent>
+        <TabsContent value="billing" className="pt-2">
+          <BillingSettingsTab />
         </TabsContent>
         <TabsContent value="members" className="pt-2">
           <Members />

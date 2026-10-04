@@ -13,6 +13,7 @@ import { SettingsPage, type SettingsTab } from './SettingsPage'
 
 export function ProductShell({
   active,
+  initialSettingsTab = 'profile',
   onNavigate: setActive,
   onOpenAgentBuilder,
   onAgentCreated,
@@ -20,12 +21,14 @@ export function ProductShell({
 }: {
   /** Kept by the caller, so leaving the agent builder returns to the same page. */
   active: NavId
+  /** The Settings tab to show first, e.g. from a link in an alert email. */
+  initialSettingsTab?: SettingsTab
   onNavigate: (id: NavId) => void
   onOpenAgentBuilder: () => void
   onAgentCreated: () => void
   onOpenAgentActivity: () => void
 }) {
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>('profile')
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>(initialSettingsTab)
   // A chat to open when switching to the inbox (from a ticket or a notification).
   const [chatPhone, setChatPhone] = useState<string | null>(null)
   const openChat = (phone: string) => {
@@ -83,7 +86,14 @@ export function ProductShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-6">
           <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{activeItem.label}</p>
-          <NotificationsBell onOpenChat={openChat} />
+          <NotificationsBell
+            onOpenChat={openChat}
+            onOpenTarget={(target) => {
+              if (target === 'broadcasts') return setActive('broadcasts')
+              setSettingsTab(target)
+              setActive('settings')
+            }}
+          />
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto">{renderContent()}</main>
       </div>
