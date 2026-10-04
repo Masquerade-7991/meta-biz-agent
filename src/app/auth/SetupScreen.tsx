@@ -3,7 +3,8 @@ import { CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { cn } from '@/app/lib/utils'
 import { useAuth } from './AuthContext'
-import { authApi, message, type Me, type Verified } from './api'
+import { authApi, type Me, type Verified } from './api'
+import { errorDetail } from '@/app/api/meta'
 import { AuthHeading, AuthLayout, Field, FormError, TextButton } from './AuthLayout'
 
 /**
@@ -19,7 +20,7 @@ export function VerifyScreen({ token, onDone }: { token: string; onDone: (me: Me
   useEffect(() => {
     if (started.current) return
     started.current = true
-    authApi.verify(token).then(setResult, (err) => setError(message(err)))
+    authApi.verify(token).then(setResult, (err) => setError(errorDetail(err)))
   }, [token])
 
   if (error)
@@ -106,7 +107,7 @@ export function AccountSetupScreen() {
     try {
       setMe(await authApi.finishSetup({ name, password, ...(joining ? {} : { workspaceName }) }))
     } catch (err) {
-      setError(message(err))
+      setError(errorDetail(err))
       setBusy(false)
     }
   }
@@ -184,7 +185,7 @@ export function NewPasswordScreen() {
     try {
       setMe(await authApi.newPassword(password))
     } catch (err) {
-      setError(message(err))
+      setError(errorDetail(err))
       setBusy(false)
     }
   }

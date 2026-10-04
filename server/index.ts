@@ -9,9 +9,14 @@ import http from 'node:http'
 import { allow, getCached, invalidatePhone, putCached, ttlFor } from './cache.ts'
 import { startCollectors } from './collectors.ts'
 import { getSession, handleAuth } from './auth.ts'
-import { db, dbOffReason, initDb, withWorkspace } from './db.ts'
+import { db, dbOffReason, initDb, NO_META_ASSETS, withWorkspace } from './db.ts'
 import { logApiCall, record, resourceOf, splitPhone } from './record.ts'
 import { handleStore } from './store.ts'
+import { sendError } from './http.ts'
+import { handleInbox, handleWebhook } from './inbox.ts'
+import { handleTickets } from './tickets.ts'
+import { handleContacts } from './contacts.ts'
+import { handleBroadcasts, startBroadcastWorker } from './broadcasts.ts'
 import { agentUpstream, callUpstream, env, hasToken, ids, resolveIds, setCallLogger, upstream, type Kind } from './upstream.ts'
 
 const PORT = Number(env('SERVER_PORT') || 8787)
@@ -22,11 +27,6 @@ async function readBody(req: http.IncomingMessage): Promise<Buffer> {
   return Buffer.concat(chunks)
 }
 
-function sendError(res: http.ServerResponse, status: number, title: string, detail: string) {
-  // Same StandardError shape Meta uses, so the UI handles one error format.
-  res.writeHead(status, { 'content-type': 'application/json' })
-  res.end(JSON.stringify({ title, detail, status }))
-}
 
 /** Local guard below Meta's limits: 500 agent_test/h per number, 1000/h per resource per number. */
 function rateLimited(kind: Kind, path: string): string | null {
@@ -77,40 +77,55 @@ async function forward(req: http.IncomingMessage, res: http.ServerResponse, kind
 const server = http.createServer(async (req, res) => {
   const url = req.url ?? '/'
   if (url === '/api/health') {
+    // Public, so the WhatsApp assets are only added for members of the workspace that owns them
+    // (the Create Agent fallback and dummy mode use them). The token never leaves this process.
+    const owner = !!(await getSession(req).catch(() => null))?.workspace?.metaAssets
     res.writeHead(200, { 'content-type': 'application/json' })
-    // IDs aren't secrets; the Create Agent picker shows them. The token never leaves this process.
     res.end(
       JSON.stringify({
         ok: true,
         upstream,
         hasToken,
-        businessName: env('BUSINESS_NAME'),
-        wabaId: ids.WABA_ID,
-        // Display labels for the offline fallback, matching WhatsApp Manager (not IDs, not secrets).
-        wabaName: env('WABA_NAME'),
-        phoneNumberId: ids.PHONE_NUMBER_ID,
-        phoneNumber: env('PHONE_NUMBER'),
-        phoneName: env('PHONE_NAME'),
+        ...(owner && {
+          businessName: env('BUSINESS_NAME'),
+          wabaId: ids.WABA_ID,
+          // Display labels for the offline fallback, matching WhatsApp Manager (not IDs, not secrets).
+          wabaName: env('WABA_NAME'),
+          phoneNumberId: ids.PHONE_NUMBER_ID,
+          phoneNumber: env('PHONE_NUMBER'),
+          phoneName: env('PHONE_NAME'),
+        }),
       }),
     )
     return
   }
   if (await handleAuth(req, res)) return
+  // Meta calls this without a session; it checks its own signature and verify token.
+  if (await handleWebhook(req, res)) return
   // Everything else needs a signed-in workspace member, and runs inside that member's workspace.
   if (!db) return sendError(res, 503, dbOffReason, 'Accounts need the database. Set MONGODB_URI in .env and restart the server.')
   const s = await getSession(req)
   if (!s) return sendError(res, 401, 'Not logged in', 'Log in to continue.')
   if (s.setup !== 'complete') return sendError(res, 403, 'Setup not finished', 'Finish setting up your account first.')
   if (!s.workspace) return sendError(res, 403, 'No workspace', 'Create or join a workspace first.')
+  const metaAssets = !!s.workspace.metaAssets
+  if (!metaAssets && /^\/api\/(meta|graph)\//.test(url))
+    return sendError(res, 403, NO_META_ASSETS.title, NO_META_ASSETS.detail)
+  const me = { _id: s.user._id, name: s.user.name ?? '', role: s.role }
   await withWorkspace(s.workspace._id, async () => {
     if (url.startsWith('/api/meta/')) await forward(req, res, 'meta', resolveIds(url.slice('/api/meta'.length)))
     else if (url.startsWith('/api/graph/')) await forward(req, res, 'graph', resolveIds(url.slice('/api/graph'.length)))
+    else if (await handleInbox(req, res, me)) return
+    else if (await handleTickets(req, res, me)) return
+    else if (await handleContacts(req, res, me)) return
+    else if (await handleBroadcasts(req, res, me)) return
     else if (!(await handleStore(req, res))) res.writeHead(404).end()
-  })
+  }, metaAssets)
 })
 
 server.listen(PORT, () => console.log(`API proxy on :${PORT} → graph: ${upstream || '(no upstream set)'} · agent: ${agentUpstream || '(no upstream set)'}`))
 if (await initDb()) {
   setCallLogger(logApiCall)
+  startBroadcastWorker()
   if (env('COLLECTORS') !== 'off') startCollectors()
 } else if (!env('MONGODB_URI')) console.log('No MONGODB_URI: running without a database (store routes return 503)')

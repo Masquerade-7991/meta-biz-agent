@@ -9,6 +9,7 @@ import { AgentStudioShell } from '@/app/components/shell/AgentStudioShell'
 import { DevControlsButton } from '@/app/components/wizard/DevControlsButton'
 import { GateScreen } from '@/app/components/GateScreen'
 import { SetupFrontDoor } from '@/app/components/SetupFrontDoor'
+import type { NavId } from '@/app/nav'
 import { ProductShell } from '@/app/components/shell/ProductShell'
 import { isDummyMode } from '@/app/api/dummy'
 import { AuthProvider, useAuth } from '@/app/auth/AuthContext'
@@ -37,6 +38,7 @@ function AgentBuilderFlow({ onExitToShell }: { onExitToShell: () => void }) {
 function Gate() {
   const { me, setMe } = useAuth()
   const [view, setView] = useState<'shell' | 'setup' | 'agent-flow'>('shell')
+  const [nav, setNav] = useState<NavId>('home')
   const [linkToken, setLinkToken] = useState(() =>
     window.location.pathname === '/auth/verify' ? new URLSearchParams(window.location.search).get('token') : null,
   )
@@ -62,6 +64,8 @@ function Gate() {
     <>
       {view === 'shell' && (
         <ProductShell
+          active={nav}
+          onNavigate={setNav}
           onOpenAgentBuilder={() => setView('agent-flow')}
           // Dummy demos fill every field by hand, so the guided setup is skipped.
           onAgentCreated={() => setView(isDummyMode() ? 'agent-flow' : 'setup')}

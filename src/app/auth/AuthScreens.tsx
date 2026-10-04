@@ -2,7 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { useAuth } from './AuthContext'
-import { authApi, message } from './api'
+import { authApi } from './api'
+import { errorDetail } from '@/app/api/meta'
 import { AuthHeading, AuthLayout, Field, FormError, TextButton } from './AuthLayout'
 
 type Mode = 'login' | 'signup' | 'forgot'
@@ -39,7 +40,7 @@ function Login({ email, setEmail, go }: ModeProps) {
     try {
       setMe(await authApi.login(email, password))
     } catch (err) {
-      setError(message(err))
+      setError(errorDetail(err))
       setBusy(false)
     }
   }
@@ -117,7 +118,7 @@ function SendLink({ kind, email, setEmail, go }: ModeProps & { kind: 'signup' | 
       setSent(true)
       setWait(60)
     } catch (err) {
-      setError(message(err))
+      setError(errorDetail(err))
       setExisting(err instanceof Error && /already have an account/i.test(err.message))
     } finally {
       setBusy(false)
@@ -181,7 +182,7 @@ export function CreateWorkspaceScreen() {
     try {
       setMe(await authApi.createWorkspace(name))
     } catch (err) {
-      setError(message(err))
+      setError(errorDetail(err))
       setBusy(false)
     }
   }

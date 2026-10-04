@@ -22,6 +22,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **IDs stay on the server:** client paths use the literal placeholders `PHONE_NUMBER_ID` / `WABA_ID`, and the server fills them in from `.env`. Never put real IDs in client code.
 - **There is no test suite.** Verify with `npm run build` (type-checks `src/` and `server/`) and `npm run lint`. Lint is clean; keep it that way. Context hooks are allowed by name in `.oxlintrc.json`; other shared helpers go in a `.ts` file, not next to a component.
 
+## Support platform (Home, Inbox, Tickets, Contacts, Broadcasts, Analytics)
+
+- **Server modules:** `inbox.ts` (chats, replies, thread control, canned responses, webhook, AI assist), `tickets.ts` (tickets, SLA, routing, CSAT, support settings, notifications, analytics), `contacts.ts` (contacts, fields, segments, CSV import), `broadcasts.ts` (templates, broadcasts, send worker). All workspace-scoped; sending needs `ownsMetaAssets()`.
+- **Model:** one conversation per customer phone; a ticket is one issue inside it (opens on handoff, take-over or a team reply).
+- **Sample data never reaches Meta:** rows with `sample: true` are stored but not sent. Tests send only to sample contacts.
+- **Shared pure logic** lives in `src/` and is imported by the server too: `src/app/inbox/sampleData.ts`, `src/app/broadcasts/templates.ts`. SLA business-hours maths is `server/businessHours.ts`.
+- **Tests:** `node --test server/*.test.ts src/app/contacts/csv.test.ts`.
+
 ## Rules for Meta wiring
 
 - **One place for Meta calls:** everything goes through `src/app/api/meta.ts`.
@@ -38,6 +46,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Deliberately not wired
 
 - **Native integrations:** there is no Meta API for them, so the tab stays a mock.
-- **Handoff bell and live inbound events:** they need webhooks, which need the app secret.
+- **Live inbound messages:** the webhook receiver exists (`POST /api/webhooks/whatsapp`, `server/inbox.ts`; optional `WEBHOOK_VERIFY_TOKEN`, `APP_SECRET`), but Meta still sends this number's webhooks to Helo.ai. Until they're routed here, the Inbox rebuilds each chat from Meta's conversation turns (the agent's replies; customer text shows as a placeholder), and Demo controls → Inbox → "Simulate customer message" drives the same processor.
 - **Budget and mTLS:** out of scope per PRD §4.
 - **Duplicate agent:** a copy needs a second phone number, and the setup has one.

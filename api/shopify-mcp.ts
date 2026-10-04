@@ -41,6 +41,13 @@ export async function POST(request: Request): Promise<Response> {
     body: JSON.stringify(msg),
     signal: AbortSignal.timeout(25_000),
   })
+  // A password-protected store (or one without UCP) answers with a web page; say so instead of passing HTML on.
+  if (!/json|event-stream/.test(upstream.headers.get('content-type') ?? ''))
+    return rpcError(
+      msg.id,
+      `${store} did not answer as a Shopify MCP server (HTTP ${upstream.status}). If the store shows a password page, remove the password under Online Store → Preferences.`,
+      502,
+    )
   if (msg.method !== 'tools/list' || !upstream.ok) return new Response(upstream.body, { status: upstream.status, headers: { 'content-type': upstream.headers.get('content-type') || 'application/json' } })
 
   // Tool list: keep the enabled tools and drop the `meta` argument the bridge fills in.

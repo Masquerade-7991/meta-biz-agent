@@ -11,17 +11,11 @@ import {
 import { Separator } from '@/app/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/app/components/ui/tooltip'
 import { NAV_ITEMS, type NavId } from '@/app/nav'
-import { cn } from '@/app/lib/utils'
+import { cn, initialsOf } from '@/app/lib/utils'
 import { useAuth } from '@/app/auth/AuthContext'
 import type { SettingsTab } from './SettingsPage'
 
-const initials = (name: string) =>
-  name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join('') || '?'
+const initials = (name: string) => initialsOf(name) || '?'
 
 export function AppSidebar({
   active,

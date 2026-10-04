@@ -4,9 +4,8 @@
 // which also backfills anything created before this existed. Secrets are blanked (stripSecrets).
 import { col, ws } from './db.ts'
 import { stripSecrets } from './store.ts'
+import { obj, type Obj } from './http.ts'
 
-type Obj = Record<string, unknown>
-const obj = (v: unknown): Obj => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : {})
 
 /** List resources: path pattern → collection; `id` / `parent` are capture-group numbers. */
 const LISTS: { re: RegExp; coll: string; id: number; parent?: number }[] = [

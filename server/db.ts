@@ -3,12 +3,20 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { MongoClient, type Collection, type Db, type Document, type IndexDescription } from 'mongodb'
 import { env } from './upstream.ts'
+import { HttpError } from './http.ts'
 
 // The workspace a piece of work belongs to: set per request from the session (index.ts), and per
 // workspace for background collectors. Records made before accounts existed use 'default'.
-const wsStore = new AsyncLocalStorage<string>()
-export const ws = () => wsStore.getStore() ?? 'default'
-export const withWorkspace = <T>(workspaceId: string, fn: () => T): T => wsStore.run(workspaceId, fn)
+const wsStore = new AsyncLocalStorage<{ id: string; metaAssets: boolean }>()
+export const ws = () => wsStore.getStore()?.id ?? 'default'
+/** Whether this workspace owns the WhatsApp assets in .env (one workspace does; see initDb). */
+export const ownsMetaAssets = () => wsStore.getStore()?.metaAssets ?? false
+/** The 403 every WhatsApp action gives a workspace that doesn't own the .env number. */
+export const NO_META_ASSETS = { title: 'No WhatsApp account connected', detail: 'No WhatsApp Business Account is connected to this workspace.' }
+export function needMetaAssets() {
+  if (!ownsMetaAssets()) throw new HttpError(403, NO_META_ASSETS.detail)
+}
+export const withWorkspace = <T>(workspaceId: string, fn: () => T, metaAssets = false): T => wsStore.run({ id: workspaceId, metaAssets }, fn)
 const DAY = 86400
 const D90 = 90 * DAY
 const Y2 = 730 * DAY
@@ -26,6 +34,29 @@ export const col = <T extends Document = Document>(name: string): Collection<T> 
 const TIME_SERIES = ['metrics_daily', 'handoff_snapshots']
 const INDEXES: Record<string, IndexDescription[]> = {
   agents: [{ key: { workspaceId: 1 } }],
+  // Inbox (inbox.ts): one conversation per customer; messages deduped by wamid or Meta turn id.
+  contacts: [{ key: { workspaceId: 1, phone: 1 }, unique: true }, { key: { workspaceId: 1, lastSeenAt: -1 } }, { key: { workspaceId: 1, tags: 1 } }],
+  contact_fields: [{ key: { workspaceId: 1 }, unique: true }],
+  segments: [{ key: { workspaceId: 1, name: 1 } }],
+  // Broadcasts (broadcasts.ts): the worker picks due ones; recipients are matched to webhook ticks by wamid.
+  broadcasts: [{ key: { status: 1, scheduledAt: 1 } }, { key: { workspaceId: 1, createdAt: -1 } }],
+  broadcast_recipients: [
+    { key: { workspaceId: 1, broadcastId: 1, status: 1 } },
+    { key: { workspaceId: 1, waMessageId: 1 }, partialFilterExpression: { waMessageId: { $type: 'string' } } },
+    { key: { workspaceId: 1, phone: 1, sentAt: -1 } },
+  ],
+  conversations: [{ key: { workspaceId: 1, phone: 1 }, unique: true }, { key: { workspaceId: 1, lastMessageAt: -1 } }],
+  messages: [
+    { key: { workspaceId: 1, phone: 1, at: 1 } },
+    { key: { workspaceId: 1, waMessageId: 1 }, unique: true, partialFilterExpression: { waMessageId: { $type: 'string' } } },
+    { key: { workspaceId: 1, turnId: 1 }, unique: true, partialFilterExpression: { turnId: { $type: 'string' } } },
+  ],
+  canned_responses: [{ key: { workspaceId: 1, shortcut: 1 }, unique: true }],
+  presence: [{ key: { workspaceId: 1, phone: 1, userId: 1 }, unique: true }, { key: { at: 1 }, expireAfterSeconds: 60 }],
+  // Tickets (tickets.ts): numbered per workspace; one open ticket per chat at a time.
+  tickets: [{ key: { workspaceId: 1, number: 1 }, unique: true }, { key: { workspaceId: 1, status: 1, createdAt: -1 } }, { key: { workspaceId: 1, phone: 1, status: 1 } }],
+  support_settings: [{ key: { workspaceId: 1 }, unique: true }],
+  whatsapp_webhooks: [{ key: { at: 1 }, expireAfterSeconds: 30 * DAY }], // raw payloads, for replay and debugging
   agent_drafts: [{ key: { workspaceId: 1, phoneNumberId: 1 }, unique: true }],
   test_conversations: [
     { key: { conversationId: 1 }, unique: true },
@@ -124,6 +155,11 @@ export async function initDb(): Promise<boolean> {
     await client.connect()
     const d = client.db(env('MONGODB_DB') || 'meta_agent')
     await ensureSchema(d)
+    // The .env WhatsApp assets belong to the first workspace created (it also adopted the pre-accounts data).
+    if (!(await d.collection('workspaces').findOne({ metaAssets: true }))) {
+      const [first] = await d.collection('workspaces').find().sort({ createdAt: 1 }).limit(1).toArray()
+      if (first) await d.collection('workspaces').updateOne({ _id: first._id }, { $set: { metaAssets: true } })
+    }
     db = d
     console.log('MongoDB connected, collections ready')
     return true

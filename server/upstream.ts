@@ -1,5 +1,6 @@
 // The one way to reach Meta (via Helo.ai's server): used by the relay and the collectors, so
 // headers, placeholders and timeouts stay the same for both.
+import { HttpError, obj, str, type Obj } from './http.ts'
 try {
   process.loadEnvFile?.('.env')
 } catch {
@@ -99,6 +100,20 @@ export async function callUpstream(
     throw err
   }
 }
+/**
+ * Calls Meta on behalf of a route and returns the parsed JSON. A refusal throws an HttpError with
+ * Meta's own words: 400 stays 400, anything else becomes 502 (or `failStatus` when given).
+ */
+export async function metaJson(kind: Kind, method: string, path: string, body?: Obj, failStatus?: number): Promise<Obj> {
+  const r = await callUpstream(kind, method, resolveIds(path), body && Buffer.from(JSON.stringify(body)), body && 'application/json')
+  const json = obj(parseJson(r.text))
+  if (r.status >= 300) {
+    const e = obj(json.error)
+    throw new HttpError(failStatus ?? (r.status === 400 ? 400 : 502), str(e.error_user_msg) ?? str(e.message) ?? `${kind === 'graph' ? 'WhatsApp' : 'Meta'} answered ${r.status}.`)
+  }
+  return json
+}
+
 export async function metaGet<T = Record<string, unknown>>(path: string): Promise<T> {
   const r = await callUpstream('meta', 'GET', path, undefined, undefined, 'collector').catch((err: unknown) => Promise.reject(Object.assign(new Error(String(err)), { down: true })))
   if (r.status < 200 || r.status >= 300) throw Object.assign(new Error(`HTTP ${r.status} for ${path}`), { status: r.status })

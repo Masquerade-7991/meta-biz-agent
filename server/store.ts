@@ -1,43 +1,16 @@
 // /api/store/* and /api/analytics/* routes, served from MongoDB.
 import type http from 'node:http'
+import { HttpError, readJson, serveJson, type Obj, type Titles } from './http.ts'
 import { mirrorDraft } from './mirror.ts'
-import { col, db, dbOffReason, ws } from './db.ts'
+import { col, db, dbOffReason, needMetaAssets, ws } from './db.ts'
 import { addDays, dayIn, ensureDays } from './collectors.ts'
 import { metaGet, ids } from './upstream.ts'
 
-type Obj = Record<string, unknown>
-export class HttpError extends Error {
-  status: number
-  constructor(status: number, message: string) {
-    super(message)
-    this.status = status
-  }
-}
-const TITLES: Record<number, string> = { 400: 'Bad request', 404: 'Not found', 413: 'Payload too large', 502: 'Upstream unreachable' }
-const MAX_BODY = 1024 * 1024
-
-export function send(res: http.ServerResponse, status: number, data: unknown) {
-  res.writeHead(status, { 'content-type': 'application/json' })
-  res.end(JSON.stringify(data))
-}
-
-export async function readJson(req: http.IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = []
-  let size = 0
-  for await (const c of req) {
-    size += (c as Buffer).length
-    if (size > MAX_BODY) throw new HttpError(413, 'Body over 1 MB.')
-    chunks.push(c as Buffer)
-  }
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString() || 'null')
-  } catch {
-    throw new HttpError(400, 'Body is not valid JSON.')
-  }
-}
+const TITLES: Titles = { 400: 'Bad request', 403: 'No WhatsApp account connected', 404: 'Not found', 413: 'Payload too large', 502: 'Upstream unreachable' }
 
 /** Digits, or the PHONE_NUMBER_ID placeholder (filled from .env). */
 function phoneParam(v: string | null | undefined): string {
+  needMetaAssets()
   const p = v === 'PHONE_NUMBER_ID' ? ids.PHONE_NUMBER_ID : (v ?? '')
   if (!/^\d{1,20}$/.test(p)) throw new HttpError(400, 'phone must be digits.')
   return p
@@ -157,7 +130,7 @@ async function route(req: http.IncomingMessage, u: URL): Promise<unknown> {
   if ((seg = path.match(/^\/api\/store\/agents\/([^/]+)$/))) {
     const phone = phoneParam(seg[1])
     if (m === 'GET') {
-      const a = await col('agents').findOne({ _id: phone as never, deletedAt: { $exists: false } })
+      const a = await col('agents').findOne({ _id: phone as never, workspaceId: ws(), deletedAt: { $exists: false } })
       if (!a) throw new HttpError(404, `No stored agent for ${phone}.`)
       return agentOut(a)
     }
@@ -197,7 +170,7 @@ async function route(req: http.IncomingMessage, u: URL): Promise<unknown> {
     }
     if (path === '/api/store/audit') {
       const rows = await col('audit_log')
-        .find({ phoneNumberId: phoneParam(p('phone')) }, { projection: { _id: 0, workspaceId: 0 } })
+        .find({ workspaceId: ws(), phoneNumberId: phoneParam(p('phone')) }, { projection: { _id: 0, workspaceId: 0 } })
         .sort({ at: -1 })
         .limit(intParam(p('limit'), 100, 1, 500))
         .toArray()
@@ -206,7 +179,7 @@ async function route(req: http.IncomingMessage, u: URL): Promise<unknown> {
     if (path === '/api/store/eval-runs') {
       const rows = await col('eval_runs')
         .aggregate([
-          { $match: { phoneNumberId: phoneParam(p('phone')), status: { $in: ['COMPLETED', 'FAILED'] }, caseId: { $ne: null } } },
+          { $match: { workspaceId: ws(), phoneNumberId: phoneParam(p('phone')), status: { $in: ['COMPLETED', 'FAILED'] }, caseId: { $ne: null } } },
           { $sort: { completedAt: -1 } },
           { $group: { _id: '$caseId', run: { $first: '$$ROOT' } } },
           { $replaceRoot: { newRoot: '$run' } },
@@ -229,7 +202,7 @@ async function route(req: http.IncomingMessage, u: URL): Promise<unknown> {
     }
     if (path === '/api/store/agent-events') {
       const rows = await col('agent_events')
-        .find({ phoneNumberId: phoneParam(p('phone')) }, { projection: { _id: 0, workspaceId: 0, phoneNumberId: 0 } })
+        .find({ workspaceId: ws(), phoneNumberId: phoneParam(p('phone')) }, { projection: { _id: 0, workspaceId: 0, phoneNumberId: 0 } })
         .sort({ createdAt: -1 })
         .limit(200)
         .toArray()
@@ -256,18 +229,15 @@ async function route(req: http.IncomingMessage, u: URL): Promise<unknown> {
 export async function handleStore(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {
   const u = new URL(req.url ?? '/', 'http://x')
   if (!u.pathname.startsWith('/api/store/') && !u.pathname.startsWith('/api/analytics/')) return false
-  if (!db) {
-    send(res, 503, { title: dbOffReason, detail: 'Set MONGODB_URI in .env and restart the server to enable storage.', status: 503 })
-    return true
-  }
-  try {
-    send(res, 200, await route(req, u))
-  } catch (err) {
-    if (err instanceof HttpError) send(res, err.status, { title: TITLES[err.status] ?? 'Error', detail: err.message, status: err.status })
-    else {
-      console.log(`${req.method} ${u.pathname} → 503 (${err instanceof Error ? err.message : err})`)
-      send(res, 503, { title: 'Database unavailable', detail: err instanceof Error ? err.message : String(err), status: 503 })
-    }
-  }
-  return true
+  return serveJson(
+    req,
+    res,
+    {
+      titles: TITLES,
+      db,
+      noDb: { title: dbOffReason, detail: 'Set MONGODB_URI in .env and restart the server to enable storage.' },
+      unexpected: (err) => ({ status: 503, title: 'Database unavailable', detail: err instanceof Error ? err.message : String(err) }),
+    },
+    () => route(req, u),
+  )
 }

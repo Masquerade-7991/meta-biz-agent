@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
@@ -9,12 +9,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/ta
 import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
 import { useAuth } from '@/app/auth/AuthContext'
 import { Field, FormError } from '@/app/auth/AuthLayout'
-import { authApi, message, type Invite, type Member, type Role } from '@/app/auth/api'
+import { CannedResponsesSettings } from './CannedResponsesSettings'
+import { SupportSettingsTab } from './SupportSettings'
+import { ContactFieldsSettings } from './ContactFieldsSettings'
+import { authApi, type Invite, type Member, type Role } from '@/app/auth/api'
+import { errorDetail } from '@/app/api/meta'
+import { SECTION_TITLE } from '@/app/lib/text'
+import { SettingsSection } from './SettingsSection'
 
-export type SettingsTab = 'profile' | 'members'
+export type SettingsTab = 'profile' | 'members' | 'canned' | 'support' | 'fields'
 
-// Section titles sit well below the page's h1, at body-heading size.
-const SECTION_TITLE = { fontSize: '1.25rem', fontWeight: 'var(--font-weight-semi-bold)', lineHeight: 1.3 } as const
 
 const days = (from: string, to = Date.now()) => Math.round((to - Date.parse(from)) / 86_400_000)
 const ago = (iso: string) => {
@@ -22,22 +26,6 @@ const ago = (iso: string) => {
   return d <= 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`
 }
 
-/** A titled settings section with its own form. */
-function Section({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
-  return (
-    <section className="grid gap-4 border-b border-border py-8 first:pt-2 last:border-0 md:grid-cols-[minmax(0,16rem)_minmax(0,28rem)] md:gap-10">
-      <div className="space-y-1">
-        <h2 style={SECTION_TITLE}>{title}</h2>
-        {description && (
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)', lineHeight: 1.5 }}>
-            {description}
-          </p>
-        )}
-      </div>
-      <div>{children}</div>
-    </section>
-  )
-}
 
 /** Shared busy/error handling for one settings form. */
 function useAction() {
@@ -49,7 +37,7 @@ function useAction() {
     try {
       await fn()
     } catch (err) {
-      setError(message(err))
+      setError(errorDetail(err))
     } finally {
       setBusy(false)
     }
@@ -104,7 +92,7 @@ function Profile() {
 
   return (
     <div>
-      <Section title="Your name" description="Shown to people in your workspace and in invite emails.">
+      <SettingsSection title="Your name" description="Shown to people in your workspace and in invite emails.">
         <form onSubmit={saveName} className="space-y-4">
           <Field label="Full name" autoComplete="name" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
           {nameAction.error && <FormError>{nameAction.error}</FormError>}
@@ -113,9 +101,9 @@ function Profile() {
             Save name
           </Button>
         </form>
-      </Section>
+      </SettingsSection>
 
-      <Section title="Email" description={`You log in with ${me?.user.email}. To change it, we send a confirmation link to the new address.`}>
+      <SettingsSection title="Email" description={`You log in with ${me?.user.email}. To change it, we send a confirmation link to the new address.`}>
         <form onSubmit={sendEmailLink} className="space-y-4">
           <Field label="New email" type="email" autoComplete="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
           <Field label="Current password" type="password" autoComplete="current-password" value={emailPassword} onChange={(e) => setEmailPassword(e.target.value)} />
@@ -125,9 +113,9 @@ function Profile() {
             Send confirmation link
           </Button>
         </form>
-      </Section>
+      </SettingsSection>
 
-      <Section title="Password" description="Changing it logs you out on every other device.">
+      <SettingsSection title="Password" description="Changing it logs you out on every other device.">
         <form onSubmit={changePassword} className="space-y-4">
           <Field label="Current password" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
           <Field label="New password" type="password" autoComplete="new-password" hint="At least 8 characters." value={next} onChange={(e) => setNext(e.target.value)} />
@@ -138,7 +126,7 @@ function Profile() {
             Change password
           </Button>
         </form>
-      </Section>
+      </SettingsSection>
     </div>
   )
 }
@@ -159,7 +147,7 @@ function Members() {
         setData(d)
         setLoadError(null)
       },
-      (err) => setLoadError(message(err)),
+      (err) => setLoadError(errorDetail(err)),
     )
   }, [])
   useEffect(load, [load])
@@ -178,7 +166,7 @@ function Members() {
       await fn()
       toast.success(done)
     } catch (err) {
-      toast.error(message(err))
+      toast.error(errorDetail(err))
     }
     load()
   }
@@ -186,7 +174,7 @@ function Members() {
   return (
     <div>
       {owner && (
-        <Section title="Invite people" description="They get an email with a link to set up their account and join as a member. Invites expire after 7 days.">
+        <SettingsSection title="Invite people" description="They get an email with a link to set up their account and join as a member. Invites expire after 7 days.">
           <form onSubmit={sendInvite} className="space-y-4">
             <Field label="Email" type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} />
             {inviteAction.error && <FormError>{inviteAction.error}</FormError>}
@@ -195,7 +183,7 @@ function Members() {
               Send invite
             </Button>
           </form>
-        </Section>
+        </SettingsSection>
       )}
 
       <section className="space-y-3 py-8">
@@ -341,15 +329,27 @@ export function SettingsPage({ tab, onTabChange }: { tab: SettingsTab; onTabChan
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
       <h1 className="mb-6">Settings</h1>
       <Tabs value={tab} onValueChange={(v) => onTabChange(v as SettingsTab)}>
-        <TabsList>
+        <TabsList className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
+          <TabsTrigger value="canned">Canned responses</TabsTrigger>
+          <TabsTrigger value="support">Support rules</TabsTrigger>
+          <TabsTrigger value="fields">Contact fields</TabsTrigger>
         </TabsList>
         <TabsContent value="profile" className="pt-2">
           <Profile />
         </TabsContent>
         <TabsContent value="members" className="pt-2">
           <Members />
+        </TabsContent>
+        <TabsContent value="canned" className="pt-2">
+          <CannedResponsesSettings />
+        </TabsContent>
+        <TabsContent value="support" className="pt-2">
+          <SupportSettingsTab />
+        </TabsContent>
+        <TabsContent value="fields" className="pt-2">
+          <ContactFieldsSettings />
         </TabsContent>
       </Tabs>
     </div>

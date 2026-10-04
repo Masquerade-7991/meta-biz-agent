@@ -4,35 +4,44 @@
 import { readFileSync } from 'node:fs'
 import nodemailer from 'nodemailer'
 import { env } from './upstream.ts'
+import { HttpError } from './http.ts'
 
 const user = env('SMTP_USER') || 'soumik.choudhury@helo.ai'
 const pass = env('SMTP_PASS').replace(/\s+/g, '')
 export const appUrl = (env('APP_URL') || 'http://localhost:5175').replace(/\/+$/, '')
 const transport = pass ? nodemailer.createTransport({ host: 'smtp.gmail.com', port: 465, secure: true, auth: { user, pass } }) : null
-// Gmail and Outlook don't show SVG images, so emails carry a PNG of the official logo, inline.
+// Gmail and Outlook don't show SVG images, so emails carry PNGs of the official logo and partner badge, inline.
 const logo = readFileSync(new URL('./assets/helo-logo.png', import.meta.url))
+const badge = readFileSync(new URL('./assets/meta-partner.png', import.meta.url))
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+// Helo.ai brand (helo.ai site and logo): red buttons, ink text, blush accents on a light grey page.
+const RED = '#ED1C24'
+const TAGLINE = 'Helo.ai · Conversations personalised for billions with AI'
 
-/** One layout for every email: logo, heading, body, optional button, small print. */
+/** One layout for every email: red brand band, logo, heading, body, optional button, note, partner footer. */
 function layout(o: { heading: string; lines: string[]; button?: { label: string; url: string }; note?: string }) {
   const button = o.button
-    ? `<p style="margin:28px 0"><a href="${esc(o.button.url)}" style="background:#3186DF;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;display:inline-block">${esc(o.button.label)}</a></p>
+    ? `<p style="margin:28px 0"><a href="${esc(o.button.url)}" style="background:${RED};color:#fff;text-decoration:none;padding:14px 28px;border-radius:999px;font-weight:600;display:inline-block">${esc(o.button.label)}</a></p>
        <p style="color:#676E73;font-size:13px;margin:0 0 4px">Or paste this link into your browser:</p>
-       <p style="font-size:13px;word-break:break-all;margin:0"><a href="${esc(o.button.url)}" style="color:#3186DF">${esc(o.button.url)}</a></p>`
+       <p style="font-size:13px;word-break:break-all;margin:0"><a href="${esc(o.button.url)}" style="color:${RED}">${esc(o.button.url)}</a></p>`
     : ''
-  const html = `<!doctype html><html><body style="margin:0;background:#F2F3F3;font-family:Inter,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:#14181B">
+  const html = `<!doctype html><html><body style="margin:0;background:#F7F7F8;font-family:Inter,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:#14181B">
   <div style="max-width:520px;margin:0 auto;padding:32px 16px">
-    <div style="background:#fff;border:1px solid #CED1D3;border-radius:8px;padding:32px">
+    <div style="background:#fff;border:1px solid #ECE7E6;border-top:4px solid ${RED};border-radius:12px;padding:32px">
       <img src="cid:helo-logo" alt="Helo.ai" width="120" height="60" style="display:block;margin-bottom:24px">
-      <h1 style="font-size:20px;margin:0 0 16px">${esc(o.heading)}</h1>
+      <h1 style="font-size:22px;font-weight:700;letter-spacing:-0.01em;margin:0 0 16px">${esc(o.heading)}</h1>
       ${o.lines.map((l) => `<p style="font-size:15px;line-height:22px;margin:0 0 12px">${esc(l)}</p>`).join('')}
       ${button}
-      ${o.note ? `<p style="color:#676E73;font-size:13px;margin:24px 0 0">${esc(o.note)}</p>` : ''}
+      ${o.note ? `<p style="background:#FDF3F1;color:#676E73;font-size:13px;line-height:19px;border-radius:8px;padding:12px 14px;margin:24px 0 0">${esc(o.note)}</p>` : ''}
     </div>
-    <p style="color:#676E73;font-size:12px;text-align:center;margin:16px 0 0">Helo.ai · Meta Business Agent console</p>
+    <div style="text-align:center;margin:24px 0 0">
+      <img src="cid:meta-partner" alt="Meta Partner" width="145" height="32" style="display:inline-block">
+      <p style="color:#676E73;font-size:12px;margin:12px 0 4px">${TAGLINE}</p>
+      <a href="https://www.helo.ai" style="color:#676E73;font-size:12px">www.helo.ai</a>
+    </div>
   </div></body></html>`
-  const text = [o.heading, '', ...o.lines, ...(o.button ? ['', `${o.button.label}: ${o.button.url}`] : []), ...(o.note ? ['', o.note] : [])].join('\n')
+  const text = [o.heading, '', ...o.lines, ...(o.button ? ['', `${o.button.label}: ${o.button.url}`] : []), ...(o.note ? ['', o.note] : []), '', '—', TAGLINE, 'https://www.helo.ai'].join('\n')
   return { html, text }
 }
 
@@ -42,14 +51,29 @@ async function send(to: string, subject: string, body: Parameters<typeof layout>
     console.log(`\n[mail → ${to}] ${subject}\n${text}\n`)
     return
   }
-  await transport.sendMail({
-    from: `"Helo.ai" <${user}>`,
-    to,
-    subject,
-    text,
-    html,
-    attachments: [{ filename: 'helo-logo.png', content: logo, cid: 'helo-logo' }],
-  })
+  try {
+    await transport.sendMail({
+      from: `"Helo.ai" <${user}>`,
+      to,
+      subject,
+      text,
+      html,
+      attachments: [
+        { filename: 'helo-logo.png', content: logo, cid: 'helo-logo' },
+        { filename: 'meta-partner.png', content: badge, cid: 'meta-partner' },
+      ],
+    })
+  } catch (err) {
+    // Say why in the app: a policy refusal (550 5.7.1, e.g. the Google Workspace blocks outside addresses) won't pass on a retry.
+    console.log(`[mail → ${to}] failed: ${err instanceof Error ? err.message : err}`)
+    const refused = (err as { responseCode?: number }).responseCode === 550
+    throw new HttpError(
+      502,
+      refused
+        ? `Gmail refused to deliver the email to ${to}. The sending Google Workspace account isn’t allowed to email this address; ask its admin to allow it.`
+        : 'The email couldn’t be sent. Check the address and try again.',
+    )
+  }
 }
 
 const link = (token: string) => `${appUrl}/auth/verify?token=${encodeURIComponent(token)}`

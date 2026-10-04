@@ -38,6 +38,12 @@ export class MetaError extends Error {
 }
 
 export const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err))
+/** Errors read "Title: detail"; screens show only the detail. */
+export const errorDetail = (err: unknown) => {
+  const m = errorText(err)
+  const i = m.indexOf(': ')
+  return i > 0 ? m.slice(i + 2) : m
+}
 
 /** Fired when the server says the session has ended; AuthContext shows the login screen. */
 export const UNAUTHORIZED_EVENT = 'helo:unauthorized'
@@ -125,10 +131,11 @@ export interface ServerHealth {
   ok: boolean
   upstream: string
   hasToken: boolean
-  businessName: string
-  wabaId: string
+  // Only for members of the workspace that owns the WhatsApp assets.
+  businessName?: string
+  wabaId?: string
   wabaName?: string
-  phoneNumberId: string
+  phoneNumberId?: string
   phoneNumber?: string
   phoneName?: string
 }
@@ -154,8 +161,14 @@ export interface MetaWaba {
  *  the business, and listing those would check every client number for an agent.
  *  ponytail: one WABA; list `/BUSINESS_ID/owned_whatsapp_business_accounts` again when the console serves several. */
 export async function listWabas(): Promise<MetaWaba[]> {
-  const w = await graphFetch<MetaWaba>('/WABA_ID?fields=id,name')
-  return [{ id: w.id, name: w.name }]
+  try {
+    const w = await graphFetch<MetaWaba>('/WABA_ID?fields=id,name')
+    return [{ id: w.id, name: w.name }]
+  } catch (err) {
+    // The .env WhatsApp assets belong to one workspace; every other workspace has none.
+    if (err instanceof MetaError && err.status === 403 && err.message.startsWith('No WhatsApp account connected')) return []
+    throw err
+  }
 }
 
 export interface MetaPhoneNumber {
@@ -383,6 +396,7 @@ export const websiteFields = (w: MetaWebsite): Partial<WebsiteSource> => ({
   crawlError: w.crawl_error || undefined,
   lastCrawledAt: toMs(w.last_crawled_at),
   updatedAt: toMs(w.last_crawled_at) ?? Date.now(),
+  stalled: false,
 })
 export const isCrawlDone = (s: WebsiteStatus) => s === 'done' || s === 'done_no_data' || s === 'failed'
 
@@ -391,11 +405,12 @@ export const addWebsite = (url: string) => metaFetch<MetaWebsite>(`${agent()}/ag
 export const updateWebsite = (id: string, url: string) => metaFetch<MetaWebsite>(`${agent()}/agent_config/websites/${id}`, 'PUT', { url })
 export const deleteWebsite = (id: string) => metaFetch(`${agent()}/agent_config/websites/${id}`, 'DELETE')
 
-/** Polls one website until its crawl finishes, reporting every change. Gives up quietly after
- *  ~30 min (the row keeps its last known status; a page reload re-polls via hydrate). */
-export async function pollWebsite(id: string, onUpdate: (fields: Partial<WebsiteSource>) => void, intervalMs = 5000) {
-  for (let i = 0; i < 360; i++) {
-    await sleep(intervalMs)
+/** Polls one website until its crawl finishes, reporting every change. Waits 5 s, then doubles up to
+ *  60 s, so a long crawl costs ~70 checks over ~1 hour instead of eating Meta's 1000/hour website
+ *  budget. Then it gives up and marks the row stalled (a page reload re-polls via hydrate). */
+export async function pollWebsite(id: string, onUpdate: (fields: Partial<WebsiteSource>) => void) {
+  for (let i = 0, wait = 5000; i < 70; i++, wait = Math.min(wait * 2, 60000)) {
+    await sleep(wait)
     let w: MetaWebsite
     try {
       w = await metaFetch<MetaWebsite>(`${agent()}/agent_config/websites/${id}`)
@@ -407,6 +422,7 @@ export async function pollWebsite(id: string, onUpdate: (fields: Partial<Website
     onUpdate(fields)
     if (isCrawlDone(fields.status!)) return
   }
+  onUpdate({ stalled: true })
 }
 
 /** One poll per website across the whole app, patched straight into the knowledge slice, so

@@ -397,6 +397,10 @@ export function CreateAgentModal({
                 <Loader2 className="size-4 animate-spin" />
                 Loading your accounts&hellip;
               </div>
+            ) : wabas.length === 0 ? (
+              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                No WhatsApp Business Account is connected to this workspace.
+              </p>
             ) : wabas.length === 1 ? (
               <div className="rounded-md border border-border px-3 py-2" style={{ fontSize: 'var(--text-sm)' }}>
                 <TwoLineOption primary={wabas[0].name} secondary={wabas[0].id} />

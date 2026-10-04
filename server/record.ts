@@ -4,11 +4,9 @@ import { createHash } from 'node:crypto'
 import { col, db, ws } from './db.ts'
 import { isConfigCollection, mirror, mirrorCollection } from './mirror.ts'
 import { stripSecrets } from './store.ts'
+import { obj, str } from './http.ts'
 import { parseJson, type CallLog, type Kind } from './upstream.ts'
 
-type Obj = Record<string, unknown>
-const obj = (v: unknown): Obj => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : {})
-const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
 
 /** Meta timestamps come as seconds or ms. */
 export const toDate = (t: unknown) => (typeof t === 'number' && t > 0 ? new Date(t < 1e12 ? t * 1000 : t) : new Date())

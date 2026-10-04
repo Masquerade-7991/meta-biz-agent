@@ -12,7 +12,7 @@ import { ObjectId } from 'mongodb'
 import { allow } from './cache.ts'
 import { col, db, dbOffReason } from './db.ts'
 import { appUrl, mail } from './mail.ts'
-import { HttpError, readJson, send } from './store.ts'
+import { HttpError, readJson, serveJson, type Titles } from './http.ts'
 
 type Obj = Record<string, unknown>
 type Role = 'owner' | 'member'
@@ -39,6 +39,8 @@ interface Workspace {
   name: string
   ownerId: string
   createdAt: Date
+  /** Owns the WhatsApp assets in .env; only members of this workspace reach them. */
+  metaAssets?: boolean
 }
 interface Membership {
   workspaceId: string
@@ -164,6 +166,16 @@ async function createLink(l: Omit<MagicLink, 'tokenHash' | 'expiresAt' | 'create
   await links().insertOne({ ...l, tokenHash: sha256(token), createdAt: now, expiresAt: new Date(now.getTime() + LINK_TTL[l.purpose]) })
   return token
 }
+/** Creates a link and emails it; if the email fails the link is withdrawn, so no unsent invite lingers as pending. */
+async function mailLink(l: Parameters<typeof createLink>[0], deliver: (token: string) => Promise<void>) {
+  const token = await createLink(l)
+  try {
+    await deliver(token)
+  } catch (err) {
+    await links().updateOne({ tokenHash: sha256(token) }, { $set: { revokedAt: new Date() } })
+    throw err
+  }
+}
 const live = () => ({ usedAt: { $exists: false }, revokedAt: { $exists: false }, expiresAt: { $gt: new Date() } })
 async function findLink(token: unknown) {
   const l = typeof token === 'string' && token ? await links().findOne({ tokenHash: sha256(token), ...live() }) : null
@@ -180,7 +192,7 @@ async function consumeLink(l: MagicLink) {
 /** Creates a workspace owned by the user. The first workspace ever adopts the records made before accounts existed. */
 async function createWorkspace(userId: string, name: string) {
   const first = (await workspaces().countDocuments()) === 0
-  const w: Workspace = { _id: randomUUID(), name, ownerId: userId, createdAt: new Date() }
+  const w: Workspace = { _id: randomUUID(), name, ownerId: userId, createdAt: new Date(), ...(first && { metaAssets: true }) }
   await workspaces().insertOne(w)
   await memberships().insertOne({ workspaceId: w._id, userId, role: 'owner', createdAt: new Date() })
   if (first) await adoptDefaultRecords(w._id)
@@ -238,7 +250,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     const existing = await users().findOne({ email: e })
     // An account that never finished setup can sign up again (e.g. the setup tab was closed).
     if (existing?.passwordHash) throw new HttpError(409, 'You already have an account. Log in instead.')
-    await mail.signup(e, await createLink({ email: e, purpose: 'signup' }))
+    await mailLink({ email: e, purpose: 'signup' }, (t) => mail.signup(e, t))
     return { ok: true }
   }
   // POST, not GET: email scanners that pre-open links don't use them up.
@@ -274,7 +286,8 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     limit(`send|${e}`, 5, 'Too many emails sent to this address. Try again in an hour.')
     limit(`send-ip|${ip}`, 20, 'Too many requests. Try again in an hour.')
     // Same answer either way, so this can't be used to find out who has an account.
-    if (await users().findOne({ email: e })) await mail.reset(e, await createLink({ email: e, purpose: 'reset' }))
+    // Failures are only logged: this route must answer the same whether or not the account exists.
+    if (await users().findOne({ email: e })) await mailLink({ email: e, purpose: 'reset' }, (t) => mail.reset(e, t)).catch(() => {})
     return { ok: true }
   }
 
@@ -302,7 +315,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     const e = email(body.newEmail)
     if (e === x.user.email) throw new HttpError(400, 'That’s already your email.')
     if (await users().findOne({ email: e })) throw new HttpError(409, 'Another account already uses that email.')
-    await mail.emailChange(e, await createLink({ email: e, purpose: 'email_change', userId: x.user._id }))
+    await mailLink({ email: e, purpose: 'email_change', userId: x.user._id }, (t) => mail.emailChange(e, t))
     return { ok: true }
   }
 
@@ -337,7 +350,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     if (existing && (await memberships().findOne({ userId: existing._id }))) throw new HttpError(409, 'This person is already in a workspace.')
     if (await links().findOne({ email: e, workspaceId: x.workspace._id, purpose: 'invite', ...live() }))
       throw new HttpError(409, 'This person is already invited. Resend the invite from the list.')
-    await mail.invite(e, await createLink({ email: e, purpose: 'invite', workspaceId: x.workspace._id, invitedBy: x.user._id }), x.user.name, x.workspace.name)
+    await mailLink({ email: e, purpose: 'invite', workspaceId: x.workspace._id, invitedBy: x.user._id }, (t) => mail.invite(e, t, x.user.name, x.workspace.name))
     return { ok: true }
   }
   if ((seg = path.match(/^\/api\/workspace\/invites\/([a-f0-9]{24})(\/resend)?$/))) {
@@ -350,8 +363,8 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     }
     if (m === 'POST' && seg[2]) {
       limit(`send|${inv.email}`, 5, 'Too many emails sent to this address. Try again in an hour.')
-      await links().updateOne({ tokenHash: inv.tokenHash }, { $set: { revokedAt: new Date() } }) // the old link stops working
-      await mail.invite(inv.email, await createLink({ email: inv.email, purpose: 'invite', workspaceId: x.workspace._id, invitedBy: x.user._id }), x.user.name, x.workspace.name)
+      await mailLink({ email: inv.email, purpose: 'invite', workspaceId: x.workspace._id, invitedBy: x.user._id }, (t) => mail.invite(inv.email, t, x.user.name, x.workspace.name))
+      await links().updateOne({ tokenHash: inv.tokenHash }, { $set: { revokedAt: new Date() } }) // sent: the old link stops working
       return { ok: true }
     }
   }
@@ -469,8 +482,9 @@ async function finishSetup(x: Session, body: Obj) {
   return me(after)
 }
 
-const TITLES: Record<number, string> = {
+const TITLES: Titles = {
   400: 'Check your details',
+  502: 'Email not sent',
   401: 'Not logged in',
   403: 'Not allowed',
   404: 'Not found',
@@ -484,18 +498,5 @@ const TITLES: Record<number, string> = {
 export async function handleAuth(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {
   const u = new URL(req.url ?? '/', 'http://x')
   if (!/^\/api\/(auth|account|workspace)(\/|$)/.test(u.pathname)) return false
-  if (!db) {
-    send(res, 503, { title: dbOffReason, detail: 'Accounts need the database. Set MONGODB_URI in .env and restart the server.', status: 503 })
-    return true
-  }
-  try {
-    send(res, 200, await route(req, res, u))
-  } catch (err) {
-    if (err instanceof HttpError) send(res, err.status, { title: TITLES[err.status] ?? 'Error', detail: err.message, status: err.status })
-    else {
-      console.log(`${req.method} ${u.pathname} → 500 (${err instanceof Error ? err.message : err})`)
-      send(res, 500, { title: 'Something went wrong', detail: 'Please try again.', status: 500 })
-    }
-  }
-  return true
+  return serveJson(req, res, { titles: TITLES, db, noDb: { title: dbOffReason, detail: 'Accounts need the database. Set MONGODB_URI in .env and restart the server.' } }, () => route(req, res, u))
 }

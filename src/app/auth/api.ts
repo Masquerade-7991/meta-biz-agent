@@ -64,10 +64,3 @@ export const authApi = {
   setRole: (userId: string, role: Role) => call<{ ok: true }>('PUT', `/api/workspace/members/${userId}`, { role }),
   removeMember: (userId: string) => call<{ ok: true }>('DELETE', `/api/workspace/members/${userId}`),
 }
-
-/** MetaError messages read "Title: detail"; screens show only the detail. */
-export const message = (err: unknown) => {
-  const m = err instanceof Error ? err.message : String(err)
-  const i = m.indexOf(': ')
-  return i > 0 ? m.slice(i + 2) : m
-}

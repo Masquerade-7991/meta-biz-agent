@@ -50,7 +50,7 @@ If the request is ambiguous ("look at the code"), run the hygiene check (§B) an
 npm run build                    # tsc -b (src + server) + vite build
 npm run lint                     # oxlint, must be 0 warnings
 npm run lint:tw                  # Tailwind canonical classes / conflicts (scripts/check-tailwind.mjs), exit 0
-node --test server/record.test.ts
+node --test server/*.test.ts src/app/contacts/csv.test.ts
 ```
 
 Extra checks by area:
@@ -66,6 +66,8 @@ browser (React, src/)
   ├─ src/app/api/meta.ts       every Meta call (metaFetch / graphFetch / parse); 401 → helo:unauthorized
   ├─ src/app/api/store.ts      /api/store/* and /api/analytics/* (MongoDB-backed)
   ├─ src/app/api/dummy*.ts     dummy mode: answers everything in the browser, no server
+  ├─ src/app/api/{inbox,tickets,contacts,broadcasts}.ts  support platform clients (+ supportDummy.ts)
+  ├─ src/app/pages/*           Home, Inbox, Tickets, Contacts, Broadcasts, Analytics pages
   └─ src/app/auth/*            AuthContext (me), login / sign-up / verify / in-app setup screens
         │  /api/*  (Vite proxies to :8787)
 server/ (node:http, Node runs TS natively)
@@ -78,6 +80,10 @@ server/ (node:http, Node runs TS natively)
   ├─ record.ts     write-through recording of relayed traffic (audit_log, test_conversations, …)
   ├─ mirror.ts     per-kind copies of the agent config on Meta (faqs, skills, …), soft-deleted
   ├─ store.ts      /api/store/* and /api/analytics/* handlers; HttpError / send / readJson helpers
+  ├─ inbox.ts      chats, messages, replies, thread control, canned, webhook receiver, AI assist
+  ├─ tickets.ts    tickets, SLA (businessHours.ts), routing, CSAT, support settings, bell, analytics
+  ├─ contacts.ts   contacts, custom fields, segments (segmentQuery), CSV import
+  ├─ broadcasts.ts WhatsApp templates, broadcasts, send worker (every 3 s)
   ├─ collectors.ts background jobs (COLLECTORS=off disables), per workspace
   ├─ cache.ts      in-memory TTL cache + allow() rate limiter
   └─ db.ts         MongoDB connect, collections + indexes + TTLs, ws()/withWorkspace (AsyncLocalStorage)
@@ -100,8 +106,14 @@ scripts/check-tailwind.mjs  Tailwind checker behind npm run lint:tw
   - Some fields are JSON-encoded strings.
 
 **Reusable helpers (look here before writing new ones):**
-- `parse`, `metaFetch`, `graphFetch`, `q`, `errorText` in `meta.ts`
-- `HttpError`, `send`, `readJson`, `stripSecrets` in `store.ts`
+- `parse`, `metaFetch`, `graphFetch`, `q`, `errorText`, `errorDetail` (error text without its title) in `meta.ts`
+- `jsonClient` in `src/app/api/client.ts`: the fetch wrapper for every server API area (dummy-mode aware)
+- `HttpError`, `send`, `sendError`, `readJson`, `serveJson` (the route-handler wrapper), `obj` / `arr` / `str` / `digits` in `server/http.ts`
+- `metaJson` (Meta call → JSON, refusals as HttpError) in `upstream.ts`; `needMetaAssets` / `NO_META_ASSETS` in `db.ts`; `stripSecrets` in `store.ts`
+- `contactNames`, `segmentQuery` in `server/contacts.ts`
+- `TEXT_SM`, `TEXT_SM_OPEN`, `TEXT_XS`, `SECTION_TITLE` in `src/app/lib/text.ts`; `initialsOf`, `cn` in `lib/utils.ts`
+- `usePolling` (`lib/usePolling.ts`), `useMembers` (`auth/useMembers.ts`)
+- `PillTabs`, `SearchInput` (`components/Filters.tsx`), `SettingsSection` (`components/shell/SettingsSection.tsx`)
 - `allow` in `cache.ts`
 - `ws`, `withWorkspace`, `col` in `db.ts`
 - UI primitives in `src/app/components/ui/`

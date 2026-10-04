@@ -147,6 +147,8 @@ export interface WebsiteSource {
   /** Meta's crawl_error, shown under a Failed row. */
   crawlError?: string
   lastCrawledAt?: number
+  /** Polling gave up while Meta still had the crawl pending or running; Re-crawl is offered. */
+  stalled?: boolean
   url: string
   status: WebsiteStatus
   pagesRead: number

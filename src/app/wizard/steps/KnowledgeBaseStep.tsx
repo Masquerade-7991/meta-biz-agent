@@ -1090,6 +1090,17 @@ export function WebsiteTab({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editUrl, setEditUrl] = useState('')
 
+  // Rows with a Meta request in flight: their buttons are disabled, so a double-click or Enter plus
+  // click can't send the same PUT or DELETE twice.
+  // The ref answers at once (two clicks can land before a re-render); the state drives the buttons.
+  const inFlight = useRef(new Set<string>())
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
+  const markBusy = (id: string, on: boolean) => {
+    if (on) inFlight.current.add(id)
+    else inFlight.current.delete(id)
+    setBusy(new Set(inFlight.current))
+  }
+
   const setSite = (id: string, fields: Partial<WebsiteSource>) =>
     patchKnowledge((prev) => ({ websites: prev.websites.map((w) => (w.id === id ? { ...w, ...fields } : w)) }))
 
@@ -1097,7 +1108,7 @@ export function WebsiteTab({
   // and edit only have to put a row back into a crawling state; this picks it up.
   useEffect(() => {
     websites.forEach((w) => {
-      if (w.metaId && !isCrawlDone(w.status)) trackCrawl(w.metaId, patchKnowledge)
+      if (w.metaId && !isCrawlDone(w.status) && !w.stalled) trackCrawl(w.metaId, patchKnowledge)
     })
   }, [websites, patchKnowledge])
 
@@ -1142,6 +1153,8 @@ export function WebsiteTab({
 
   /** Re-crawl and edit are the same call on Meta: PUT the URL, which restarts the crawl. */
   async function recrawl(site: WebsiteSource, url = site.url) {
+    if (inFlight.current.has(site.id)) return false
+    markBusy(site.id, true)
     const shouldFail = consumeForcedFailure()
     try {
       if (shouldFail) throw new Error('forced')
@@ -1152,6 +1165,8 @@ export function WebsiteTab({
     } catch (err) {
       setRowErrors((prev) => ({ ...prev, [site.id]: shouldFail ? 'Could not start reading this site again.' : errorText(err) }))
       return false
+    } finally {
+      markBusy(site.id, false)
     }
   }
 
@@ -1170,8 +1185,9 @@ export function WebsiteTab({
   }
 
   async function confirmRemove() {
-    if (!pendingRemoveId) return
+    if (!pendingRemoveId || inFlight.current.has(pendingRemoveId)) return
     const id = pendingRemoveId
+    markBusy(id, true)
     const shouldFail = consumeForcedFailure()
     const metaId = websites.find((w) => w.id === id)?.metaId
     try {
@@ -1181,6 +1197,8 @@ export function WebsiteTab({
       setRowErrors((prev) => ({ ...prev, [id]: shouldFail ? 'Could not delete. The item is still here.' : `Could not delete. The item is still here. (${errorText(err)})` }))
       setPendingRemoveId(null)
       return
+    } finally {
+      markBusy(id, false)
     }
     patchKnowledge((prev) => ({ websites: prev.websites.filter((w) => w.id !== id) }))
     setPendingRemoveId(null)
@@ -1238,8 +1256,14 @@ export function WebsiteTab({
                   </span>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  {isCrawlDone(site.status) && (
-                    <button type="button" onClick={() => void recrawl(site)} className="text-primary" style={{ fontSize: 'var(--text-sm)' }}>
+                  {(isCrawlDone(site.status) || site.stalled) && (
+                    <button
+                      type="button"
+                      onClick={() => void recrawl(site)}
+                      disabled={busy.has(site.id)}
+                      className="text-primary disabled:opacity-50"
+                      style={{ fontSize: 'var(--text-sm)' }}
+                    >
                       Re-crawl
                     </button>
                   )}
@@ -1268,7 +1292,7 @@ export function WebsiteTab({
                     onKeyDown={(e) => e.key === 'Enter' && void saveEditUrl(site)}
                     aria-label="Website address"
                   />
-                  <Button size="sm" onClick={() => void saveEditUrl(site)} disabled={!editUrl.trim()}>
+                  <Button size="sm" onClick={() => void saveEditUrl(site)} disabled={!editUrl.trim() || busy.has(site.id)}>
                     Save
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>
@@ -1279,11 +1303,13 @@ export function WebsiteTab({
 
               <div className="mt-1 flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
                 {site.status === 'not_started' && <span>Not started</span>}
-                {site.status === 'waiting' && <span>Pending</span>}
+                {site.status === 'waiting' && <span>{site.stalled ? 'Still pending on Meta’s side. Try Re-crawl later.' : 'Pending'}</span>}
                 {site.status === 'reading' && (
                   <>
                     <Loader2 className="size-3 animate-spin" />
-                    <span>In progress · {site.pagesRead} pages so far</span>
+                    <span>
+                      In progress · {site.pagesRead} pages so far{site.stalled ? '. Still running on Meta’s side. Try Re-crawl later.' : ''}
+                    </span>
                   </>
                 )}
                 {site.status === 'done' && (

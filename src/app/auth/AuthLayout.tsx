@@ -1,55 +1,30 @@
 import { useId, type ComponentProps, type ReactNode } from 'react'
 import logo from '@/assets/helo-logo.svg'
-import logoLight from '@/assets/helo-logo-light.svg'
+import heroArt from '@/assets/helo-conversations.webp'
+import metaPartner from '@/assets/meta-partner.svg'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
-import { WA } from '@/app/wizard/steps/whatsappTheme'
-
-// One short exchange in WhatsApp's own look: what the product does, shown rather than described.
-const EXCHANGE = [
-  { from: 'customer', text: 'Hi! Do you deliver to Pune?', delay: 250 },
-  { from: 'agent', text: 'Yes, orders to Pune usually arrive in 2–3 days, and delivery is free. Want me to show you our bestsellers?', delay: 1100 },
-] as const
-
-function ChatGlimpse() {
-  return (
-    <div className="space-y-2" aria-hidden style={{ fontFamily: WA.font }}>
-      {EXCHANGE.map((m) => (
-        <div key={m.text} className={m.from === 'customer' ? 'flex justify-end pl-12' : 'flex justify-start pr-12'}>
-          <p
-            className="motion-safe:animate-bubble-in rounded-lg px-3 py-2 shadow-sm"
-            style={{
-              animationDelay: `${m.delay}ms`,
-              background: m.from === 'customer' ? WA.bubbleOut : WA.bubbleIn,
-              color: WA.text,
-              fontSize: 14,
-              lineHeight: '20px',
-              [m.from === 'customer' ? 'borderTopRightRadius' : 'borderTopLeftRadius']: 0,
-            }}
-          >
-            {m.text}
-          </p>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 /** Login, sign-up and setup screens: brand panel on wide screens, the form on the right. */
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className="hidden flex-col justify-between bg-primary p-10 text-primary-foreground lg:flex lg:w-5/12 xl:p-14">
-        <img src={logoLight} alt="Helo.ai" className="h-14 w-auto self-start" />
-        <div className="max-w-md space-y-8">
-          <h2 className="text-primary-foreground" style={{ fontSize: '2.25rem', lineHeight: 1.15, letterSpacing: '-0.015em' }}>
+      {/* Helo.ai's own look (helo.ai): blush page, red-and-black logo, and its homepage art of an agent answering on WhatsApp. */}
+      <aside className="hidden flex-col justify-between gap-8 bg-[#FDF3F1] p-10 text-[#14181B] lg:flex lg:w-5/12 xl:p-14">
+        <img src={logo} alt="Helo.ai" className="h-14 w-auto self-start" />
+        <div className="max-w-md space-y-6">
+          <h2 style={{ fontSize: '2.25rem', lineHeight: 1.15, letterSpacing: '-0.015em', color: 'inherit' }}>
             Your WhatsApp AI agent, set up and run from one place.
           </h2>
-          <ChatGlimpse />
+          {/* The art has a white background; multiply blends it into the blush panel. */}
+          <img src={heroArt} alt="" className="max-h-[42vh] w-full object-contain object-left mix-blend-multiply" />
         </div>
-        <p className="opacity-80" style={{ fontSize: 'var(--text-sm)' }}>
-          Built by Helo.ai, an official Meta Business Solution Provider.
-        </p>
+        <div className="space-y-3">
+          <img src={metaPartner} alt="Meta Partner" className="h-8 w-auto" />
+          <p className="opacity-70" style={{ fontSize: 'var(--text-sm)' }}>
+            Built by Helo.ai, an official Meta Business Solution Provider.
+          </p>
+        </div>
       </aside>
       <main className="flex flex-1 justify-center px-4 py-10 sm:items-center sm:py-16">
         <div className="w-full max-w-100">
