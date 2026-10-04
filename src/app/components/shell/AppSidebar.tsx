@@ -10,6 +10,7 @@ import {
 } from '@/app/components/ui/dropdown-menu'
 import { Separator } from '@/app/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/app/components/ui/tooltip'
+import logo from '@/assets/helo-mark.svg'
 import { NAV_ITEMS, type NavId } from '@/app/nav'
 import { cn, initialsOf } from '@/app/lib/utils'
 import { useAuth } from '@/app/auth/AuthContext'
@@ -29,44 +30,7 @@ export function AppSidebar({
   const { me, logout } = useAuth()
   return (
     <nav className="flex w-16 shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar py-3">
-      <DropdownMenu>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <button type="button" className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" aria-label="Account and workspace">
-                <Avatar>
-                  <AvatarFallback className="bg-primary text-primary-foreground">{initials(me?.user.name ?? '')}</AvatarFallback>
-                </Avatar>
-              </button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="right">{me?.workspace?.name}</TooltipContent>
-        </Tooltip>
-        <DropdownMenuContent side="right" align="start" className="w-64">
-          <DropdownMenuLabel className="space-y-0.5">
-            <div className="truncate">{me?.user.name}</div>
-            <div className="truncate text-muted-foreground" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-normal)' }}>
-              {me?.user.email}
-            </div>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-normal)' }}>
-            {me?.workspace?.name}, {me?.role === 'owner' ? 'Owner' : 'Member'}
-          </DropdownMenuLabel>
-          {me?.role === 'owner' && (
-            <DropdownMenuItem onSelect={() => onOpenSettings('members')}>
-              <UserPlus className="size-4" /> Invite people
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onSelect={() => onOpenSettings('profile')}>
-            <Settings className="size-4" /> Account settings
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => void logout()}>
-            <LogOut className="size-4" /> Log out
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <img src={logo} alt="Helo.ai" className="size-9" />
 
       <Separator className="my-3 w-8 bg-sidebar-border" />
 
@@ -109,6 +73,47 @@ export function AppSidebar({
           )
         })}
       </ul>
+
+      <Separator className="my-3 w-8 bg-sidebar-border" />
+
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" aria-label="Account and workspace">
+                <Avatar>
+                  <AvatarFallback className="bg-primary text-primary-foreground">{initials(me?.user.name ?? '')}</AvatarFallback>
+                </Avatar>
+              </button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="right">{me?.workspace?.name}</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent side="right" align="end" className="w-64">
+          <DropdownMenuLabel className="space-y-0.5">
+            <div className="truncate">{me?.user.name}</div>
+            <div className="truncate text-muted-foreground" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-normal)' }}>
+              {me?.user.email}
+            </div>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-normal)' }}>
+            {me?.workspace?.name}, {me?.role === 'owner' ? 'Owner' : 'Member'}
+          </DropdownMenuLabel>
+          {me?.role === 'owner' && (
+            <DropdownMenuItem onSelect={() => onOpenSettings('members')}>
+              <UserPlus className="size-4" /> Invite people
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={() => onOpenSettings('profile')}>
+            <Settings className="size-4" /> Account settings
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => void logout()}>
+            <LogOut className="size-4" /> Log out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </nav>
   )
 }
