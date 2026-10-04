@@ -14,6 +14,11 @@ import { trace } from './trace.ts'
 import { contactFor, resolveCustomer, webhookContacts } from './customers.ts'
 import { recipientFailed } from './broadcasts.ts'
 import { onAccountWebhook } from './health.ts'
+import { inboundMedia, MEDIA_TYPES, saveMedia, serveMedia, uploadToMeta } from './media.ts'
+import { enqueue } from './jobs.ts'
+import { deleteView, listViews, remind, saveView, searchMessages, snooze, upcomingReminders, wakeOnMessage } from './followups.ts'
+import { checkMedia, mediaLabel, MEDIA_RULES, type MediaKind, type MessageMedia } from '../src/app/inbox/media.ts'
+import { interactiveError, interactivePayload, interactiveText, type InteractiveReply } from '../src/app/inbox/interactive.ts'
 import { reasonOf } from '../src/app/broadcasts/sendErrors.ts'
 import { isBsuid, NO_CONTROL_HIDDEN, parseCustomerKey, sendTarget } from '../src/app/lib/customer.ts'
 import { accounts, assetsFor, workspaceForNumber } from './accounts.ts'
@@ -61,6 +66,7 @@ interface Msg {
   status?: 'sent' | 'delivered' | 'read' | 'failed'
   tools?: string[]
   sample?: boolean
+  media?: MessageMedia & { waMediaId?: string }
 }
 
 /** Makes sure the customer has a contact and a conversation (AI-handled until someone takes over). */
@@ -171,6 +177,7 @@ async function processChange(field: string, value: Obj) {
     if (!phone) continue
     await ensureConversation(phone, who?.name, false, link)
     const type = str(m.type) ?? 'text'
+    const media = MEDIA_TYPES.has(type as MediaKind) ? inboundMedia(type as MediaKind, m) : undefined
     const body =
       type === 'text'
         ? (str(obj(m.text).body) ?? '')
@@ -178,8 +185,15 @@ async function processChange(field: string, value: Obj) {
           ? (str(obj(obj(m.interactive).button_reply).title) ?? str(obj(obj(m.interactive).list_reply).title) ?? 'Replied to a message')
           : type === 'button'
             ? (str(obj(m.button).text) ?? 'Tapped a button')
-            : `Sent ${type === 'image' || type === 'audio' ? 'an' : 'a'} ${type}`
-    await addMessage({ phone, direction: 'in', author: 'customer', kind: type === 'text' ? 'text' : type === 'interactive' || type === 'button' ? 'interactive' : 'media', body, at: fromSeconds(m.timestamp), waMessageId: str(m.id) })
+            : media
+              ? (media.caption ?? mediaLabel(media.kind, media.filename))
+              : `Sent a ${type} message`
+    const fresh = await addMessage({ phone, direction: 'in', author: 'customer', kind: type === 'text' ? 'text' : type === 'interactive' || type === 'button' ? 'interactive' : 'media', body, at: fromSeconds(m.timestamp), waMessageId: str(m.id), ...(media && { media }) })
+    // The file itself comes from WhatsApp in the background (media.ts), so the webhook answers fast.
+    if (fresh && media?.waMediaId) {
+      const saved = await messages().findOne({ workspaceId: ws(), waMessageId: str(m.id) }, { projection: { _id: 1 } })
+      if (saved) await enqueue('media.fetch', { messageId: String(saved._id) })
+    }
     // A reply within 3 days counts towards the last broadcast this customer received.
     await col('broadcast_recipients').findOneAndUpdate(
       { workspaceId: ws(), phone, status: { $in: ['sent', 'delivered', 'read'] }, repliedAt: { $exists: false }, sentAt: { $gte: new Date(Date.now() - 3 * DAY) } },
@@ -189,6 +203,7 @@ async function processChange(field: string, value: Obj) {
     // WhatsApp's opt-out words: STOP keeps the contact out of broadcasts, START lets them back in.
     const word = body.trim().toUpperCase()
     if (['STOP', 'UNSUBSCRIBE', 'START'].includes(word)) await contacts().updateOne({ workspaceId: ws(), phone }, { $set: { optedOut: word !== 'START' } })
+    await wakeOnMessage(phone)
     // On `messages` our app holds the chat; on `standby` the agent does.
     const owner = field === 'messages' ? 'human' : 'ai'
     const conv = await conversations().findOneAndUpdate({ workspaceId: ws(), phone }, { $set: { owner } }, { returnDocument: 'after' })
@@ -313,6 +328,10 @@ async function listConversations(me: Actor, filter: string, q: string) {
   if (filter === 'mine') where.assigneeId = me._id
   if (filter === 'unassigned') Object.assign(where, { owner: 'human', assigneeId: null })
   if (filter === 'ai') where.owner = 'ai'
+  // Snoozed chats live under their own filter until their time comes.
+  const now = new Date()
+  if (filter === 'snoozed') where.snoozedUntil = { $gt: now }
+  else where.$or = [{ snoozedUntil: { $exists: false } }, { snoozedUntil: { $lte: now } }]
   const rows = await conversations().find(where).sort({ lastMessageAt: -1 }).limit(500).toArray()
   const people = new Map((await contacts().find({ workspaceId: ws(), phone: { $in: rows.map((r) => r.phone) } }).toArray()).map((c) => [c.phone, c]))
   const lastByPhone = new Map(
@@ -330,6 +349,7 @@ async function listConversations(me: Actor, filter: string, q: string) {
       return {
         phone: r.phone,
         name: c?.name ?? null,
+        ...(c?.username && { username: c.username }),
         tags: c?.tags ?? [],
         owner: r.owner,
         assigneeId: r.assigneeId ?? null,
@@ -337,6 +357,7 @@ async function listConversations(me: Actor, filter: string, q: string) {
         lastMessageAt: r.lastMessageAt,
         windowOpen: !!r.lastInboundAt && Date.now() - +r.lastInboundAt < WINDOW,
         sample: !!r.sample,
+        snoozedUntil: r.snoozedUntil ?? null,
         preview: last ? { author: last.author, body: last.body } : null,
       }
     })
@@ -364,7 +385,9 @@ async function getConversation(phone: string, me?: Actor) {
       lastInboundAt: fresh!.lastInboundAt ?? null,
       windowOpen: !!fresh!.lastInboundAt && Date.now() - +fresh!.lastInboundAt < WINDOW,
       sample: !!fresh!.sample,
+      snoozedUntil: fresh!.snoozedUntil && +fresh!.snoozedUntil > Date.now() ? fresh!.snoozedUntil : null,
     },
+    reminders: me ? (await upcomingReminders(me._id, phone)).map((r) => ({ id: String(r._id), note: r.note, dueAt: r.dueAt })) : [],
     contact,
     messages: rows.map(({ _id, ...m }) => ({ id: String(_id), ...m })),
   }
@@ -396,16 +419,56 @@ export const sendInteractive = (phone: string, body: string, buttons: { id: stri
     o.sample,
   )
 
-async function reply(me: Actor, phone: string, body: string) {
+/** A person's message into an open chat: checks the 24-hour window, sends, then the chat is the team's. */
+async function agentSend(me: Actor, phone: string, send: (sample: boolean) => Promise<unknown>) {
   const conv = await conversations().findOne({ workspaceId: ws(), phone })
   if (!conv) throw new HttpError(404, 'No chat with this number yet.')
   if (!conv.lastInboundAt || Date.now() - +conv.lastInboundAt >= WINDOW)
     throw new HttpError(400, 'WhatsApp only allows free replies within 24 hours of the customer’s last message. Send a template instead.')
-  await sendText(phone, body, { author: 'agent', actor: me, sample: !!conv.sample })
+  await send(!!conv.sample)
   // Sending from our app moves thread control to us (Meta's rule), so the chat is now with people.
   await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { owner: 'human', unread: 0, ...(!conv.assigneeId && { assigneeId: me._id }) } })
   await ensureTicket(phone, 'reply')
   await onAgentReply(phone)
+}
+const reply = (me: Actor, phone: string, body: string) => agentSend(me, phone, (sample) => sendText(phone, body, { author: 'agent', actor: me, sample }))
+
+async function readRaw(req: http.IncomingMessage, max: number): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const c of req) {
+    size += (c as Buffer).length
+    if (size > max) throw new HttpError(413, 'That file is too big for WhatsApp.')
+    chunks.push(c as Buffer)
+  }
+  return Buffer.concat(chunks)
+}
+
+/** An attachment from a person: stored here, uploaded to WhatsApp, then sent (sample chats: stored only). */
+async function sendMedia(me: Actor, phone: string, req: http.IncomingMessage) {
+  const mime = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase()
+  const announced = checkMedia(mime, Number(req.headers['content-length'] ?? 1) || 1)
+  if ('error' in announced) throw new HttpError(400, announced.error)
+  const buf = await readRaw(req, MEDIA_RULES[announced.kind].max)
+  const checked = checkMedia(mime, buf.length)
+  if ('error' in checked) throw new HttpError(400, checked.error)
+  const kind = checked.kind
+  const header = (k: string) => {
+    try {
+      return decodeURIComponent(String(req.headers[k] ?? ''))
+    } catch {
+      return ''
+    }
+  }
+  const filename = header('x-filename').replace(/[\\/\r\n]/g, '_').slice(0, 200) || kind
+  const caption = kind === 'audio' ? '' : header('x-caption').trim().slice(0, 1024)
+  await agentSend(me, phone, async (sample) => {
+    const id = await saveMedia(buf, { mime, filename, source: 'upload' })
+    const media: MessageMedia = { kind, mime, id, filename, size: buf.length, ...(caption && { caption }), state: 'ready' }
+    const payload = sample ? {} : { type: kind, [kind]: { id: await uploadToMeta(buf, mime, filename), ...(caption && { caption }), ...(kind === 'document' && { filename }) } }
+    await deliver(phone, payload, { author: 'agent', authorId: me._id, authorName: me.name, kind: 'media', body: caption || mediaLabel(kind, filename), media }, sample)
+  })
+  trace('message.media_sent', { kind, size: buf.length }, { entity: 'conversation', id: phone })
 }
 
 export async function setControl(me: Actor, phone: string, action: 'take' | 'release') {
@@ -519,12 +582,20 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   const path = u.pathname
   const m = req.method ?? 'GET'
   let seg: RegExpMatchArray | null
+  if (path === '/api/inbox/search' && m === 'GET') return searchMessages(u.searchParams.get('q') ?? '')
+  if (path === '/api/inbox/views' && m === 'GET') return listViews(me._id)
+  if (path === '/api/inbox/views' && m === 'POST') return saveView(me._id, obj(await readJson(req)))
+  if ((seg = path.match(/^\/api\/inbox\/views\/([a-f0-9]{24})$/)) && m === 'DELETE') return deleteView(me._id, seg[1])
   if (path === '/api/inbox/conversations' && m === 'GET') return listConversations(me, u.searchParams.get('filter') ?? 'all', u.searchParams.get('q') ?? '')
   if ((seg = path.match(/^\/api\/inbox\/conversations\/([^/]+)(?:\/([a-z]+))?$/))) {
     const phone = phoneParam(decodeURIComponent(seg[1]))
     const action = seg[2]
     if (!action && m === 'GET') return getConversation(phone, me)
     if (m !== 'POST') throw new HttpError(405, 'Method not allowed.')
+    if (action === 'media') {
+      await sendMedia(me, phone, req)
+      return getConversation(phone, me)
+    }
     const body = obj(await readJson(req))
     if (action === 'presence') {
       // Collision detection: who else has this chat open (and is typing). Expires by TTL.
@@ -534,6 +605,18 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     if (action === 'suggest') return { text: await suggestReply(phone) }
     if (action === 'summary') return { text: await summarize(phone) }
     if (action === 'messages') await reply(me, phone, text(body.text, 'a reply'))
+    else if (action === 'interactive') {
+      // Reply buttons or a list, within WhatsApp's limits (src/app/inbox/interactive.ts).
+      const r: InteractiveReply =
+        body.type === 'list'
+          ? { type: 'list', body: String(body.body ?? ''), button: String(body.button ?? ''), rows: arr(body.rows).map((x) => ({ title: String(obj(x).title ?? ''), description: str(obj(x).description) })) }
+          : { type: 'button', body: String(body.body ?? ''), buttons: arr(body.buttons).map(String) }
+      const problem = interactiveError(r)
+      if (problem) throw new HttpError(400, problem)
+      await agentSend(me, phone, (sample) =>
+        deliver(phone, { type: 'interactive', interactive: interactivePayload(r) }, { author: 'agent', authorId: me._id, authorName: me.name, kind: 'interactive', body: interactiveText(r) }, sample),
+      )
+    }
     else if (action === 'notes') {
       if (!(await conversations().findOne({ workspaceId: ws(), phone }))) throw new HttpError(404, 'No chat with this number yet.')
       await addMessage({ phone, direction: 'out', author: 'agent', authorId: me._id, authorName: me.name, kind: 'note', body: text(body.text, 'a note'), at: new Date() })
@@ -545,6 +628,8 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       if (body.action !== 'take' && body.action !== 'release') throw new HttpError(400, 'Action must be take or release.')
       await setControl(me, phone, body.action)
     } else if (action === 'read') await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { unread: 0 } })
+    else if (action === 'snooze') await snooze(phone, body.until ?? null, me._id)
+    else if (action === 'remind') await remind(phone, body, me._id)
     else throw new HttpError(404, 'Not found.')
     if (action !== 'messages' && action !== 'notes') trace('conversation.updated', { action, ...(action === 'control' && { to: body.action }) }, { entity: 'conversation', id: phone })
     return getConversation(phone, me)
@@ -599,5 +684,15 @@ const TITLES: Titles = { 400: 'Check the details', 403: 'No WhatsApp account con
 export async function handleInbox(req: http.IncomingMessage, res: http.ServerResponse, me: Actor): Promise<boolean> {
   const u = new URL(req.url ?? '/', 'http://x')
   if (!u.pathname.startsWith('/api/inbox/')) return false
+  // Files stream out as they are, not as JSON.
+  const file = u.pathname.match(/^\/api\/inbox\/media\/([a-f0-9]{24})$/)
+  if (file && req.method === 'GET' && db)
+    return serveMedia(file[1], res, u.searchParams.has('download')).then(
+      () => true,
+      (err: unknown) => {
+        res.writeHead(err instanceof HttpError ? err.status : 500, { 'content-type': 'application/json' }).end(JSON.stringify({ title: 'Not found', detail: err instanceof Error ? err.message : 'No such file.' }))
+        return true
+      },
+    )
   return serveJson(req, res, { titles: TITLES, db, noDb: { title: dbOffReason, detail: 'The inbox needs the database.' } }, () => route(req, u, me))
 }

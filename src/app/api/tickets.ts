@@ -54,7 +54,15 @@ export interface AlertNotice {
   at: string
   target: 'billing' | 'whatsapp' | 'broadcasts'
 }
-export type Notice = TicketNotice | AlertNotice
+/** One of your reminders that is due (or a chat back from snooze). */
+export interface ReminderNotice {
+  id: string
+  kind: 'reminder'
+  text: string
+  at: string
+  phone: string
+}
+export type Notice = TicketNotice | AlertNotice | ReminderNotice
 export const isAlert = (n: Notice): n is AlertNotice => n.kind === 'alert' || n.kind === 'alert_critical'
 
 const call = jsonClient(dummyTickets)
@@ -72,7 +80,8 @@ export const bulkTickets = (numbers: number[], o: { action: 'resolve' } | { patc
 export const getSupportSettings = () => call<SupportSettings>('/api/support/settings')
 export const saveSupportSettings = (s: Omit<SupportSettings, 'aiSummary'>) => call<SupportSettings>('/api/support/settings', 'PUT', s)
 export const listNotices = () => call<Notice[]>('/api/support/notifications')
-export const dismissNotice = (id: string) => call<{ ok: true }>(`/api/support/notifications/${encodeURIComponent(id).replace('alert%3A', 'alert:')}/dismiss`, 'POST', {})
+/** Alerts and reminders stay until dismissed; ids look like alert:<key> or reminder:<id>. */
+export const dismissNotice = (id: string) => call<{ ok: true }>(`/api/support/notifications/${encodeURIComponent(id).replace(/^(alert|reminder)%3A/, '$1:')}/dismiss`, 'POST', {})
 export interface SupportAnalytics {
   days: number
   timezone: string

@@ -4,7 +4,9 @@
 import { SAMPLE_CHATS, sampleName } from '../inbox/sampleData'
 import { MetaError } from './meta'
 import { isBsuid, NO_CONTROL_HIDDEN } from '../lib/customer'
-import type { CannedResponse, ChatDetail, ChatMessage, ChatSummary } from './inbox'
+import { checkMedia, mediaLabel, type MediaKind } from '../inbox/media'
+import { interactiveError, interactiveText, type InteractiveReply } from '../inbox/interactive'
+import type { CannedResponse, ChatDetail, ChatFilter, ChatMessage, ChatSummary, SavedView } from './inbox'
 import type { Priority, SupportSettings, Ticket } from './tickets'
 import type { Contact, FieldDef, Segment } from './contacts'
 import type { Broadcast, BroadcastDetail, WaTemplate } from './broadcasts'
@@ -19,7 +21,11 @@ interface Chat {
   assigneeId: string | null
   unread: number
   messages: ChatMessage[]
+  snoozedUntil?: string
 }
+// Reminders and saved views live in this tab only, like the rest of dummy mode.
+let demoReminders: { id: string; phone: string; note: string; dueAt: string; dismissed: boolean }[] = []
+let demoViews: SavedView[] = []
 const ME = { id: 'demo', name: 'You' }
 const DAY = 86_400_000
 let seq = 0
@@ -69,11 +75,13 @@ const summary = (c: Chat): ChatSummary => {
     lastMessageAt: c.messages.at(-1)?.at ?? null,
     windowOpen: windowOpen(c),
     sample: true,
+    snoozedUntil: c.snoozedUntil ?? null,
     preview: last ? { author: last.author, body: last.body } : null,
   }
 }
 const detail = (c: Chat): ChatDetail => ({
-  conversation: { phone: c.phone, owner: c.owner, assigneeId: c.assigneeId, lastInboundAt: lastInbound(c), windowOpen: windowOpen(c), sample: true },
+  conversation: { phone: c.phone, owner: c.owner, assigneeId: c.assigneeId, lastInboundAt: lastInbound(c), windowOpen: windowOpen(c), sample: true, snoozedUntil: c.snoozedUntil ?? null },
+  reminders: demoReminders.filter((r) => r.phone === c.phone && Date.parse(r.dueAt) > Date.now()).map(({ id, note, dueAt }) => ({ id, note, dueAt })),
   contact: { phone: c.phone, name: c.name, tags: c.tags, fields: {} },
   messages: c.messages,
 })
@@ -87,11 +95,28 @@ export async function dummyInbox<T>(method: string, path: string, body: unknown)
   if (u.pathname === '/api/inbox/conversations') {
     const f = u.searchParams.get('filter')
     const q = (u.searchParams.get('q') ?? '').toLowerCase()
+    const asleep = (c: Chat) => !!c.snoozedUntil && Date.parse(c.snoozedUntil) > Date.now()
     return list
+      .filter((c) => (f === 'snoozed' ? asleep(c) : !asleep(c)))
       .filter((c) => (f === 'mine' ? c.assigneeId === ME.id : f === 'unassigned' ? c.owner === 'human' && !c.assigneeId : f === 'ai' ? c.owner === 'ai' : true))
       .filter((c) => !q || c.name.toLowerCase().includes(q) || c.phone.includes(q))
       .map(summary)
       .sort((a, z) => Date.parse(z.lastMessageAt ?? '0') - Date.parse(a.lastMessageAt ?? '0')) as T
+  }
+  if (u.pathname === '/api/inbox/search') {
+    const q = (u.searchParams.get('q') ?? '').trim().toLowerCase()
+    if (q.length < 2) return [] as T
+    return list
+      .flatMap((c) => c.messages.filter((x) => x.body?.toLowerCase().includes(q)).map((x) => ({ id: x.id, phone: c.phone, name: c.name || null, body: x.body!, at: x.at, kind: x.kind, author: x.author })))
+      .slice(0, 30) as T
+  }
+  if (u.pathname === '/api/inbox/views') {
+    if (method === 'POST') demoViews = [...demoViews.filter((v) => v.name !== b.name), { id: `v${++seq}`, name: String(b.name), filter: (b.filter ?? 'all') as ChatFilter, q: String(b.q ?? '') }]
+    return demoViews as T
+  }
+  if (u.pathname.startsWith('/api/inbox/views/')) {
+    demoViews = demoViews.filter((v) => !u.pathname.endsWith(`/${v.id}`))
+    return demoViews as T
   }
   if (m) {
     const c = list.find((x) => x.phone === decodeURIComponent(m[1]))
@@ -107,9 +132,46 @@ export async function dummyInbox<T>(method: string, path: string, body: unknown)
       c.assigneeId ??= ME.id
       ensureTicket(c, 'reply').firstRespondedAt ??= new Date().toISOString()
     }
+    if (m[2] === 'interactive') {
+      const r = body as InteractiveReply
+      const problem = interactiveError(r)
+      if (problem) throw new MetaError(400, 'Check the details', problem)
+      if (!windowOpen(c)) throw new MetaError(400, 'Check the details', 'WhatsApp only allows free replies within 24 hours of the customer’s last message. Send a template instead.')
+      push(c, { direction: 'out', author: 'agent', authorId: ME.id, authorName: ME.name, kind: 'interactive', body: interactiveText(r), status: 'sent' })
+      c.owner = 'human'
+      c.assigneeId ??= ME.id
+    }
+    if (m[2] === 'media') {
+      // The file stays in this tab as a blob URL; the rest works like the real thing.
+      const f = (body as { file: File; caption: string; kind: MediaKind }).file
+      const check = checkMedia(f.type, f.size)
+      if ('error' in check) throw new MetaError(400, 'Check the details', check.error)
+      if (!windowOpen(c)) throw new MetaError(400, 'Check the details', 'WhatsApp only allows free replies within 24 hours of the customer’s last message. Send a template instead.')
+      const caption = check.kind === 'audio' ? '' : String((body as { caption?: string }).caption ?? '').trim()
+      push(c, {
+        direction: 'out',
+        author: 'agent',
+        authorId: ME.id,
+        authorName: ME.name,
+        kind: 'media',
+        body: caption || mediaLabel(check.kind, f.name),
+        status: 'sent',
+        media: { kind: check.kind, mime: f.type, id: URL.createObjectURL(f), filename: f.name, size: f.size, ...(caption && { caption }), state: 'ready' },
+      })
+      c.owner = 'human'
+      c.assigneeId ??= ME.id
+    }
     if (m[2] === 'notes') push(c, { direction: 'out', author: 'agent', authorId: ME.id, authorName: ME.name, kind: 'note', body: String(b.text) })
     if (m[2] === 'assign') c.assigneeId = b.userId ?? null
     if (m[2] === 'read') c.unread = 0
+    if (m[2] === 'snooze') {
+      if (b.until && Date.parse(String(b.until)) < Date.now() + 30_000) throw new MetaError(400, 'Check the details', 'Pick a time in the future.')
+      c.snoozedUntil = b.until ? String(b.until) : undefined
+    }
+    if (m[2] === 'remind') {
+      if (!b.at || Date.parse(String(b.at)) < Date.now() + 30_000) throw new MetaError(400, 'Check the details', 'Pick a time in the future.')
+      demoReminders.push({ id: `r${++seq}`, phone: c.phone, note: String(b.note || 'Follow up'), dueAt: String(b.at), dismissed: false })
+    }
     if (m[2] === 'control') {
       if (isBsuid(c.phone)) throw new MetaError(400, 'Check the details', NO_CONTROL_HIDDEN)
       c.owner = b.action === 'take' ? 'human' : 'ai'
@@ -246,8 +308,14 @@ export async function dummyTickets<T>(method: string, path: string, body: unknow
     if (method === 'PUT') settings = { ...(b as unknown as SupportSettings), aiSummary: false }
     return settings as T
   }
-  if (u.pathname.startsWith('/api/support/notifications/')) return { ok: true } as T
-  if (u.pathname === '/api/support/notifications') return [] as T
+  if (u.pathname.startsWith('/api/support/notifications/')) {
+    demoReminders = demoReminders.map((r) => (u.pathname.includes(`reminder:${r.id}/`) ? { ...r, dismissed: true } : r))
+    return { ok: true } as T
+  }
+  if (u.pathname === '/api/support/notifications')
+    return demoReminders
+      .filter((r) => !r.dismissed && Date.parse(r.dueAt) <= Date.now())
+      .map((r) => ({ id: `reminder:${r.id}`, kind: 'reminder', text: `${r.note} · ${load().find((c) => c.phone === r.phone)?.name || r.phone}`, at: r.dueAt, phone: r.phone })) as T
   if (u.pathname === '/api/support/analytics') {
     const days = Number(u.searchParams.get('days') ?? 7)
     const series = Array.from({ length: days }, (_, i) => ({ date: new Date(Date.now() - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10), created: (i * 7) % 5, resolved: (i * 5) % 4 }))
@@ -434,6 +502,7 @@ export async function dummyWhatsApp<T>(method: string, path: string, body: unkno
   const b = (body ?? {}) as Record<string, string>
   waAccounts ??= [dummyAccountNow()]
   const u = new URL(path, 'http://x')
+  if (u.pathname === '/api/whatsapp/webhook-status') return { lastAt: new Date(Date.now() - 4 * 60_000).toISOString(), callbackUrl: `${location.origin}/api/webhooks/whatsapp`, verifyTokenSet: true, signatureChecked: true } as T
   if (u.pathname === '/api/whatsapp/health')
     return waAccounts.flatMap((a) =>
       a.phoneNumbers.map((n) => ({ phoneNumberId: n.id, display: n.display, name: n.verifiedName, quality: 'GREEN', nameStatus: 'APPROVED', status: 'CONNECTED', limit: 'TIER_2K', limitLabel: '2,000', checkedAt: new Date().toISOString() })),

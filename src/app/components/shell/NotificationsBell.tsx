@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { AlarmClock, AlertTriangle, Bell, Inbox, UserCheck, X } from 'lucide-react'
+import { AlarmClock, AlertTriangle, Bell, BellRing, Inbox, UserCheck, X } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover'
 import { dismissNotice, isAlert, listNotices, type AlertNotice, type Notice } from '@/app/api/tickets'
 import { cn } from '@/app/lib/utils'
 import { usePolling } from '@/app/lib/usePolling'
 
-const LIVE_NOTICES = ['ticket.', 'alert.']
+const LIVE_NOTICES = ['ticket.', 'alert.', 'reminder.']
 
 const SEEN_KEY = 'helo-notices-seen'
 const readSeen = () => {
@@ -15,7 +15,7 @@ const readSeen = () => {
     return 0
   }
 }
-const ICON = { breached: AlarmClock, due: AlarmClock, assigned: UserCheck, unassigned: Inbox, alert: AlertTriangle, alert_critical: AlertTriangle }
+const ICON = { breached: AlarmClock, due: AlarmClock, assigned: UserCheck, unassigned: Inbox, alert: AlertTriangle, alert_critical: AlertTriangle, reminder: BellRing }
 
 /** Header bell: account alerts (owners), overdue or due-soon SLAs, tickets assigned to you, and tickets nobody has. */
 export function NotificationsBell({ onOpenChat, onOpenTarget }: { onOpenChat: (phone: string) => void; onOpenTarget: (target: AlertNotice['target']) => void }) {
@@ -23,7 +23,7 @@ export function NotificationsBell({ onOpenChat, onOpenTarget }: { onOpenChat: (p
   const [seen, setSeen] = useState(readSeen)
   const [open, setOpen] = useState(false)
   usePolling(() => void listNotices().then(setItems, () => {}), 30_000, [], true, LIVE_NOTICES)
-  const fresh = items.filter((n) => Date.parse(n.at) > seen || n.kind === 'breached' || n.kind === 'alert_critical').length
+  const fresh = items.filter((n) => Date.parse(n.at) > seen || n.kind === 'breached' || n.kind === 'alert_critical' || n.kind === 'reminder').length
   return (
     <Popover
       open={open}
@@ -72,12 +72,12 @@ export function NotificationsBell({ onOpenChat, onOpenTarget }: { onOpenChat: (p
                       else onOpenChat(n.phone)
                     }}
                   >
-                    <Icon className={cn('mt-0.5 size-4 shrink-0', n.kind === 'breached' || n.kind === 'alert_critical' ? 'text-destructive' : n.kind === 'alert' ? 'text-amber-600' : 'text-muted-foreground')} />
-                    <span className={cn(isAlert(n) && 'pr-6')} style={{ fontSize: 'var(--text-sm)', lineHeight: 1.4 }}>
+                    <Icon className={cn('mt-0.5 size-4 shrink-0', n.kind === 'breached' || n.kind === 'alert_critical' ? 'text-destructive' : n.kind === 'alert' ? 'text-amber-600' : n.kind === 'reminder' ? 'text-primary' : 'text-muted-foreground')} />
+                    <span className={cn(n.kind.startsWith('alert') || n.kind === 'reminder' ? 'pr-6' : '')} style={{ fontSize: 'var(--text-sm)', lineHeight: 1.4 }}>
                       {n.text}
                     </span>
                   </button>
-                  {isAlert(n) && (
+                  {(isAlert(n) || n.kind === 'reminder') && (
                     <button
                       type="button"
                       aria-label="Dismiss"

@@ -11,6 +11,7 @@ import { disconnectAccount, getSignupConfig, listAccounts, revealPin, type Signu
 import { AccountSteps, ConnectWhatsApp } from '@/app/whatsapp/ConnectWhatsApp'
 import { SettingsSection } from './SettingsSection'
 import { NumberHealthCard } from '@/app/whatsapp/NumberHealthCard'
+import { WebhookStatusCard } from '@/app/whatsapp/WebhookStatusCard'
 import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 
 const SOURCE: Record<WaAccount['source'], string> = { env: 'Set up by Helo.ai', signup: 'Connected with Embedded Signup', coexistence: 'WhatsApp Business app number' }
@@ -101,6 +102,11 @@ export function WhatsAppSettings() {
       {!!rows?.length && (
         <SettingsSection wide title="Number health" description="WhatsApp rates each number on how customers react to your messages, and limits how many new conversations it can start a day. Checked every hour.">
           <NumberHealthCard />
+        </SettingsSection>
+      )}
+      {!!rows?.length && (
+        <SettingsSection wide title="Customer messages" description="WhatsApp delivers customers’ messages, photos and delivery ticks to this app by webhook.">
+          <WebhookStatusCard />
         </SettingsSection>
       )}
       <SettingsSection wide title={rows?.length ? 'Connect another number' : 'Connect a number'} description="Log in with Facebook and pick your business, WhatsApp account and number. About 5 minutes.">

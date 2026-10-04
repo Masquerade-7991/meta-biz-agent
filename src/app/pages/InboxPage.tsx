@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { Bot, Check, CheckCheck, Clock, FileText, Hand, Loader2, MessageSquareText, Send, Sparkles, StickyNote, Undo2, Wrench, X } from 'lucide-react'
+import { Bot, Check, CheckCheck, Clock, FileText, Hand, ListChecks, Loader2, MessageSquareText, Paperclip, Send, Sparkles, StickyNote, Undo2, Wrench, X } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
 import { Textarea } from '@/app/components/ui/textarea'
@@ -21,6 +21,7 @@ import {
   loadSampleChats,
   markChatRead,
   sendPresence,
+  sendMedia,
   sendReply,
   setChatControl,
   simulateCustomerMessage,
@@ -31,6 +32,12 @@ import {
   type ChatFilter,
   type ChatMessage,
   type ChatSummary,
+  type SavedView,
+  type SearchHit,
+  deleteView,
+  listViews,
+  saveView,
+  searchMessages,
 } from '@/app/api/inbox'
 import { cn, initialsOf } from '@/app/lib/utils'
 import { getSupportSettings } from '@/app/api/tickets'
@@ -41,6 +48,12 @@ import { useMembers } from '@/app/auth/useMembers'
 import { usePolling } from '@/app/lib/usePolling'
 import { PillTabs, SearchInput } from '@/app/components/Filters'
 import { customerLabel, isBsuid, NO_CONTROL_HIDDEN } from '@/app/lib/customer'
+import { MediaView } from '@/app/inbox/MediaView'
+import { ACCEPT, checkMedia, formatSize } from '@/app/inbox/media'
+import { EmojiPicker } from '@/app/inbox/EmojiPicker'
+import { WindowChip } from '@/app/inbox/WindowChip'
+import { FollowUpBanner, FollowUpMenu } from '@/app/inbox/FollowUpMenu'
+import { InteractiveDialog } from '@/app/inbox/InteractiveDialog'
 
 // Live events that change the chat list, and the open chat.
 const LIVE_INBOX = ['message.', 'conversation.', 'ticket.']
@@ -52,6 +65,7 @@ const FILTERS: { id: ChatFilter; label: string }[] = [
   { id: 'mine', label: 'Mine' },
   { id: 'unassigned', label: 'Unassigned' },
   { id: 'ai', label: 'AI handling' },
+  { id: 'snoozed', label: 'Snoozed' },
 ]
 
 const display = (c: { name?: string | null; phone: string; username?: string }) => c.name || customerLabel(c.phone, c.username)
@@ -122,13 +136,18 @@ function ChatRow({ c, active, onOpen }: { c: ChatSummary; active: boolean; onOpe
               Sample
             </span>
           )}
+          {c.snoozedUntil && Date.parse(c.snoozedUntil) > Date.now() && (
+            <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 text-muted-foreground" style={{ fontSize: '0.6875rem', lineHeight: '1.125rem' }}>
+              <Clock className="size-3" /> until {when(c.snoozedUntil)}
+            </span>
+          )}
         </span>
       </span>
     </button>
   )
 }
 
-function Bubble({ m }: { m: ChatMessage }) {
+function Bubble({ m, highlight }: { m: ChatMessage; highlight?: boolean }) {
   if (m.kind === 'event')
     return (
       <div className="flex justify-center py-1">
@@ -148,7 +167,7 @@ function Bubble({ m }: { m: ChatMessage }) {
     )
   const out = m.direction === 'out'
   return (
-    <div className={cn('flex', out ? 'justify-end pl-16' : 'justify-start pr-16')}>
+    <div id={`msg-${m.id}`} className={cn('flex rounded-lg transition-colors', out ? 'justify-end pl-16' : 'justify-start pr-16', highlight && 'bg-primary/15 ring-2 ring-primary/40')}>
       <div className="max-w-136 rounded-lg px-2.5 pt-1.5 pb-1 shadow-sm" style={{ background: out ? WA.bubbleOut : WA.bubbleIn, color: WA.text, fontFamily: WA.font, fontSize: 14.2, lineHeight: '19px' }}>
         {out && (
           <p className="flex items-center gap-1" style={{ fontSize: 12, fontWeight: 600, color: m.author === 'ai' ? WA.green : WA.link }}>
@@ -156,7 +175,14 @@ function Bubble({ m }: { m: ChatMessage }) {
             {m.author === 'ai' ? 'AI agent' : (m.authorName ?? 'Team')}
           </p>
         )}
-        {m.body === null ? (
+        {m.media && (
+          <div className="pb-1">
+            <MediaView media={m.media} />
+          </div>
+        )}
+        {m.media ? (
+          m.media.caption && <p className="whitespace-pre-wrap wrap-break-word">{waText(m.media.caption)}</p>
+        ) : m.body === null ? (
           <p className="italic" style={{ color: WA.meta }}>
             Customer sent a message. The text shows here once WhatsApp webhooks are connected.
           </p>
@@ -183,12 +209,15 @@ function Bubble({ m }: { m: ChatMessage }) {
   )
 }
 
-function Thread({ messages }: { messages: ChatMessage[] }) {
+/** The chat; `focusId` (a search hit) is scrolled to and highlighted instead of jumping to the end. */
+function Thread({ messages, focusId }: { messages: ChatMessage[]; focusId?: string | null }) {
   const end = useRef<HTMLDivElement>(null)
   const count = messages.length
   useEffect(() => {
-    end.current?.scrollIntoView({ block: 'end' })
-  }, [count])
+    const hit = focusId ? document.getElementById(`msg-${focusId}`) : null
+    if (hit) hit.scrollIntoView({ block: 'center' })
+    else end.current?.scrollIntoView({ block: 'end' })
+  }, [count, focusId])
   let lastDay = ''
   return (
     <div className="space-y-1.5 px-4 py-4 md:px-8" style={{ background: WA.wallpaper }}>
@@ -205,7 +234,7 @@ function Thread({ messages }: { messages: ChatMessage[] }) {
                 </span>
               </div>
             )}
-            <Bubble m={m} />
+            <Bubble m={m} highlight={m.id === focusId} />
           </div>
         )
       })}
@@ -221,6 +250,15 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
   const [pick, setPick] = useState(0)
   const [assist, setAssist] = useState<'suggest' | 'summary' | null>(null)
   const [templating, setTemplating] = useState(false)
+  const [buttonsOpen, setButtonsOpen] = useState(false)
+  // An attachment waiting to be sent; the draft becomes its caption.
+  const [file, setFile] = useState<File | null>(null)
+  const [progress, setProgress] = useState<number | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const preview = useMemo(() => (file && file.type.startsWith('image/') ? URL.createObjectURL(file) : null), [file])
+  useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview])
+  const fileInput = useRef<HTMLInputElement>(null)
+  const box = useRef<HTMLTextAreaElement>(null)
   const lastPing = useRef(0)
   const { conversation: conv, contact } = chat
   async function runAssist(kind: 'suggest' | 'summary') {
@@ -240,21 +278,45 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
   const matches = slash !== null ? canned.filter((c) => c.shortcut.startsWith(slash) || c.title.toLowerCase().includes(slash.slice(1))).slice(0, 6) : []
   const locked = mode === 'reply' && !conv.windowOpen
 
+  function attach(f: File | undefined) {
+    if (!f) return
+    const check = checkMedia(f.type, f.size)
+    if ('error' in check) return void toast.error(check.error)
+    setMode('reply')
+    setFile(f)
+    box.current?.focus()
+  }
+  /** Puts an emoji where the cursor is. */
+  function insert(text: string) {
+    const el = box.current
+    const at = el?.selectionStart ?? draft.length
+    const end = el?.selectionEnd ?? at
+    setDraft(draft.slice(0, at) + text + draft.slice(end))
+    requestAnimationFrame(() => {
+      el?.focus()
+      el?.setSelectionRange(at + text.length, at + text.length)
+    })
+  }
   const applyCanned = (c: CannedResponse) => {
     setDraft(fillCanned(c.body, { name: contact?.name, phone: conv.phone }))
     setPick(0)
   }
   async function submit() {
     const text = draft.trim()
-    if (!text || busy || locked) return
+    if ((!text && !file) || busy || locked) return
     setBusy(true)
     try {
-      onSent(mode === 'note' ? await addNote(conv.phone, text) : await sendReply(conv.phone, text))
+      if (file) {
+        setProgress(0)
+        onSent(await sendMedia(conv.phone, file, text, setProgress))
+        setFile(null)
+      } else onSent(mode === 'note' ? await addNote(conv.phone, text) : await sendReply(conv.phone, text))
       setDraft('')
     } catch (err) {
       toast.error(errorDetail(err))
     } finally {
       setBusy(false)
+      setProgress(null)
     }
   }
   function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -271,7 +333,24 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
   }
 
   return (
-    <div className="border-t border-border bg-background px-4 py-3">
+    <div
+      className={cn('relative border-t border-border bg-background px-4 py-3', dragging && 'ring-2 ring-primary ring-inset')}
+      onDragOver={(e) => {
+        if (locked || !e.dataTransfer.types.includes('Files')) return
+        e.preventDefault()
+        setDragging(true)
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => {
+        e.preventDefault()
+        setDragging(false)
+        if (!locked) attach(e.dataTransfer.files[0])
+      }}
+    >
+      <input ref={fileInput} type="file" accept={ACCEPT} className="hidden" onChange={(e) => {
+          attach(e.target.files?.[0])
+          e.target.value = ''
+        }} />
       <div className="mb-2 flex items-center gap-1" role="tablist" aria-label="Message type">
         {(['reply', 'note'] as const).map((m) => (
           <button
@@ -291,6 +370,18 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
             {assist === 'suggest' ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
             <span style={TEXT_XS}>Suggest reply</span>
           </Button>
+          {mode === 'reply' && !locked && (
+            <>
+              <Button type="button" size="sm" variant="ghost" className="h-7 px-2" disabled={busy} onClick={() => fileInput.current?.click()} aria-label="Attach a file" title="Attach a photo, video, audio or document (or drop it here)">
+                <Paperclip className="size-3.5" />
+              </Button>
+              <Button type="button" size="sm" variant="ghost" className="h-7 px-2" disabled={busy || !!file} onClick={() => setButtonsOpen(true)} title="Send reply buttons or a list">
+                <ListChecks className="size-3.5" />
+                <span style={TEXT_XS}>Buttons</span>
+              </Button>
+            </>
+          )}
+          <EmojiPicker onPick={insert} disabled={locked && mode === 'reply'} />
           {aiSummary && (
             <Button type="button" size="sm" variant="ghost" className="h-7 px-2" disabled={assist !== null} onClick={() => void runAssist('summary')}>
               {assist === 'summary' ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
@@ -344,9 +435,39 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
               ))}
             </ul>
           )}
+          {file && (
+            <div className="mb-2 flex items-center gap-3 rounded-md border border-border p-2">
+              {preview ? <img src={preview} alt="" className="size-12 rounded object-cover" /> : <FileText className="size-8 text-muted-foreground" />}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate" style={TEXT_SM}>
+                  {file.name}
+                </span>
+                <span className="text-muted-foreground" style={TEXT_XS}>
+                  {formatSize(file.size)}
+                  {progress !== null && ` · uploading ${Math.round(progress * 100)}%`}
+                </span>
+                {progress !== null && (
+                  <span className="mt-1 block h-1 overflow-hidden rounded-full bg-muted">
+                    <span className="block h-full bg-primary transition-[width]" style={{ width: `${progress * 100}%` }} />
+                  </span>
+                )}
+              </span>
+              <Button type="button" size="icon" variant="ghost" aria-label="Remove attachment" disabled={busy} onClick={() => setFile(null)}>
+                <X className="size-4" />
+              </Button>
+            </div>
+          )}
           <div className="flex items-end gap-2">
             <Textarea
+              ref={box}
               value={draft}
+              onPaste={(e) => {
+                const f = e.clipboardData.files[0]
+                if (f && mode === 'reply') {
+                  e.preventDefault()
+                  attach(f)
+                }
+              }}
               onChange={(e) => {
                 setDraft(e.target.value)
                 setPick(0)
@@ -358,16 +479,28 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
               }}
               onKeyDown={onKey}
               rows={2}
-              placeholder={mode === 'note' ? 'Only your team sees notes' : 'Type a reply, or / for canned responses'}
+              placeholder={mode === 'note' ? 'Only your team sees notes' : file ? 'Add a caption (optional)' : 'Type a reply, or / for canned responses'}
               aria-label={mode === 'note' ? 'Internal note' : 'Reply'}
               className={cn('max-h-40 min-h-11 resize-none', mode === 'note' && 'bg-warning/5')}
             />
-            <Button onClick={() => void submit()} disabled={!draft.trim() || busy} aria-label={mode === 'note' ? 'Add note' : 'Send reply'}>
+            <Button onClick={() => void submit()} disabled={(!draft.trim() && !file) || busy} aria-label={mode === 'note' ? 'Add note' : 'Send reply'}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : mode === 'note' ? <StickyNote className="size-4" /> : <Send className="size-4" />}
               {mode === 'note' ? 'Add note' : 'Send'}
             </Button>
           </div>
         </div>
+      )}
+      {buttonsOpen && (
+        <InteractiveDialog
+          phone={conv.phone}
+          initialText={draft}
+          onClose={() => setButtonsOpen(false)}
+          onSent={(d) => {
+            setButtonsOpen(false)
+            setDraft('')
+            onSent(d)
+          }}
+        />
       )}
     </div>
   )
@@ -394,9 +527,12 @@ function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Me
         <p className="truncate" style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>
           {display({ name: contact?.name, phone: conv.phone, username: contact?.username })}
         </p>
-        <p className="text-muted-foreground" style={TEXT_XS}>
-          {conv.owner === 'ai' ? 'The AI agent is answering this chat' : assignee ? `With ${assignee.name}` : 'With your team, unassigned'}
-          {contact?.name ? ` · ${customerLabel(conv.phone, contact.username)}` : ''}
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground" style={TEXT_XS}>
+          <span>
+            {conv.owner === 'ai' ? 'The AI agent is answering this chat' : assignee ? `With ${assignee.name}` : 'With your team, unassigned'}
+            {contact?.name ? ` · ${customerLabel(conv.phone, contact.username)}` : ''}
+          </span>
+          <WindowChip lastInboundAt={conv.lastInboundAt} />
         </p>
         {!!chat.viewers?.length && (
           <p className="text-primary" style={TEXT_XS}>
@@ -404,7 +540,8 @@ function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Me
           </p>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <FollowUpMenu chat={chat} onChange={onChange} />
         <Select value={conv.assigneeId ?? 'none'} onValueChange={(v) => void run(() => assignChat(conv.phone, v === 'none' ? null : v))} disabled={busy}>
           <SelectTrigger className="h-9 w-44" aria-label="Assign to">
             <SelectValue>{assignee?.name ?? (conv.assigneeId ? 'Assigned' : 'Unassigned')}</SelectValue>
@@ -477,6 +614,69 @@ function CustomerPanel({ chat, version, onChanged }: { chat: ChatDetail; version
   )
 }
 
+/** The search words in bold, so a hit shows why it matched. */
+function Highlight({ text, q }: { text: string; q: string }) {
+  const words = q.trim().split(/\s+/).filter((w) => w.length > 1).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  if (!words.length) return <>{text}</>
+  const rx = new RegExp(`(${words.join('|')})`, 'gi')
+  return (
+    <>
+      {text.split(rx).map((part, i) => (i % 2 ? <mark key={i} className="rounded-sm bg-primary/20 text-foreground">{part}</mark> : <Fragment key={i}>{part}</Fragment>))}
+    </>
+  )
+}
+
+/** Your saved filter + search combinations, one tap away; the current one can be saved. */
+function SavedViews({ views, current, onApply, onChange }: { views: SavedView[]; current: { filter: ChatFilter; q: string }; onApply: (v: SavedView) => void; onChange: (v: SavedView[]) => void }) {
+  const [naming, setNaming] = useState<string | null>(null)
+  const custom = current.filter !== 'all' || current.q.trim() !== ''
+  const active = views.find((v) => v.filter === current.filter && v.q === current.q)
+  if (!views.length && !custom) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" style={TEXT_XS}>
+      {views.map((v) => (
+        <span key={v.id} className={cn('inline-flex items-center rounded-full border pl-2.5', v === active ? 'border-primary bg-primary/10 text-primary' : 'border-border')}>
+          <button type="button" onClick={() => onApply(v)}>
+            {v.name}
+          </button>
+          <button type="button" aria-label={`Delete view ${v.name}`} className="px-1.5 py-0.5 text-muted-foreground hover:text-foreground" onClick={() => void deleteView(v.id).then(onChange, (err) => toast.error(errorDetail(err)))}>
+            <X className="size-3" />
+          </button>
+        </span>
+      ))}
+      {custom &&
+        !active &&
+        (naming === null ? (
+          <button type="button" className="text-primary hover:underline" onClick={() => setNaming('')}>
+            + Save this view
+          </button>
+        ) : (
+          <form
+            className="flex items-center gap-1"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void saveView({ name: naming, ...current }).then(
+                (v) => {
+                  onChange(v)
+                  setNaming(null)
+                },
+                (err) => toast.error(errorDetail(err)),
+              )
+            }}
+          >
+            <input autoFocus value={naming} onChange={(e) => setNaming(e.target.value)} placeholder="View name" maxLength={40} className="h-6 w-28 rounded border border-border bg-background px-1.5" aria-label="View name" />
+            <button type="submit" className="text-primary" disabled={!naming.trim()}>
+              Save
+            </button>
+            <button type="button" className="text-muted-foreground" onClick={() => setNaming(null)}>
+              Cancel
+            </button>
+          </form>
+        ))}
+    </div>
+  )
+}
+
 /** One chat per customer who talks to the agent; people can step in, reply and hand back. */
 export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
   const [aiSummary, setAiSummary] = useState(false)
@@ -489,7 +689,19 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
   const [open, setOpen] = useState<string | null>(null)
   const [chat, setChat] = useState<ChatDetail | null>(null)
   const [canned, setCanned] = useState<CannedResponse[]>([])
+  const [views, setViews] = useState<SavedView[]>([])
+  const [hits, setHits] = useState<SearchHit[] | null>(null)
+  const [focusId, setFocusId] = useState<string | null>(null)
   const members = useMembers()
+  useEffect(() => {
+    listViews().then(setViews, () => {})
+  }, [])
+  // Typing in search also looks through message text (debounced).
+  useEffect(() => {
+    if (q.trim().length < 2) return setHits(null)
+    const t = setTimeout(() => void searchMessages(q).then(setHits, () => setHits([])), 350)
+    return () => clearTimeout(t)
+  }, [q])
 
   const refreshList = useCallback(() => {
     listChats(filter, q).then(
@@ -517,7 +729,8 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
     listCanned().then(setCanned, () => {})
   }, [])
 
-  async function openChat(phone: string) {
+  async function openChat(phone: string, messageId: string | null = null) {
+    setFocusId(messageId)
     setOpen(phone)
     setChat(null)
     setSummary(null)
@@ -562,8 +775,17 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
     <div className="flex h-full min-h-0">
       <section className={cn('flex w-full shrink-0 flex-col border-r border-border md:w-80', open && 'hidden md:flex')} aria-label="Chats">
         <div className="space-y-3 border-b border-border p-4">
-          <SearchInput value={q} onChange={setQ} placeholder="Search name or number" label="Search chats" />
+          <SearchInput value={q} onChange={setQ} placeholder="Search names, numbers and messages" label="Search chats" />
           <PillTabs label="Filter chats" options={FILTERS} value={filter} onChange={setFilter} compact />
+          <SavedViews
+            views={views}
+            current={{ filter, q }}
+            onApply={(v) => {
+              setFilter(v.filter)
+              setQ(v.q)
+            }}
+            onChange={setViews}
+          />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {listError ? (
@@ -587,6 +809,33 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
                 </li>
               ))}
             </ul>
+          )}
+          {hits && hits.length > 0 && (
+            <div className="border-t border-border">
+              <p className="px-4 pt-3 pb-1 text-muted-foreground" style={{ ...TEXT_XS, fontWeight: 'var(--font-weight-semi-bold)' }}>
+                In messages
+              </p>
+              <ul className="divide-y divide-border">
+                {hits.map((h) => (
+                  <li key={h.id}>
+                    <button type="button" className="block w-full px-4 py-2.5 text-left hover:bg-muted/60" onClick={() => void openChat(h.phone, h.id)}>
+                      <span className="flex justify-between gap-2" style={TEXT_SM}>
+                        <span className="truncate" style={{ fontWeight: 'var(--font-weight-medium)' }}>
+                          {h.name || customerLabel(h.phone)}
+                        </span>
+                        <span className="shrink-0 text-muted-foreground" style={TEXT_XS}>
+                          {when(h.at)}
+                        </span>
+                      </span>
+                      <span className="line-clamp-2 text-muted-foreground" style={TEXT_XS}>
+                        {h.kind === 'note' ? 'Note: ' : ''}
+                        <Highlight text={h.body} q={q} />
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       </section>
@@ -616,6 +865,13 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
                 setVersion((v) => v + 1)
               }}
             />
+            <FollowUpBanner
+              chat={chat}
+              onChange={(d) => {
+                setChat(d)
+                refreshList()
+              }}
+            />
             {summary && (
               <div className="flex items-start gap-2 border-b border-border bg-primary/5 px-4 py-3" style={TEXT_SM}>
                 <FileText className="mt-0.5 size-4 shrink-0 text-primary" />
@@ -626,7 +882,7 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
               </div>
             )}
             <div className="min-h-0 flex-1 overflow-y-auto" style={{ background: WA.wallpaper }}>
-              <Thread messages={chat.messages} />
+              <Thread messages={chat.messages} focusId={focusId} />
             </div>
             <Composer
               chat={chat}

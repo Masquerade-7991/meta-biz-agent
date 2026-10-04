@@ -9,6 +9,7 @@ import { env } from './upstream.ts'
 import { trace } from './trace.ts'
 import { customerLabel, isBsuid, parseCustomerKey } from '../src/app/lib/customer.ts'
 import { dismissAlert, openAlerts } from './alerts.ts'
+import { dismissReminder, dueReminders } from './followups.ts'
 import { addBusinessMinutes, DAYS, DEFAULT_HOURS, isOpen, type Hours } from './businessHours.ts'
 import { contactNames } from './contacts.ts'
 import { addMessage, conversations, sendInteractive, sendText, setControl, type Actor } from './inbox.ts'
@@ -280,7 +281,7 @@ async function notifications(me: Actor) {
     me.role === 'owner'
       ? (await openAlerts(me._id)).map((a) => ({ id: `alert:${String(a.key)}`, kind: a.severity === 'critical' ? 'alert_critical' : 'alert', text: `${String(a.title)}. ${String(a.detail)}`, at: a.createdAt as Date, target: String(a.target) }))
       : []
-  return [...alerts, ...items.sort((a, z) => +z.at - +a.at)].slice(0, 30)
+  return [...alerts, ...(await dueReminders(me._id)), ...items.sort((a, z) => +z.at - +a.at)].slice(0, 30)
 }
 
 // ---- support analytics ----
@@ -379,6 +380,10 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     return { ...settings, aiSummary: !!env('ANTHROPIC_API_KEY') }
   }
   if (path === '/api/support/notifications' && m === 'GET') return notifications(me)
+  if ((seg = path.match(/^\/api\/support\/notifications\/reminder:([a-f0-9]{24})\/dismiss$/)) && m === 'POST') {
+    await dismissReminder(seg[1], me._id)
+    return { ok: true }
+  }
   if ((seg = path.match(/^\/api\/support\/notifications\/alert:(.+)\/dismiss$/)) && m === 'POST') {
     await dismissAlert(decodeURIComponent(seg[1]), me._id)
     return { ok: true }

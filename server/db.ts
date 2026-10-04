@@ -53,13 +53,18 @@ const INDEXES: Record<string, IndexDescription[]> = {
     { key: { workspaceId: 1, phone: 1, at: 1 } },
     { key: { workspaceId: 1, waMessageId: 1 }, unique: true, partialFilterExpression: { waMessageId: { $type: 'string' } } },
     { key: { workspaceId: 1, turnId: 1 }, unique: true, partialFilterExpression: { turnId: { $type: 'string' } } },
+    // Inbox search (followups.ts): words in message text, within one workspace.
+    { key: { workspaceId: 1, body: 'text' }, name: 'body_text', default_language: 'none' },
   ],
+  // Snooze ends and reminders (followups.ts).
+  reminders: [{ key: { workspaceId: 1, userId: 1, firedAt: 1, dismissedAt: 1 } }, { key: { workspaceId: 1, userId: 1, phone: 1, firedAt: 1 } }],
+  saved_views: [{ key: { workspaceId: 1, userId: 1, name: 1 }, unique: true }],
   canned_responses: [{ key: { workspaceId: 1, shortcut: 1 }, unique: true }],
   presence: [{ key: { workspaceId: 1, phone: 1, userId: 1 }, unique: true }, { key: { at: 1 }, expireAfterSeconds: 60 }],
   // Tickets (tickets.ts): numbered per workspace; one open ticket per chat at a time.
   tickets: [{ key: { workspaceId: 1, number: 1 }, unique: true }, { key: { workspaceId: 1, status: 1, createdAt: -1 } }, { key: { workspaceId: 1, phone: 1, status: 1 } }],
   support_settings: [{ key: { workspaceId: 1 }, unique: true }],
-  whatsapp_webhooks: [{ key: { at: 1 }, expireAfterSeconds: 30 * DAY }], // raw payloads, for replay and debugging
+  whatsapp_webhooks: [{ key: { at: 1 }, expireAfterSeconds: 30 * DAY }, { key: { workspaceId: 1, at: -1 } }], // raw payloads, for replay and debugging
   agent_drafts: [{ key: { workspaceId: 1, phoneNumberId: 1 }, unique: true }],
   test_conversations: [
     { key: { conversationId: 1 }, unique: true },

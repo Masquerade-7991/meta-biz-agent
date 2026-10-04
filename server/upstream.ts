@@ -132,6 +132,16 @@ export async function metaJson(kind: Kind, method: string, path: string, body?: 
   return json
 }
 
+/** Downloads a file Meta hosts (a media URL from GET /<media-id>), with the workspace's token. */
+export async function downloadMeta(url: string): Promise<{ buf: Buffer; mime: string }> {
+  const token = tokenFor('')
+  const at = new Date()
+  const r = await fetch(url, { headers: token ? { authorization: `Bearer ${token}` } : {}, signal: AbortSignal.timeout(60_000) })
+  logCall({ at, source: 'relay', kind: 'graph', method: 'GET', url: safeUrl(url.split('?')[0]), status: r.status, ms: Date.now() - at.getTime() })
+  if (!r.ok) throw new HttpError(502, `WhatsApp didn’t hand over the file (${r.status}).`)
+  return { buf: Buffer.from(await r.arrayBuffer()), mime: r.headers.get('content-type') ?? 'application/octet-stream' }
+}
+
 export async function metaGet<T = Record<string, unknown>>(path: string): Promise<T> {
   const r = await callUpstream('meta', 'GET', path, undefined, undefined, 'collector').catch((err: unknown) => Promise.reject(Object.assign(new Error(String(err)), { down: true })))
   if (r.status < 200 || r.status >= 300) throw Object.assign(new Error(`HTTP ${r.status} for ${path}`), { status: r.status })

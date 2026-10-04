@@ -13,12 +13,13 @@ import { trace } from './trace.ts'
 export type JobResult = void | { again: Date }
 type Handler = (payload: Record<string, unknown>) => Promise<JobResult>
 
-const handlers = new Map<string, { run: Handler; maxAttempts: number }>()
+const handlers = new Map<string, { run: Handler; maxAttempts: number; onDead?: Handler }>()
 const jobs = () => col('jobs')
 const LEASE_MS = 5 * 60_000
 
-export function defineJob(type: string, run: Handler, opts: { maxAttempts?: number } = {}) {
-  handlers.set(type, { run, maxAttempts: opts.maxAttempts ?? 5 })
+/** `onDead` runs once when the job gives up, so whatever waits on it can show the failure. */
+export function defineJob(type: string, run: Handler, opts: { maxAttempts?: number; onDead?: Handler } = {}) {
+  handlers.set(type, { run, maxAttempts: opts.maxAttempts ?? 5, onDead: opts.onDead })
 }
 
 /** Queues a job in the current workspace. With `key`, a job still queued under that key is reused (earliest time wins). */
@@ -77,6 +78,7 @@ async function runJob(j: Record<string, unknown> & { _id: ObjectId }) {
           { $set: dead ? { status: 'dead', finishedAt: new Date(), lastError: error, updatedAt: new Date() } : { status: 'queued', runAt: new Date(Date.now() + backoffMs(attempts)), lastError: error, updatedAt: new Date() }, $unset: { lockedUntil: '' } },
         )
         trace(dead ? 'job.dead' : 'job.failed', { type: j.type, attempts, error })
+        if (dead) await h?.onDead?.((j.payload ?? {}) as Record<string, unknown>).catch(() => {})
         console.log(`job ${String(j.type)} ${dead ? 'gave up' : 'will retry'} (attempt ${attempts}): ${error}`)
       }
     },

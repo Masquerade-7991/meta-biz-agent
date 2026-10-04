@@ -4,7 +4,8 @@
 import type http from 'node:http'
 import { HttpError, type Obj, type Titles, serveJson, str } from './http.ts'
 import { col, db, dbOffReason, ownsMetaAssets, withWorkspace, ws } from './db.ts'
-import { metaJson } from './upstream.ts'
+import { env, metaJson } from './upstream.ts'
+import { appUrl } from './mail.ts'
 import { defineJob, enqueue } from './jobs.ts'
 import { clearAlert, raiseAlert } from './alerts.ts'
 import { trace } from './trace.ts'
@@ -108,8 +109,16 @@ async function overview() {
   return rows.map((r) => ({ phoneNumberId: String(r.phoneNumberId), display: r.display, name: r.name, quality: r.quality, nameStatus: r.nameStatus, status: r.status, limit: r.limit, limitLabel: limitLabel(r.limit), checkedAt: r.checkedAt }))
 }
 const TITLES: Titles = { 403: 'Not allowed', 404: 'Not found', 502: 'WhatsApp didn’t answer' }
+/** Whether Meta's webhooks reach this app: the inbox only gets customers' words and media through them. */
+async function webhookStatus() {
+  const last = await col('whatsapp_webhooks').findOne({ workspaceId: ws() }, { sort: { at: -1 }, projection: { at: 1 } })
+  return { lastAt: last?.at ?? null, callbackUrl: `${appUrl}/api/webhooks/whatsapp`, verifyTokenSet: !!env('WEBHOOK_VERIFY_TOKEN'), signatureChecked: !!env('APP_SECRET') }
+}
+
 export async function handleHealth(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {
   const path = new URL(req.url ?? '/', 'http://x').pathname
+  if (path === '/api/whatsapp/webhook-status' && req.method === 'GET')
+    return serveJson(req, res, { titles: TITLES, db, noDb: { title: dbOffReason, detail: 'Webhook status needs the database.' } }, webhookStatus)
   if (path !== '/api/whatsapp/health') return false
   return serveJson(req, res, { titles: TITLES, db, noDb: { title: dbOffReason, detail: 'Number health needs the database.' } }, async () => {
     if (req.method === 'POST') {

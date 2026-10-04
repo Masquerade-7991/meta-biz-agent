@@ -60,6 +60,14 @@ export interface NumberHealth {
 }
 export const getNumberHealth = () => call<NumberHealth[]>('/api/whatsapp/health')
 export const refreshNumberHealth = () => call<NumberHealth[]>('/api/whatsapp/health', 'POST', {})
+/** Whether WhatsApp webhooks reach this app (they carry customers' words and media into the inbox). */
+export interface WebhookStatus {
+  lastAt: string | null
+  callbackUrl: string
+  verifyTokenSet: boolean
+  signatureChecked: boolean
+}
+export const getWebhookStatus = () => call<WebhookStatus>('/api/whatsapp/webhook-status')
 export const PAYMENT_URL = 'https://business.facebook.com/wa/manage/home/'
 export const STEP_LABEL: Record<StepName, string> = {
   exchange: 'Secure access to your account',
