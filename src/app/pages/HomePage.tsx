@@ -8,6 +8,13 @@ import { HELP_GROUPS } from '@/app/home/helpLinks'
 import { listChats } from '@/app/api/inbox'
 import { listTickets } from '@/app/api/tickets'
 import type { NavId } from '@/app/nav'
+import type { SettingsTab } from '@/app/components/shell/SettingsPage'
+import { getSignupConfig, listAccounts, type SignupConfig, type WaAccount } from '@/app/api/whatsapp'
+import { AccountSteps, ConnectWhatsApp } from '@/app/whatsapp/ConnectWhatsApp'
+import { isDummyMode } from '@/app/api/dummy'
+import { resetDummyWhatsApp } from '@/app/api/supportDummy'
+import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
+import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { SECTION_TITLE, TEXT_SM_OPEN } from '@/app/lib/text'
 
 interface Snapshot {
@@ -47,28 +54,42 @@ function greeting(name?: string) {
 }
 
 /** One step of the setup guide; `done` comes from live data, never from a click. */
-function Step({ n, done, title, children, action }: { n: number; done: boolean; title: string; children: ReactNode; action?: ReactNode }) {
+function Step({ n, done, locked, title, note, children, action }: { n: number; done: boolean; locked?: string; title: string; note?: ReactNode; children?: ReactNode; action?: ReactNode }) {
   return (
     <li className="grid grid-cols-[2rem_minmax(0,1fr)] gap-4 py-5">
       <span
         className={
           done
             ? 'flex size-8 items-center justify-center rounded-full bg-success text-success-foreground'
-            : 'flex size-8 items-center justify-center rounded-full border border-border text-muted-foreground'
+            : locked
+              ? 'flex size-8 items-center justify-center rounded-full border border-border text-muted-foreground/60'
+              : 'flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground'
         }
         aria-label={done ? 'Done' : `Step ${n}`}
       >
         {done ? <Check className="size-4" /> : <span style={{ fontSize: 'var(--text-sm)' }}>{n}</span>}
       </span>
-      <div className="space-y-2">
-        <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }} className={done ? 'text-muted-foreground' : undefined}>
+      <div className="min-w-0 space-y-2">
+        <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }} className={done || locked ? 'text-muted-foreground' : undefined}>
           {title}
         </p>
-        {!done && (
-          <>
+        {done ? (
+          note && (
             <div className="text-muted-foreground" style={TEXT_SM_OPEN}>
-              {children}
+              {note}
             </div>
+          )
+        ) : locked ? (
+          <p className="text-muted-foreground/80" style={TEXT_SM_OPEN}>
+            {locked}
+          </p>
+        ) : (
+          <>
+            {children && (
+              <div className="text-muted-foreground" style={TEXT_SM_OPEN}>
+                {children}
+              </div>
+            )}
             {action}
           </>
         )}
@@ -77,59 +98,79 @@ function Step({ n, done, title, children, action }: { n: number; done: boolean; 
   )
 }
 
-function ExternalButton({ href, children }: { href: string; children: ReactNode }) {
-  return (
-    <Button variant="outline" size="sm" asChild>
-      <a href={href} target="_blank" rel="noreferrer">
-        {children}
-        <ArrowUpRight className="size-3.5" />
-      </a>
-    </Button>
-  )
-}
+const billingDone = (a: WaAccount) => a.source === 'env' || (a.billing.mode === 'partner_credit' ? a.billing.state === 'shared' : a.billing.state === 'confirmed')
 
-/** New workspace: what to do, in order, to get an AI agent answering on WhatsApp. */
-function SetupGuide({ snap, onNavigate }: { snap: Snapshot; onNavigate: (id: NavId) => void }) {
-  const connected = !!snap.waba
+/** New workspace: connect WhatsApp first (Embedded Signup); everything else follows from it. */
+function SetupGuide({
+  snap,
+  accounts,
+  config,
+  onNavigate,
+  onAccountChange,
+}: {
+  snap: Snapshot
+  accounts: WaAccount[]
+  config: SignupConfig | null
+  onNavigate: (id: NavId) => void
+  onAccountChange: (a: WaAccount) => void
+}) {
+  const { me } = useAuth()
+  const account = accounts[0]
+  const connected = !!account
+  const billed = connected && billingDone(account)
   const hasAgent = !!snap.agent
-  const steps = [connected, connected, connected, hasAgent, !!snap.agent?.enabled]
-  const doneCount = steps.filter(Boolean).length
+  const steps = [connected, billed, hasAgent, !!snap.agent?.enabled]
+  const number = account?.phoneNumbers[0]
   return (
     <section className="rounded-xl border border-border p-6 md:p-8">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 style={SECTION_TITLE}>Set up WhatsApp for your AI agent</h2>
+        <h2 style={SECTION_TITLE}>{connected ? 'Finish setting up WhatsApp' : 'Start by connecting WhatsApp'}</h2>
         <p className="text-muted-foreground" style={TEXT_SM_OPEN}>
-          {doneCount} of {steps.length} done
+          {steps.filter(Boolean).length} of {steps.length} done
         </p>
       </div>
       <ol className="mt-2 divide-y divide-border">
-        <Step n={1} done={steps[0]} title="Create a Meta Business portfolio" action={<ExternalButton href="https://business.facebook.com/settings">Open Business settings</ExternalButton>}>
-          Your business&rsquo;s home on Meta. It owns your WhatsApp account and decides who can manage it.
-        </Step>
-        <Step n={2} done={steps[1]} title="Add a WhatsApp Business number" action={<ExternalButton href="https://business.facebook.com/wa/manage/home/">Open WhatsApp Manager</ExternalButton>}>
-          Use a number that isn&rsquo;t on the WhatsApp app. Meta checks it by SMS or call, then asks you to approve a display name customers will see.
-        </Step>
-        <Step n={3} done={steps[2]} title="Connect the number to this workspace" action={<ExternalButton href="https://helo.ai/contact-us">Contact Helo.ai</ExternalButton>}>
-          Helo.ai links your WhatsApp Business Account to this workspace. Once it&rsquo;s linked, this step ticks itself.
+        <Step
+          n={1}
+          done={connected}
+          title="Connect your WhatsApp Business number"
+          note={number && `${number.verifiedName || account.wabaName} · ${number.display || number.id}`}
+          action={
+            <div className="pt-2">
+              <ConnectWhatsApp config={config} isOwner={me?.role === 'owner'} workspaceName={me?.workspace?.name ?? 'this workspace'} variant="hero" onConnected={onAccountChange} />
+            </div>
+          }
+        >
+          Your AI agent, inbox and broadcasts all run on your own WhatsApp number. Connect it with Facebook in a few minutes, right here.
         </Step>
         <Step
-          n={4}
-          done={steps[3]}
+          n={2}
+          done={billed}
+          locked={connected ? undefined : 'Unlocks after you connect your number.'}
+          title="Set up billing"
+          note={account && (account.billing.mode === 'partner_credit' ? 'Billed through Helo.ai' : 'Your own payment method with Meta')}
+          action={account && <AccountSteps account={account} canEdit={me?.role === 'owner'} onChange={onAccountChange} />}
+        />
+        <Step
+          n={3}
+          done={hasAgent}
+          locked={connected ? undefined : 'Unlocks after you connect your number.'}
           title="Create your AI agent"
           action={
-            <Button size="sm" onClick={() => onNavigate('ai-agents')} disabled={!connected}>
+            <Button size="sm" onClick={() => onNavigate('ai-agents')}>
               Create agent
             </Button>
           }
         >
-          {connected ? 'Name it, check the number is eligible, then give it your business details and FAQs.' : 'Available once your number is connected.'}
+          Name it, check the number is eligible, then give it your business details and FAQs.
         </Step>
         <Step
-          n={5}
-          done={steps[4]}
+          n={4}
+          done={steps[3]}
+          locked={hasAgent ? undefined : 'Unlocks once your agent exists.'}
           title="Switch your agent on"
           action={
-            <Button size="sm" variant="outline" onClick={() => onNavigate('ai-agents')} disabled={!hasAgent}>
+            <Button size="sm" variant="outline" onClick={() => onNavigate('ai-agents')}>
               Open AI agents
             </Button>
           }
@@ -156,7 +197,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint: stri
 }
 
 /** Returning workspace: the agent's live state and the next things to do. */
-function AgentHome({ snap, onNavigate }: { snap: Snapshot; onNavigate: (id: NavId) => void }) {
+function AgentHome({ snap, onNavigate, onOpenSettings }: { snap: Snapshot; onNavigate: (id: NavId) => void; onOpenSettings: (tab: SettingsTab) => void }) {
   const a = snap.agent!
   const [team, setTeam] = useState<{ tickets: number; overdue: number; unread: number } | null>(null)
   useEffect(() => {
@@ -203,6 +244,12 @@ function AgentHome({ snap, onNavigate }: { snap: Snapshot; onNavigate: (id: NavI
           View tickets
         </Button>
       </div>
+      <p className="mt-5 border-t border-border pt-4 text-muted-foreground" style={TEXT_SM_OPEN}>
+        Running more than one WhatsApp number?{' '}
+        <button type="button" className="text-primary underline-offset-4 hover:underline" onClick={() => onOpenSettings('whatsapp')}>
+          Add another WhatsApp number
+        </button>
+      </p>
     </section>
   )
 }
@@ -238,16 +285,42 @@ function HelpGuides() {
 }
 
 /** Home: a WhatsApp setup guide until an agent exists, then the agent's live state; product guides always. */
-export function HomePage({ onNavigate }: { onNavigate: (id: NavId) => void }) {
+export function HomePage({ onNavigate, onOpenSettings }: { onNavigate: (id: NavId) => void; onOpenSettings: (tab: SettingsTab) => void }) {
   const { me } = useAuth()
   const [snap, setSnap] = useState<Snapshot | null>(null)
+  const [accounts, setAccounts] = useState<WaAccount[]>([])
+  const [config, setConfig] = useState<SignupConfig | null>(null)
+  useRegisterDevControls(
+    'home-whatsapp',
+    isDummyMode() ? (
+      <DemoControlsGroup label="WhatsApp">
+        <Button size="sm" variant="outline" onClick={() => {
+            resetDummyWhatsApp(false)
+            setAttempt((n) => n + 1)
+          }}>
+          New workspace (no number)
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => {
+            resetDummyWhatsApp(true)
+            setAttempt((n) => n + 1)
+          }}>
+          Number connected
+        </Button>
+      </DemoControlsGroup>
+    ) : null,
+  )
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     let cancelled = false
     setError(null)
-    loadSnapshot().then(
-      (s) => !cancelled && setSnap(s),
+    Promise.all([loadSnapshot(), listAccounts(), getSignupConfig().catch(() => null)]).then(
+      ([s, a, c]) => {
+        if (cancelled) return
+        setSnap(s)
+        setAccounts(a)
+        setConfig(c)
+      },
       (err) => !cancelled && setError(errorText(err)),
     )
     return () => {
@@ -274,9 +347,19 @@ export function HomePage({ onNavigate }: { onNavigate: (id: NavId) => void }) {
           Checking your WhatsApp setup&hellip;
         </div>
       ) : snap.agent ? (
-        <AgentHome snap={snap} onNavigate={onNavigate} />
+        <AgentHome snap={snap} onNavigate={onNavigate} onOpenSettings={onOpenSettings} />
       ) : (
-        <SetupGuide snap={snap} onNavigate={onNavigate} />
+        <SetupGuide
+          snap={snap}
+          accounts={accounts}
+          config={config}
+          onNavigate={onNavigate}
+          onAccountChange={(a) => {
+            setAccounts((prev) => [...prev.filter((x) => x.wabaId !== a.wabaId), a])
+            // A newly connected number changes what the rest of Home shows (agent, numbers).
+            if (!accounts.some((x) => x.wabaId === a.wabaId)) setAttempt((n) => n + 1)
+          }}
+        />
       )}
       <HelpGuides />
     </div>

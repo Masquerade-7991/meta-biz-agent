@@ -13,6 +13,7 @@ import { allow } from './cache.ts'
 import { col, db, dbOffReason } from './db.ts'
 import { appUrl, mail } from './mail.ts'
 import { HttpError, readJson, serveJson, type Titles } from './http.ts'
+import { migrateEnvAccount } from './accounts.ts'
 
 type Obj = Record<string, unknown>
 type Role = 'owner' | 'member'
@@ -195,7 +196,10 @@ async function createWorkspace(userId: string, name: string) {
   const w: Workspace = { _id: randomUUID(), name, ownerId: userId, createdAt: new Date(), ...(first && { metaAssets: true }) }
   await workspaces().insertOne(w)
   await memberships().insertOne({ workspaceId: w._id, userId, role: 'owner', createdAt: new Date() })
-  if (first) await adoptDefaultRecords(w._id)
+  if (first) {
+    await adoptDefaultRecords(w._id)
+    await migrateEnvAccount(db!) // the server's own WhatsApp account (.env) belongs to the first workspace
+  }
   return w
 }
 async function adoptDefaultRecords(workspaceId: string) {

@@ -1,6 +1,7 @@
 // Background collectors (in-process setInterval). Each job has an in-flight lock, and a run stops
 // quietly when the upstream is unreachable (it's VPN-only and often down).
 import { col, db, withWorkspace, ws } from './db.ts'
+import { assetsFor } from './accounts.ts'
 import { hash, saveTurns } from './record.ts'
 import { metaGet } from './upstream.ts'
 
@@ -189,7 +190,7 @@ export async function runOnce(job: Job): Promise<void> {
   running.add(job)
   try {
     // Each workspace's agents are collected inside that workspace.
-    for (const w of (await col('agents').distinct('workspaceId')) as string[]) await withWorkspace(w, JOBS[job])
+    for (const w of (await col('agents').distinct('workspaceId')) as string[]) await withWorkspace(w, JOBS[job], await assetsFor(w))
   } catch (err) {
     console.log(`collector ${job} skipped: ${(err as { down?: boolean }).down ? 'upstream unreachable' : err instanceof Error ? err.message : err}`)
   } finally {

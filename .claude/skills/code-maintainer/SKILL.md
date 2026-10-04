@@ -50,7 +50,7 @@ If the request is ambiguous ("look at the code"), run the hygiene check (§B) an
 npm run build                    # tsc -b (src + server) + vite build
 npm run lint                     # oxlint, must be 0 warnings
 npm run lint:tw                  # Tailwind canonical classes / conflicts (scripts/check-tailwind.mjs), exit 0
-node --test server/*.test.ts src/app/contacts/csv.test.ts
+node --test server/*.test.ts src/app/contacts/csv.test.ts src/app/whatsapp/signupEvent.test.ts
 ```
 
 Extra checks by area:
@@ -84,6 +84,10 @@ server/ (node:http, Node runs TS natively)
   ├─ tickets.ts    tickets, SLA (businessHours.ts), routing, CSAT, support settings, bell, analytics
   ├─ contacts.ts   contacts, custom fields, segments (segmentQuery), CSV import
   ├─ broadcasts.ts WhatsApp templates, broadcasts, send worker (every 3 s)
+  ├─ whatsapp.ts   Embedded Signup: code exchange, subscribe, register, billing, coexistence sync
+  ├─ accounts.ts   whatsapp_accounts per workspace; assetsFor() → context; .env account migration
+  ├─ context.ts    per-request workspace + WhatsApp account (AsyncLocalStorage)
+  ├─ crypto.ts     seal/open (AES-256-GCM) for stored tokens and PINs
   ├─ collectors.ts background jobs (COLLECTORS=off disables), per workspace
   ├─ cache.ts      in-memory TTL cache + allow() rate limiter
   └─ db.ts         MongoDB connect, collections + indexes + TTLs, ws()/withWorkspace (AsyncLocalStorage)
@@ -96,6 +100,7 @@ scripts/check-tailwind.mjs  Tailwind checker behind npm run lint:tw
 - Meta is the source of truth: per-row actions call Meta first, then update local state. New list types carry a `metaId`.
 - Keep the Demo-controls failure hooks (`consumeForcedFailure()`) in front of real calls.
 - Every stored document is scoped by `workspaceId` via `ws()`. Never use a constant workspace.
+- Meta calls act through the workspace's own WhatsApp account (`currentAssets()`); a workspace may only name its own WABA, numbers and business IDs.
 - Never store secrets: connector keys and client secrets are blanked (`stripSecrets`); tokens and session ids are stored only as hashes.
 - Magic links only verify an email. Setup happens in the app, and an unfinished account can only finish setup.
 - Meta quirks:

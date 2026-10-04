@@ -399,7 +399,7 @@ export function CreateAgentModal({
               </div>
             ) : wabas.length === 0 ? (
               <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                No WhatsApp Business Account is connected to this workspace.
+                No WhatsApp Business Account is connected to this workspace. An owner can connect one from Home or Settings → WhatsApp.
               </p>
             ) : wabas.length === 1 ? (
               <div className="rounded-md border border-border px-3 py-2" style={{ fontSize: 'var(--text-sm)' }}>

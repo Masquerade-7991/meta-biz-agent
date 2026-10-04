@@ -17,7 +17,9 @@ import { handleInbox, handleWebhook } from './inbox.ts'
 import { handleTickets } from './tickets.ts'
 import { handleContacts } from './contacts.ts'
 import { handleBroadcasts, startBroadcastWorker } from './broadcasts.ts'
-import { agentUpstream, callUpstream, env, hasToken, ids, resolveIds, setCallLogger, upstream, type Kind } from './upstream.ts'
+import { agentUpstream, callUpstream, env, hasToken, pathIds, resolveIds, setCallLogger, upstream, type Kind } from './upstream.ts'
+import { accounts, assetsFor } from './accounts.ts'
+import { handleWhatsApp } from './whatsapp.ts'
 
 const PORT = Number(env('SERVER_PORT') || 8787)
 
@@ -77,23 +79,25 @@ async function forward(req: http.IncomingMessage, res: http.ServerResponse, kind
 const server = http.createServer(async (req, res) => {
   const url = req.url ?? '/'
   if (url === '/api/health') {
-    // Public, so the WhatsApp assets are only added for members of the workspace that owns them
-    // (the Create Agent fallback and dummy mode use them). The token never leaves this process.
-    const owner = !!(await getSession(req).catch(() => null))?.workspace?.metaAssets
+    // Public, so a WhatsApp account's labels are only added for members of the workspace it belongs
+    // to (the Create Agent fallback and dummy mode use them). Tokens never leave this process.
+    const wsId = db ? (await getSession(req).catch(() => null))?.workspace?._id : undefined
+    const account = wsId ? await accounts().findOne({ workspaceId: wsId }, { sort: { createdAt: 1 } }) : null
+    const number = account?.phoneNumbers[0]
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(
       JSON.stringify({
         ok: true,
         upstream,
         hasToken,
-        ...(owner && {
-          businessName: env('BUSINESS_NAME'),
-          wabaId: ids.WABA_ID,
+        ...(account && {
+          businessName: account.source === 'env' ? env('BUSINESS_NAME') : account.wabaName,
+          wabaId: account.wabaId,
           // Display labels for the offline fallback, matching WhatsApp Manager (not IDs, not secrets).
-          wabaName: env('WABA_NAME'),
-          phoneNumberId: ids.PHONE_NUMBER_ID,
-          phoneNumber: env('PHONE_NUMBER'),
-          phoneName: env('PHONE_NAME'),
+          wabaName: account.wabaName,
+          phoneNumberId: number?.id,
+          phoneNumber: number?.display,
+          phoneName: number?.verifiedName,
         }),
       }),
     )
@@ -108,19 +112,24 @@ const server = http.createServer(async (req, res) => {
   if (!s) return sendError(res, 401, 'Not logged in', 'Log in to continue.')
   if (s.setup !== 'complete') return sendError(res, 403, 'Setup not finished', 'Finish setting up your account first.')
   if (!s.workspace) return sendError(res, 403, 'No workspace', 'Create or join a workspace first.')
-  const metaAssets = !!s.workspace.metaAssets
-  if (!metaAssets && /^\/api\/(meta|graph)\//.test(url))
-    return sendError(res, 403, NO_META_ASSETS.title, NO_META_ASSETS.detail)
+  const assets = await assetsFor(s.workspace._id)
+  const metaRoute = url.match(/^\/api\/(meta|graph)(\/.*)$/)
+  if (metaRoute && !assets) return sendError(res, 403, NO_META_ASSETS.title, NO_META_ASSETS.detail)
   const me = { _id: s.user._id, name: s.user.name ?? '', role: s.role }
   await withWorkspace(s.workspace._id, async () => {
-    if (url.startsWith('/api/meta/')) await forward(req, res, 'meta', resolveIds(url.slice('/api/meta'.length)))
-    else if (url.startsWith('/api/graph/')) await forward(req, res, 'graph', resolveIds(url.slice('/api/graph'.length)))
+    if (metaRoute) {
+      const path = resolveIds(metaRoute[2])
+      // Several businesses share this server: a workspace may only name its own WABA, numbers and business.
+      if (pathIds(path).some((id) => !assets!.ids.has(id))) return sendError(res, 403, 'Not your WhatsApp account', 'That WhatsApp ID isn’t connected to this workspace.')
+      await forward(req, res, metaRoute[1] as Kind, path)
+    }
+    else if (await handleWhatsApp(req, res, me)) return
     else if (await handleInbox(req, res, me)) return
     else if (await handleTickets(req, res, me)) return
     else if (await handleContacts(req, res, me)) return
     else if (await handleBroadcasts(req, res, me)) return
     else if (!(await handleStore(req, res))) res.writeHead(404).end()
-  }, metaAssets)
+  }, assets)
 })
 
 server.listen(PORT, () => console.log(`API proxy on :${PORT} → graph: ${upstream || '(no upstream set)'} · agent: ${agentUpstream || '(no upstream set)'}`))

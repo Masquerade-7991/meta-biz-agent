@@ -7,6 +7,7 @@ import { ObjectId } from 'mongodb'
 import { HttpError, type Obj, type Titles, arr, obj, readJson, serveJson } from './http.ts'
 import { col, db, dbOffReason, needMetaAssets, withWorkspace, ws } from './db.ts'
 import { metaJson } from './upstream.ts'
+import { assetsFor } from './accounts.ts'
 import { conversations, ensureConversation, sendTemplateMessage, type Actor } from './inbox.ts'
 import { contactNames, segmentQuery, type SegmentFilter } from './contacts.ts'
 import { renderTemplate, slotsOf, templatePayload, type Template } from '../src/app/broadcasts/templates.ts'
@@ -178,7 +179,6 @@ export async function broadcastTick() {
   try {
     const b = await col('broadcasts').findOne({ status: { $in: ['scheduled', 'sending'] }, scheduledAt: { $lte: new Date() } }, { sort: { scheduledAt: 1 } })
     if (!b) return
-    const owner = await col('workspaces').findOne({ _id: b.workspaceId })
     await withWorkspace(
       String(b.workspaceId),
       async () => {
@@ -204,7 +204,7 @@ export async function broadcastTick() {
         }
         if (batch.length < BATCH) await broadcasts().updateOne({ _id: b._id, status: 'sending' }, { $set: { status: 'completed', completedAt: new Date() } })
       },
-      !!owner?.metaAssets,
+      await assetsFor(String(b.workspaceId)),
     )
   } catch (err) {
     console.log('broadcast worker:', err instanceof Error ? err.message : err)

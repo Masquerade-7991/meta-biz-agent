@@ -8,7 +8,9 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { ObjectId } from 'mongodb'
 import { HttpError, type Obj, type Titles, arr, digits, obj, readJson, serveJson, str } from './http.ts'
 import { col, db, dbOffReason, needMetaAssets, ownsMetaAssets, withWorkspace, ws } from './db.ts'
-import { callUpstream, env, ids, metaJson, parseJson, resolveIds } from './upstream.ts'
+import { callUpstream, env, metaJson, parseJson, resolveIds } from './upstream.ts'
+import { currentAssets } from './context.ts'
+import { accounts, assetsFor, workspaceForNumber } from './accounts.ts'
 import { SAMPLE_CHATS } from '../src/app/inbox/sampleData.ts'
 import { ensureTicket, onAgentReply, onCustomerMessage } from './tickets.ts'
 
@@ -208,15 +210,39 @@ async function processChange(field: string, value: Obj) {
   }
 }
 
+/** Handles the events for the current workspace's numbers (anything else in the payload is skipped). */
 export async function processWebhook(payload: unknown) {
+  const mine = currentAssets()?.ids
   for (const entry of arr(obj(payload).entry))
     for (const change of arr(obj(entry).changes)) {
       const c = obj(change)
       const value = obj(c.value)
       const phoneId = str(obj(value.metadata).phone_number_id)
-      if (phoneId && phoneId !== ids.PHONE_NUMBER_ID) continue // another number on the shared account
+      if (phoneId && !mine?.has(phoneId)) continue
       await processChange(String(c.field), value)
     }
+}
+
+/** Sends each event to the workspace that connected that number (or, for account events, that WABA). */
+async function routeWebhook(payload: unknown) {
+  const byWorkspace = new Map<string, unknown[]>()
+  for (const entry of arr(obj(payload).entry))
+    for (const change of arr(obj(entry).changes)) {
+      const phoneId = str(obj(obj(obj(change).value).metadata).phone_number_id)
+      const wsId = phoneId
+        ? await workspaceForNumber(phoneId)
+        : ((await accounts().findOne({ wabaId: String(obj(entry).id ?? '') }, { projection: { workspaceId: 1 } }))?.workspaceId ?? null)
+      if (wsId) byWorkspace.set(wsId, [...(byWorkspace.get(wsId) ?? []), { ...obj(entry), changes: [change] }])
+    }
+  for (const [wsId, entries] of byWorkspace)
+    await withWorkspace(
+      wsId,
+      async () => {
+        await col('whatsapp_webhooks').insertOne({ workspaceId: ws(), at: new Date(), payload: { entry: entries } })
+        await processWebhook({ entry: entries })
+      },
+      await assetsFor(wsId),
+    )
 }
 
 /** Public: Meta's verification handshake (GET) and events (POST). Runs in the workspace that owns the number. */
@@ -242,17 +268,7 @@ export async function handleWebhook(req: http.IncomingMessage, res: http.ServerR
   }
   res.writeHead(200).end() // acknowledge first; Meta retries slow answers
   if (!db) return true
-  const owner = await col('workspaces').findOne({ metaAssets: true })
-  if (!owner) return true
-  const payload = parseJson(raw.toString('utf8'))
-  await withWorkspace(
-    String(owner._id),
-    async () => {
-      await col('whatsapp_webhooks').insertOne({ workspaceId: ws(), at: new Date(), payload })
-      await processWebhook(payload)
-    },
-    true,
-  ).catch((err: unknown) => console.log('webhook processing failed:', err instanceof Error ? err.message : err))
+  await routeWebhook(parseJson(raw.toString('utf8'))).catch((err: unknown) => console.log('webhook processing failed:', err instanceof Error ? err.message : err))
   return true
 }
 
@@ -531,7 +547,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
           changes: [
             {
               field,
-              value: { metadata: { phone_number_id: ids.PHONE_NUMBER_ID }, ...(field === 'standby' ? { standby: event } : event) },
+              value: { metadata: { phone_number_id: currentAssets()?.phoneNumberId }, ...(field === 'standby' ? { standby: event } : event) },
             },
           ],
         },

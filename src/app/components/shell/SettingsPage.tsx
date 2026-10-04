@@ -16,8 +16,9 @@ import { authApi, type Invite, type Member, type Role } from '@/app/auth/api'
 import { errorDetail } from '@/app/api/meta'
 import { SECTION_TITLE } from '@/app/lib/text'
 import { SettingsSection } from './SettingsSection'
+import { WhatsAppSettings } from './WhatsAppSettings'
 
-export type SettingsTab = 'profile' | 'members' | 'canned' | 'support' | 'fields'
+export type SettingsTab = 'profile' | 'whatsapp' | 'members' | 'canned' | 'support' | 'fields'
 
 
 const days = (from: string, to = Date.now()) => Math.round((to - Date.parse(from)) / 86_400_000)
@@ -331,6 +332,7 @@ export function SettingsPage({ tab, onTabChange }: { tab: SettingsTab; onTabChan
       <Tabs value={tab} onValueChange={(v) => onTabChange(v as SettingsTab)}>
         <TabsList className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
           <TabsTrigger value="canned">Canned responses</TabsTrigger>
           <TabsTrigger value="support">Support rules</TabsTrigger>
@@ -338,6 +340,9 @@ export function SettingsPage({ tab, onTabChange }: { tab: SettingsTab; onTabChan
         </TabsList>
         <TabsContent value="profile" className="pt-2">
           <Profile />
+        </TabsContent>
+        <TabsContent value="whatsapp" className="pt-2">
+          <WhatsAppSettings />
         </TabsContent>
         <TabsContent value="members" className="pt-2">
           <Members />

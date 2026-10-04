@@ -19,7 +19,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Accounts need MongoDB.
   - Emails go through Gmail SMTP (`SMTP_USER` / `SMTP_PASS` App password). Without `SMTP_PASS`, emails, including magic links, print to the relay log.
   - Dummy mode skips login entirely.
-- **IDs stay on the server:** client paths use the literal placeholders `PHONE_NUMBER_ID` / `WABA_ID`, and the server fills them in from `.env`. Never put real IDs in client code.
+- **IDs stay on the server:** client paths use the literal placeholders `PHONE_NUMBER_ID` / `WABA_ID`, and the server fills them in from the workspace's WhatsApp account. Never put real IDs in client code.
+- **WhatsApp accounts are per workspace (`server/accounts.ts`, `whatsapp_accounts`):**
+  - Each request runs with its workspace's accounts (`server/context.ts`); calls use that account's token. The `.env` number is the first workspace's account (`source: 'env'`, server token).
+  - `/api/meta` and `/api/graph` reject real IDs that aren't the workspace's own.
+  - New numbers come in through **Embedded Signup v4** (`server/whatsapp.ts`, `src/app/whatsapp/*`). It needs `META_APP_ID`, `META_ES_CONFIG_ID`, `META_APP_SECRET` and `TOKEN_ENCRYPTION_KEY`, plus optionally `WA_CREDIT_LINE_ID` / `WA_CREDIT_CURRENCY` for billing through Helo.ai. Without them, Home offers "Talk to Helo.ai"; Dummy mode simulates the signup.
+  - Customer tokens and PINs are stored only sealed (`server/crypto.ts`, AES-256-GCM).
 - **There is no test suite.** Verify with `npm run build` (type-checks `src/` and `server/`) and `npm run lint`. Lint is clean; keep it that way. Context hooks are allowed by name in `.oxlintrc.json`; other shared helpers go in a `.ts` file, not next to a component.
 
 ## Support platform (Home, Inbox, Tickets, Contacts, Broadcasts, Analytics)
@@ -28,7 +33,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Model:** one conversation per customer phone; a ticket is one issue inside it (opens on handoff, take-over or a team reply).
 - **Sample data never reaches Meta:** rows with `sample: true` are stored but not sent. Tests send only to sample contacts.
 - **Shared pure logic** lives in `src/` and is imported by the server too: `src/app/inbox/sampleData.ts`, `src/app/broadcasts/templates.ts`. SLA business-hours maths is `server/businessHours.ts`.
-- **Tests:** `node --test server/*.test.ts src/app/contacts/csv.test.ts`.
+- **Tests:** `node --test server/*.test.ts src/app/contacts/csv.test.ts src/app/whatsapp/signupEvent.test.ts`.
 
 ## Rules for Meta wiring
 

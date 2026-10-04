@@ -4,15 +4,18 @@ import { HttpError, readJson, serveJson, type Obj, type Titles } from './http.ts
 import { mirrorDraft } from './mirror.ts'
 import { col, db, dbOffReason, needMetaAssets, ws } from './db.ts'
 import { addDays, dayIn, ensureDays } from './collectors.ts'
-import { metaGet, ids } from './upstream.ts'
+import { metaGet } from './upstream.ts'
+import { currentAssets } from './context.ts'
 
 const TITLES: Titles = { 400: 'Bad request', 403: 'No WhatsApp account connected', 404: 'Not found', 413: 'Payload too large', 502: 'Upstream unreachable' }
 
-/** Digits, or the PHONE_NUMBER_ID placeholder (filled from .env). */
+/** One of this workspace's numbers, by ID or the PHONE_NUMBER_ID placeholder (its default number). */
 function phoneParam(v: string | null | undefined): string {
   needMetaAssets()
-  const p = v === 'PHONE_NUMBER_ID' ? ids.PHONE_NUMBER_ID : (v ?? '')
+  const a = currentAssets()!
+  const p = v === 'PHONE_NUMBER_ID' ? a.phoneNumberId : (v ?? '')
   if (!/^\d{1,20}$/.test(p)) throw new HttpError(400, 'phone must be digits.')
+  if (!a.ids.has(p)) throw new HttpError(403, 'That number isn’t connected to this workspace.')
   return p
 }
 function dateParam(v: string | null): Date | undefined {

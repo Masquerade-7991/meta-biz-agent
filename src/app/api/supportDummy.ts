@@ -7,6 +7,7 @@ import type { CannedResponse, ChatDetail, ChatMessage, ChatSummary } from './inb
 import type { Priority, SupportSettings, Ticket } from './tickets'
 import type { Contact, FieldDef, Segment } from './contacts'
 import type { Broadcast, BroadcastDetail, WaTemplate } from './broadcasts'
+import type { WaAccount } from './whatsapp'
 import { renderTemplate } from '../broadcasts/templates'
 
 interface Chat {
@@ -386,4 +387,73 @@ export async function dummyBroadcasts<T>(method: string, path: string, body: unk
     return row as T
   }
   throw new MetaError(404, 'Not found', path)
+}
+
+// ---- WhatsApp accounts (dummy) ----
+const dummyAccountNow = (): WaAccount => ({
+  wabaId: '990000000000001',
+  wabaName: 'Helo Demo Store',
+  businessId: '990000000000003',
+  phoneNumbers: [{ id: '990000000000002', display: '+91 98765 43210', verifiedName: 'Helo Demo Store' }],
+  source: 'env',
+  billing: { mode: 'partner_credit', state: 'shared' },
+  steps: {},
+  hasPin: false,
+  canDisconnect: false,
+  needsAttention: false,
+  createdAt: new Date().toISOString(),
+})
+let waAccounts: WaAccount[] | null = null
+/** Demo control: show Home as a brand-new workspace (no WhatsApp yet). */
+export const resetDummyWhatsApp = (connected: boolean) => void (waAccounts = connected ? [dummyAccountNow()] : [])
+
+export async function dummyWhatsApp<T>(method: string, path: string, body: unknown): Promise<T> {
+  const b = (body ?? {}) as Record<string, string>
+  waAccounts ??= [dummyAccountNow()]
+  const u = new URL(path, 'http://x')
+  if (u.pathname === '/api/whatsapp/config') return { ready: true, missing: [], appId: 'demo', configId: 'demo', sdkVersion: 'v23.0', partnerCredit: true } as T
+  if (u.pathname === '/api/whatsapp/accounts' && method === 'GET') return waAccounts as T
+  if (u.pathname === '/api/whatsapp/connect') {
+    const now = new Date().toISOString()
+    const done = { state: 'done' as const, at: now }
+    const coexist = b.flow === 'coexistence'
+    const own = b.billing === 'own'
+    const account: WaAccount = {
+      wabaId: b.wabaId,
+      wabaName: 'Asha Foods',
+      businessId: b.businessId,
+      phoneNumbers: [{ id: b.phoneNumberId, display: coexist ? '+91 99887 76655' : '+91 90000 12345', verifiedName: 'Asha Foods' }],
+      source: coexist ? 'coexistence' : 'signup',
+      billing: { mode: own ? 'own' : 'partner_credit', state: own ? 'pending' : 'shared' },
+      steps: {
+        exchange: done,
+        subscribe: done,
+        register: coexist ? { state: 'skipped', at: now } : done,
+        sync: coexist ? done : { state: 'skipped', at: now },
+        details: done,
+        billing: own ? { state: 'failed', at: now, error: 'Add a payment method in WhatsApp Manager, then confirm here.' } : done,
+      },
+      hasPin: !coexist,
+      canDisconnect: true,
+      needsAttention: own,
+      createdAt: now,
+    }
+    waAccounts = [...waAccounts.filter((a) => a.wabaId !== account.wabaId), account]
+    return { account, ...(!coexist && { pin: '482913' }) } as T
+  }
+  const m = u.pathname.match(/^\/api\/whatsapp\/accounts\/(\d+)(?:\/([a-z]+))?$/)
+  const acc = m && waAccounts.find((a) => a.wabaId === m[1])
+  if (!m || !acc) throw new MetaError(404, 'Not found', 'That WhatsApp account isn’t connected to this workspace.')
+  if (!m[2] && method === 'DELETE') {
+    waAccounts = waAccounts.filter((a) => a !== acc)
+    return { ok: true } as T
+  }
+  if (m[2] === 'billing') {
+    const confirmed = (body as { confirmed?: boolean }).confirmed === true || b.mode === 'partner_credit'
+    Object.assign(acc, { billing: { mode: b.mode, state: b.mode === 'partner_credit' ? 'shared' : confirmed ? 'confirmed' : 'pending' }, needsAttention: !confirmed })
+    acc.steps.billing = confirmed ? { state: 'done', at: new Date().toISOString() } : acc.steps.billing
+    return acc as T
+  }
+  if (m[2] === 'pin') return { pin: '482913' } as T
+  return acc as T
 }

@@ -1,6 +1,7 @@
 // The one way to reach Meta (via Helo.ai's server): used by the relay and the collectors, so
 // headers, placeholders and timeouts stay the same for both.
 import { HttpError, obj, str, type Obj } from './http.ts'
+import { currentAssets } from './context.ts'
 try {
   process.loadEnvFile?.('.env')
 } catch {
@@ -11,23 +12,39 @@ export const env = (k: string) => (process.env[k] ?? '').trim()
 // UPSTREAM=meta → straight to Meta with our own token (META_TOKEN or BEARER_TOKEN): agent calls to
 // BASE_URL_1 (api.facebook.com), WABA / number lists to Graph. Anything else → BASE_URL_2 (Helo.ai server).
 const direct = env('UPSTREAM') === 'meta'
-const token = env('META_TOKEN') || env('BEARER_TOKEN')
+const serverToken = env('META_TOKEN') || env('BEARER_TOKEN')
 export const upstream = (direct ? env('GRAPH_BASE_URL') || 'https://graph.facebook.com/v23.0' : env('BASE_URL_2')).replace(/\/+$/, '')
 const GRAPH_PREFIX = env('GRAPH_PREFIX').replace(/\/+$/, '')
 // Meta Business Agent endpoints live on api.facebook.com, not graph.facebook.com (Graph answers
 // "Unknown path components", code 2500). AGENT_BASE_URL points agent calls at a route that reaches
 // api.facebook.com; Graph calls (WABA / phone-number lists) keep using the upstream above.
 export const agentUpstream = (env('AGENT_BASE_URL') || (direct ? env('BASE_URL_1') : upstream)).replace(/\/+$/, '')
-export const hasToken = !!token
-export const ids: Record<string, string> = {
+export const hasToken = !!serverToken
+/** The server's own WhatsApp account (.env). Requests use their workspace's account instead (context.ts). */
+export const envIds: Record<string, string> = {
   WABA_ID: env('WABA_ID'),
   PHONE_NUMBER_ID: env('PHONE_NUMBER_ID'),
   BUSINESS_ID: env('BUSINESS_ID'),
 }
 
-/** Swaps literal WABA_ID / PHONE_NUMBER_ID / BUSINESS_ID path segments for the .env values. */
-export const resolveIds = (rest: string) =>
-  rest.replace(/\/(WABA_ID|PHONE_NUMBER_ID|BUSINESS_ID)(?=\/|\?|$)/g, (_, k: string) => '/' + ids[k])
+/** Swaps literal WABA_ID / PHONE_NUMBER_ID / BUSINESS_ID path segments for the current workspace's
+ *  account (outside any workspace, e.g. a diagnostic script, for the .env account). */
+export function resolveIds(rest: string) {
+  const a = currentAssets()
+  const ids = a === undefined ? envIds : { WABA_ID: a?.wabaId ?? '', PHONE_NUMBER_ID: a?.phoneNumberId ?? '', BUSINESS_ID: a?.businessId ?? '' }
+  return rest.replace(/\/(WABA_ID|PHONE_NUMBER_ID|BUSINESS_ID)(?=\/|\?|$)/g, (_, k: string) => '/' + ids[k as keyof typeof ids])
+}
+
+/** Real IDs named in a path (long numeric segments), e.g. /123456789012345/agent_config. */
+export const pathIds = (path: string) => (path.split('?')[0].match(/\/\d{10,}(?=\/|$)/g) ?? []).map((s) => s.slice(1))
+
+/** The token for a call: the account the path names, else the workspace's default, else the server's. */
+function tokenFor(path: string) {
+  const a = currentAssets()
+  if (!a) return serverToken
+  for (const id of pathIds(path)) if (a.tokens.has(id)) return a.tokens.get(id) ?? serverToken
+  return a.token ?? serverToken
+}
 
 export type Kind = 'meta' | 'graph'
 export interface UpstreamReply {
@@ -75,6 +92,7 @@ export async function callUpstream(
   // Thread Control is the one endpoint on the 1.0.0 contract; Graph calls send no version.
   if (kind === 'meta') headers['X-API-Version'] = path.includes('/thread_control') ? '1.0.0' : '2.0.0'
   if (contentType) headers['content-type'] = contentType
+  const token = tokenFor(path)
   if (token) headers.authorization = `Bearer ${token}`
   const target = (kind === 'meta' ? agentUpstream : upstream + GRAPH_PREFIX) + path
   // A test message waits for the agent's model to answer (25 s seen on the real agent); others are quick.

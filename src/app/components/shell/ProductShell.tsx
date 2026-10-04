@@ -38,7 +38,15 @@ export function ProductShell({
   function renderContent() {
     switch (active) {
       case 'home':
-        return <HomePage onNavigate={setActive} />
+        return (
+          <HomePage
+            onNavigate={setActive}
+            onOpenSettings={(tab) => {
+              setSettingsTab(tab)
+              setActive('settings')
+            }}
+          />
+        )
       case 'inbox':
         return <InboxPage initialPhone={chatPhone} />
       case 'tickets':
