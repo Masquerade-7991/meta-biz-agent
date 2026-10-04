@@ -31,9 +31,12 @@ export const agent = (id = activePhoneNumberId) => '/' + (id || 'PHONE_NUMBER_ID
 /** Meta's StandardError shape, which the server also uses when the upstream is unreachable. */
 export class MetaError extends Error {
   status: number
-  constructor(status: number, title: string, detail: string) {
+  /** The server's trace for this request (X-Trace-Id), when it answered. */
+  traceId?: string
+  constructor(status: number, title: string, detail: string, traceId?: string) {
     super(detail ? `${title}: ${detail}` : title)
     this.status = status
+    this.traceId = traceId
   }
 }
 
@@ -59,7 +62,10 @@ export async function parse<T>(res: Response): Promise<T> {
   }
   if (!res.ok) {
     const e = (json ?? {}) as { title?: string; detail?: string; error?: { message?: string } }
-    throw new MetaError(res.status, e.title ?? `HTTP ${res.status}`, e.detail ?? e.error?.message ?? '')
+    const traceId = res.headers.get('x-trace-id') ?? undefined
+    // Server-side failures carry a short reference the workspace owner can look up (GET /api/trace/<ref>).
+    const ref = res.status >= 500 && traceId ? ` (Reference: ${traceId.slice(0, 8)})` : ''
+    throw new MetaError(res.status, e.title ?? `HTTP ${res.status}`, (e.detail ?? e.error?.message ?? '') + ref, traceId)
   }
   return json as T
 }

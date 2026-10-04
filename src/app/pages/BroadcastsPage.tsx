@@ -36,6 +36,8 @@ import { cn } from '@/app/lib/utils'
 import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { usePolling } from '@/app/lib/usePolling'
 
+const LIVE_BROADCASTS = ['broadcast.']
+
 const STATUS: Record<Broadcast['status'], { label: string; cls: string }> = {
   scheduled: { label: 'Scheduled', cls: 'bg-muted text-foreground' },
   sending: { label: 'Sending', cls: 'bg-primary text-primary-foreground' },
@@ -202,7 +204,7 @@ function NewBroadcastDialog({ templates, segments, fields, onClose, onCreated }:
 function BroadcastDetailDialog({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
   const [b, setB] = useState<BroadcastDetail | null>(null)
   const [confirm, setConfirm] = useState(false)
-  usePolling(() => void getBroadcast(id).then(setB, (err) => toast.error(errorDetail(err))), 4000, [id])
+  usePolling(() => void getBroadcast(id).then(setB, (err) => toast.error(errorDetail(err))), 4000, [id], true, LIVE_BROADCASTS)
   const s = b?.stats
   const done = s ? s.sent + s.delivered + s.read : 0
   return (
@@ -459,7 +461,7 @@ export function BroadcastsPage() {
     listFields().then(setFields, () => {})
   }, [load, loadTemplates])
   const sending = rows?.some((r) => r.status === 'sending' || r.status === 'scheduled')
-  usePolling(load, 5000, [], !!sending)
+  usePolling(load, 5000, [], !!sending, LIVE_BROADCASTS)
 
   return (
     <div className="mx-auto w-full max-w-7xl px-6 py-8">

@@ -1,0 +1,58 @@
+# The API server (server/index.ts) on Render. It must be a long-running process: the job runner,
+# collectors and live stream all live in it. The front-end stays on Vercel, which forwards /api here
+# (vercel.json). Secrets are entered in Render's dashboard (sync: false), never committed.
+services:
+  - type: web
+    name: helo-wizard-api
+    runtime: node
+    plan: starter
+    buildCommand: npm ci --omit=dev
+    startCommand: node server/index.ts
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: APP_URL # the Vercel domain users open; magic links point here
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: UPSTREAM
+        sync: false
+      - key: BEARER_TOKEN
+        sync: false
+      - key: BASE_URL_1
+        sync: false
+      - key: BASE_URL_2
+        sync: false
+      - key: BUSINESS_ID
+        sync: false
+      - key: BUSINESS_NAME
+        sync: false
+      - key: WABA_ID
+        sync: false
+      - key: WABA_NAME
+        sync: false
+      - key: PHONE_NUMBER_ID
+        sync: false
+      - key: PHONE_NUMBER
+        sync: false
+      - key: PHONE_NAME
+        sync: false
+      - key: WEBHOOK_VERIFY_TOKEN
+        sync: false
+      - key: APP_SECRET
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_ES_CONFIG_ID
+        sync: false
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

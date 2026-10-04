@@ -1,7 +1,7 @@
 // The one way to reach Meta (via Helo.ai's server): used by the relay and the collectors, so
 // headers, placeholders and timeouts stay the same for both.
 import { HttpError, obj, str, type Obj } from './http.ts'
-import { currentAssets } from './context.ts'
+import { currentAssets, traceId } from './context.ts'
 try {
   process.loadEnvFile?.('.env')
 } catch {
@@ -102,7 +102,7 @@ export async function callUpstream(
   try {
     const r = await fetch(target, { method, headers, body, signal: AbortSignal.timeout(timeout) })
     const text = await r.text()
-    console.log(`${method} ${safeUrl(target)} → ${r.status}`)
+    console.log(`[${traceId()?.slice(0, 8) ?? '-'}] ${method} ${safeUrl(target)} → ${r.status}`)
     // Errors keep Meta's message and trace id (StandardError {title, detail, fbtrace_id} or Graph {error: {...}}).
     const e = r.ok ? null : (parseJson(text) as { title?: string; detail?: string; fbtrace_id?: string; error?: { message?: string; fbtrace_id?: string } } | null)
     logCall({

@@ -2,6 +2,7 @@
 // response was sent; never throws (errors are logged) and the relay never awaits it.
 import { createHash } from 'node:crypto'
 import { col, db, ws } from './db.ts'
+import { traceId } from './context.ts'
 import { isConfigCollection, mirror, mirrorCollection } from './mirror.ts'
 import { stripSecrets } from './store.ts'
 import { obj, str } from './http.ts'
@@ -77,7 +78,7 @@ export function logApiCall(c: CallLog): void {
   const u = new URL(c.url)
   const { phone } = c.kind === 'meta' ? splitPhone(u.pathname) : { phone: null }
   col('api_calls')
-    .insertOne({ workspaceId: ws(), phoneNumberId: phone, ...c, host: u.host, ...resourceOf(splitPhone(u.pathname).rest), ok: c.status >= 200 && c.status < 300 })
+    .insertOne({ workspaceId: ws(), traceId: traceId(), phoneNumberId: phone, ...c, host: u.host, ...resourceOf(splitPhone(u.pathname).rest), ok: c.status >= 200 && c.status < 300 })
     .catch((err) => console.log(`api_calls write failed: ${err instanceof Error ? err.message : err}`))
 }
 
@@ -96,6 +97,7 @@ async function recordAsync(x: Exchange) {
   const body = x.method === 'GET' ? {} : bodyOf(x.reqBody, x.contentType)
   const b = obj(body)
   const base = { workspaceId: ws(), phoneNumberId: phone }
+  const trace = traceId()
   const jobs: Promise<unknown>[] = []
 
   if (x.method !== 'GET') {
@@ -105,7 +107,7 @@ async function recordAsync(x: Exchange) {
     // Configuration changes keep their full contents (secrets blanked), so the log shows what changed to what.
     const data = x.kind === 'meta' && isConfigCollection(mirrorCollection(rest)) ? stripSecrets(body, true) : undefined
     jobs.push(
-      col('audit_log').insertOne({ ...base, at, action: actionOf(x.method, rest), ...r, resourceId, status: x.status, summary: summarize(body), ...(data ? { data } : {}) }),
+      col('audit_log').insertOne({ ...base, traceId: trace, at, action: actionOf(x.method, rest), ...r, resourceId, status: x.status, summary: summarize(body), ...(data ? { data } : {}) }),
     )
   }
   if (x.kind === 'meta' && phone) jobs.push(mirror(phone, x.method, rest, u.searchParams, body, json))

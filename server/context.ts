@@ -2,6 +2,7 @@
 // request (index.ts), per webhook event (inbox.ts) and per background job (collectors, broadcasts).
 // Imports nothing from the app, so upstream.ts can read it without a cycle.
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { randomUUID } from 'node:crypto'
 
 /** The WhatsApp account calls are made through. The token stays on the server. */
 export interface Assets {
@@ -19,6 +20,10 @@ export interface Assets {
 interface Context {
   id: string
   assets: Assets | null
+  /** Ties one piece of work together across logs: request → Meta calls → events → later webhooks. */
+  traceId: string
+  /** The signed-in member the work is for; absent for webhooks and background jobs. */
+  userId?: string
 }
 const store = new AsyncLocalStorage<Context>()
 
@@ -29,4 +34,10 @@ export const currentAssets = (): Assets | null | undefined => {
   const c = store.getStore()
   return c ? c.assets : undefined
 }
-export const runIn = <T>(id: string, assets: Assets | null, fn: () => T): T => store.run({ id, assets }, fn)
+export const traceId = () => store.getStore()?.traceId
+export const currentUserId = () => store.getStore()?.userId
+/** Nested runs keep the caller's trace and user unless `extra` names others. */
+export const runIn = <T>(id: string, assets: Assets | null, fn: () => T, extra: { traceId?: string; userId?: string } = {}): T => {
+  const outer = store.getStore()
+  return store.run({ id, assets, traceId: extra.traceId ?? outer?.traceId ?? randomUUID(), userId: extra.userId ?? outer?.userId }, fn)
+}

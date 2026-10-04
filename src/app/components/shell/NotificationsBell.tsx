@@ -5,6 +5,8 @@ import { listNotices, type Notice } from '@/app/api/tickets'
 import { cn } from '@/app/lib/utils'
 import { usePolling } from '@/app/lib/usePolling'
 
+const LIVE_TICKETS = ['ticket.']
+
 const SEEN_KEY = 'helo-notices-seen'
 const readSeen = () => {
   try {
@@ -20,7 +22,7 @@ export function NotificationsBell({ onOpenChat }: { onOpenChat: (phone: string) 
   const [items, setItems] = useState<Notice[]>([])
   const [seen, setSeen] = useState(readSeen)
   const [open, setOpen] = useState(false)
-  usePolling(() => void listNotices().then(setItems, () => {}), 30_000, [])
+  usePolling(() => void listNotices().then(setItems, () => {}), 30_000, [], true, LIVE_TICKETS)
   const fresh = items.filter((n) => Date.parse(n.at) > seen || n.kind === 'breached').length
   return (
     <Popover

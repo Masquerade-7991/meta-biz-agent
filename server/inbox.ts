@@ -10,6 +10,7 @@ import { HttpError, type Obj, type Titles, arr, digits, obj, readJson, serveJson
 import { col, db, dbOffReason, needMetaAssets, ownsMetaAssets, withWorkspace, ws } from './db.ts'
 import { callUpstream, env, metaJson, parseJson, resolveIds } from './upstream.ts'
 import { currentAssets } from './context.ts'
+import { trace } from './trace.ts'
 import { accounts, assetsFor, workspaceForNumber } from './accounts.ts'
 import { SAMPLE_CHATS } from '../src/app/inbox/sampleData.ts'
 import { ensureTicket, onAgentReply, onCustomerMessage } from './tickets.ts'
@@ -95,6 +96,7 @@ export async function addMessage(m: Msg): Promise<boolean> {
       ...(inbound && fresh && { $inc: { unread: 1 } }),
     },
   )
+  trace('message.added', { direction: m.direction, author: m.author, kind: m.kind }, { entity: 'conversation', id: m.phone })
   return true
 }
 
@@ -193,9 +195,13 @@ async function processChange(field: string, value: Obj) {
     const s = obj(raw)
     const status = str(s.status)
     if (str(s.id) && status && ['sent', 'delivered', 'read', 'failed'].includes(status)) {
-      await messages().updateOne({ workspaceId: ws(), waMessageId: String(s.id) }, { $set: { status } })
+      const msg = await messages().findOneAndUpdate({ workspaceId: ws(), waMessageId: String(s.id) }, { $set: { status } }, { projection: { phone: 1 } })
       const error = str(obj(arr(s.errors)[0]).title)
-      await col('broadcast_recipients').updateOne({ workspaceId: ws(), waMessageId: String(s.id) }, { $set: { status, ...(error && { error }) } })
+      const code = obj(arr(s.errors)[0]).code
+      if (msg) trace('message.status', { status, ...(error && { error, code }) }, { entity: 'conversation', id: String(msg.phone) })
+      const rec = await col('broadcast_recipients').findOneAndUpdate({ workspaceId: ws(), waMessageId: String(s.id) }, { $set: { status, ...(error && { error }) } }, { projection: { broadcastId: 1, traceId: 1 } })
+      // Same trace as the broadcast that sent it, so one id follows click → send → delivery.
+      if (rec) withWorkspace(ws(), () => trace('broadcast.recipient', { status, ...(error && { error, code }) }, { entity: 'broadcast', id: String(rec.broadcastId) }), currentAssets() ?? null, { traceId: rec.traceId })
     }
   }
   if (field === 'messaging_handovers') {
@@ -239,6 +245,7 @@ async function routeWebhook(payload: unknown) {
       wsId,
       async () => {
         await col('whatsapp_webhooks').insertOne({ workspaceId: ws(), at: new Date(), payload: { entry: entries } })
+        trace('webhook.received', { fields: [...new Set(entries.flatMap((e) => arr(obj(e).changes).map((c) => String(obj(c).field))))] })
         await processWebhook({ entry: entries })
       },
       await assetsFor(wsId),
@@ -511,6 +518,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       await setControl(me, phone, body.action)
     } else if (action === 'read') await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { unread: 0 } })
     else throw new HttpError(404, 'Not found.')
+    if (action !== 'messages' && action !== 'notes') trace('conversation.updated', { action, ...(action === 'control' && { to: body.action }) }, { entity: 'conversation', id: phone })
     return getConversation(phone, me)
   }
   if (path === '/api/inbox/canned' && m === 'GET')

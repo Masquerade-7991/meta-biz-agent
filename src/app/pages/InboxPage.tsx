@@ -41,6 +41,10 @@ import { useMembers } from '@/app/auth/useMembers'
 import { usePolling } from '@/app/lib/usePolling'
 import { PillTabs, SearchInput } from '@/app/components/Filters'
 
+// Live events that change the chat list, and the open chat.
+const LIVE_INBOX = ['message.', 'conversation.', 'ticket.']
+const LIVE_CHAT = ['message.', 'conversation.']
+
 const POLL_MS = 5000
 const FILTERS: { id: ChatFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -487,12 +491,12 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
       (err) => setListError(errorDetail(err)),
     )
   }, [filter, q])
-  usePolling(refreshList, POLL_MS, [refreshList])
+  usePolling(refreshList, POLL_MS, [refreshList], true, LIVE_INBOX)
   usePolling(() => {
     if (!open) return
     getChat(open).then(setChat, () => {})
     void sendPresence(open, false).catch(() => {})
-  }, POLL_MS, [open])
+  }, POLL_MS, [open], true, LIVE_CHAT)
   useEffect(() => {
     getSupportSettings().then((s) => setAiSummary(s.aiSummary), () => {})
   }, [])

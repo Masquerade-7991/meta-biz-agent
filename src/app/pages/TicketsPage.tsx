@@ -13,6 +13,8 @@ import { useMembers } from '@/app/auth/useMembers'
 import { usePolling } from '@/app/lib/usePolling'
 import { PillTabs, SearchInput } from '@/app/components/Filters'
 
+const LIVE_TICKETS = ['ticket.']
+
 const VIEWS = [
   { id: 'open', label: 'Open' },
   { id: 'pending', label: 'Waiting on customer' },
@@ -53,7 +55,7 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
       (err) => setError(errorDetail(err)),
     )
   }, [view, assignee, priority, q])
-  usePolling(refresh, 15_000, [refresh])
+  usePolling(refresh, 15_000, [refresh], true, LIVE_TICKETS)
   useEffect(() => setPicked(new Set()), [view, assignee, priority, q])
 
   const nameOf = (id: string | null) => (id ? (members.find((m) => m.userId === id)?.name ?? 'Someone') : 'Unassigned')

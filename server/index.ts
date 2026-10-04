@@ -6,6 +6,7 @@
 // With MONGODB_URI set, successful traffic is also recorded (record.ts), /api/store/* and
 // /api/analytics/* are served from MongoDB (store.ts), and collectors run in the background.
 import http from 'node:http'
+import { randomUUID } from 'node:crypto'
 import { allow, getCached, invalidatePhone, putCached, ttlFor } from './cache.ts'
 import { startCollectors } from './collectors.ts'
 import { getSession, handleAuth } from './auth.ts'
@@ -16,12 +17,16 @@ import { sendError } from './http.ts'
 import { handleInbox, handleWebhook } from './inbox.ts'
 import { handleTickets } from './tickets.ts'
 import { handleContacts } from './contacts.ts'
-import { handleBroadcasts, startBroadcastWorker } from './broadcasts.ts'
+import { handleBroadcasts, resumeBroadcasts } from './broadcasts.ts'
+import { startJobs } from './jobs.ts'
 import { agentUpstream, callUpstream, env, hasToken, pathIds, resolveIds, setCallLogger, upstream, type Kind } from './upstream.ts'
 import { accounts, assetsFor } from './accounts.ts'
 import { handleWhatsApp } from './whatsapp.ts'
+import { readTrace, trace } from './trace.ts'
+import { handleStream } from './stream.ts'
 
-const PORT = Number(env('SERVER_PORT') || 8787)
+// Hosts like Render hand the port in PORT.
+const PORT = Number(env('SERVER_PORT') || env('PORT') || 8787)
 
 async function readBody(req: http.IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = []
@@ -78,6 +83,9 @@ async function forward(req: http.IncomingMessage, res: http.ServerResponse, kind
 
 const server = http.createServer(async (req, res) => {
   const url = req.url ?? '/'
+  // Every answer names its trace, so a reported error can be looked up (GET /api/trace/<id>).
+  const tid = randomUUID()
+  res.setHeader('x-trace-id', tid)
   if (url === '/api/health') {
     // Public, so a WhatsApp account's labels are only added for members of the workspace it belongs
     // to (the Create Agent fallback and dummy mode use them). Tokens never leave this process.
@@ -116,7 +124,15 @@ const server = http.createServer(async (req, res) => {
   const metaRoute = url.match(/^\/api\/(meta|graph)(\/.*)$/)
   if (metaRoute && !assets) return sendError(res, 403, NO_META_ASSETS.title, NO_META_ASSETS.detail)
   const me = { _id: s.user._id, name: s.user.name ?? '', role: s.role }
-  await withWorkspace(s.workspace._id, async () => {
+  const wsId = s.workspace._id
+  res.on('finish', () => {
+    if (res.statusCode >= 500) withWorkspace(wsId, () => trace('request.failed', { method: req.method, path: url.split('?')[0], status: res.statusCode }), null, { traceId: tid, userId: String(me._id) })
+  })
+  const traceRoute = url.match(/^\/api\/trace\/([0-9a-f-]{8,36})$/)
+  await withWorkspace(wsId, async () => {
+    if (handleStream(req, res)) return
+    if (traceRoute && s.role !== 'owner') return sendError(res, 403, 'Owners only', 'Only workspace owners can read traces.')
+    if (traceRoute) return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(await readTrace(traceRoute[1])))
     if (metaRoute) {
       const path = resolveIds(metaRoute[2])
       // Several businesses share this server: a workspace may only name its own WABA, numbers and business.
@@ -129,12 +145,13 @@ const server = http.createServer(async (req, res) => {
     else if (await handleContacts(req, res, me)) return
     else if (await handleBroadcasts(req, res, me)) return
     else if (!(await handleStore(req, res))) res.writeHead(404).end()
-  }, assets)
+  }, assets, { traceId: tid, userId: String(me._id) })
 })
 
 server.listen(PORT, () => console.log(`API proxy on :${PORT} → graph: ${upstream || '(no upstream set)'} · agent: ${agentUpstream || '(no upstream set)'}`))
 if (await initDb()) {
   setCallLogger(logApiCall)
-  startBroadcastWorker()
+  await resumeBroadcasts()
+  startJobs()
   if (env('COLLECTORS') !== 'off') startCollectors()
 } else if (!env('MONGODB_URI')) console.log('No MONGODB_URI: running without a database (store routes return 503)')

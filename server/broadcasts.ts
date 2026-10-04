@@ -7,7 +7,9 @@ import { ObjectId } from 'mongodb'
 import { HttpError, type Obj, type Titles, arr, obj, readJson, serveJson } from './http.ts'
 import { col, db, dbOffReason, needMetaAssets, withWorkspace, ws } from './db.ts'
 import { metaJson } from './upstream.ts'
-import { assetsFor } from './accounts.ts'
+import { traceId } from './context.ts'
+import { trace } from './trace.ts'
+import { defineJob, enqueue, type JobResult } from './jobs.ts'
 import { conversations, ensureConversation, sendTemplateMessage, type Actor } from './inbox.ts'
 import { contactNames, segmentQuery, type SegmentFilter } from './contacts.ts'
 import { renderTemplate, slotsOf, templatePayload, type Template } from '../src/app/broadcasts/templates.ts'
@@ -136,6 +138,8 @@ async function createBroadcast(b: Obj, me: Actor) {
   }
   const r = await broadcasts().insertOne(doc)
   await recipients().insertMany(audience.map((c) => ({ workspaceId: ws(), broadcastId: r.insertedId, phone: c.phone, status: 'queued', ...(c.sample && { sample: true }) })))
+  await enqueue('broadcast.send', { broadcastId: String(r.insertedId) }, { runAt: doc.scheduledAt, key: jobKey(r.insertedId) })
+  trace('broadcast.created', { audience: audience.length, scheduled: !!at, template: template.name }, { entity: 'broadcast', id: String(r.insertedId) })
   return one(String(r.insertedId))
 }
 
@@ -169,50 +173,61 @@ async function one(id: string) {
   return { ...out(b, s.get(String(b._id))), preview: renderTemplate(b.template as Template, {}), recipients: rec.map(({ _id, workspaceId: _w, broadcastId: _b, ...r }) => ({ ...r, name: names.get(String(r.phone)) || null })) }
 }
 
-// ---- worker ----
+// ---- sending (a job per broadcast, jobs.ts) ----
 const BATCH = 20
-let working = false
-/** Sends the next batch of the oldest due broadcast. Runs every few seconds. */
-export async function broadcastTick() {
-  if (!db || working) return
-  working = true
-  try {
-    const b = await col('broadcasts').findOne({ status: { $in: ['scheduled', 'sending'] }, scheduledAt: { $lte: new Date() } }, { sort: { scheduledAt: 1 } })
-    if (!b) return
-    await withWorkspace(
-      String(b.workspaceId),
-      async () => {
-        if (b.status === 'scheduled') await broadcasts().updateOne({ _id: b._id }, { $set: { status: 'sending', startedAt: new Date() } })
-        const batch = await recipients().find({ workspaceId: ws(), broadcastId: b._id, status: 'queued' }).limit(BATCH).toArray()
-        const template = b.template as Template
-        const slots = slotsOf(template)
-        for (const r of batch) {
-          const c = await col('contacts').findOne({ workspaceId: ws(), phone: r.phone })
-          if (!c || c.optedOut) {
-            await recipients().updateOne({ _id: r._id }, { $set: { status: 'skipped', error: c ? 'Opted out' : 'Contact deleted' } })
-            continue
-          }
-          try {
-            const values = valuesFor(slots, b.mapping as Mapping, c)
-            const payload = templatePayload(template, values)
-            await ensureConversation(String(r.phone))
-            const waMessageId = await sendTemplateMessage(String(r.phone), payload, renderTemplate(template, values), { sample: !!(r.sample || c.sample), label: `Broadcast: ${b.name}` })
-            await recipients().updateOne({ _id: r._id }, { $set: { status: 'sent', sentAt: new Date(), ...(waMessageId && { waMessageId }) } })
-          } catch (err) {
-            await recipients().updateOne({ _id: r._id }, { $set: { status: 'failed', error: err instanceof Error ? err.message : String(err) } })
-          }
-        }
-        if (batch.length < BATCH) await broadcasts().updateOne({ _id: b._id, status: 'sending' }, { $set: { status: 'completed', completedAt: new Date() } })
-      },
-      await assetsFor(String(b.workspaceId)),
-    )
-  } catch (err) {
-    console.log('broadcast worker:', err instanceof Error ? err.message : err)
-  } finally {
-    working = false
+const jobKey = (id: unknown) => `broadcast:${String(id)}`
+
+/** Sends one batch of a broadcast, then asks to run again until nobody is left in the queue. */
+async function sendBatch(p: Record<string, unknown>): Promise<JobResult> {
+  const b = await broadcasts().findOne({ workspaceId: ws(), _id: new ObjectId(String(p.broadcastId)) })
+  if (!b || (b.status !== 'scheduled' && b.status !== 'sending')) return
+  const ref = { entity: 'broadcast', id: String(b._id) }
+  if (b.status === 'scheduled') {
+    await broadcasts().updateOne({ _id: b._id }, { $set: { status: 'sending', startedAt: new Date() } })
+    trace('broadcast.started', { audience: b.audienceCount }, ref)
+  }
+  const batch = await recipients().find({ workspaceId: ws(), broadcastId: b._id, status: 'queued' }).limit(BATCH).toArray()
+  const template = b.template as Template
+  const slots = slotsOf(template)
+  const tally = { sent: 0, failed: 0, skipped: 0 }
+  for (const r of batch) {
+    // A cancel lands between messages, not only between batches.
+    if ((await broadcasts().findOne({ _id: b._id }, { projection: { status: 1 } }))?.status === 'cancelled') return
+    const c = await col('contacts').findOne({ workspaceId: ws(), phone: r.phone })
+    if (!c || c.optedOut) {
+      await recipients().updateOne({ _id: r._id }, { $set: { status: 'skipped', error: c ? 'Opted out' : 'Contact deleted' } })
+      tally.skipped++
+      continue
+    }
+    try {
+      const values = valuesFor(slots, b.mapping as Mapping, c)
+      const payload = templatePayload(template, values)
+      await ensureConversation(String(r.phone))
+      const waMessageId = await sendTemplateMessage(String(r.phone), payload, renderTemplate(template, values), { sample: !!(r.sample || c.sample), label: `Broadcast: ${b.name}` })
+      await recipients().updateOne({ _id: r._id }, { $set: { status: 'sent', sentAt: new Date(), traceId: traceId(), ...(waMessageId && { waMessageId }) } })
+      tally.sent++
+    } catch (err) {
+      await recipients().updateOne({ _id: r._id }, { $set: { status: 'failed', error: err instanceof Error ? err.message : String(err) } })
+      tally.failed++
+    }
+  }
+  trace('broadcast.progress', tally, ref)
+  if (batch.length === BATCH) return { again: new Date() }
+  await broadcasts().updateOne({ _id: b._id, status: 'sending' }, { $set: { status: 'completed', completedAt: new Date() } })
+  trace('broadcast.completed', {}, ref)
+}
+defineJob('broadcast.send', sendBatch)
+
+/** Broadcasts left scheduled or sending by an older server (or a lost job) get their job back. */
+export async function resumeBroadcasts() {
+  if (!db) return
+  for (const b of await col('broadcasts').find({ status: { $in: ['scheduled', 'sending'] } }, { projection: { workspaceId: 1, scheduledAt: 1 } }).toArray()) {
+    await withWorkspace(String(b.workspaceId), async () => {
+      if (await col('jobs').findOne({ workspaceId: ws(), key: jobKey(b._id), status: { $in: ['queued', 'running'] } })) return
+      await enqueue('broadcast.send', { broadcastId: String(b._id) }, { runAt: b.scheduledAt as Date, key: jobKey(b._id) })
+    })
   }
 }
-export const startBroadcastWorker = () => setInterval(() => void broadcastTick(), 3000).unref()
 
 // ---- routes ----
 async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unknown> {
@@ -253,6 +268,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       const r = await broadcasts().updateOne({ workspaceId: ws(), _id: new ObjectId(seg[1]), status: { $in: ['scheduled', 'sending'] } }, { $set: { status: 'cancelled', completedAt: new Date() } })
       if (!r.modifiedCount) throw new HttpError(400, 'Only scheduled or sending broadcasts can be cancelled.')
       await recipients().updateMany({ workspaceId: ws(), broadcastId: new ObjectId(seg[1]), status: 'queued' }, { $set: { status: 'skipped', error: 'Broadcast cancelled' } })
+      trace('broadcast.cancelled', {}, { entity: 'broadcast', id: seg[1] })
       return one(seg[1])
     }
     if (m === 'GET') return one(seg[1])

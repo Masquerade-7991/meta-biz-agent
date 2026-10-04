@@ -16,7 +16,8 @@ export function needMetaAssets() {
   if (!ownsMetaAssets()) throw new HttpError(403, NO_META_ASSETS.detail)
 }
 /** Runs `fn` inside a workspace, acting through `assets` (load them with assetsFor in accounts.ts). */
-export const withWorkspace = <T>(workspaceId: string, fn: () => T, assets: Assets | null = null): T => runIn(workspaceId, assets, fn)
+export const withWorkspace = <T>(workspaceId: string, fn: () => T, assets: Assets | null = null, extra?: { traceId?: string; userId?: string }): T =>
+  runIn(workspaceId, assets, fn, extra)
 const DAY = 86400
 const D90 = 90 * DAY
 const Y2 = 730 * DAY
@@ -91,10 +92,25 @@ const INDEXES: Record<string, IndexDescription[]> = {
   ],
   audit_log: [
     { key: { phoneNumberId: 1, at: -1 } },
+    { key: { traceId: 1 } },
     { key: { at: 1 }, expireAfterSeconds: Y2 },
+  ],
+  // Background jobs (jobs.ts): due ones are claimed oldest first; finished ones are kept 7 days.
+  jobs: [
+    { key: { status: 1, runAt: 1 } },
+    { key: { workspaceId: 1, key: 1 }, unique: true, partialFilterExpression: { key: { $type: 'string' }, status: 'queued' } },
+    { key: { finishedAt: 1 }, expireAfterSeconds: 7 * DAY },
+  ],
+  // What happened, per workspace (trace.ts): one row per event, grouped by the trace it belongs to.
+  events: [
+    { key: { workspaceId: 1, at: -1 } },
+    { key: { traceId: 1, at: 1 } },
+    { key: { workspaceId: 1, entity: 1, entityId: 1, at: -1 } },
+    { key: { at: 1 }, expireAfterSeconds: D90 },
   ],
   // Every call to Meta (relay and collectors), success or failure: the relay log, kept 90 days.
   api_calls: [
+    { key: { traceId: 1 } },
     { key: { phoneNumberId: 1, at: -1 } },
     { key: { status: 1, at: -1 } },
     { key: { at: 1 }, expireAfterSeconds: D90 },

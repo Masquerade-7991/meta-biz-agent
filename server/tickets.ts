@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { HttpError, type Obj, type Titles, obj, readJson, serveJson } from './http.ts'
 import { col, db, dbOffReason, ws } from './db.ts'
 import { env } from './upstream.ts'
+import { trace } from './trace.ts'
 import { addBusinessMinutes, DAYS, DEFAULT_HOURS, isOpen, type Hours } from './businessHours.ts'
 import { contactNames } from './contacts.ts'
 import { addMessage, conversations, sendInteractive, sendText, setControl, type Actor } from './inbox.ts'
@@ -143,6 +144,7 @@ export async function ensureTicket(phone: string, source: 'handoff' | 'takeover'
     ...((opts.sample ?? conv?.sample) && { sample: true }),
   }
   await tickets().insertOne(doc)
+  trace('ticket.created', { number: doc.number, source, priority, assigned: !!assigneeId }, { entity: 'ticket', id: String(doc.number) })
   if (assigneeId && !conv?.assigneeId) await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { assigneeId } })
   return doc
 }
@@ -228,6 +230,7 @@ async function update(number: number, b: Obj, me: Actor) {
   if (typeof b.subject === 'string' && b.subject.trim()) set.subject = b.subject.trim().slice(0, 120)
   if (Array.isArray(b.tags)) set.tags = b.tags.map((x) => String(x).trim().toLowerCase()).filter(Boolean).slice(0, 20)
   await tickets().updateOne({ _id: t._id }, { $set: set })
+  trace('ticket.updated', { number, fields: Object.keys(set).filter((k) => k !== 'updatedAt') }, { entity: 'ticket', id: String(number) })
   void me
   return one(number)
 }
@@ -243,6 +246,7 @@ async function resolve(number: number, b: Obj, me: Actor) {
   const askCsat = b.askFeedback !== false && s.csat.enabled && windowOpen
   await tickets().updateOne({ _id: t._id }, { $set: { status: 'resolved', resolvedAt: now, updatedAt: now, resolution: String(b.resolution ?? '').trim().slice(0, 2000) || null, ...(askCsat && { csatRequestedAt: now }) } })
   await addMessage({ phone: String(t.phone), direction: 'out', author: 'system', kind: 'event', body: `${me.name} resolved ticket #${number}.`, at: now })
+  trace('ticket.resolved', { number, askCsat, handBack: b.handBack !== false }, { entity: 'ticket', id: String(number) })
   if (askCsat) await sendInteractive(String(t.phone), s.csat.question, CSAT, { sample: !!conv?.sample })
   if (b.handBack !== false && conv?.owner === 'human') await setControl(me, String(t.phone), 'release')
   return one(number)
@@ -363,6 +367,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     const members = new Set((await col('memberships').find({ workspaceId: ws() }).toArray()).map((x) => String(x.userId)))
     const settings = parseSettings(obj(await readJson(req)), members)
     await settingsCol().updateOne({ workspaceId: ws() }, { $set: { settings, updatedAt: new Date(), updatedBy: me._id } }, { upsert: true })
+    trace('settings.updated', { area: 'support' })
     return { ...settings, aiSummary: !!env('ANTHROPIC_API_KEY') }
   }
   if (path === '/api/support/notifications' && m === 'GET') return notifications(me)
