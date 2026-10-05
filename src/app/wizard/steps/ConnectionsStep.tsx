@@ -62,6 +62,7 @@ import type {
   ValueType,
 } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
+import { readToolRun } from '@/app/wizard/toolRun'
 import {
   connectorLogs,
   type ConnectorLogs,
@@ -517,18 +518,7 @@ function ConnectionsTabContent() {
     const input = Object.fromEntries(action.values.filter((v) => inputs[v.id] !== undefined).map((v) => [v.name, inputs[v.id]]))
     try {
       const r = await runTool(connMetaId, action.metaId, input)
-      let body = r.output
-      // Meta can answer status "success" while the run itself failed: the output then holds
-      // { status: { code: <non-zero>, failure_code } } (e.g. the system refused the key).
-      let failedInside = false
-      try {
-        const parsed = JSON.parse(r.output) as { status?: { code?: number; failure_code?: number } }
-        failedInside = !!(parsed?.status && typeof parsed.status === 'object' && (parsed.status.code || parsed.status.failure_code))
-        body = JSON.stringify(parsed, null, 2)
-      } catch {
-        // not JSON: show as returned
-      }
-      const ok = r.status === 'success' && !failedInside
+      const { ok, body } = readToolRun(r.status, r.output)
       log(ok ? 'worked' : 'failed', ok ? undefined : body)
       return { kind: ok ? 'success' : 'failure', body }
     } catch (err) {
@@ -1697,7 +1687,7 @@ function ActionTestDialog({
                 </p>
               ) : (
                 <>
-                  <pre className="max-h-48 overflow-auto rounded-lg bg-muted p-3" style={{ fontSize: 'var(--text-xs)' }}>
+                  <pre className="max-h-64 min-w-0 overflow-auto rounded-lg bg-muted p-3 break-all whitespace-pre-wrap" style={{ fontSize: 'var(--text-xs)' }}>
                     {result.body}
                   </pre>
                   {result.kind === 'failure' && (
@@ -1814,7 +1804,7 @@ function ActivityDialog({
                   </span>
                 </button>
                 {row.outcome === 'failed' && expandedRowId === row.id && (
-                  <pre className="mx-3 mb-2 max-h-32 overflow-auto rounded-md bg-muted p-2" style={{ fontSize: 'var(--text-xs)' }}>
+                  <pre className="mx-3 mb-2 max-h-32 min-w-0 overflow-auto rounded-md bg-muted p-2 break-all whitespace-pre-wrap" style={{ fontSize: 'var(--text-xs)' }}>
                     {row.errorText}
                   </pre>
                 )}

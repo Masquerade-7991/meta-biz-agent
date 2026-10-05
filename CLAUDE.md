@@ -33,7 +33,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Model:** one conversation per customer phone; a ticket is one issue inside it (opens on handoff, take-over or a team reply).
 - **Sample data never reaches Meta:** rows with `sample: true` are stored but not sent. Tests send only to sample contacts.
 - **Shared pure logic** lives in `src/` and is imported by the server too: `src/app/inbox/sampleData.ts`, `src/app/broadcasts/templates.ts`. SLA business-hours maths is `server/businessHours.ts`.
-- **Tests:** `node --test server/*.test.ts src/app/contacts/csv.test.ts src/app/whatsapp/signupEvent.test.ts`.
+- **Tests:** `node --test server/*.test.ts src/app/contacts/csv.test.ts src/app/whatsapp/signupEvent.test.ts src/app/wizard/toolRun.test.ts`.
 
 ## Rules for Meta wiring
 
