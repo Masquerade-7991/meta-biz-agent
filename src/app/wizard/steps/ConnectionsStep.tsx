@@ -71,6 +71,8 @@ import {
   listTools,
   refreshMcpTools,
   runTool,
+  META_NAME,
+  META_NAME_HINT,
   saveConnector,
   saveTool,
   toolToAction,
@@ -984,7 +986,8 @@ function CustomConnectionDialog({
   const [copied, setCopied] = useState(false)
 
   const urlValid = /^https:\/\//.test(baseUrl.trim())
-  const canSave = name.trim().length > 0 && description.trim().length > 0 && urlValid
+  const nameValid = META_NAME.test(name.trim())
+  const canSave = nameValid && description.trim().length > 0 && urlValid
 
   function copyChecklist() {
     navigator.clipboard?.writeText(buildDeveloperChecklist()).then(() => {
@@ -1035,7 +1038,14 @@ function CustomConnectionDialog({
             </p>
             <div className="space-y-1.5">
               <Label htmlFor="conn-name">Name</Label>
-              <Input id="conn-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Our store system" />
+              <Input id="conn-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Our_store" aria-invalid={name.length > 0 && !nameValid} />
+              {name.length > 0 && !nameValid ? (
+                <InlineError message={META_NAME_HINT} />
+              ) : (
+                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  {META_NAME_HINT}
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -1337,7 +1347,7 @@ function ActionEditorDialog({
   }
 
   async function handleSave() {
-    if (!editor.name.trim() || !editor.description.trim()) return
+    if (!META_NAME.test(editor.name.trim()) || !editor.description.trim()) return
     const similar = findSimilarActionName(editor.name, existingActionsOnConnection, editor.connectionId, editor.actionId)
     setSimilarWarning(
       similar ? 'This name is very close to another action. Clearly different names help the agent choose correctly.' : null,
@@ -1364,7 +1374,14 @@ function ActionEditorDialog({
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="action-name">Action name</Label>
-              <Input id="action-name" value={editor.name} onChange={(e) => onChange({ ...editor, name: e.target.value })} placeholder="Look up an order" />
+              <Input id="action-name" value={editor.name} onChange={(e) => onChange({ ...editor, name: e.target.value })} placeholder="look_up_order" aria-invalid={editor.name.length > 0 && !META_NAME.test(editor.name.trim())} />
+              {editor.name.length > 0 && !META_NAME.test(editor.name.trim()) ? (
+                <InlineError message="Use only letters, numbers and underscores, e.g. look_up_order." />
+              ) : (
+                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  Letters, numbers and underscores only, e.g. look_up_order.
+                </p>
+              )}
               {similarWarning && (
                 <p className="flex items-center gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
                   <AlertTriangle className="size-3.5 shrink-0" /> {similarWarning}
@@ -1455,7 +1472,7 @@ function ActionEditorDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={!editor.name.trim() || !editor.description.trim() || saving}>
+          <Button onClick={handleSave} disabled={!META_NAME.test(editor.name.trim()) || !editor.description.trim() || saving}>
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : 'Save action'}
           </Button>
         </DialogFooter>

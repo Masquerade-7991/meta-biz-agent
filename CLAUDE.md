@@ -47,6 +47,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Path styles mix `agent_config/...` (underscores) with `agent-ui-skills` and `agent-eval` (hyphens).
   - Thread control has its own path and uses `X-API-Version: 1.0.0`.
   - Several response fields are JSON-encoded strings.
+  - Connector and tool names allow only letters, numbers and underscores (Meta answers a bare 400 otherwise, though its docs show names with spaces). Body params take no per-param `required` flag; use `body.required`.
 
 ## Deliberately not wired
 

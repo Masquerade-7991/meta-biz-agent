@@ -484,6 +484,9 @@ export const updateUiSkill = async (
 export const deleteUiSkill = (id: string) => metaFetch(`${agent()}/agent-ui-skills/${id}`, 'DELETE')
 
 // ---- Connectors + tools ----
+/** Meta rejects connector and tool names with anything else (spaces, hyphens, dots); checked live. */
+export const META_NAME = /^[A-Za-z0-9_]+$/
+export const META_NAME_HINT = 'Use only letters, numbers and underscores, e.g. Shopify_store.'
 type MetaConnStatus = 'PENDING_OAUTH' | 'ACTIVE' | 'EXPIRED' | 'ERROR'
 interface MetaConnector {
   id: string
@@ -602,6 +605,7 @@ interface MetaTool {
   }
 }
 
+/** Body values take no per-value `required` flag (Meta's schema rejects it); they're listed in body.required. */
 function paramNode(v: ActionValue): ParamNode {
   const binding: ParamNode['binding'] =
     v.source === 'fixed'
@@ -612,7 +616,7 @@ function paramNode(v: ActionValue): ParamNode {
   return {
     type: v.type === 'text' ? 'string' : v.type,
     ...(v.description ? { description: v.description } : {}),
-    required: v.required,
+    ...(v.location === 'body' ? {} : { required: v.required }),
     ...(binding ? { binding } : {}),
   }
 }
