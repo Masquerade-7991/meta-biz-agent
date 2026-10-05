@@ -245,8 +245,11 @@ function AgentHome({ snap, onNavigate, onOpenSettings }: { snap: Snapshot; onNav
           View tickets
         </Button>
       </div>
-      <div className="mt-5 border-t border-border pt-4">
+      <div className="mt-5 space-y-2 border-t border-border pt-4">
         <NumberHealthCard compact />
+        <button type="button" className="text-primary underline-offset-4 hover:underline" style={TEXT_SM_OPEN} onClick={() => onNavigate('whatsapp')}>
+          Manage your numbers, profiles and names &rarr;
+        </button>
       </div>
       <p className="mt-5 border-t border-border pt-4 text-muted-foreground" style={TEXT_SM_OPEN}>
         Running more than one WhatsApp number?{' '}

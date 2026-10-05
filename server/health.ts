@@ -9,6 +9,7 @@ import { appUrl } from './mail.ts'
 import { defineJob, enqueue } from './jobs.ts'
 import { clearAlert, raiseAlert } from './alerts.ts'
 import { trace } from './trace.ts'
+import { queueNumbersSync, syncNumbers } from './numbers.ts'
 
 const health = () => col('number_health')
 const LIMIT: Record<string, string> = { TIER_50: '50', TIER_250: '250', TIER_2K: '2,000', TIER_10K: '10,000', TIER_100K: '100,000', TIER_UNLIMITED: 'Unlimited' }
@@ -56,6 +57,7 @@ defineJob(
   'health.check',
   async () => {
     await checkHealth()
+    await syncNumbers().catch(() => {})
     return { again: new Date(Date.now() + 3_600_000) }
   },
   { maxAttempts: 3 },
@@ -77,6 +79,12 @@ const TEMPLATE_BAD: Record<string, string> = {
   FLAGGED: 'was flagged for low quality and may be paused soon.',
 }
 export async function onAccountWebhook(field: string, value: Obj) {
+  // A display-name review finished: re-read the numbers so the new name (or refusal) shows.
+  if (field === 'phone_number_name_update') {
+    trace('number.name_reviewed', { decision: str(value.decision) ?? null, name: str(value.requested_verified_name) ?? null }, { entity: 'number', id: String(value.phone_number_id ?? value.display_phone_number ?? '') })
+    await queueNumbersSync()
+    return true
+  }
   if (field === 'phone_number_quality_update') {
     trace('number.limit_update', { event: str(value.event) ?? null, limit: str(value.current_limit) ?? str(value.max_daily_conversations_per_business) ?? null })
     await queueHealthCheck()

@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { Bot, Check, CheckCheck, Clock, FileText, Hand, ListChecks, Loader2, MessageSquareText, Paperclip, Send, Sparkles, StickyNote, Undo2, Wrench, X } from 'lucide-react'
+import { Ban, Bot, Check, CheckCheck, Clock, FileText, Hand, ListChecks, Loader2, MessageSquareText, MoreHorizontal, Paperclip, Send, Sparkles, StickyNote, Undo2, Wrench, X } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
 import { Textarea } from '@/app/components/ui/textarea'
@@ -21,6 +21,7 @@ import {
   loadSampleChats,
   markChatRead,
   sendPresence,
+  blockChat,
   sendMedia,
   sendReply,
   setChatControl,
@@ -56,6 +57,8 @@ import { FollowUpBanner, FollowUpMenu } from '@/app/inbox/FollowUpMenu'
 import { InteractiveDialog } from '@/app/inbox/InteractiveDialog'
 import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu'
+import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
 
 // Live events that change the chat list, and the open chat.
 const LIVE_INBOX = ['message.', 'conversation.', 'ticket.']
@@ -508,6 +511,51 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
   )
 }
 
+/** Block the customer on WhatsApp (or unblock), after a confirmation that says what it does. */
+function BlockMenu({ chat, onChange }: { chat: ChatDetail; onChange: (d: ChatDetail) => void }) {
+  const [confirm, setConfirm] = useState(false)
+  const blocked = !!chat.contact?.blocked
+  const run = (block: boolean) =>
+    blockChat(chat.conversation.phone, block).then(
+      (d) => {
+        onChange(d)
+        toast.success(block ? 'Blocked on WhatsApp. They can’t message you any more.' : 'Unblocked.')
+      },
+      (err) => toast.error(errorDetail(err)),
+    )
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="icon" className="size-9" aria-label="More actions">
+            <MoreHorizontal className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {blocked ? (
+            <DropdownMenuItem onSelect={() => void run(false)}>Unblock on WhatsApp</DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem className="text-destructive" onSelect={() => setConfirm(true)} disabled={isBsuid(chat.conversation.phone)}>
+              <Ban className="size-4" /> Block on WhatsApp
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <ConfirmDialog
+        open={confirm}
+        title="Block this customer on WhatsApp?"
+        description="They won’t be able to message this number, and broadcasts skip them. You can unblock them later, here or on the WhatsApp page."
+        confirmLabel="Block"
+        onCancel={() => setConfirm(false)}
+        onConfirm={() => {
+          setConfirm(false)
+          void run(true)
+        }}
+      />
+    </>
+  )
+}
+
 function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Member[]; onChange: (d: ChatDetail) => void }) {
   const [busy, setBusy] = useState(false)
   const { me } = useAuth()
@@ -533,6 +581,11 @@ function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Me
       <div className="min-w-0">
         <p className="truncate" style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>
           {display({ name: contact?.name, phone: conv.phone, username: contact?.username })}
+          {contact?.blocked && (
+            <Badge variant="destructive" className="ml-2 align-middle">
+              Blocked
+            </Badge>
+          )}
         </p>
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground" style={TEXT_XS}>
           <span>
@@ -549,6 +602,7 @@ function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Me
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <FollowUpMenu chat={chat} onChange={onChange} />
+        {can(me?.role, 'numbers.edit') && <BlockMenu chat={chat} onChange={onChange} />}
         <Select value={conv.assigneeId ?? 'none'} onValueChange={(v) => void run(() => assignChat(conv.phone, v === 'none' ? null : v))} disabled={busy || lockedAssign}>
           <SelectTrigger className="h-9 w-44" aria-label="Assign to" title={lockedAssign ? 'Assigned to someone else. A supervisor can reassign it.' : undefined}>
             <SelectValue>{assignee?.name ?? (conv.assigneeId ? 'Assigned' : 'Unassigned')}</SelectValue>

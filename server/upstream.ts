@@ -132,6 +132,11 @@ export async function metaJson(kind: Kind, method: string, path: string, body?: 
   return json
 }
 
+/** The token calls about `id` (a number, WABA or business) use, and the Graph base URL: for the few
+ *  calls that can't go through metaJson (Resumable Upload names the app, not the number). */
+export const tokenForId = (id: string) => tokenFor(`/${id}`)
+export const graphBase = () => upstream + GRAPH_PREFIX
+
 /** Downloads a file Meta hosts (a media URL from GET /<media-id>), with the workspace's token. */
 export async function downloadMeta(url: string): Promise<{ buf: Buffer; mime: string }> {
   const token = tokenFor('')

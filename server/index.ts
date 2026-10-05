@@ -21,6 +21,7 @@ import { handleBroadcasts, resumeBroadcasts } from './broadcasts.ts'
 import { startJobs } from './jobs.ts'
 import { handleBilling, startBilling } from './billing.ts'
 import { handleHealth, startHealth } from './health.ts'
+import { handleNumbers } from './numbers.ts'
 import { agentUpstream, callUpstream, env, hasToken, pathIds, resolveIds, setCallLogger, upstream, type Kind } from './upstream.ts'
 import { accounts, assetsFor } from './accounts.ts'
 import { handleWhatsApp } from './whatsapp.ts'
@@ -145,6 +146,7 @@ const server = http.createServer(async (req, res) => {
       await forward(req, res, metaRoute[1] as Kind, path)
     }
     else if (await handleHealth(req, res)) return
+    else if (await handleNumbers(req, res, me)) return
     else if (await handleWhatsApp(req, res, me)) return
     else if (await handleInbox(req, res, me)) return
     else if (await handleTickets(req, res, me)) return
@@ -161,6 +163,7 @@ if (await initDb()) {
   await resumeBroadcasts()
   await startBilling()
   await startHealth()
-  startJobs()
+  // JOBS=off: a second copy of the server (e.g. against a stand-in Meta) must not run real jobs.
+  if (env('JOBS') !== 'off') startJobs()
   if (env('COLLECTORS') !== 'off') startCollectors()
 } else if (!env('MONGODB_URI')) console.log('No MONGODB_URI: running without a database (store routes return 503)')

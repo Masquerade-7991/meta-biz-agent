@@ -25,6 +25,7 @@ import { accounts, assetsFor, workspaceForNumber } from './accounts.ts'
 import { SAMPLE_CHATS } from '../src/app/inbox/sampleData.ts'
 import { ensureTicket, needCanAssign, needInScope, onAgentReply, onCustomerMessage, scopeFor } from './tickets.ts'
 import { can, type Role } from '../src/app/lib/permissions.ts'
+import { setBlocked } from './numbers.ts'
 
 export interface Actor {
   _id: string
@@ -638,6 +639,16 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       await setControl(me, phone, body.action)
     } else if (action === 'read') await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { unread: 0 } })
     else if (action === 'snooze') await snooze(phone, body.until ?? null, me._id)
+    else if (action === 'block' || action === 'unblock') {
+      // Blocking happens on WhatsApp, on the workspace's default number (sample chats: only here).
+      if (!can(me.role, 'numbers.edit')) throw new HttpError(403, 'Owners and admins block customers.')
+      const conv = await conversations().findOne({ workspaceId: ws(), phone })
+      if (conv?.sample) await contacts().updateOne({ workspaceId: ws(), phone }, action === 'block' ? { $set: { blocked: true } } : { $unset: { blocked: '' } })
+      else {
+        needMetaAssets()
+        await setBlocked(currentAssets()!.phoneNumberId, phone, action === 'block')
+      }
+    }
     else if (action === 'remind') await remind(phone, body, me._id)
     else throw new HttpError(404, 'Not found.')
     if (action !== 'messages' && action !== 'notes') trace('conversation.updated', { action, ...(action === 'control' && { to: body.action }) }, { entity: 'conversation', id: phone })

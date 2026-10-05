@@ -48,7 +48,7 @@ export interface ChatDetail {
   conversation: { phone: string; owner: ChatOwner; assigneeId: string | null; lastInboundAt: string | null; windowOpen: boolean; sample: boolean; snoozedUntil?: string | null }
   /** Your reminders still to come for this chat. */
   reminders?: { id: string; note: string; dueAt: string }[]
-  contact: { phone: string; name?: string; username?: string; tags: string[]; fields: Record<string, string> } | null
+  contact: { phone: string; name?: string; username?: string; tags: string[]; fields: Record<string, string>; blocked?: boolean } | null
   messages: ChatMessage[]
 }
 export interface CannedResponse {
@@ -94,6 +94,8 @@ export const searchMessages = (q: string) => call<SearchHit[]>(`/api/inbox/searc
 export const listViews = () => call<SavedView[]>('/api/inbox/views')
 export const saveView = (v: Omit<SavedView, 'id'>) => call<SavedView[]>('/api/inbox/views', 'POST', v)
 export const deleteView = (id: string) => call<SavedView[]>(`/api/inbox/views/${id}`, 'DELETE')
+/** Blocks (or unblocks) the customer on WhatsApp: they can't message the number any more. */
+export const blockChat = (phone: string, block: boolean) => call<ChatDetail>(chat(phone, block ? 'block' : 'unblock'), 'POST', {})
 export const markChatRead = (phone: string) => call<ChatDetail>(chat(phone, 'read'), 'POST', {})
 /** How the business's own AI agent would answer the customer's last message. */
 export const suggestReply = (phone: string) => call<{ text: string }>(chat(phone, 'suggest'), 'POST', {})

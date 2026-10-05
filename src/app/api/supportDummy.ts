@@ -6,6 +6,8 @@ import { MetaError } from './meta'
 import { isBsuid, NO_CONTROL_HIDDEN } from '../lib/customer'
 import { checkMedia, mediaLabel, type MediaKind } from '../inbox/media'
 import { interactiveError, interactiveText, type InteractiveReply } from '../inbox/interactive'
+import type { NumberDetail, WaNumber } from './numbers'
+import { automationErrors, displayNameError, profileErrors, type Automation, type Profile } from '../whatsapp/profileRules'
 import type { CannedResponse, ChatDetail, ChatFilter, ChatMessage, ChatSummary, SavedView } from './inbox'
 import type { Priority, SupportSettings, Ticket } from './tickets'
 import type { Contact, FieldDef, Segment } from './contacts'
@@ -22,6 +24,7 @@ interface Chat {
   unread: number
   messages: ChatMessage[]
   snoozedUntil?: string
+  blocked?: boolean
 }
 // Reminders and saved views live in this tab only, like the rest of dummy mode.
 let demoReminders: { id: string; phone: string; note: string; dueAt: string; dismissed: boolean }[] = []
@@ -82,7 +85,7 @@ const summary = (c: Chat): ChatSummary => {
 const detail = (c: Chat): ChatDetail => ({
   conversation: { phone: c.phone, owner: c.owner, assigneeId: c.assigneeId, lastInboundAt: lastInbound(c), windowOpen: windowOpen(c), sample: true, snoozedUntil: c.snoozedUntil ?? null },
   reminders: demoReminders.filter((r) => r.phone === c.phone && Date.parse(r.dueAt) > Date.now()).map(({ id, note, dueAt }) => ({ id, note, dueAt })),
-  contact: { phone: c.phone, name: c.name, tags: c.tags, fields: {} },
+  contact: { phone: c.phone, name: c.name, tags: c.tags, fields: {}, blocked: !!c.blocked },
   messages: c.messages,
 })
 const push = (c: Chat, m: Omit<ChatMessage, 'id' | 'phone' | 'at'>) => c.messages.push({ id: `m${++seq}`, phone: c.phone, at: new Date().toISOString(), ...m })
@@ -164,6 +167,11 @@ export async function dummyInbox<T>(method: string, path: string, body: unknown)
     if (m[2] === 'notes') push(c, { direction: 'out', author: 'agent', authorId: ME.id, authorName: ME.name, kind: 'note', body: String(b.text) })
     if (m[2] === 'assign') c.assigneeId = b.userId ?? null
     if (m[2] === 'read') c.unread = 0
+    if (m[2] === 'block') {
+      if (!windowOpen(c)) throw new MetaError(400, 'Check the details', 'WhatsApp only lets you block someone who messaged this number in the last 24 hours.')
+      c.blocked = true
+    }
+    if (m[2] === 'unblock') c.blocked = false
     if (m[2] === 'snooze') {
       if (b.until && Date.parse(String(b.until)) < Date.now() + 30_000) throw new MetaError(400, 'Check the details', 'Pick a time in the future.')
       c.snoozedUntil = b.until ? String(b.until) : undefined
@@ -576,4 +584,144 @@ export async function dummyBilling<T>(method: string, path: string, body: unknow
     month: { total, byCategory: [{ category: 'MARKETING', cost: total * 0.78, volume: 0 }, { category: 'UTILITY', cost: total * 0.17, volume: 0 }, { category: 'AUTHENTICATION', cost: total * 0.05, volume: 0 }] },
     days,
   } as T
+}
+
+// ---- WhatsApp numbers (dummy): one live number and one waiting for its ownership check ----
+interface DemoNumber {
+  n: WaNumber
+  detail: Omit<NumberDetail, 'number' | 'activity'>
+  activity: NumberDetail['activity']
+  pin: string | null
+  blocked: string[]
+  nameAsked?: number
+}
+let demoNumbers: DemoNumber[] | null = null
+const demoNumberList = (): DemoNumber[] =>
+  (demoNumbers ??= [
+    {
+      n: { id: '990000000000002', wabaId: '990000000000001', wabaName: 'Helo Demo Store', display: '+91 98765 43210', verifiedName: 'Helo Demo Store', status: 'CONNECTED', codeVerification: 'VERIFIED', quality: 'GREEN', nameStatus: 'APPROVED', newName: null, newNameStatus: 'NONE', platform: 'CLOUD_API', throughput: 'STANDARD', photo: null, limit: 'TIER_2K', pinKnown: true, syncedAt: new Date().toISOString() },
+      detail: {
+        profile: { about: 'Fresh groceries delivered in 30 minutes', address: '12 MG Road, Bengaluru', description: 'Order groceries on WhatsApp. Our AI assistant answers 24/7.', email: 'hello@helodemo.store', websites: ['https://helodemo.store'], vertical: 'GROCERY', photo: null },
+        automation: { prompts: ['Track my order', 'Today’s offers'], commands: [{ name: 'orders', description: 'See your recent orders' }] },
+        official: false,
+        pinStorage: true,
+        webhook: { number: null, account: 'https://console.helo.ai/api/webhooks/whatsapp', app: null, console: `${location.origin}/api/webhooks/whatsapp`, reachable: true, verifyTokenSet: true },
+      },
+      activity: [],
+      pin: '482913',
+      blocked: [],
+    },
+    {
+      n: { id: '990000000000004', wabaId: '990000000000001', wabaName: 'Helo Demo Store', display: '+91 98765 43211', verifiedName: 'Helo Demo Support', status: 'PENDING', codeVerification: 'NOT_VERIFIED', quality: 'UNKNOWN', nameStatus: 'PENDING_REVIEW', newName: null, newNameStatus: 'NONE', platform: 'NOT_APPLICABLE', throughput: null, photo: null, limit: null, pinKnown: false, syncedAt: new Date().toISOString() },
+      detail: {
+        profile: { about: '', address: '', description: '', email: '', websites: [], vertical: 'OTHER', photo: null },
+        automation: { prompts: [], commands: [] },
+        official: false,
+        pinStorage: true,
+        webhook: { number: null, account: null, app: null, console: `${location.origin}/api/webhooks/whatsapp`, reachable: true, verifyTokenSet: true },
+      },
+      activity: [],
+      pin: null,
+      blocked: [],
+    },
+  ])
+
+export async function dummyNumbers<T>(method: string, path: string, body: unknown): Promise<T> {
+  const b = (body ?? {}) as Record<string, unknown>
+  const list = demoNumberList()
+  // A display name in review is approved 30 seconds after it was asked for.
+  for (const x of list)
+    if (x.nameAsked && Date.now() - x.nameAsked > 30_000) {
+      Object.assign(x.n, { verifiedName: x.n.newName, nameStatus: 'APPROVED', newName: null, newNameStatus: 'APPROVED' })
+      x.nameAsked = undefined
+      x.activity.unshift({ kind: 'name_reviewed', data: { decision: 'APPROVED' }, at: new Date().toISOString(), by: 'WhatsApp' })
+    }
+  const u = new URL(path, 'http://x')
+  if (u.pathname === '/api/whatsapp/numbers') return list.map((x) => x.n) as T
+  const m = u.pathname.match(/^\/api\/whatsapp\/numbers\/(\d+)(?:\/([a-z-]+))?(?:\/([^/]+))?$/)
+  const x = m && list.find((y) => y.n.id === m[1])
+  if (!m || !x) throw new MetaError(404, 'Not found', 'That number isn’t connected to this workspace.')
+  const [, , action = '', arg] = m
+  const out = () => ({ number: { ...x.n, pinKnown: !!x.pin }, ...x.detail, activity: x.activity }) as T
+  const log = (kind: string, data: Record<string, unknown> = {}) => x.activity.unshift({ kind, data, at: new Date().toISOString(), by: 'Demo User' })
+  const bad = (detail: string) => new MetaError(400, 'Check the details', detail)
+  if (!action) return out()
+  if (action === 'pin' && method === 'GET') {
+    if (!x.pin) throw new MetaError(404, 'Not found', 'We don’t have this number’s PIN. Set a new one below.')
+    return { pin: x.pin } as T
+  }
+  if (action === 'blocked' && method === 'GET') return x.blocked.map((user) => ({ user })) as T
+  if (action === 'blocked' && method === 'DELETE') {
+    x.blocked = x.blocked.filter((p) => p !== decodeURIComponent(arg ?? ''))
+    log('unblocked')
+    return { ok: true } as T
+  }
+  if (action === 'blocked' && method === 'POST') {
+    const user = String(b.user ?? '').replace(/\D/g, '')
+    const chat = load().find((c) => c.phone === user)
+    if (!chat || !windowOpen(chat)) throw bad('WhatsApp only lets you block someone who messaged this number in the last 24 hours.')
+    if (!x.blocked.includes(user)) x.blocked.push(user)
+    log('blocked')
+    return { ok: true } as T
+  }
+  if (action === 'profile') {
+    const p = b as unknown as Profile
+    const errors = profileErrors(p)
+    if (Object.keys(errors).length) throw bad(Object.values(errors)[0]!)
+    x.detail.profile = { ...p, photo: x.detail.profile.photo }
+    log('profile_updated')
+  }
+  if (action === 'photo') {
+    const f = b.file as File
+    if (!['image/jpeg', 'image/png'].includes(f.type)) throw bad('Use a JPG or PNG image.')
+    if (f.size > 5 * 1024 * 1024) throw new MetaError(413, 'Too big', 'Profile photos can be 5 MB at most.')
+    x.detail.profile.photo = x.n.photo = URL.createObjectURL(f)
+    log('photo_updated')
+  }
+  if (action === 'display-name') {
+    const problem = displayNameError(String(b.name ?? ''))
+    if (problem) throw bad(problem)
+    Object.assign(x.n, { newName: String(b.name).trim(), newNameStatus: 'PENDING_REVIEW' })
+    x.nameAsked = Date.now()
+    log('name_requested', { name: x.n.newName })
+  }
+  if (action === 'automation') {
+    const a = b as unknown as Automation
+    const problem = automationErrors(a)
+    if (problem) throw bad(problem)
+    x.detail.automation = { prompts: a.prompts.filter((p) => p.trim()), commands: a.commands.filter((c) => c.name.trim()) }
+    log('automation_updated')
+  }
+  if (action === 'pin') {
+    if (!/^\d{6}$/.test(String(b.pin ?? ''))) throw bad('The PIN is 6 digits.')
+    x.pin = String(b.pin)
+    log('pin_changed')
+  }
+  if (action === 'register') {
+    const pin = b.pin ? String(b.pin) : x.pin
+    if (!pin) throw bad('Enter the number’s 6-digit PIN to register it.')
+    if (x.n.status === 'PENDING') throw bad('Verify you own this number first.')
+    x.pin = pin
+    Object.assign(x.n, { status: 'CONNECTED', newNameStatus: 'NONE' })
+    log('registered')
+  }
+  if (action === 'deregister') {
+    if (String(b.confirm ?? '').replace(/\D/g, '') !== x.n.display.replace(/\D/g, '')) throw bad('Type the number exactly to confirm.')
+    x.n.status = 'DISCONNECTED'
+    log('deregistered')
+  }
+  if (action === 'request-code') {
+    log('code_requested', { method: b.method })
+    return { ok: true } as T
+  }
+  if (action === 'verify-code') {
+    if (String(b.code ?? '') !== '123456') throw bad('That code isn’t right. In the demo, the code is 123456.')
+    Object.assign(x.n, { codeVerification: 'VERIFIED', status: 'DISCONNECTED' })
+    log('verified')
+  }
+  if (action === 'webhook') {
+    x.detail.webhook = { ...x.detail.webhook, number: b.target === 'console' ? x.detail.webhook.console : String(b.url) }
+    log('webhook_changed', { to: x.detail.webhook.number })
+  }
+  return out()
 }

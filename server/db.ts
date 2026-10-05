@@ -107,6 +107,8 @@ const INDEXES: Record<string, IndexDescription[]> = {
   billing: [{ key: { workspaceId: 1 }, unique: true }],
   // Latest quality and limits per WhatsApp number (health.ts).
   number_health: [{ key: { workspaceId: 1, phoneNumberId: 1 }, unique: true }],
+  // Every number of the workspace's WhatsApp accounts, as Meta last reported it (numbers.ts).
+  phone_numbers: [{ key: { workspaceId: 1, id: 1 }, unique: true }],
   // Background jobs (jobs.ts): due ones are claimed oldest first; finished ones are kept 7 days.
   jobs: [
     { key: { status: 1, runAt: 1 } },

@@ -1,7 +1,7 @@
-import { BarChart3, Bot, Contact, Home, Inbox, Megaphone, Settings, Ticket, type LucideIcon } from 'lucide-react'
+import { BarChart3, Bot, Contact, Home, Inbox, Megaphone, Settings, Smartphone, Ticket, type LucideIcon } from 'lucide-react'
 import { can, type Action, type Role } from '@/app/lib/permissions'
 
-export type NavId = 'home' | 'inbox' | 'tickets' | 'contacts' | 'ai-agents' | 'broadcasts' | 'analytics' | 'settings'
+export type NavId = 'home' | 'inbox' | 'tickets' | 'contacts' | 'ai-agents' | 'broadcasts' | 'whatsapp' | 'analytics' | 'settings'
 
 export interface NavItem {
   id: NavId
@@ -22,6 +22,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'contacts', label: 'Contacts', icon: Contact },
   { id: 'ai-agents', label: 'AI Agents', icon: Bot, distinct: true },
   { id: 'broadcasts', label: 'Broadcasts', icon: Megaphone },
+  { id: 'whatsapp', label: 'WhatsApp', icon: Smartphone, need: 'numbers.view' },
   { id: 'analytics', label: 'Analytics', icon: BarChart3, need: 'reports.view' },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]

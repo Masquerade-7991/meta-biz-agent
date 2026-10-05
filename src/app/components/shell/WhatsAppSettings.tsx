@@ -68,7 +68,7 @@ function AccountCard({ a, isOwner, onChange, onRemove }: { a: WaAccount; isOwner
 }
 
 /** Settings → WhatsApp: the numbers this workspace works with, and connecting more. */
-export function WhatsAppSettings() {
+export function WhatsAppSettings({ onManageNumbers }: { onManageNumbers?: () => void }) {
   const { me } = useAuth()
   const isOwner = can(me?.role, 'whatsapp.manage')
   const [rows, setRows] = useState<WaAccount[] | null>(null)
@@ -84,6 +84,11 @@ export function WhatsAppSettings() {
   return (
     <div>
       <SettingsSection wide title="WhatsApp accounts" description="The WhatsApp Business numbers this workspace uses for its AI agent, inbox and broadcasts.">
+        {!!rows?.length && onManageNumbers && can(me?.role, 'numbers.view') && (
+          <Button variant="outline" size="sm" className="mb-3" onClick={onManageNumbers}>
+            Manage numbers, profiles and names &rarr;
+          </Button>
+        )}
         {error ? (
           <FormError>{error}</FormError>
         ) : !rows ? (

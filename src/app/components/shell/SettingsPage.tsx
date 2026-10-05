@@ -356,7 +356,7 @@ function Members() {
   )
 }
 
-export function SettingsPage({ tab, onTabChange }: { tab: SettingsTab; onTabChange: (t: SettingsTab) => void }) {
+export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: SettingsTab; onTabChange: (t: SettingsTab) => void; onManageNumbers?: () => void }) {
   const { me } = useAuth()
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
@@ -375,7 +375,7 @@ export function SettingsPage({ tab, onTabChange }: { tab: SettingsTab; onTabChan
           <Profile />
         </TabsContent>
         <TabsContent value="whatsapp" className="pt-2">
-          <WhatsAppSettings />
+          <WhatsAppSettings onManageNumbers={onManageNumbers} />
         </TabsContent>
         <TabsContent value="billing" className="pt-2">
           <BillingSettingsTab />

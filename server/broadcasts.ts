@@ -269,8 +269,8 @@ async function sendBatch(p: Record<string, unknown>): Promise<JobResult> {
     // A cancel lands between messages, not only between batches.
     if ((await broadcasts().findOne({ _id: b._id }, { projection: { status: 1 } }))?.status === 'cancelled') return
     const c = await col('contacts').findOne({ workspaceId: ws(), phone: r.phone })
-    if (!c || c.optedOut) {
-      await recipients().updateOne({ _id: r._id }, { $set: { status: 'skipped', reason: c ? 'opted_out' : 'other', error: c ? 'Opted out' : 'Contact deleted' } })
+    if (!c || c.optedOut || c.blocked) {
+      await recipients().updateOne({ _id: r._id }, { $set: { status: 'skipped', reason: c?.optedOut ? 'opted_out' : 'other', error: !c ? 'Contact deleted' : c.optedOut ? 'Opted out' : 'Blocked on WhatsApp' } })
       tally.skipped++
       continue
     }

@@ -5,6 +5,7 @@ import { TicketsPage } from '@/app/pages/TicketsPage'
 import { ContactsPage } from '@/app/pages/ContactsPage'
 import { BroadcastsPage } from '@/app/pages/BroadcastsPage'
 import { SupportAnalyticsPage } from '@/app/pages/SupportAnalyticsPage'
+import { WhatsAppPage } from '@/app/pages/WhatsAppPage'
 import { NotificationsBell } from './NotificationsBell'
 import { AppSidebar } from './AppSidebar'
 import { AgentsListPage } from './AgentsListPage'
@@ -84,6 +85,15 @@ export function ProductShell({
         return <ContactsPage onOpenChat={openChat} />
       case 'broadcasts':
         return <BroadcastsPage />
+      case 'whatsapp':
+        return (
+          <WhatsAppPage
+            onOpenSettings={() => {
+              setSettingsTab('whatsapp')
+              setActive('settings')
+            }}
+          />
+        )
       case 'analytics':
         return <SupportAnalyticsPage />
       case 'ai-agents':
@@ -95,7 +105,7 @@ export function ProductShell({
           />
         )
       case 'settings':
-        return <SettingsPage tab={settingsTab} onTabChange={setSettingsTab} />
+        return <SettingsPage tab={settingsTab} onTabChange={setSettingsTab} onManageNumbers={() => setActive('whatsapp')} />
     }
   }
 
@@ -115,7 +125,8 @@ export function ProductShell({
           <NotificationsBell
             onOpenChat={openChat}
             onOpenTarget={(target) => {
-              if (target === 'broadcasts') return setActive('broadcasts')
+              // Number alerts (quality, names) open the WhatsApp page; billing opens Settings.
+              if (target === 'broadcasts' || target === 'whatsapp') return setActive(target)
               setSettingsTab(target)
               setActive('settings')
             }}
