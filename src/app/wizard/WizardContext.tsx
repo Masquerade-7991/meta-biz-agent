@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNo
 import type { SliceKey, StepId, StudioSectionId, WizardState } from './types'
 import { DEFAULT_BUSINESS_HOURS, DEFAULT_REPLIES } from './mockData'
 import { migrateRichReply } from './richReplies'
-import { getDraftSyncPhone, putDraft } from '@/app/api/store'
+import { getDraftSyncPhone, putDraft, stripConnectionSecrets } from '@/app/api/store'
 import { storageKey } from '@/app/api/dummy'
 
 const STORAGE_KEY = storageKey('meta-agent-wizard-state-v1')
@@ -299,7 +299,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, loadInitialState)
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stripConnectionSecrets(state)))
   }, [state])
 
   // localStorage stays the fast cache; the stored draft (minus secrets) follows 2 s after the last edit.

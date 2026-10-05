@@ -55,11 +55,11 @@ let draftSyncPhone: string | null = null
 export const setDraftSyncPhone = (id: string | null) => void (draftSyncPhone = id)
 export const getDraftSyncPhone = () => draftSyncPhone
 
-/** Credentials never leave the browser; the server blanks the same fields again. */
-export function stripSecrets(state: WizardState): WizardState {
+/** Connection keys and client secrets live only on Meta: never in this browser's storage or the
+ *  stored draft. Meta keeps them across edits (a PUT without auth_config leaves them as they are). */
+export function stripConnectionSecrets(state: WizardState): WizardState {
   return {
     ...state,
-    connectors: { ...state.connectors, apiKey: '', clientSecret: '' },
     connections: {
       ...state.connections,
       connections: state.connections.connections.map((c) => ({
@@ -68,8 +68,13 @@ export function stripSecrets(state: WizardState): WizardState {
         ...(c.clientSecret !== undefined ? { clientSecret: '' } : {}),
       })),
     },
-    agentEvents: { ...state.agentEvents, secretKey: '' },
   }
+}
+
+/** Credentials never leave the browser; the server blanks the same fields again. */
+export function stripSecrets(state: WizardState): WizardState {
+  const s = stripConnectionSecrets(state)
+  return { ...s, connectors: { ...s.connectors, apiKey: '', clientSecret: '' }, agentEvents: { ...s.agentEvents, secretKey: '' } }
 }
 
 const SECRET_KEYS = new Set(['clientSecret', 'token', 'password', 'apiKey', 'secretKey', 'value'])

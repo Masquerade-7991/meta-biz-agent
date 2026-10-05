@@ -410,6 +410,8 @@ export interface Connection {
   tokenUrl?: string
   clientId?: string
   clientSecret?: string
+  /** Last characters of the client secret Meta holds. */
+  clientSecretHint?: string
   scopes?: string[]
   /** OAuth token request body format (Meta token_request_content_type). Defaults to URL-encoded. */
   tokenContentType?: 'form' | 'json'
@@ -447,6 +449,8 @@ export interface ActionValue {
   fixedValue?: string
   /** Only meaningful (and near-mandatory) when source === 'conversation'. */
   description: string
+  /** Meta's own node for shapes the console can't edit (objects, lists); sent back unchanged. */
+  raw?: Record<string, unknown>
 }
 
 export interface ConnectionAction {
@@ -462,6 +466,8 @@ export interface ConnectionAction {
   metaId?: string
   /** Discovered from an MCP server by Refresh Tools: Test only, no Edit/Delete here. */
   fromMcp?: boolean
+  /** A question a customer might ask that needs this tool; offered as a chip in Test & Eval. Console only, not sent to Meta. */
+  exampleQuestion?: string
 }
 
 export interface ActivityLogRow {

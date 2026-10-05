@@ -23,7 +23,10 @@ import {
 } from '@/app/wizard/mockData'
 import type { Connection, ConnectionAction, WizardState } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
-import { checkEligibility, errorText, MetaError, sendTestMessage } from '@/app/api/meta'
+import { checkEligibility, errorText, MetaError, sendTestMessage, testConversationTurns } from '@/app/api/meta'
+import { findToolCalls, type ToolCallsState } from '@/app/wizard/testTools'
+import { ToolCallsNote } from './ToolCallsNote'
+import { TestToolsStrip } from './TestToolsStrip'
 import { listTestConversations } from '@/app/api/store'
 import { isDummyMode, storageKey } from '@/app/api/dummy'
 import type { DummyRich } from '@/app/api/dummyMeta'
@@ -36,6 +39,8 @@ interface ChatMessage {
   at: number
   quickReplies?: string[]
   rich?: DummyRich
+  /** Connector tools the agent called for this reply (agent messages only). */
+  tools?: ToolCallsState
 }
 interface TestConversation {
   id: string
@@ -127,7 +132,10 @@ function buildStandardChecks(state: WizardState, forceAmberGreeting: boolean): C
 }
 
 export function TestEvalStep() {
-  const { state, patch } = useWizard()
+  const { state, patch, setSection } = useWizard()
+  // Tool calls are looked up only when the agent has tools to call.
+  const hasTools = state.connections.actions.length > 0
+  const openConnections = () => setSection('connections')
 
   // ---- Quick test: Meta's Agent Test API (not billed, 500/hour per number) ----
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -168,6 +176,7 @@ export function TestEvalStep() {
     state.knowledge.faqs.length > 0 ||
     state.knowledge.documents.length > 0 ||
     state.knowledge.websites.length > 0 ||
+    state.connections.actions.length > 0 ||
     state.business.businessDescription.trim() !== ''
 
   /** `shown` replaces the customer's bubble text when `text` is a dummy-mode tap token. */
@@ -177,19 +186,27 @@ export function TestEvalStep() {
     if (!textArg) setChatDraft('')
     setChatMessages((prev) => [...prev, { from: 'customer', text: shown ?? text, at: Date.now() }])
     setSending(true)
+    const sentAt = Date.now()
     try {
       const r = await sendTestMessage(text, conversationId)
       setConversationId(r.conversation_id)
+      const replyAt = Date.now()
+      const lookTools = hasTools && !!r.agent_response && !!r.conversation_id
       setChatMessages((prev) => [
         ...prev,
         ...(r.agent_response
-          ? [{ from: 'agent' as const, text: r.agent_response, at: Date.now(), quickReplies: r.quick_replies, rich: r.dummy_rich }]
+          ? [{ from: 'agent' as const, text: r.agent_response, at: replyAt, quickReplies: r.quick_replies, rich: r.dummy_rich, ...(lookTools ? { tools: { state: 'checking' as const } } : {}) }]
           : []),
         ...(r.handoff_reason ? [{ from: 'system' as const, text: 'This message would hand off to a human agent here.', at: Date.now() }] : []),
         ...(!r.agent_response && !r.handoff_reason && r.no_response_reason
           ? [{ from: 'system' as const, text: `The agent did not reply: ${r.no_response_reason}`, at: Date.now() }]
           : []),
       ])
+      // Which tools it used: from the conversation's turns, which land about a second after the reply.
+      if (lookTools)
+        void findToolCalls(() => testConversationTurns(r.conversation_id), sentAt).then((calls) =>
+          setChatMessages((prev) => prev.map((m) => (m.at === replyAt && m.from === 'agent' ? { ...m, tools: calls ? { state: 'done', calls } : { state: 'unknown' } } : m))),
+        )
     } catch (err) {
       if (err instanceof MetaError && err.status === 429) {
         // Meta limits test messages per number (500/h) and per app across every agent (10,000/h).
@@ -330,6 +347,7 @@ export function TestEvalStep() {
       </TabsList>
 
       <TabsContent value="testing" className="space-y-4 pt-3">
+        <TestToolsStrip onAsk={(q) => void sendQuickTest(q)} onManage={openConnections} disabled={sending || ineligible || !!limitMessage || !!viewing} />
         {/* Quick test */}
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
@@ -388,6 +406,7 @@ export function TestEvalStep() {
 
           {isDummyMode() && !viewing ? (
             <DemoWhatsAppChat
+              belowAgent={(m) => <ToolCallsNote tools={(m as ChatMessage).tools} hasTools={hasTools} onOpenConnections={openConnections} />}
               name={state.identity.companyName.trim() || state.gate.selectedWabaName?.trim() || state.identity.agentName.trim() || 'Your business'}
               messages={chatMessages}
               sending={sending}
@@ -430,6 +449,11 @@ export function TestEvalStep() {
                           <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
                             {new Date(m.at).toLocaleTimeString()}
                           </span>
+                        )}
+                        {m.from === 'agent' && (
+                          <div className="mt-1 w-full">
+                            <ToolCallsNote tools={m.tools} hasTools={hasTools} onOpenConnections={openConnections} />
+                          </div>
                         )}
                         {/* Quick replies on the latest agent message, tappable like on WhatsApp. */}
                         {!viewing && m.quickReplies && m.quickReplies.length > 0 && i === all.length - 1 && (

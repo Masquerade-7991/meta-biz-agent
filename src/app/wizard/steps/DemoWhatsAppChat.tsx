@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CheckCircle2, CreditCard, ExternalLink, Landmark, Loader2, Mic, Package, Send, ShieldCheck, Smartphone, X } from 'lucide-react'
 import { BUY, PAID, rupees, type DummyRich, type Order } from '@/app/api/dummyMeta'
 import { Bubble, BubbleButton, Meta, PhoneFrame } from './WhatsAppPreview'
@@ -22,7 +22,10 @@ export function DemoWhatsAppChat({
   sending,
   disabled,
   onSend,
+  belowAgent,
 }: {
+  /** Extra lines under an agent message, e.g. the tools it used. */
+  belowAgent?: (m: DemoChatMessage) => ReactNode
   name: string
   messages: DemoChatMessage[]
   sending: boolean
@@ -140,6 +143,7 @@ export function DemoWhatsAppChat({
               onBuy={(id, label) => onSend(BUY + id, label)}
               onPay={(o) => setPaying(o)}
             />
+            {belowAgent && <div className="pl-2">{belowAgent(m)}</div>}
             {last && !sending && m.quickReplies?.length ? (
               <div className="flex flex-wrap justify-end gap-1.5 pl-8">
                 {m.quickReplies.map((qr) => (

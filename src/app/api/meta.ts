@@ -2,7 +2,6 @@
 // PHONE_NUMBER_ID / WABA_ID / BUSINESS_ID in a path are filled in server-side from .env unless a real ID is set, so the browser never holds tokens.
 // Field names and paths follow developers.facebook.com/documentation/meta-business-agent/reference.
 import type {
-  ActionValue,
   ApiKeyEntry,
   Connection,
   ConnectionAction,
@@ -21,6 +20,8 @@ import { compileConfig } from '../wizard/compiler'
 import { validateRichReply } from '../wizard/richReplies'
 import type { EvalConversationResult, EvalScenario, TranscriptLine } from '../wizard/steps/evalData'
 import { isDummyMode } from './dummy'
+import { toolBody, toolToAction, type MetaTool } from '../wizard/toolRequest'
+export { toolToAction }
 import { dummyAssets, dummyMeta, type DummyRich } from './dummyMeta'
 
 // The number every call targets. Unset → the PHONE_NUMBER_ID placeholder the server fills from .env.
@@ -498,21 +499,21 @@ interface MetaConnector {
   connector_protocol?: 'HTTP' | 'MCP'
   connection_status?: { status: MetaConnStatus; error_message?: string }
   mcp_tool_sync?: { status: 'PENDING' | 'READY' | 'ERROR'; tool_count?: number } | null
-  auth_config?: { api_key?: Partial<Record<'headers' | 'query_params', { field_name: string; value: string; prefix?: string }[]>> } | null
+  auth_config?: {
+    api_key?: Partial<Record<'headers' | 'query_params', { field_name: string; value: string; prefix?: string }[]>>
+    oauth2_client_credentials?: { token_url?: string; client_id?: string; scopes_to_request?: string[]; token_request_content_type?: string; client_secret?: string }
+  } | null
 }
-/** The keys as Meta holds them: where each goes and its last 4 characters. The value stays the one
- *  this browser knows (Meta never returns it), matched by field name and place. */
-function metaApiKeys(r: MetaConnector, local: ApiKeyEntry[] = []): ApiKeyEntry[] | undefined {
+/** The keys as Meta holds them: where each goes and its last 4 characters. Meta never returns a
+ *  key, and the console never keeps one, so the value is always empty here. */
+function metaApiKeys(r: MetaConnector): ApiKeyEntry[] | undefined {
   const k = r.auth_config?.api_key
   if (!k) return undefined
   const rows = [
     ...(k.headers ?? []).map((x) => ({ x, location: 'header' as const })),
     ...(k.query_params ?? []).map((x) => ({ x, location: 'query' as const })),
   ]
-  return rows.map(({ x, location }, i) => {
-    const mine = local.find((l) => l.fieldName === x.field_name && l.location === location)
-    return { id: mine?.id ?? `key-${r.id}-${i}`, value: mine?.value ?? '', location, fieldName: x.field_name, prefix: x.prefix ?? '', hint: x.value.replace(/^\*+/, '').slice(-4) }
-  })
+  return rows.map(({ x, location }) => ({ id: `key-${r.id}-${location}-${x.field_name}`, value: '', location, fieldName: x.field_name, prefix: x.prefix ?? '', hint: x.value.replace(/^\*+/, '').slice(-4) }))
 }
 const CONN_STATUS: Record<MetaConnStatus, ConnectionStatus> = {
   ACTIVE: 'working',
@@ -528,6 +529,18 @@ export const connectorFields = (c: MetaConnector): Partial<Connection> => ({
   protocol: c.connector_protocol === 'MCP' ? 'mcp' : 'http',
   demoStatus: c.connection_status ? CONN_STATUS[c.connection_status.status] : 'not_tested',
   mcpSync: c.mcp_tool_sync ? { status: c.mcp_tool_sync.status, toolCount: c.mcp_tool_sync.tool_count ?? 0 } : undefined,
+  authMethod: c.auth_type === 'API_KEY' ? 'api_key' : c.auth_type === 'OAUTH2_CLIENT_CREDENTIALS' ? 'client_credentials' : 'none',
+  ...(metaApiKeys(c) ? { apiKeys: metaApiKeys(c) } : {}),
+  ...(c.auth_config?.oauth2_client_credentials
+    ? (({ token_url, client_id, scopes_to_request, token_request_content_type, client_secret }) => ({
+        tokenUrl: token_url ?? '',
+        clientId: client_id ?? '',
+        scopes: scopes_to_request ?? [],
+        tokenContentType: token_request_content_type === 'application/json' ? ('json' as const) : ('form' as const),
+        clientSecret: '',
+        clientSecretHint: (client_secret ?? '').replace(/^\*+/, '').slice(-4),
+      }))(c.auth_config.oauth2_client_credentials)
+    : {}),
 })
 
 function apiKeyConfig(c: Connection) {
@@ -546,7 +559,8 @@ function oauthConfig(c: Connection) {
     client_secret: c.clientSecret ?? '',
   }
 }
-function connectorBody(c: Connection) {
+/** `auth` false: leave the saved keys as they are (Meta keeps them when auth_config is left out). */
+function connectorBody(c: Connection, auth: boolean) {
   const auth_type = c.authMethod === 'api_key' ? 'API_KEY' : c.authMethod === 'client_credentials' ? 'OAUTH2_CLIENT_CREDENTIALS' : 'NONE'
   return {
     name: c.name,
@@ -554,16 +568,17 @@ function connectorBody(c: Connection) {
     base_url: c.baseUrl,
     connector_protocol: c.protocol === 'mcp' ? 'MCP' : 'HTTP',
     auth_type,
-    ...(auth_type === 'API_KEY' ? { auth_config: { api_key: apiKeyConfig(c) } } : {}),
-    ...(auth_type === 'OAUTH2_CLIENT_CREDENTIALS' ? { auth_config: { oauth2_client_credentials: oauthConfig(c) } } : {}),
+    ...(auth && auth_type === 'API_KEY' ? { auth_config: { api_key: apiKeyConfig(c) } } : {}),
+    ...(auth && auth_type === 'OAUTH2_CLIENT_CREDENTIALS' ? { auth_config: { oauth2_client_credentials: oauthConfig(c) } } : {}),
   }
 }
-/** Create or update; returns the Meta-derived fields to merge onto the local connection. */
-export async function saveConnector(c: Connection): Promise<Partial<Connection>> {
+/** Create or update; returns the Meta-derived fields to merge onto the local connection. An update
+ *  sends sign-in details only when `auth` is set (keys were retyped or sign-in changed). */
+export async function saveConnector(c: Connection, auth = !c.metaId): Promise<Partial<Connection>> {
   try {
     const r = c.metaId
-      ? await metaFetch<MetaConnector>(`${agent()}/agent_connectors/${c.metaId}`, 'PUT', connectorBody(c))
-      : await metaFetch<MetaConnector>(`${agent()}/agent_connectors`, 'POST', connectorBody(c))
+      ? await metaFetch<MetaConnector>(`${agent()}/agent_connectors/${c.metaId}`, 'PUT', connectorBody(c, auth))
+      : await metaFetch<MetaConnector>(`${agent()}/agent_connectors`, 'POST', connectorBody(c, true))
     return connectorFields(r)
   } catch (err) {
     if (err instanceof MetaError && err.status === 409) throw new MetaError(409, `A connection named "${c.name}" already exists.`, '')
@@ -601,61 +616,6 @@ export const connectorLogs = (id: string, extra: Record<string, string | number 
       q({ start_time: Math.floor(Date.now() / 1000) - 7 * 86400 + 60, include_stats: true, limit: 1000, ...extra }),
   )
 
-interface ParamNode {
-  type: 'string' | 'integer' | 'number' | 'boolean'
-  description?: string
-  required?: boolean
-  binding?: { kind: 'default' | 'macro'; value?: string; macro?: string }
-}
-interface MetaTool {
-  id: string
-  name: string
-  description: string
-  request_definition: {
-    method: ConnectionAction['method']
-    path: string
-    path_parameters?: Record<string, ParamNode>
-    query_parameters?: Record<string, ParamNode>
-    headers?: Record<string, ParamNode>
-    body?: { content_type: 'application/json'; params: Record<string, ParamNode>; required?: string[] } | null
-  }
-}
-
-/** Body values take no per-value `required` flag (Meta's schema rejects it); they're listed in body.required. */
-function paramNode(v: ActionValue): ParamNode {
-  const binding: ParamNode['binding'] =
-    v.source === 'fixed'
-      ? { kind: 'default', value: v.fixedValue ?? '' }
-      : v.source === 'whatsapp_number'
-        ? { kind: 'macro', macro: 'WHATSAPP_PHONE_NUMBER' }
-        : undefined // 'conversation' (and, pending review, 'conversation_memory'): the agent fills it in
-  return {
-    type: v.type === 'text' ? 'string' : v.type,
-    ...(v.description ? { description: v.description } : {}),
-    ...(v.location === 'body' ? {} : { required: v.required }),
-    ...(binding ? { binding } : {}),
-  }
-}
-function toolBody(a: ConnectionAction) {
-  const at = (loc: ActionValue['location']) =>
-    Object.fromEntries(a.values.filter((v) => v.location === loc && v.name).map((v) => [v.name, paramNode(v)]))
-  const bodyValues = a.values.filter((v) => v.location === 'body' && v.name)
-  return {
-    name: a.name,
-    description: a.description,
-    user_auth_required: false,
-    request_definition: {
-      method: a.method,
-      path: a.path,
-      path_parameters: at('path'),
-      query_parameters: at('query'),
-      headers: at('header'),
-      body: bodyValues.length
-        ? { content_type: 'application/json', params: at('body'), required: bodyValues.filter((v) => v.required).map((v) => v.name) }
-        : null,
-    },
-  }
-}
 export async function saveTool(connectorMetaId: string, a: ConnectionAction): Promise<string> {
   const base = `${agent()}/agent_connectors/${connectorMetaId}/tools`
   const r = a.metaId ? await metaFetch<MetaTool>(`${base}/${a.metaId}`, 'PUT', toolBody(a)) : await metaFetch<MetaTool>(base, 'POST', toolBody(a))
@@ -669,40 +629,6 @@ export const runTool = (connectorMetaId: string, toolId: string, input: Record<s
     input: JSON.stringify(input),
   })
 
-/** A Meta tool as a local action (used for MCP-discovered tools and tools created elsewhere). */
-export function toolToAction(t: MetaTool, connectionId: string, fromMcp: boolean): ConnectionAction {
-  const values: ActionValue[] = []
-  const add = (loc: ActionValue['location'], map?: Record<string, ParamNode>) =>
-    Object.entries(map ?? {}).forEach(([name, n]) =>
-      values.push({
-        id: `${t.id}-${loc}-${name}`,
-        name,
-        type: n.type === 'string' ? 'text' : n.type,
-        required: !!n.required,
-        location: loc,
-        source: n.binding?.kind === 'default' ? 'fixed' : n.binding?.macro === 'WHATSAPP_PHONE_NUMBER' ? 'whatsapp_number' : 'conversation',
-        fixedValue: n.binding?.value,
-        description: n.description ?? '',
-      }),
-    )
-  const rd = t.request_definition ?? { method: 'GET', path: '' }
-  add('path', rd.path_parameters)
-  add('query', rd.query_parameters)
-  add('header', rd.headers)
-  add('body', rd.body?.params)
-  return {
-    id: `tool-${t.id}`,
-    metaId: t.id,
-    connectionId,
-    name: t.name,
-    description: t.description,
-    method: rd.method,
-    path: rd.path,
-    values,
-    createdAt: Date.now(),
-    fromMcp,
-  }
-}
 export const listTools = (connectorMetaId: string) => metaFetch<MetaTool[]>(`${agent()}/agent_connectors/${connectorMetaId}/tools`)
 
 // ---- Agent Eval ----
@@ -829,8 +755,20 @@ export interface MetaTurn {
   timestamp?: number
   e2e_latency_ms?: number
   conversation_id: string
-  steps: { type: 'LLM_CALL' | 'TOOL_CALL'; status?: 'SUCCESS' | 'ERROR' | 'TIMEOUT'; tool_name?: string; latency_ms?: number }[]
+  steps: {
+    type: 'LLM_CALL' | 'TOOL_CALL'
+    status?: 'SUCCESS' | 'ERROR' | 'TIMEOUT'
+    tool_name?: string
+    latency_ms?: number
+    /** JSON-encoded strings, when Meta includes them. */
+    tool_input?: string
+    tool_output?: string
+    llm_output_preview?: string
+  }[]
 }
+/** Turns of a Test & Eval conversation: Meta accepts agent_test's conversation_id in place of a phone number. */
+export const testConversationTurns = (conversationId: string) =>
+  metaFetch<{ data?: MetaTurn[] }>(`${agent()}/insights/conversations/turns` + q({ user_phone_number: conversationId, limit: 20 })).then((r) => r.data ?? [])
 /** Most recent conversation only. Phone must be digits with country code, no '+'. */
 export const conversationTurns = (phone: string) =>
   listAllPages<MetaTurn>(`${agent()}/insights/conversations/turns` + q({ user_phone_number: phone.replace(/\D/g, '') }))
@@ -1044,12 +982,6 @@ export async function hydrateFromMeta(state: WizardState): Promise<{ patch: Patc
       createdAt: now,
       ...(connectorFields(r) as Omit<Connection, 'id' | 'authMethod' | 'createdAt'>),
     }))
-    // Keys: Meta's placement and masked tail win; the value stays whatever this browser knew.
-    for (const c of conns) {
-      const r = connectors.find((x) => x.id === c.metaId)
-      const keys = r && metaApiKeys(r, c.apiKeys)
-      if (keys) c.apiKeys = keys
-    }
     const toolLists = await Promise.all(
       conns.filter((c) => c.metaId).map(async (c) => ({ c, tools: await get(`tools of ${c.name}`, () => listTools(c.metaId!)) })),
     )
@@ -1060,7 +992,11 @@ export async function hydrateFromMeta(state: WizardState): Promise<{ patch: Patc
       const merged = reconcile<ConnectionAction, MetaTool>(
         mine,
         tools,
-        (t) => ({ name: t.name, description: t.description }),
+        // Meta is the source of truth for everything it holds; only exampleQuestion is the console's own.
+        (t) => {
+          const { id: _id, connectionId: _c, createdAt: _t, ...fromMeta } = toolToAction(t, c.id, c.protocol === 'mcp')
+          return fromMeta
+        },
         (t) => toolToAction(t, c.id, c.protocol === 'mcp'),
       )
       actions = [...actions.filter((a) => a.connectionId !== c.id), ...merged]

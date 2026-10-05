@@ -119,6 +119,8 @@ interface Db {
   jobs: Record<string, { polls: number; caseId: string }>
   events: Record<string, { polls: number; type: string }>
   conversations: Record<string, number>
+  /** Conversation turns per test conversation, like Meta's insights/conversations/turns. */
+  turns: Record<string, Record<string, unknown>[]>
 }
 const DB_KEY = storageKey('meta-agent-dummy-db')
 const fresh = (): Db => ({
@@ -141,6 +143,7 @@ const fresh = (): Db => ({
   jobs: {},
   events: {},
   conversations: {},
+  turns: {},
 })
 const db: Db = (() => {
   try {
@@ -180,11 +183,30 @@ const bad = (detail: string): DummyReply => ({
 })
 
 // ---- The scripted test conversation ----
+/** Keys as Meta returns them: masked, with the last 4 characters showing. */
+function maskAuth(auth: unknown): unknown {
+  const mask = (v: unknown) => '********' + String(v ?? '').slice(-4)
+  const a = (auth ?? null) as { api_key?: Record<string, { field_name: string; value: string; prefix?: string }[]>; oauth2_client_credentials?: Record<string, unknown> } | null
+  if (!a) return auth
+  return {
+    ...(a.api_key ? { api_key: Object.fromEntries(Object.entries(a.api_key).map(([k, rows]) => [k, (rows ?? []).map((r) => ({ ...r, value: mask(r.value) }))])) } : {}),
+    ...(a.oauth2_client_credentials ? { oauth2_client_credentials: { ...a.oauth2_client_credentials, client_secret: mask(a.oauth2_client_credentials.client_secret) } } : {}),
+  }
+}
+
 async function agentTest(body: Record<string, unknown>): Promise<DummyReply> {
   const msg = String(body.user_msg ?? '').trim()
   if (!msg) return bad('user_msg is required')
   const conversation_id = String(body.conversation_id || id('conv'))
-  const reply = (agent_response: string, extra: Record<string, unknown> = {}) => {
+  const started = Date.now()
+  const reply = (agent_response: string, extra: Record<string, unknown> = {}, toolStep?: Record<string, unknown>) => {
+    ;(db.turns[conversation_id] ??= []).push({
+      turn_id: id('traj'),
+      conversation_id,
+      timestamp: started,
+      e2e_latency_ms: Date.now() - started,
+      steps: [...(toolStep ? [toolStep] : []), { type: 'LLM_CALL', status: 'SUCCESS', latency_ms: 900, llm_output_preview: agent_response.slice(0, 160) }],
+    })
     save()
     return ok({
       message_id: id('wamid'),
@@ -233,6 +255,26 @@ async function agentTest(body: Record<string, unknown>): Promise<DummyReply> {
       dummy_rich: rich,
       quick_replies: ['Talk to my account manager'],
     })
+  }
+
+  // A question only live data can answer uses the first saved tool, the way Meta's agent does.
+  const liveTool = /\b(stock|in stock|how many|price|order|track|available|inventory)\b/i.test(msg)
+    ? db.connectors.flatMap((c) => (db.tools[c.id] ?? []).map((t) => ({ c, t })))[0]
+    : undefined
+  if (liveTool) {
+    const output = { products: PRODUCTS.slice(0, 3).map((p) => ({ title: p.name, totalInventory: 7, price: p.price })) }
+    return reply(
+      `Here's what we have right now: ${PRODUCTS.slice(0, 3).map((p) => `*${p.name}* (7 in stock)`).join(', ')}. Would you like one of these?`,
+      {},
+      {
+        type: 'TOOL_CALL',
+        status: 'SUCCESS',
+        latency_ms: 412,
+        tool_name: `integration_${digits(15)}_${String(liveTool.c.name)}__${String(liveTool.t.name)}`,
+        tool_input: JSON.stringify({ query: msg }),
+        tool_output: JSON.stringify({ data: output }),
+      },
+    )
   }
 
   const step = db.conversations[conversation_id] ?? 0
@@ -393,6 +435,7 @@ export async function dummyMeta(method: string, fullPath: string, body: Record<s
       const row: Row = {
         id: id('conn'),
         ...body,
+        auth_config: maskAuth(body.auth_config),
         connection_status: { status: 'ACTIVE' },
         mcp_tool_sync: body.connector_protocol === 'MCP' ? { status: 'PENDING', tool_count: 0 } : null,
       }
@@ -412,10 +455,11 @@ export async function dummyMeta(method: string, fullPath: string, body: Record<s
           delete db.tools[c.id]
           return ok(undefined, 204)
         }
-        if (m === 'PUT') Object.assign(c, body, { connector_protocol: c.connector_protocol })
+        if (m === 'PUT') Object.assign(c, body, { connector_protocol: c.connector_protocol }, body.auth_config ? { auth_config: maskAuth(body.auth_config) } : {})
         return ok(c)
       }
-      if (sub === 'upsertApiKey' || sub === 'upsertOAuth') return ok(Object.assign(c, { connection_status: { status: 'ACTIVE' } }))
+      if (sub === 'upsertApiKey') return ok(Object.assign(c, { auth_config: maskAuth({ api_key: body.api_key_config }), connection_status: { status: 'ACTIVE' } }))
+      if (sub === 'upsertOAuth') return ok(Object.assign(c, { auth_config: maskAuth({ oauth2_client_credentials: body.oauth_config }), connection_status: { status: 'ACTIVE' } }))
       if (sub === 'refreshMCPTools') {
         db.tools[c.id] = [
           {
@@ -462,9 +506,13 @@ export async function dummyMeta(method: string, fullPath: string, body: Record<s
         const t = tools.find((x) => x.id === tm[1])
         if (!t) return notFound(tm[1])
         if (tm[2])
+          // Meta's runner format: { status: { code }, body: "<JSON>" }, with the system's answer inside.
           return ok({
             status: 'success',
-            output: JSON.stringify({ tool: t.name, ok: true }),
+            output: JSON.stringify({
+              status: { code: 1 },
+              body: JSON.stringify({ output: { status: 200, data: { tool: t.name, input: JSON.parse(String(body.input ?? '{}')), products: PRODUCTS.slice(0, 3).map((p) => ({ title: p.name, totalInventory: 7 })) } } }),
+            }),
           })
         if (m === 'DELETE') return ok(void tools.splice(tools.indexOf(t), 1), 204)
         return ok(Object.assign(t, body))
@@ -591,7 +639,7 @@ export async function dummyMeta(method: string, fullPath: string, body: Record<s
     }
 
     // Insights: steady, believable numbers
-    if (rest === 'insights/conversations/turns') return ok({ data: [] })
+    if (rest === 'insights/conversations/turns') return ok({ data: [...(db.turns[qp('user_phone_number') ?? ''] ?? [])].reverse() })
     if (rest === 'insights/conversations') {
       const sd = qp('start_date') ?? isoDay(new Date())
       const ed = qp('end_date') ?? sd
