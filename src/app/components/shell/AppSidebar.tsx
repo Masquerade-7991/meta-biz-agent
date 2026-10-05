@@ -1,5 +1,6 @@
 import { LogOut, Settings, UserPlus } from 'lucide-react'
-import { Avatar, AvatarFallback } from '@/app/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/app/components/ui/avatar'
+import avatar from '@/assets/helo-avatar.svg'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -83,6 +84,7 @@ export function AppSidebar({
             <DropdownMenuTrigger asChild>
               <button type="button" className="rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" aria-label="Account and workspace">
                 <Avatar>
+                  <AvatarImage src={avatar} alt="" />
                   <AvatarFallback className="bg-primary text-primary-foreground">{initials(me?.user.name ?? '')}</AvatarFallback>
                 </Avatar>
               </button>
