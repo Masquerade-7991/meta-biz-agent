@@ -416,7 +416,7 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
               onSent={() => {
                 setTemplating(false)
                 toast.success('Template sent.')
-                void getChat(conv.phone).then(onSent)
+                void getChat(conv.phone).then(onSent, () => {})
               }}
             />
           )}
@@ -820,8 +820,8 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
             if (!target) return toast.message('Load sample chats first, or open a chat.')
             void simulateCustomerMessage(target, 'Hi, is anyone there? I need help with my order.').then(() => {
               refreshList()
-              if (open === target) void getChat(target).then(setChat)
-            })
+              if (open === target) void getChat(target).then(setChat, () => {})
+            }, (err) => toast.error(errorDetail(err)))
           }}
         >
           Simulate customer message
@@ -964,7 +964,7 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
           chat={chat}
           version={version}
           onChanged={() => {
-            void getChat(open).then(setChat)
+            void getChat(open).then(setChat, () => {})
             refreshList()
           }}
         />

@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { AlertCircle, AlertTriangle, FileText, Loader2 } from 'lucide-react'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { Textarea } from '@/app/components/ui/textarea'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { Button } from '@/app/components/ui/button'
 import {
   Dialog,
@@ -29,6 +30,7 @@ import {
   type SignalId,
 } from '@/app/wizard/mockData'
 import { cn } from '@/app/lib/utils'
+import { PersonalitySection } from './PersonalitySection'
 
 const MAX_NAME = 60
 const MAX_ROLE = 250
@@ -74,7 +76,40 @@ function pickRandomSignals(): SignalId[] {
   return picked
 }
 
+type TabId = 'about' | 'personality'
+
+// Identity is who the agent is: About (name and role) and Personality (tone, languages, length).
+// Both tabs stay mounted (hidden with CSS) so each keeps its own save state and nav guard.
 export function AgentIdentityStep() {
+  const { state, setPendingStepFocus } = useWizard()
+  const [tab, setTab] = useState<TabId>('about')
+
+  // Arriving from an Overview link that named the Personality tab.
+  useEffect(() => {
+    if (state.pendingStepFocus?.step === 'agent' && state.pendingStepFocus.tab === 'personality') {
+      setTab('personality')
+      setPendingStepFocus(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.pendingStepFocus])
+
+  return (
+    <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
+      <TabsList>
+        <TabsTrigger value="about">About</TabsTrigger>
+        <TabsTrigger value="personality">Personality</TabsTrigger>
+      </TabsList>
+      <TabsContent value="about" forceMount className="mt-6 data-[state=inactive]:hidden">
+        <AboutSection />
+      </TabsContent>
+      <TabsContent value="personality" forceMount className="mt-6 data-[state=inactive]:hidden">
+        <PersonalitySection />
+      </TabsContent>
+    </Tabs>
+  )
+}
+
+function AboutSection() {
   const { state, patch } = useWizard()
   const { identity } = state
   const section = useSaveOnNextSection('identity')

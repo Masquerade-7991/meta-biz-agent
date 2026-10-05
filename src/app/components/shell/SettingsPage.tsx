@@ -358,14 +358,17 @@ function Members() {
 
 export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: SettingsTab; onTabChange: (t: SettingsTab) => void; onManageNumbers?: () => void }) {
   const { me } = useAuth()
+  const billing = can(me?.role, 'billing.view')
+  // A link (email, notification) can name a tab this role can't open; show Profile instead.
+  const shown = tab === 'billing' && !billing ? 'profile' : tab
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
       <h1 className="mb-6">Settings</h1>
-      <Tabs value={tab} onValueChange={(v) => onTabChange(v as SettingsTab)}>
+      <Tabs value={shown} onValueChange={(v) => onTabChange(v as SettingsTab)}>
         <TabsList className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
-          {can(me?.role, 'billing.view') && <TabsTrigger value="billing">Billing</TabsTrigger>}
+          {billing && <TabsTrigger value="billing">Billing</TabsTrigger>}
           <TabsTrigger value="members">Members</TabsTrigger>
           <TabsTrigger value="canned">Canned responses</TabsTrigger>
           <TabsTrigger value="support">Support rules</TabsTrigger>
@@ -377,9 +380,11 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
         <TabsContent value="whatsapp" className="pt-2">
           <WhatsAppSettings onManageNumbers={onManageNumbers} />
         </TabsContent>
-        <TabsContent value="billing" className="pt-2">
-          <BillingSettingsTab />
-        </TabsContent>
+        {billing && (
+          <TabsContent value="billing" className="pt-2">
+            <BillingSettingsTab />
+          </TabsContent>
+        )}
         <TabsContent value="members" className="pt-2">
           <Members />
         </TabsContent>

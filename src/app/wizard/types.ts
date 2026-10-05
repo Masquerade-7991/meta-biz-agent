@@ -110,7 +110,7 @@ export interface DemoState {
    *  sibling component's local state change never re-renders the popover while it stays open. */
   richRepliesForceSaveFailure: boolean
   /** Lets the Safety & handoff step's multi-language warning be demoed without actually
-   *  configuring more than one language back on the Personality tab. */
+   *  configuring more than one language under Identity → Personality. */
   simulateMultipleLanguages: boolean
 }
 

@@ -1,17 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowUpRight, Bot, Check, Inbox, Loader2, Ticket } from 'lucide-react'
+import { ArrowUpRight, Bot, Check, Loader2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
 import { useAuth } from '@/app/auth/AuthContext'
-import { conversationInsights, errorText, getAgentOnNumber, listPhoneNumbers, listWabas, type AgentOnNumber } from '@/app/api/meta'
+import { errorText, getAgentOnNumber, type AgentOnNumber } from '@/app/api/meta'
+import { can } from '@/app/lib/permissions'
 import { HELP_GROUPS } from '@/app/home/helpLinks'
-import { listChats } from '@/app/api/inbox'
-import { listTickets } from '@/app/api/tickets'
 import type { NavId } from '@/app/nav'
 import type { SettingsTab } from '@/app/components/shell/SettingsPage'
 import { getSignupConfig, listAccounts, type SignupConfig, type WaAccount } from '@/app/api/whatsapp'
 import { AccountSteps, ConnectWhatsApp } from '@/app/whatsapp/ConnectWhatsApp'
-import { NumberHealthCard } from '@/app/whatsapp/NumberHealthCard'
 import { isDummyMode } from '@/app/api/dummy'
 import { resetDummyWhatsApp } from '@/app/api/supportDummy'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
@@ -19,31 +17,18 @@ import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { SECTION_TITLE, TEXT_SM_OPEN } from '@/app/lib/text'
 
 interface Snapshot {
-  waba: { id: string; name: string } | null
   number: { id: string; display: string; name: string } | null
   agent: AgentOnNumber | null
-  week: { aiThreads: number; aiHandoffs: number } | null
 }
 
-
-const isoDay = (d: Date) => d.toISOString().slice(0, 10)
-
-/** What Home needs to pick its state: the connected WhatsApp number, its agent, and last week's numbers. */
-async function loadSnapshot(): Promise<Snapshot> {
-  const [waba] = await listWabas()
-  if (!waba) return { waba: null, number: null, agent: null, week: null }
-  const numbers = await listPhoneNumbers(waba.id)
+/** What Home needs: the workspace's WhatsApp accounts, and the first number that has an agent. */
+async function loadSnapshot(accounts: WaAccount[]): Promise<Snapshot> {
+  const numbers = accounts.flatMap((a) => a.phoneNumbers)
   const withAgents = await Promise.all(numbers.map(async (n) => ({ n, agent: await getAgentOnNumber(n.id).catch(() => null) })))
   const pick = withAgents.find((x) => x.agent) ?? withAgents[0]
-  const now = new Date()
-  const week = pick?.agent
-    ? await conversationInsights({ start_date: isoDay(new Date(now.getTime() - 6 * 86_400_000)), end_date: isoDay(now) }).catch(() => null)
-    : null
   return {
-    waba,
-    number: pick ? { id: pick.n.id, display: pick.n.displayPhoneNumber, name: pick.n.verifiedName } : null,
+    number: pick ? { id: pick.n.id, display: pick.n.display || pick.n.id, name: pick.n.verifiedName } : null,
     agent: pick?.agent ?? null,
-    week,
   }
 }
 
@@ -101,162 +86,100 @@ function Step({ n, done, locked, title, note, children, action }: { n: number; d
 
 const billingDone = (a: WaAccount) => a.source === 'env' || (a.billing.mode === 'partner_credit' ? a.billing.state === 'shared' : a.billing.state === 'confirmed')
 
-/** New workspace: connect WhatsApp first (Embedded Signup); everything else follows from it. */
-function SetupGuide({
+const link = 'text-primary underline-offset-4 hover:underline'
+
+/** The two things Home is for: connect WhatsApp, then build the agent. `done` comes from live data. */
+function GetStarted({
   snap,
   accounts,
   config,
   onNavigate,
+  onOpenSettings,
   onAccountChange,
 }: {
   snap: Snapshot
   accounts: WaAccount[]
   config: SignupConfig | null
   onNavigate: (id: NavId) => void
+  onOpenSettings: (tab: SettingsTab) => void
   onAccountChange: (a: WaAccount) => void
 }) {
   const { me } = useAuth()
+  const manage = can(me?.role, 'whatsapp.manage')
   const account = accounts[0]
   const connected = !!account
   const billed = connected && billingDone(account)
-  const hasAgent = !!snap.agent
-  const steps = [connected, billed, hasAgent, !!snap.agent?.enabled]
   const number = account?.phoneNumbers[0]
+  const agent = snap.agent
   return (
     <section className="rounded-xl border border-border p-6 md:p-8">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 style={SECTION_TITLE}>{connected ? 'Finish setting up WhatsApp' : 'Start by connecting WhatsApp'}</h2>
-        <p className="text-muted-foreground" style={TEXT_SM_OPEN}>
-          {steps.filter(Boolean).length} of {steps.length} done
-        </p>
-      </div>
+      <h2 style={SECTION_TITLE}>{!connected ? 'Start by connecting WhatsApp' : agent ? 'You’re set up' : 'Next, build your AI agent'}</h2>
       <ol className="mt-2 divide-y divide-border">
         <Step
           n={1}
-          done={connected}
-          title="Connect your WhatsApp Business number"
-          note={number && `${number.verifiedName || account.wabaName} · ${number.display || number.id}`}
+          done={billed}
+          title={connected ? 'WhatsApp connected' : 'Connect your WhatsApp Business number'}
+          note={
+            number && (
+              <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span>
+                  {number.verifiedName || account.wabaName} · {number.display || number.id}
+                </span>
+                {can(me?.role, 'numbers.view') && (
+                  <button type="button" className={link} onClick={() => onNavigate('whatsapp')}>
+                    Manage numbers &rarr;
+                  </button>
+                )}
+                {manage && (
+                  <button type="button" className={link} onClick={() => onOpenSettings('whatsapp')}>
+                    Add another number
+                  </button>
+                )}
+              </span>
+            )
+          }
           action={
             <div className="pt-2">
-              <ConnectWhatsApp config={config} isOwner={me?.role === 'owner'} workspaceName={me?.workspace?.name ?? 'this workspace'} variant="hero" onConnected={onAccountChange} />
+              {connected ? (
+                <AccountSteps account={account} canEdit={can(me?.role, 'billing.manage')} onChange={onAccountChange} />
+              ) : (
+                <ConnectWhatsApp config={config} isOwner={manage} workspaceName={me?.workspace?.name ?? 'this workspace'} variant="hero" onConnected={onAccountChange} />
+              )}
             </div>
           }
         >
-          Your AI agent, inbox and broadcasts all run on your own WhatsApp number. Connect it with Facebook in a few minutes, right here.
+          {connected
+            ? 'Finish billing so your number can send messages.'
+            : 'Your AI agent, inbox and broadcasts all run on your own WhatsApp number. Connect it with Facebook in a few minutes, right here.'}
         </Step>
         <Step
           n={2}
-          done={billed}
+          done={!!agent}
           locked={connected ? undefined : 'Unlocks after you connect your number.'}
-          title="Set up billing"
-          note={account && (account.billing.mode === 'partner_credit' ? 'Billed through Helo.ai' : 'Your own payment method with Meta')}
-          action={account && <AccountSteps account={account} canEdit={me?.role === 'owner'} onChange={onAccountChange} />}
-        />
-        <Step
-          n={3}
-          done={hasAgent}
-          locked={connected ? undefined : 'Unlocks after you connect your number.'}
-          title="Create your AI agent"
+          title={agent ? 'AI agent built' : 'Build your AI agent'}
+          note={
+            agent && (
+              <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <Badge className={agent.enabled ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'}>{agent.enabled ? 'Active' : 'Off'}</Badge>
+                <span>
+                  On {snap.number?.name} · {snap.number?.display}
+                </span>
+                <button type="button" className={link} onClick={() => onNavigate('ai-agents')}>
+                  Open your agent &rarr;
+                </button>
+              </span>
+            )
+          }
           action={
             <Button size="sm" onClick={() => onNavigate('ai-agents')}>
-              Create agent
+              <Bot className="size-4" />
+              Build agent
             </Button>
           }
         >
-          Name it, check the number is eligible, then give it your business details and FAQs.
-        </Step>
-        <Step
-          n={4}
-          done={steps[3]}
-          locked={hasAgent ? undefined : 'Unlocks once your agent exists.'}
-          title="Switch your agent on"
-          action={
-            <Button size="sm" variant="outline" onClick={() => onNavigate('ai-agents')}>
-              Open AI agents
-            </Button>
-          }
-        >
-          Test it, add the phone numbers allowed to chat with it, then switch it on. It answers those customers straight away.
+          Name it, give it your business details and FAQs, test it, then publish. Its live numbers show on the agent&rsquo;s Overview.
         </Step>
       </ol>
-    </section>
-  )
-}
-
-function Stat({ label, value, hint }: { label: string; value: string; hint: string }) {
-  return (
-    <div>
-      <p className="text-muted-foreground" style={TEXT_SM_OPEN}>
-        {label}
-      </p>
-      <p style={{ fontSize: 'var(--text-h4)', fontWeight: 'var(--font-weight-semi-bold)', lineHeight: 1.1 }}>{value}</p>
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-        {hint}
-      </p>
-    </div>
-  )
-}
-
-/** Returning workspace: the agent's live state and the next things to do. */
-function AgentHome({ snap, onNavigate, onOpenSettings }: { snap: Snapshot; onNavigate: (id: NavId) => void; onOpenSettings: (tab: SettingsTab) => void }) {
-  const a = snap.agent!
-  const [team, setTeam] = useState<{ tickets: number; overdue: number; unread: number } | null>(null)
-  useEffect(() => {
-    Promise.all([listTickets(), listChats()]).then(
-      ([t, c]) => setTeam({ tickets: t.length, overdue: t.filter((x) => x.sla.breached).length, unread: c.reduce((n, x) => n + x.unread, 0) }),
-      () => {},
-    )
-  }, [])
-  return (
-    <section className="rounded-xl border border-border p-6 md:p-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h2 style={SECTION_TITLE}>Get started with your agent</h2>
-          <p className="text-muted-foreground" style={TEXT_SM_OPEN}>
-            {snap.number?.name} &middot; {snap.number?.display}
-          </p>
-        </div>
-        <Badge className={a.enabled ? 'bg-success text-success-foreground' : 'bg-destructive text-destructive-foreground'}>{a.enabled ? 'Active' : 'Stopped'}</Badge>
-      </div>
-      <p className="mt-4 max-w-2xl" style={TEXT_SM_OPEN}>
-        {a.enabled
-          ? a.audience === 'EVERYONE'
-            ? 'Your agent answers every customer who messages this number.'
-            : 'Your agent answers the phone numbers on its allowlist. Add a payment method in Billing Hub to let it answer everyone.'
-          : 'Your agent is switched off, so customers get no AI replies. Switch it on from AI agents.'}
-      </p>
-      <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="AI conversations" value={snap.week ? String(snap.week.aiThreads) : '–'} hint="Last 7 days" />
-        <Stat label="Handed to a person" value={snap.week ? String(snap.week.aiHandoffs) : '–'} hint="Waiting for your team right now" />
-        <Stat label="Open tickets" value={team ? String(team.tickets) : '–'} hint={team?.overdue ? `${team.overdue} overdue` : 'None overdue'} />
-        <Stat label="Unread messages" value={team ? String(team.unread) : '–'} hint="Across all chats" />
-      </div>
-      <div className="mt-6 flex flex-wrap gap-2">
-        <Button onClick={() => onNavigate('ai-agents')}>
-          <Bot className="size-4" />
-          Open your agent
-        </Button>
-        <Button variant="outline" onClick={() => onNavigate('inbox')}>
-          <Inbox className="size-4" />
-          Open inbox
-        </Button>
-        <Button variant="outline" onClick={() => onNavigate('tickets')}>
-          <Ticket className="size-4" />
-          View tickets
-        </Button>
-      </div>
-      <div className="mt-5 space-y-2 border-t border-border pt-4">
-        <NumberHealthCard compact />
-        <button type="button" className="text-primary underline-offset-4 hover:underline" style={TEXT_SM_OPEN} onClick={() => onNavigate('whatsapp')}>
-          Manage your numbers, profiles and names &rarr;
-        </button>
-      </div>
-      <p className="mt-5 border-t border-border pt-4 text-muted-foreground" style={TEXT_SM_OPEN}>
-        Running more than one WhatsApp number?{' '}
-        <button type="button" className="text-primary underline-offset-4 hover:underline" onClick={() => onOpenSettings('whatsapp')}>
-          Add another WhatsApp number
-        </button>
-      </p>
     </section>
   )
 }
@@ -291,7 +214,7 @@ function HelpGuides() {
   )
 }
 
-/** Home: a WhatsApp setup guide until an agent exists, then the agent's live state; product guides always. */
+/** Home: connect WhatsApp and build the agent, then product guides. The agent's live state is on its Overview. */
 export function HomePage({ onNavigate, onOpenSettings }: { onNavigate: (id: NavId) => void; onOpenSettings: (tab: SettingsTab) => void }) {
   const { me } = useAuth()
   const [snap, setSnap] = useState<Snapshot | null>(null)
@@ -321,8 +244,8 @@ export function HomePage({ onNavigate, onOpenSettings }: { onNavigate: (id: NavI
   useEffect(() => {
     let cancelled = false
     setError(null)
-    Promise.all([loadSnapshot(), listAccounts(), getSignupConfig().catch(() => null)]).then(
-      ([s, a, c]) => {
+    Promise.all([listAccounts().then(async (a) => [a, await loadSnapshot(a)] as const), getSignupConfig().catch(() => null)]).then(
+      ([[a, s], c]) => {
         if (cancelled) return
         setSnap(s)
         setAccounts(a)
@@ -353,17 +276,16 @@ export function HomePage({ onNavigate, onOpenSettings }: { onNavigate: (id: NavI
           <Loader2 className="size-4 animate-spin" />
           Checking your WhatsApp setup&hellip;
         </div>
-      ) : snap.agent ? (
-        <AgentHome snap={snap} onNavigate={onNavigate} onOpenSettings={onOpenSettings} />
       ) : (
-        <SetupGuide
+        <GetStarted
           snap={snap}
           accounts={accounts}
           config={config}
           onNavigate={onNavigate}
+          onOpenSettings={onOpenSettings}
           onAccountChange={(a) => {
             setAccounts((prev) => [...prev.filter((x) => x.wabaId !== a.wabaId), a])
-            // A newly connected number changes what the rest of Home shows (agent, numbers).
+            // A newly connected number changes what the rest of Home shows (its agent).
             if (!accounts.some((x) => x.wabaId === a.wabaId)) setAttempt((n) => n + 1)
           }}
         />

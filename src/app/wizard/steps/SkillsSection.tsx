@@ -327,7 +327,7 @@ export function SkillsSection() {
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
               No custom skills yet, and most agents do not need any.
             </p>
-            <InfoTooltip text="The controls in the Personality tab cover tone, languages and length. When there is a specific situation you want handled your way, like warranty questions or discount requests, start from a template or add your own." />
+            <InfoTooltip text="The controls under Identity → Personality cover tone, languages and length. When there is a specific situation you want handled your way, like warranty questions or discount requests, start from a template or add your own." />
           </span>
           <Button variant="outline" onClick={() => setTemplatesOpen(true)}>
             Choose from templates

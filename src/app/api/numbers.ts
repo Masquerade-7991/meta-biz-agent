@@ -34,7 +34,6 @@ export interface NumberDetail {
   official: boolean | null
   /** Whether the server can remember PINs (TOKEN_ENCRYPTION_KEY is set). */
   pinStorage: boolean
-  webhook: { number: string | null; account: string | null; app: string | null; console: string; reachable: boolean; verifyTokenSet: boolean }
   activity: { kind: string; data: Record<string, unknown>; at: string; by: string }[]
 }
 
@@ -56,7 +55,6 @@ export const verifyCode = (id: string, code: string) => write(() => call<NumberD
 export const listBlocked = (id: string) => call<{ user: string }[]>(base(id, 'blocked'))
 export const blockUser = (id: string, user: string) => write(() => call<{ ok: true }>(base(id, 'blocked'), 'POST', { user }))
 export const unblockUser = (id: string, user: string) => write(() => call<{ ok: true }>(`${base(id, 'blocked')}/${encodeURIComponent(user)}`, 'DELETE'))
-export const routeWebhook = (id: string, b: { target: 'console' } | { target: 'other'; url: string; verifyToken: string }) => write(() => call<NumberDetail>(base(id, 'webhook'), 'PUT', b))
 
 /** Uploads a new profile photo (JPG or PNG, up to 5 MB). */
 export async function uploadPhoto(id: string, file: File): Promise<NumberDetail> {

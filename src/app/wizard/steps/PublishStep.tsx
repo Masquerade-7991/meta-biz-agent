@@ -211,7 +211,7 @@ export function PublishStep() {
                 <Square className="size-3.5" />
                 Stop agent
               </Button>
-              <Button variant="outline" size="sm" onClick={exitWizard}>
+              <Button variant="outline" size="sm" onClick={() => exitWizard()}>
                 Back to agents list
               </Button>
             </div>

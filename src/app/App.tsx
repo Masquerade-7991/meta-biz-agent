@@ -17,17 +17,17 @@ import { AuthProvider, useAuth } from '@/app/auth/AuthContext'
 import { AuthScreen, CreateWorkspaceScreen } from '@/app/auth/AuthScreens'
 import { AccountSetupScreen, NewPasswordScreen, VerifyScreen } from '@/app/auth/SetupScreen'
 
-function AgentBuilderFlow({ onExitToShell }: { onExitToShell: () => void }) {
+function AgentBuilderFlow({ onExitToShell }: { onExitToShell: (page?: NavId) => void }) {
   const { state } = useWizard()
 
   if (!state.gate.gatePassed) {
-    return <GateScreen onBack={onExitToShell} />
+    return <GateScreen onBack={() => onExitToShell()} />
   }
 
   return (
     <ExitProvider onExit={onExitToShell}>
       <NavigationGuardProvider>
-        <AgentStudioShell onExit={onExitToShell} />
+        <AgentStudioShell onExit={() => onExitToShell()} />
       </NavigationGuardProvider>
     </ExitProvider>
   )
@@ -83,7 +83,14 @@ function Gate() {
         />
       )}
       {view === 'setup' && <SetupFrontDoor onFinish={() => setView('agent-flow')} />}
-      {view === 'agent-flow' && <AgentBuilderFlow onExitToShell={() => setView('shell')} />}
+      {view === 'agent-flow' && (
+        <AgentBuilderFlow
+          onExitToShell={(page) => {
+            if (page) setNav(page)
+            setView('shell')
+          }}
+        />
+      )}
     </>
   )
 }

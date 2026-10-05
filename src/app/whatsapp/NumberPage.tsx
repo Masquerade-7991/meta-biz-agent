@@ -5,10 +5,8 @@ import { Badge } from '@/app/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
 import { FormError } from '@/app/auth/AuthLayout'
-import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
 import { getNumber, type NumberDetail } from '@/app/api/numbers'
-import { can } from '@/app/lib/permissions'
 import { cn } from '@/app/lib/utils'
 import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { MANAGER_URL, statusHelp } from './profileRules'
@@ -16,9 +14,8 @@ import { ProfileTab } from './ProfileTab'
 import { AutomationTab, DisplayNameTab } from './NumberSettingsTabs'
 import { SecurityTab } from './SecurityTab'
 import { BlockedTab } from './BlockedTab'
-import { WebhookTab } from './WebhookTab'
 
-export type NumberTab = 'profile' | 'name' | 'automation' | 'security' | 'blocked' | 'webhooks' | 'activity'
+export type NumberTab = 'profile' | 'name' | 'automation' | 'security' | 'blocked' | 'activity'
 /** What every tab gets: the number, a way to show what Meta now says, and the dirty flag for the guard. */
 export interface TabProps {
   detail: NumberDetail
@@ -59,9 +56,8 @@ export function NumberAvatar({ photo, name, size = 'md' }: { photo: string | nul
   )
 }
 
-/** One number, managed like WhatsApp Manager does it: profile, name, ice breakers, security, blocks, webhooks. */
+/** One number, managed like WhatsApp Manager does it: profile, name, ice breakers, security, blocks. */
 export function NumberPage({ id, showBack, onBack, initialTab = 'profile' }: { id: string; showBack: boolean; onBack: () => void; initialTab?: NumberTab }) {
-  const { me } = useAuth()
   const [d, setD] = useState<NumberDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<NumberTab>(initialTab)
@@ -108,7 +104,6 @@ export function NumberPage({ id, showBack, onBack, initialTab = 'profile' }: { i
   const n = d.number
   const st = statusHelp(n.status)
   const q = QUALITY[n.quality]
-  const isOwner = can(me?.role, 'whatsapp.manage')
   const props: TabProps = { detail: d, onSaved: (x) => (setD(x), setDirty(false)), onDirty: setDirty }
 
   return (
@@ -174,7 +169,6 @@ export function NumberPage({ id, showBack, onBack, initialTab = 'profile' }: { i
           <TabsTrigger value="automation">Ice breakers</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="blocked">Blocked</TabsTrigger>
-          {isOwner && <TabsTrigger value="webhooks">Webhooks</TabsTrigger>}
           <TabsTrigger value="activity">Activity</TabsTrigger>
         </TabsList>
         <TabsContent value="profile" className="pt-4">
@@ -192,11 +186,6 @@ export function NumberPage({ id, showBack, onBack, initialTab = 'profile' }: { i
         <TabsContent value="blocked" className="pt-4">
           <BlockedTab {...props} />
         </TabsContent>
-        {isOwner && (
-          <TabsContent value="webhooks" className="pt-4">
-            <WebhookTab {...props} />
-          </TabsContent>
-        )}
         <TabsContent value="activity" className="pt-4">
           {d.activity.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground" style={TEXT_SM}>

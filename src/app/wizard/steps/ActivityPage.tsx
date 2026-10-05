@@ -792,8 +792,9 @@ export function ActivityPage() {
   const [audit, setAudit] = useState<AuditRow[] | null>(null)
   const [storedEvents, setStoredEvents] = useState<AgentEventRow[]>([])
   useEffect(() => {
-    listAudit().then(setAudit)
-    listAgentEvents().then((rows) => rows && setStoredEvents(rows))
+    // Without the store these stay empty, which the page already shows as "nothing yet".
+    listAudit().then(setAudit, () => setAudit([]))
+    listAgentEvents().then((rows) => rows && setStoredEvents(rows), () => {})
   }, [])
   // This browser's rows win for events it sent (they update live); the store adds everything else.
   const knownEventIds = new Set(state.agentEvents.events.map((e) => e.agentEventId))

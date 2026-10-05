@@ -1,8 +1,11 @@
 import { createContext, useContext, type ReactNode } from 'react'
+import type { NavId } from '@/app/nav'
 
-const ExitContext = createContext<(() => void) | null>(null)
+/** Leaves the agent studio, optionally straight to a console page (e.g. Overview → Inbox). */
+type Exit = (page?: NavId) => void
+const ExitContext = createContext<Exit | null>(null)
 
-export function ExitProvider({ onExit, children }: { onExit: () => void; children: ReactNode }) {
+export function ExitProvider({ onExit, children }: { onExit: Exit; children: ReactNode }) {
   return <ExitContext.Provider value={onExit}>{children}</ExitContext.Provider>
 }
 

@@ -606,7 +606,6 @@ const demoNumberList = (): DemoNumber[] =>
         automation: { prompts: ['Track my order', 'Today’s offers'], commands: [{ name: 'orders', description: 'See your recent orders' }] },
         official: false,
         pinStorage: true,
-        webhook: { number: null, account: 'https://console.helo.ai/api/webhooks/whatsapp', app: null, console: `${location.origin}/api/webhooks/whatsapp`, reachable: true, verifyTokenSet: true },
       },
       activity: [],
       pin: '482913',
@@ -619,7 +618,6 @@ const demoNumberList = (): DemoNumber[] =>
         automation: { prompts: [], commands: [] },
         official: false,
         pinStorage: true,
-        webhook: { number: null, account: null, app: null, console: `${location.origin}/api/webhooks/whatsapp`, reachable: true, verifyTokenSet: true },
       },
       activity: [],
       pin: null,
@@ -719,10 +717,6 @@ export async function dummyNumbers<T>(method: string, path: string, body: unknow
     if (String(b.code ?? '') !== '123456') throw bad('That code isn’t right. In the demo, the code is 123456.')
     Object.assign(x.n, { codeVerification: 'VERIFIED', status: 'DISCONNECTED' })
     log('verified')
-  }
-  if (action === 'webhook') {
-    x.detail.webhook = { ...x.detail.webhook, number: b.target === 'console' ? x.detail.webhook.console : String(b.url) }
-    log('webhook_changed', { to: x.detail.webhook.number })
   }
   return out()
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, LogOut } from 'lucide-react'
+import { Eye, Loader2, LogOut } from 'lucide-react'
 import { toast } from 'sonner'
 import { hydrateFromMeta, setActivePhoneNumberId } from '@/app/api/meta'
 import { getDraft, keepLocalSecrets, ms, putStoredAgent, setDraftSyncPhone } from '@/app/api/store'
@@ -22,6 +22,8 @@ import { PublishStep } from '@/app/wizard/steps/PublishStep'
 import { ActivityPage } from '@/app/wizard/steps/ActivityPage'
 import { AnalyticsPage } from '@/app/wizard/steps/AnalyticsPage'
 import { cn } from '@/app/lib/utils'
+import { useAuth } from '@/app/auth/AuthContext'
+import { can } from '@/app/lib/permissions'
 
 // Slices a stored draft may restore. Gate (which number is open) and demo controls stay local.
 const DRAFT_SLICES = [
@@ -66,6 +68,9 @@ const GROUPS = ['build', 'deploy', 'monitor'] as const
 export function AgentStudioShell({ onExit }: { onExit: () => void }) {
   const { state, setSection, patch } = useWizard()
   const { runGuard, pending } = useNavigationGuard()
+  // Supervisors and agents may look at the agent, but only owners and admins change it (server/app.ts).
+  const { me } = useAuth()
+  const readOnly = !can(me?.role, 'agent.edit')
 
   // Meta is the source of truth: load everything it holds for this agent once, before any section
   // renders, so each section's "saved" snapshot is what Meta actually has.
@@ -103,7 +108,7 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
 
   async function navigate(id: StudioSectionId) {
     if (id === state.currentSection || pending) return
-    const ok = await runGuard('save')
+    const ok = await runGuard(readOnly ? 'discard' : 'save')
     if (!ok) return
     setSection(id)
   }
@@ -127,7 +132,7 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
         </p>
         <div className="flex items-center gap-4">
           <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            All changes saved
+            {readOnly ? 'View only' : 'All changes saved'}
           </span>
           <Button variant="ghost" size="sm" onClick={handleExit} disabled={pending}>
             <LogOut className="size-4" />
@@ -173,6 +178,12 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
                 </Avatar>
               )}
             </div>
+            {readOnly && (
+              <p className="mb-6 flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                <Eye className="size-4 shrink-0" />
+                View only. Owners and admins change this agent; anything you edit here isn&rsquo;t saved.
+              </p>
+            )}
             {!hydrated ? (
               <p className="flex items-center gap-2 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
                 <Loader2 className="size-4 animate-spin" /> Loading your agent from Meta...
