@@ -18,6 +18,7 @@ export default async function vercel(req: http.IncomingMessage, res: http.Server
   // Put back the address the browser asked for.
   const u = new URL(req.url ?? '/', 'http://x')
   if (u.pathname === '/api/server') {
+    // Vercel may pass the captured path more than once; every copy is ours, not the browser's.
     const p = u.searchParams.get('p') ?? ''
     u.searchParams.delete('p')
     req.url = `/api/${p}${u.search}`

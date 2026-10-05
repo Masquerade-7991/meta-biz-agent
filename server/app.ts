@@ -99,7 +99,7 @@ export async function handle(req: http.IncomingMessage, res: http.ServerResponse
   // Every answer names its trace, so a reported error can be looked up (GET /api/trace/<id>).
   const tid = randomUUID()
   res.setHeader('x-trace-id', tid)
-  if (url === '/api/health') {
+  if (url.split('?')[0] === '/api/health') {
     // Public, so a WhatsApp account's labels are only added for members of the workspace it belongs
     // to (the Create Agent fallback and dummy mode use them). Tokens never leave this process.
     const wsId = db ? (await getSession(req).catch(() => null))?.workspace?._id : undefined
