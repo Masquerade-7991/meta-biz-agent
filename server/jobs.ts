@@ -88,20 +88,25 @@ async function runJob(j: Record<string, unknown> & { _id: ObjectId }) {
 }
 
 let busy = false
-/** Runs every due job, one at a time (at most 50 per tick so a flood can't starve the timer). */
-export async function jobsTick() {
-  if (!db || busy) return
+/** Runs due jobs one at a time: at most 50 per tick, and none started after `budgetMs` (serverless
+ *  runs stop well before the platform's time limit). Returns how many ran. */
+export async function jobsTick(budgetMs = Infinity) {
+  if (!db || busy) return 0
   busy = true
+  const until = Date.now() + budgetMs
+  let ran = 0
   try {
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 50 && Date.now() < until; i++) {
       const j = await claim()
       if (!j) break
       await runJob(j as Record<string, unknown> & { _id: ObjectId })
+      ran++
     }
   } catch (err) {
     console.log('job runner:', err instanceof Error ? err.message : err)
   } finally {
     busy = false
   }
+  return ran
 }
 export const startJobs = () => setInterval(() => void jobsTick(), 1000).unref()

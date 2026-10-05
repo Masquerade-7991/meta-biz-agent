@@ -7,6 +7,12 @@ import { bus, type TraceEvent } from './trace.ts'
 
 export function handleStream(req: http.IncomingMessage, res: http.ServerResponse): boolean {
   if (req.method !== 'GET' || new URL(req.url ?? '/', 'http://x').pathname !== '/api/stream') return false
+  // Serverless (Vercel): no long-lived process to hold the stream, and events from other instances
+  // wouldn't reach it. 204 tells the browser's EventSource to stop; screens keep polling instead.
+  if (process.env.VERCEL) {
+    res.writeHead(204).end()
+    return true
+  }
   res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache, no-transform', connection: 'keep-alive', 'x-accel-buffering': 'no' })
   res.write('retry: 5000\n\n')
   const w = ws()

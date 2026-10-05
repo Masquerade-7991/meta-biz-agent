@@ -1,5 +1,6 @@
 // MongoDB: one client, collections + indexes + TTLs created idempotently at startup.
 // No MONGODB_URI → `db` stays null and everything that stores data is a no-op (or a 503 route).
+import { createHash } from 'node:crypto'
 import { MongoClient, type Collection, type Db, type Document, type IndexDescription } from 'mongodb'
 import { env } from './upstream.ts'
 import { HttpError } from './http.ts'
@@ -168,7 +169,16 @@ const INDEXES: Record<string, IndexDescription[]> = {
   ),
 }
 
+/** Creates collections and indexes, skipped when nothing changed since the last run (serverless
+ *  instances start often; this keeps their cold start short). */
 export async function ensureSchema(d: Db) {
+  const version = createHash('sha256').update(JSON.stringify(INDEXES)).digest('hex').slice(0, 16)
+  const meta = d.collection<{ _id: string; version: string }>('schema_meta')
+  if ((await meta.findOne({ _id: 'indexes' }))?.version === version) return
+  await createSchema(d)
+  await meta.updateOne({ _id: 'indexes' }, { $set: { version, at: new Date() } }, { upsert: true })
+}
+async function createSchema(d: Db) {
   const existing = new Set((await d.listCollections({}, { nameOnly: true }).toArray()).map((c) => c.name))
   for (const name of Object.keys(INDEXES)) {
     if (existing.has(name)) continue

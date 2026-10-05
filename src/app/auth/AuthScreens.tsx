@@ -13,13 +13,15 @@ type Mode = 'login' | 'signup' | 'forgot'
 /** Shown instead of the login form when the API server can't be reached, so nobody gets a raw
  *  "page could not be found" from the host. The demo works with no server at all. */
 function ServerDown() {
-  const { refresh } = useAuth()
+  const { refresh, databaseDown } = useAuth()
   const [checking, setChecking] = useState(false)
   return (
     <div className="space-y-4">
-      <h1>Helo.ai can&rsquo;t reach its server</h1>
+      <h1>{databaseDown ? 'Helo.ai can’t reach its database' : 'Helo.ai can’t reach its server'}</h1>
       <p className="text-muted-foreground">
-        This site is up, but the server that handles logins, chats and WhatsApp isn&rsquo;t answering. If you run Helo.ai, deploy the server (see render.yaml) and point this site at it.
+        {databaseDown
+          ? 'The server is up, but MongoDB isn’t answering it, so nobody can log in. If you run Helo.ai: in MongoDB Atlas, Network Access must allow this server (on Vercel: 0.0.0.0/0), and MONGODB_URI must be set.'
+          : 'This site is up, but the server that handles logins, chats and WhatsApp isn’t answering. If you run Helo.ai, check the server’s deployment and its settings.'}
       </p>
       <div className="flex flex-wrap gap-2">
         <Button

@@ -118,6 +118,9 @@ export function sendMedia(phone: string, file: File, caption: string, onProgress
     x.setRequestHeader('x-caption', encodeURIComponent(caption))
     x.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total)
     x.onload = () => {
+      // Hosting platforms cap request size (Vercel: 4.5 MB) before our server sees the file.
+      if (x.status === 413 && !(x.getResponseHeader('content-type') ?? '').includes('json'))
+        return reject(new Error('That file is too big for this server to receive (about 4.5 MB at most here). Send a smaller file, or a link to it.'))
       const headers = new Headers()
       const t = x.getResponseHeader('x-trace-id')
       if (t) headers.set('x-trace-id', t)

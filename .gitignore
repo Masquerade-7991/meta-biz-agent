@@ -32,6 +32,8 @@ id_ed25519*
 node_modules
 dist
 dist-ssr
+# The API bundle for Vercel, written by npm run build (scripts/bundle-server.mjs)
+api/_server
 build
 *.local
 *.tsbuildinfo
