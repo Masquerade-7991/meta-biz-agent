@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs'
 import nodemailer from 'nodemailer'
 import { env } from './upstream.ts'
+import { ROLES, roleLabel, type Role } from '../src/app/lib/permissions.ts'
 import { HttpError } from './http.ts'
 
 const user = env('SMTP_USER') || 'soumik.choudhury@helo.ai'
@@ -135,9 +136,9 @@ export const mail = {
       heading: `You were removed from ${workspace}`,
       lines: [`An owner removed you from the ${workspace} workspace. Your Helo.ai account still exists, and you can create your own workspace when you next log in.`],
     }),
-  roleChanged: (to: string, workspace: string, role: string) =>
-    send(to, `Your role in ${workspace} is now ${role}`, {
-      heading: `You’re now ${role === 'owner' ? 'an Owner' : 'a Member'} of ${workspace}`,
-      lines: [role === 'owner' ? 'You can now invite people and manage members.' : 'You can still work on the agents, but can no longer invite people or manage members.'],
+  roleChanged: (to: string, workspace: string, role: Role) =>
+    send(to, `Your role in ${workspace} is now ${roleLabel(role)}`, {
+      heading: `You’re now ${role === 'owner' || role === 'admin' || role === 'agent' ? 'an' : 'a'} ${roleLabel(role)} of ${workspace}`,
+      lines: [ROLES.find((r) => r.id === role)?.description ?? ''],
     }),
 }

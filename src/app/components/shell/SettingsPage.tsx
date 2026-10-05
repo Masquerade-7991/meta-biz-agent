@@ -13,11 +13,13 @@ import { CannedResponsesSettings } from './CannedResponsesSettings'
 import { SupportSettingsTab } from './SupportSettings'
 import { BillingSettingsTab } from './BillingSettings'
 import { ContactFieldsSettings } from './ContactFieldsSettings'
-import { authApi, type Invite, type Member, type Role } from '@/app/auth/api'
+import { authApi, type Invite, type Member } from '@/app/auth/api'
+import { Label } from '@/app/components/ui/label'
 import { errorDetail } from '@/app/api/meta'
 import { SECTION_TITLE } from '@/app/lib/text'
 import { SettingsSection } from './SettingsSection'
 import { WhatsAppSettings } from './WhatsAppSettings'
+import { assignableRoles, can, canSetRole, roleLabel, ROLES, type Role } from '@/app/lib/permissions'
 
 export type SettingsTab = 'profile' | 'whatsapp' | 'billing' | 'members' | 'canned' | 'support' | 'fields'
 
@@ -134,9 +136,35 @@ function Profile() {
 }
 
 // ---- Members ----
+/** A role menu that says what each role can do. `roles` = the ones this person may give. */
+function RolePicker({ id, label, value, roles, compact, onChange }: { id: string; label: string; value: Role; roles: typeof ROLES; compact?: boolean; onChange: (r: Role) => void }) {
+  return (
+    <div className={compact ? '' : 'space-y-1.5'}>
+      {!compact && <Label htmlFor={id}>{label}</Label>}
+      <Select value={value} onValueChange={(v) => onChange(v as Role)}>
+        <SelectTrigger id={id} className={compact ? 'w-36' : 'w-full'} aria-label={label}>
+          <SelectValue>{roleLabel(value)}</SelectValue>
+        </SelectTrigger>
+        <SelectContent className="max-w-sm">
+          {roles.map((r) => (
+            <SelectItem key={r.id} value={r.id}>
+              <span className="block">{r.label}</span>
+              <span className="block whitespace-normal text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                {r.description}
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
 function Members() {
   const { me } = useAuth()
-  const owner = me?.role === 'owner'
+  const manage = can(me?.role, 'members.manage')
+  const roles = assignableRoles(me?.role)
+  const [inviteRole, setInviteRole] = useState<Role>('agent')
   const [data, setData] = useState<{ members: Member[]; invites: Invite[]; joining: { email: string; verifiedAt: string }[] } | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [email, setEmail] = useState('')
@@ -157,8 +185,8 @@ function Members() {
   const sendInvite = (e: FormEvent) => {
     e.preventDefault()
     void inviteAction.run(async () => {
-      await authApi.invite(email)
-      toast.success('Invite sent', { description: `${email} can join with the link we emailed. It expires in 7 days.` })
+      await authApi.invite(email, inviteRole)
+      toast.success('Invite sent', { description: `${email} can join as ${roleLabel(inviteRole)} with the link we emailed. It expires in 7 days.` })
       setEmail('')
       load()
     })
@@ -175,10 +203,11 @@ function Members() {
 
   return (
     <div>
-      {owner && (
-        <SettingsSection title="Invite people" description="They get an email with a link to set up their account and join as a member. Invites expire after 7 days.">
+      {manage && (
+        <SettingsSection title="Invite people" description="They get an email with a link to set up their account and join with the role you pick. Invites expire after 7 days.">
           <form onSubmit={sendInvite} className="space-y-4">
             <Field label="Email" type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <RolePicker id="invite-role" label="Role" value={inviteRole} roles={roles} onChange={setInviteRole} />
             {inviteAction.error && <FormError>{inviteAction.error}</FormError>}
             <Button type="submit" disabled={inviteAction.busy || !email}>
               <Spinner on={inviteAction.busy} />
@@ -192,9 +221,9 @@ function Members() {
         <div className="space-y-1">
           <h2 style={SECTION_TITLE}>Members of {me?.workspace?.name}</h2>
           <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-            {owner
-              ? 'Owners can invite people, change roles and remove members. Members work on the agents. Every workspace needs at least one owner.'
-              : 'Only owners can invite people, change roles or remove members.'}
+            {manage
+              ? `${me?.role === 'owner' ? 'Owners' : 'Admins'} invite people, change roles and remove members${me?.role === 'owner' ? '' : ', except owners'}. Every workspace needs at least one owner.`
+              : 'Owners and admins invite people, change roles and remove members.'}
           </p>
         </div>
         {loadError && <FormError>{loadError}</FormError>}
@@ -211,12 +240,14 @@ function Members() {
                   <TableHead>Name</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Joined</TableHead>
-                  {owner && <TableHead className="w-0" aria-label="Actions" />}
+                  {manage && <TableHead className="w-0" aria-label="Actions" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.members.map((m) => {
                   const self = m.userId === me?.user.id
+                  // Admins manage everyone but owners; nobody changes their own role here.
+                  const editable = manage && !self && canSetRole(me?.role, m.role, 'agent')
                   return (
                     <TableRow key={m.userId}>
                       <TableCell>
@@ -229,24 +260,23 @@ function Members() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {owner ? (
-                          <Select value={m.role} onValueChange={(role) => void act(() => authApi.setRole(m.userId, role as Role), `${m.name} is now ${role === 'owner' ? 'an owner' : 'a member'}`)}>
-                            <SelectTrigger className="w-32" aria-label={`Role for ${m.name}`}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="owner">Owner</SelectItem>
-                              <SelectItem value="member">Member</SelectItem>
-                            </SelectContent>
-                          </Select>
+                        {editable ? (
+                          <RolePicker
+                            id={`role-${m.userId}`}
+                            label={`Role for ${m.name}`}
+                            value={m.role}
+                            roles={roles}
+                            compact
+                            onChange={(role) => void act(() => authApi.setRole(m.userId, role), `${m.name} is now ${roleLabel(role)}`)}
+                          />
                         ) : (
-                          <Badge variant="outline">{m.role === 'owner' ? 'Owner' : 'Member'}</Badge>
+                          <Badge variant="outline">{roleLabel(m.role)}</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">{ago(m.joinedAt)}</TableCell>
-                      {owner && (
+                      {manage && (
                         <TableCell>
-                          {!self && (
+                          {editable && (
                             <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setConfirming({ kind: 'remove', member: m })}>
                               Remove
                             </Button>
@@ -262,7 +292,7 @@ function Members() {
         )}
       </section>
 
-      {owner && data && (data.invites.length > 0 || data.joining.length > 0) && (
+      {manage && data && (data.invites.length > 0 || data.joining.length > 0) && (
         <section className="space-y-3 border-t border-border py-8">
           <h2 style={SECTION_TITLE}>Pending invites</h2>
           <div className="rounded-lg border border-border">
@@ -285,7 +315,7 @@ function Members() {
                       <TableCell>
                         <div style={{ fontWeight: 'var(--font-weight-medium)' }}>{i.email}</div>
                         <div className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                          Sent {ago(i.invitedAt)}, expires {left <= 1 ? 'within a day' : `in ${left} days`}
+                          {roleLabel(i.role)} &middot; sent {ago(i.invitedAt)}, expires {left <= 1 ? 'within a day' : `in ${left} days`}
                         </div>
                       </TableCell>
                       <TableCell className="w-0 whitespace-nowrap">
@@ -327,6 +357,7 @@ function Members() {
 }
 
 export function SettingsPage({ tab, onTabChange }: { tab: SettingsTab; onTabChange: (t: SettingsTab) => void }) {
+  const { me } = useAuth()
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
       <h1 className="mb-6">Settings</h1>
@@ -334,7 +365,7 @@ export function SettingsPage({ tab, onTabChange }: { tab: SettingsTab; onTabChan
         <TabsList className="max-w-full justify-start overflow-x-auto">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
-          <TabsTrigger value="billing">Billing</TabsTrigger>
+          {can(me?.role, 'billing.view') && <TabsTrigger value="billing">Billing</TabsTrigger>}
           <TabsTrigger value="members">Members</TabsTrigger>
           <TabsTrigger value="canned">Canned responses</TabsTrigger>
           <TabsTrigger value="support">Support rules</TabsTrigger>

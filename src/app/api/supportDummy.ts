@@ -225,6 +225,7 @@ let settings: SupportSettings = {
   routing: { mode: 'round_robin', teamId: null, userId: null },
   teams: [],
   csat: { enabled: true, question: 'How did we do today?' },
+  restrictAgents: false,
   aiSummary: false,
 }
 

@@ -16,6 +16,7 @@ import { getSupportSettings, PRIORITIES, PRIORITY_LABEL, saveSupportSettings, ty
 import { TEXT_SM_OPEN, TEXT_XS } from '@/app/lib/text'
 import { useMembers } from '@/app/auth/useMembers'
 import { SettingsSection } from './SettingsSection'
+import { can } from '@/app/lib/permissions'
 
 const DAYS: { id: Day; label: string }[] = [
   { id: 'mon', label: 'Monday' },
@@ -33,7 +34,7 @@ const hours = (min: number) => (min % 60 === 0 ? `${min / 60}h` : `${min}m`)
 /** Settings → Support: when the team works, how fast it answers, who gets new tickets, and feedback. */
 export function SupportSettingsTab() {
   const { me } = useAuth()
-  const canEdit = me?.role === 'owner'
+  const canEdit = can(me?.role, 'settings.manage')
   const [s, setS] = useState<SupportSettings | null>(null)
   const members = useMembers()
   const [holiday, setHoliday] = useState('')
@@ -74,7 +75,7 @@ export function SupportSettingsTab() {
     <fieldset disabled={!canEdit} className="min-w-0">
       {!canEdit && (
         <p className="mb-2 rounded-md bg-muted px-3 py-2 text-muted-foreground" style={TEXT_SM_OPEN}>
-          Only workspace owners can change these settings.
+          Only owners and admins can change these settings.
         </p>
       )}
       <SettingsSection wide title="Business hours" description="SLA clocks only run while your team is working. Outside these hours, customers can get an away message.">
@@ -284,6 +285,18 @@ export function SupportSettingsTab() {
             Buttons: Good · Okay · Bad
           </p>
         </div>
+      </SettingsSection>
+
+      <SettingsSection wide title="Who sees which chats" description="Supervisors, admins and owners always see every chat. Agents see everything too, unless you limit them here.">
+        <label className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5" style={TEXT_SM_OPEN}>
+          <span>
+            Agents see only chats and tickets assigned to them, plus unassigned ones
+            <span className="block text-muted-foreground" style={TEXT_XS}>
+              Useful when agents shouldn&rsquo;t read each other&rsquo;s customers. They can still pick up unassigned work.
+            </span>
+          </span>
+          <Switch checked={!!s.restrictAgents} onCheckedChange={(v) => set({ restrictAgents: v })} />
+        </label>
       </SettingsSection>
 
       {canEdit && (

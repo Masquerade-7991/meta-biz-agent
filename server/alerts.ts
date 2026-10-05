@@ -26,7 +26,7 @@ export async function raiseAlert(a: Alert): Promise<boolean> {
   )
   if (!r.upsertedCount) return false
   trace('alert.raised', { key: a.key, severity: a.severity, target: a.target })
-  const owners = await col('memberships').find({ workspaceId: ws(), role: 'owner' }, { projection: { userId: 1 } }).toArray()
+  const owners = await col('memberships').find({ workspaceId: ws(), role: { $in: ['owner', 'admin'] } }, { projection: { userId: 1 } }).toArray()
   const people = await col('users').find({ _id: { $in: owners.map((o) => o.userId) } }, { projection: { email: 1 } }).toArray()
   for (const p of people) await mail.alert(String(p.email), a.title, a.detail, { label: 'Open Helo.ai', path: PATH[a.target] }).catch(() => {})
   return true

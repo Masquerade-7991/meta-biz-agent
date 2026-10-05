@@ -32,6 +32,8 @@ import { parseCsv, toCsv, toImportRows, type ImportRow } from '@/app/contacts/cs
 import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { SearchInput } from '@/app/components/Filters'
 import { customerLabel, isBsuid } from '@/app/lib/customer'
+import { can } from '@/app/lib/permissions'
+import { useAuth } from '@/app/auth/AuthContext'
 
 const tagList = (s: string) => [...new Set(s.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean))]
 const ago = (iso?: string) => {
@@ -56,6 +58,7 @@ function ContactDialog({
   onDeleted: (phone: string) => void
   onOpenChat: (phone: string) => void
 }) {
+  const { me } = useAuth()
   const [phone, setPhone] = useState(initial ? `+${initial.phone}` : '')
   const [name, setName] = useState(initial?.name ?? '')
   const [email, setEmail] = useState(initial?.email ?? '')
@@ -156,7 +159,7 @@ function ContactDialog({
           {error && <FormError>{error}</FormError>}
           <DialogFooter className="gap-2 sm:justify-between">
             <div className="flex gap-2">
-              {initial && (
+              {initial && can(me?.role, 'contacts.manage') && (
                 <Button type="button" variant="ghost" className="text-destructive" onClick={() => setConfirming(true)}>
                   <Trash2 className="size-4" />
                   Delete
@@ -366,6 +369,9 @@ function SegmentDialog({ tag, onClose, onSaved }: { tag: string; onClose: () => 
 
 /** Everyone the business talks to, with tags, custom fields, segments and CSV in and out. */
 export function ContactsPage({ onOpenChat }: { onOpenChat: (phone: string) => void }) {
+  const { me } = useAuth()
+  // Import, segments and deleting people are for supervisors and up; everyone can add and edit.
+  const manage = can(me?.role, 'contacts.manage')
   const [q, setQ] = useState('')
   const [tag, setTag] = useState('all')
   const [segment, setSegment] = useState('all')
@@ -421,10 +427,12 @@ export function ContactsPage({ onOpenChat }: { onOpenChat: (phone: string) => vo
           <p className="mt-1 text-muted-foreground">Everyone who has chatted with you, plus people you add or import.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setImporting(true)}>
-            <Upload className="size-4" />
-            Import CSV
-          </Button>
+          {manage && (
+            <Button variant="outline" onClick={() => setImporting(true)}>
+              <Upload className="size-4" />
+              Import CSV
+            </Button>
+          )}
           <Button variant="outline" onClick={exportCsv} disabled={!rows?.length}>
             <Download className="size-4" />
             Export CSV
@@ -464,11 +472,13 @@ export function ContactsPage({ onOpenChat }: { onOpenChat: (phone: string) => vo
             ))}
           </SelectContent>
         </Select>
-        <Button variant="ghost" size="sm" onClick={() => setSavingSegment(true)}>
-          <Plus className="size-4" />
-          New segment
-        </Button>
-        {currentSegment && (
+        {manage && (
+          <Button variant="ghost" size="sm" onClick={() => setSavingSegment(true)}>
+            <Plus className="size-4" />
+            New segment
+          </Button>
+        )}
+        {currentSegment && manage && (
           <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setRemovingSegment(currentSegment)}>
             Delete “{currentSegment.name}”
           </Button>

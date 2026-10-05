@@ -11,6 +11,7 @@ import { raiseAlert } from './alerts.ts'
 import { trace } from './trace.ts'
 import { countryOf } from './dialCodes.ts'
 import type { Actor } from './inbox.ts'
+import { can } from '../src/app/lib/permissions.ts'
 
 const DAY = 86_400_000
 const spend = () => col('spend_daily')
@@ -148,9 +149,10 @@ async function overview() {
 
 async function route(req: http.IncomingMessage, path: string, me: Actor) {
   const m = req.method ?? 'GET'
+  if (!can(me.role, 'billing.view')) throw new HttpError(403, 'Billing is for owners and admins.')
   if (path === '/api/billing' && m === 'GET') return overview()
   if (path === '/api/billing' && m === 'PUT') {
-    if (me.role !== 'owner') throw new HttpError(403, 'Only owners can set the budget.')
+    if (!can(me.role, 'billing.manage')) throw new HttpError(403, 'Only owners can set the budget.')
     const b = obj(await readJson(req))
     const budget = b.budget === null || b.budget === '' ? null : Number(b.budget)
     if (budget !== null && (!Number.isFinite(budget) || budget < 0)) throw new HttpError(400, 'The budget must be a positive amount, or empty for none.')

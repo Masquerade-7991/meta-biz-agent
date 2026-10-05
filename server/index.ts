@@ -26,6 +26,7 @@ import { accounts, assetsFor } from './accounts.ts'
 import { handleWhatsApp } from './whatsapp.ts'
 import { readTrace, trace } from './trace.ts'
 import { handleStream } from './stream.ts'
+import { can } from '../src/app/lib/permissions.ts'
 
 // Hosts like Render hand the port in PORT.
 const PORT = Number(env('SERVER_PORT') || env('PORT') || 8787)
@@ -133,12 +134,14 @@ const server = http.createServer(async (req, res) => {
   const traceRoute = url.match(/^\/api\/trace\/([0-9a-f-]{8,36})$/)
   await withWorkspace(wsId, async () => {
     if (handleStream(req, res)) return
-    if (traceRoute && s.role !== 'owner') return sendError(res, 403, 'Owners only', 'Only workspace owners can read traces.')
+    if (traceRoute && !can(s.role, 'traces.read')) return sendError(res, 403, 'Not allowed', 'Only owners and admins can read traces.')
     if (traceRoute) return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(await readTrace(traceRoute[1])))
     if (metaRoute) {
       const path = resolveIds(metaRoute[2])
       // Several businesses share this server: a workspace may only name its own WABA, numbers and business.
       if (pathIds(path).some((id) => !assets!.ids.has(id))) return sendError(res, 403, 'Not your WhatsApp account', 'That WhatsApp ID isn’t connected to this workspace.')
+      // Changing the AI agent is for owners and admins; everyone can look.
+      if (req.method !== 'GET' && req.method !== 'HEAD' && !can(s.role, 'agent.edit')) return sendError(res, 403, 'Not allowed', 'Only owners and admins change the AI agent.')
       await forward(req, res, metaRoute[1] as Kind, path)
     }
     else if (await handleHealth(req, res)) return

@@ -11,10 +11,11 @@ import {
 import { Separator } from '@/app/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/app/components/ui/tooltip'
 import logo from '@/assets/helo-mark.svg'
-import { NAV_ITEMS, type NavId } from '@/app/nav'
+import { navFor, type NavId } from '@/app/nav'
 import { cn, initialsOf } from '@/app/lib/utils'
 import { useAuth } from '@/app/auth/AuthContext'
 import type { SettingsTab } from './SettingsPage'
+import { can, roleLabel } from '@/app/lib/permissions'
 
 const initials = (name: string) => initialsOf(name) || '?'
 
@@ -35,7 +36,7 @@ export function AppSidebar({
       <Separator className="my-3 w-8 bg-sidebar-border" />
 
       <ul className="flex flex-1 flex-col items-center gap-1">
-        {NAV_ITEMS.map((item) => {
+        {navFor(me?.role).map((item) => {
           const Icon = item.icon
           const isActive = active === item.id
           return (
@@ -98,9 +99,9 @@ export function AppSidebar({
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuLabel className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-normal)' }}>
-            {me?.workspace?.name}, {me?.role === 'owner' ? 'Owner' : 'Member'}
+            {me?.workspace?.name}, {roleLabel(me?.role)}
           </DropdownMenuLabel>
-          {me?.role === 'owner' && (
+          {can(me?.role, 'members.manage') && (
             <DropdownMenuItem onSelect={() => onOpenSettings('members')}>
               <UserPlus className="size-4" /> Invite people
             </DropdownMenuItem>

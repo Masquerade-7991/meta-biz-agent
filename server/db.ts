@@ -191,6 +191,8 @@ export async function initDb(): Promise<boolean> {
       if (first) await d.collection('workspaces').updateOne({ _id: first._id }, { $set: { metaAssets: true } })
     }
     await migrateEnvAccount(d)
+    // Four roles replaced owner/member: members keep what they could do as admins.
+    await d.collection('memberships').updateMany({ role: 'member' }, { $set: { role: 'admin' } })
     db = d
     console.log('MongoDB connected, collections ready')
     return true

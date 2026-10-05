@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { HomePage } from '@/app/pages/HomePage'
 import { InboxPage } from '@/app/pages/InboxPage'
 import { TicketsPage } from '@/app/pages/TicketsPage'
@@ -8,7 +8,13 @@ import { SupportAnalyticsPage } from '@/app/pages/SupportAnalyticsPage'
 import { NotificationsBell } from './NotificationsBell'
 import { AppSidebar } from './AppSidebar'
 import { AgentsListPage } from './AgentsListPage'
-import { NAV_ITEMS, type NavId } from '@/app/nav'
+import { navFor, type NavId } from '@/app/nav'
+import { useAuth } from '@/app/auth/AuthContext'
+import { isDummyMode } from '@/app/api/dummy'
+import { Button } from '@/app/components/ui/button'
+import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
+import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
+import { ROLES } from '@/app/lib/permissions'
 import { SettingsPage, type SettingsTab } from './SettingsPage'
 
 export function ProductShell({
@@ -36,10 +42,30 @@ export function ProductShell({
     setActive('inbox')
   }
 
-  const activeItem = NAV_ITEMS.find((item) => item.id === active)!
+  const { me, setMe } = useAuth()
+  // A page this role can't see (e.g. after a role change) falls back to Home.
+  const pages = navFor(me?.role)
+  const activeItem = pages.find((item) => item.id === active) ?? pages[0]
+  const page = activeItem.id
+
+  // Dummy mode: try the console as each role. The server enforces roles; here only the UI changes.
+  const demo = useMemo(
+    () =>
+      isDummyMode() && me ? (
+        <DemoControlsGroup label="Role">
+          {ROLES.map((r) => (
+            <Button key={r.id} size="sm" variant={me.role === r.id ? 'default' : 'outline'} onClick={() => setMe({ ...me, role: r.id })}>
+              {r.label}
+            </Button>
+          ))}
+        </DemoControlsGroup>
+      ) : null,
+    [me, setMe],
+  )
+  useRegisterDevControls('role', demo)
 
   function renderContent() {
-    switch (active) {
+    switch (page) {
       case 'home':
         return (
           <HomePage

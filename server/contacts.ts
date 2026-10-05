@@ -6,6 +6,7 @@ import { ObjectId } from 'mongodb'
 import { HttpError, type Obj, type Titles, digits, obj, readJson, serveJson } from './http.ts'
 import { col, db, dbOffReason, ws } from './db.ts'
 import type { Actor } from './inbox.ts'
+import { can } from '../src/app/lib/permissions.ts'
 
 const contacts = () => col('contacts')
 
@@ -162,12 +163,15 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   let seg: RegExpMatchArray | null
   if (path === '/api/contacts' && m === 'GET') return list(u)
   if (path === '/api/contacts' && m === 'POST') return save(obj(await readJson(req)))
-  if (path === '/api/contacts/import' && m === 'POST') return importRows(obj(await readJson(req)))
+  if (path === '/api/contacts/import' && m === 'POST') {
+    if (!can(me.role, 'contacts.manage')) throw new HttpError(403, 'Supervisors, admins and owners import contacts.')
+    return importRows(obj(await readJson(req)))
+  }
   if (path === '/api/contacts/tags' && m === 'GET')
     return (await contacts().aggregate([{ $match: { workspaceId: ws() } }, { $unwind: '$tags' }, { $group: { _id: '$tags', count: { $sum: 1 } } }, { $sort: { _id: 1 } }]).toArray()).map((t) => ({ tag: t._id, count: t.count }))
   if (path === '/api/contacts/fields' && m === 'GET') return fieldDefs()
   if (path === '/api/contacts/fields' && m === 'PUT') {
-    if (me.role !== 'owner') throw new HttpError(403, 'Only owners can change contact fields.')
+    if (!can(me.role, 'settings.manage')) throw new HttpError(403, 'Only owners and admins can change contact fields.')
     const raw = obj(await readJson(req)).fields
     const seen = new Set<string>()
     const fields = (Array.isArray(raw) ? raw : []).slice(0, 30).map((f): FieldDef => {
@@ -189,6 +193,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     return Promise.all(
       (await col('segments').find({ workspaceId: ws() }).sort({ name: 1 }).toArray()).map(async (s) => ({ id: String(s._id), name: s.name, filter: s.filter, count: await contacts().countDocuments(segmentQuery(s.filter as SegmentFilter)) })),
     )
+  if (path.startsWith('/api/contacts/segments') && m !== 'GET' && !can(me.role, 'contacts.manage')) throw new HttpError(403, 'Supervisors, admins and owners manage segments.')
   if (path === '/api/contacts/segments' && m === 'POST') {
     const b = obj(await readJson(req))
     const name = String(b.name ?? '').trim().slice(0, 80)
@@ -211,6 +216,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     }
     if (m === 'PUT') return save(obj(await readJson(req)), phone)
     if (m === 'DELETE') {
+      if (!can(me.role, 'contacts.manage')) throw new HttpError(403, 'Supervisors, admins and owners delete contacts.')
       // Deleting a contact removes everything we hold about them: chat, messages and tickets.
       for (const name of ['contacts', 'conversations', 'messages', 'tickets', 'presence']) await col(name).deleteMany({ workspaceId: ws(), phone })
       return { ok: true }

@@ -9,13 +9,14 @@ import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
 import { listFields, saveFields, type FieldDef } from '@/app/api/contacts'
 import { SECTION_TITLE, TEXT_SM_OPEN } from '@/app/lib/text'
+import { can } from '@/app/lib/permissions'
 
 type Row = { key: string; label: string; type: FieldDef['type']; options: string }
 
 /** Settings → Contact fields: extra details kept on every contact (city, plan, renewal date…). */
 export function ContactFieldsSettings() {
   const { me } = useAuth()
-  const canEdit = me?.role === 'owner'
+  const canEdit = can(me?.role, 'settings.manage')
   const [rows, setRows] = useState<Row[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -55,7 +56,7 @@ export function ContactFieldsSettings() {
         <fieldset disabled={!canEdit} className="space-y-3">
           {!canEdit && (
             <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground" style={TEXT_SM_OPEN}>
-              Only workspace owners can change contact fields.
+              Only owners and admins can change contact fields.
             </p>
           )}
           {rows.length === 0 && (

@@ -11,6 +11,7 @@ import { getBilling, setBudget, syncBilling, type Billing } from '@/app/api/bill
 import { formatMoney } from '@/app/lib/money'
 import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { SettingsSection } from './SettingsSection'
+import { can } from '@/app/lib/permissions'
 
 const CATEGORY: Record<string, string> = { MARKETING: 'Marketing', UTILITY: 'Utility', AUTHENTICATION: 'Login codes', SERVICE: 'Service replies' }
 const ago = (iso: string) => {
@@ -39,7 +40,7 @@ function SpendBars({ days, currency }: { days: Billing['days']; currency: string
 /** Settings → Billing: what WhatsApp charged this month (Meta's own figures) and the budget alert. */
 export function BillingSettingsTab() {
   const { me } = useAuth()
-  const isOwner = me?.role === 'owner'
+  const isOwner = can(me?.role, 'billing.manage')
   const [b, setB] = useState<Billing | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [budget, setBudgetText] = useState('')

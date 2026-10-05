@@ -23,12 +23,13 @@ import { reasonOf } from '../src/app/broadcasts/sendErrors.ts'
 import { isBsuid, NO_CONTROL_HIDDEN, parseCustomerKey, sendTarget } from '../src/app/lib/customer.ts'
 import { accounts, assetsFor, workspaceForNumber } from './accounts.ts'
 import { SAMPLE_CHATS } from '../src/app/inbox/sampleData.ts'
-import { ensureTicket, onAgentReply, onCustomerMessage } from './tickets.ts'
+import { ensureTicket, needCanAssign, needInScope, onAgentReply, onCustomerMessage, scopeFor } from './tickets.ts'
+import { can, type Role } from '../src/app/lib/permissions.ts'
 
 export interface Actor {
   _id: string
   name: string
-  role: 'owner' | 'member' | null
+  role: Role | null
 }
 
 const fromSeconds = (v: unknown) => (Number(v) > 0 ? new Date(Number(v) * 1000) : new Date())
@@ -330,8 +331,11 @@ async function listConversations(me: Actor, filter: string, q: string) {
   if (filter === 'ai') where.owner = 'ai'
   // Snoozed chats live under their own filter until their time comes.
   const now = new Date()
-  if (filter === 'snoozed') where.snoozedUntil = { $gt: now }
-  else where.$or = [{ snoozedUntil: { $exists: false } }, { snoozedUntil: { $lte: now } }]
+  const scope = await scopeFor(me)
+  where.$and = [
+    filter === 'snoozed' ? { snoozedUntil: { $gt: now } } : { $or: [{ snoozedUntil: { $exists: false } }, { snoozedUntil: { $lte: now } }] },
+    ...(scope ? [scope] : []),
+  ]
   const rows = await conversations().find(where).sort({ lastMessageAt: -1 }).limit(500).toArray()
   const people = new Map((await contacts().find({ workspaceId: ws(), phone: { $in: rows.map((r) => r.phone) } }).toArray()).map((c) => [c.phone, c]))
   const lastByPhone = new Map(
@@ -367,6 +371,7 @@ async function listConversations(me: Actor, filter: string, q: string) {
 async function getConversation(phone: string, me?: Actor) {
   const conv = await conversations().findOne({ workspaceId: ws(), phone })
   if (!conv) throw new HttpError(404, 'No chat with this number yet.')
+  if (me) await needInScope(me, conv.assigneeId)
   if (!conv.sample) await syncTurns(phone)
   const [contact, rows] = await Promise.all([
     contacts().findOne({ workspaceId: ws(), phone }, { projection: { _id: 0, workspaceId: 0 } }),
@@ -499,7 +504,10 @@ const cannedOut = ({ _id, workspaceId: _w, ...c }: Obj) => ({ id: String(_id), .
 async function saveCanned(me: Actor, body: Obj, id?: string) {
   const shortcut = text(body.shortcut, 'a shortcut', 40).replace(/^\/?/, '/').toLowerCase()
   if (!/^\/[a-z0-9-_]+$/.test(shortcut)) throw new HttpError(400, 'Shortcuts use letters, numbers, - and _ only, like /refund.')
-  const doc = { title: text(body.title, 'a title', 80), shortcut, body: text(body.body, 'the reply'), shared: body.shared !== false, updatedAt: new Date() }
+  // Shared responses are the team's; only roles that manage settings can share or change them.
+  const admin = can(me.role, 'settings.manage')
+  const doc = { title: text(body.title, 'a title', 80), shortcut, body: text(body.body, 'the reply'), shared: body.shared !== false && admin, updatedAt: new Date() }
+  if (id && !admin && (await canned().findOne({ _id: new ObjectId(id), workspaceId: ws(), shared: true }))) throw new HttpError(403, 'Only owners and admins can change the team’s shared responses.')
   const clash = await canned().findOne({ workspaceId: ws(), shortcut, ...(id && { _id: { $ne: new ObjectId(id) } }) })
   if (clash) throw new HttpError(409, `${shortcut} is already used by “${clash.title}”.`)
   if (id) {
@@ -622,6 +630,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       await addMessage({ phone, direction: 'out', author: 'agent', authorId: me._id, authorName: me.name, kind: 'note', body: text(body.text, 'a note'), at: new Date() })
     } else if (action === 'assign') {
       const userId = body.userId === null ? null : String(body.userId ?? '')
+      needCanAssign(me, userId, (await conversations().findOne({ workspaceId: ws(), phone }, { projection: { assigneeId: 1 } }))?.assigneeId)
       if (userId && !(await col('memberships').findOne({ workspaceId: ws(), userId }))) throw new HttpError(400, 'That person isn’t in this workspace.')
       await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { assigneeId: userId } })
     } else if (action === 'control') {
@@ -640,7 +649,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   if ((seg = path.match(/^\/api\/inbox\/canned\/([a-f0-9]{24})$/))) {
     if (m === 'PUT') return saveCanned(me, obj(await readJson(req)), seg[1])
     if (m === 'DELETE') {
-      const r = await canned().deleteOne({ _id: new ObjectId(seg[1]), workspaceId: ws(), $or: [{ shared: true }, { createdBy: me._id }] })
+      const r = await canned().deleteOne({ _id: new ObjectId(seg[1]), workspaceId: ws(), $or: [{ createdBy: me._id }, ...(can(me.role, 'settings.manage') ? [{ shared: true }] : [])] })
       if (!r.deletedCount) throw new HttpError(404, 'That response no longer exists.')
       return { ok: true }
     }

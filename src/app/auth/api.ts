@@ -1,7 +1,9 @@
 // Calls to the server's account, workspace and member routes (server/auth.ts).
-import { parse } from '@/app/api/meta'
+import { MetaError, parse } from '@/app/api/meta'
+import { isDummyMode } from '@/app/api/dummy'
 
-export type Role = 'owner' | 'member'
+import type { Role } from '@/app/lib/permissions'
+export type { Role }
 export interface Me {
   user: { id: string; name: string; email: string }
   workspace: { id: string; name: string } | null
@@ -29,11 +31,44 @@ export interface Member {
 export interface Invite {
   id: string
   email: string
+  role: Role
   invitedAt: string
   expiresAt: string
 }
 
+// Dummy mode has no server: members and invites live in this tab, with the same role rules.
+let demoMembers: Member[] = [
+  { userId: 'demo', name: 'Demo User', email: 'demo@helo.ai', role: 'owner', joinedAt: new Date(Date.now() - 40 * 86_400_000).toISOString() },
+  { userId: 'demo-2', name: 'Riya Mehta', email: 'riya@example.com', role: 'supervisor', joinedAt: new Date(Date.now() - 12 * 86_400_000).toISOString() },
+  { userId: 'demo-3', name: 'Arjun Das', email: 'arjun@example.com', role: 'agent', joinedAt: new Date(Date.now() - 3 * 86_400_000).toISOString() },
+]
+let demoInvites: Invite[] = []
+function dummyWorkspace(method: string, path: string, body: Record<string, unknown>): unknown {
+  if (path === '/api/workspace/members') return { members: demoMembers, invites: demoInvites, joining: [] }
+  if (path === '/api/workspace/invites') {
+    const email = String(body.email ?? '').trim().toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new MetaError(400, 'Check your details', 'Enter a valid email address.')
+    if (demoInvites.some((i) => i.email === email) || demoMembers.some((m) => m.email === email)) throw new MetaError(409, 'Already exists', 'This person is already invited or in the workspace.')
+    demoInvites = [{ id: `inv${Date.now()}`, email, role: (body.role as Role) ?? 'agent', invitedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString() }, ...demoInvites]
+    return { ok: true }
+  }
+  const inv = path.match(/^\/api\/workspace\/invites\/([^/]+)/)
+  if (inv) {
+    if (method === 'DELETE') demoInvites = demoInvites.filter((i) => i.id !== inv[1])
+    return { ok: true }
+  }
+  const mem = path.match(/^\/api\/workspace\/members\/([^/]+)$/)
+  if (mem && method === 'DELETE') demoMembers = demoMembers.filter((m) => m.userId !== mem[1])
+  if (mem && method === 'PUT') {
+    const target = demoMembers.find((m) => m.userId === mem[1])
+    if (target?.role === 'owner' && body.role !== 'owner' && demoMembers.filter((m) => m.role === 'owner').length === 1) throw new MetaError(400, 'Check your details', 'A workspace needs at least one owner.')
+    demoMembers = demoMembers.map((m) => (m.userId === mem[1] ? { ...m, role: body.role as Role } : m))
+  }
+  return { ok: true }
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (isDummyMode() && path.startsWith('/api/workspace/')) return dummyWorkspace(method, path, (body ?? {}) as Record<string, unknown>) as T
   return parse<T>(
     await fetch(path, {
       method,
@@ -58,7 +93,7 @@ export const authApi = {
     call<{ ok: true }>('POST', '/api/account/password', { currentPassword, newPassword }),
   changeEmail: (newEmail: string, password: string) => call<{ ok: true }>('POST', '/api/account/email', { newEmail, password }),
   members: () => call<{ members: Member[]; invites: Invite[]; joining: { email: string; verifiedAt: string }[] }>('GET', '/api/workspace/members'),
-  invite: (email: string) => call<{ ok: true }>('POST', '/api/workspace/invites', { email }),
+  invite: (email: string, role: Role) => call<{ ok: true }>('POST', '/api/workspace/invites', { email, role }),
   resendInvite: (id: string) => call<{ ok: true }>('POST', `/api/workspace/invites/${id}/resend`),
   revokeInvite: (id: string) => call<{ ok: true }>('DELETE', `/api/workspace/invites/${id}`),
   setRole: (userId: string, role: Role) => call<{ ok: true }>('PUT', `/api/workspace/members/${userId}`, { role }),

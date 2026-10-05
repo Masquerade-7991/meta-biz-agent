@@ -16,6 +16,7 @@ import { accounts, forgetAssets, tokenKey, type Account, type StepState } from '
 import type { Actor } from './inbox.ts'
 import { trace } from './trace.ts'
 import { enqueue } from './jobs.ts'
+import { can } from '../src/app/lib/permissions.ts'
 
 type Step = keyof Account['steps']
 const cfg = () => ({
@@ -127,7 +128,7 @@ function view(a: Account) {
 }
 
 async function connect(b: Obj, me: Actor) {
-  if (me.role !== 'owner') throw new HttpError(403, 'Only workspace owners can connect WhatsApp accounts.')
+  if (!can(me.role, 'whatsapp.manage')) throw new HttpError(403, 'Only workspace owners can connect WhatsApp accounts.')
   const gaps = missing()
   if (gaps.length) throw new HttpError(503, `Embedded Signup isn’t set up on this server yet (missing ${gaps.join(', ')}).`)
   if (!allow(`wa-connect|${ws()}`, 10)) throw new HttpError(429, 'Too many signup attempts. Try again in an hour.')
@@ -188,7 +189,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   if ((seg = path.match(/^\/api\/whatsapp\/accounts\/(\d+)(?:\/([a-z]+))?$/))) {
     const a = await find(seg[1])
     const owner = () => {
-      if (me.role !== 'owner') throw new HttpError(403, 'Only workspace owners can change WhatsApp accounts.')
+      if (!can(me.role, 'whatsapp.manage')) throw new HttpError(403, 'Only workspace owners can change WhatsApp accounts.')
     }
     if (!seg[2] && m === 'DELETE') {
       owner()

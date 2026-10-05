@@ -54,6 +54,8 @@ import { EmojiPicker } from '@/app/inbox/EmojiPicker'
 import { WindowChip } from '@/app/inbox/WindowChip'
 import { FollowUpBanner, FollowUpMenu } from '@/app/inbox/FollowUpMenu'
 import { InteractiveDialog } from '@/app/inbox/InteractiveDialog'
+import { can } from '@/app/lib/permissions'
+import { useAuth } from '@/app/auth/AuthContext'
 
 // Live events that change the chat list, and the open chat.
 const LIVE_INBOX = ['message.', 'conversation.', 'ticket.']
@@ -508,8 +510,13 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
 
 function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Member[]; onChange: (d: ChatDetail) => void }) {
   const [busy, setBusy] = useState(false)
+  const { me } = useAuth()
   const { conversation: conv, contact } = chat
   const assignee = members.find((m) => m.userId === conv.assigneeId)
+  // Agents take a chat or let it go; handing it to someone else is for supervisors and up.
+  const reassign = can(me?.role, 'tickets.reassign')
+  const assignable = reassign ? members : members.filter((m) => m.userId === me?.user.id)
+  const lockedAssign = !reassign && !!conv.assigneeId && conv.assigneeId !== me?.user.id
   async function run(fn: () => Promise<ChatDetail>, done?: string) {
     setBusy(true)
     try {
@@ -542,13 +549,13 @@ function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Me
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <FollowUpMenu chat={chat} onChange={onChange} />
-        <Select value={conv.assigneeId ?? 'none'} onValueChange={(v) => void run(() => assignChat(conv.phone, v === 'none' ? null : v))} disabled={busy}>
-          <SelectTrigger className="h-9 w-44" aria-label="Assign to">
+        <Select value={conv.assigneeId ?? 'none'} onValueChange={(v) => void run(() => assignChat(conv.phone, v === 'none' ? null : v))} disabled={busy || lockedAssign}>
+          <SelectTrigger className="h-9 w-44" aria-label="Assign to" title={lockedAssign ? 'Assigned to someone else. A supervisor can reassign it.' : undefined}>
             <SelectValue>{assignee?.name ?? (conv.assigneeId ? 'Assigned' : 'Unassigned')}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Unassigned</SelectItem>
-            {members.map((m) => (
+            {assignable.map((m) => (
               <SelectItem key={m.userId} value={m.userId}>
                 {m.name}
               </SelectItem>

@@ -13,6 +13,7 @@ import { dismissReminder, dueReminders } from './followups.ts'
 import { addBusinessMinutes, DAYS, DEFAULT_HOURS, isOpen, type Hours } from './businessHours.ts'
 import { contactNames } from './contacts.ts'
 import { addMessage, conversations, sendInteractive, sendText, setControl, type Actor } from './inbox.ts'
+import { can, mayAssign } from '../src/app/lib/permissions.ts'
 
 export const PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const
 export type Priority = (typeof PRIORITIES)[number]
@@ -32,6 +33,8 @@ export interface SupportSettings {
   routing: { mode: 'unassigned' | 'round_robin' | 'fixed'; teamId: string | null; userId: string | null }
   teams: { id: string; name: string; memberIds: string[] }[]
   csat: { enabled: boolean; question: string }
+  /** Agents see only chats and tickets assigned to them, plus unassigned ones (supervisors and up see all). */
+  restrictAgents: boolean
 }
 export const DEFAULT_SETTINGS: SupportSettings = {
   hours: DEFAULT_HOURS,
@@ -40,6 +43,7 @@ export const DEFAULT_SETTINGS: SupportSettings = {
   routing: { mode: 'round_robin', teamId: null, userId: null },
   teams: [],
   csat: { enabled: true, question: 'How did we do today?' },
+  restrictAgents: false,
 }
 
 const tickets = () => col('tickets')
@@ -48,6 +52,20 @@ const settingsCol = () => col('support_settings')
 export async function getSettings(): Promise<SupportSettings> {
   const s = await settingsCol().findOne({ workspaceId: ws() })
   return { ...DEFAULT_SETTINGS, ...(s?.settings as Partial<SupportSettings> | undefined) }
+}
+
+/** For a restricted agent: only their own work and work nobody has yet. null = everything. */
+export async function scopeFor(me: Actor): Promise<Obj | null> {
+  if (can(me.role, 'chats.all') || !(await getSettings()).restrictAgents) return null
+  return { assigneeId: { $in: [me._id, null] } }
+}
+/** Refuses a chat or ticket that belongs to someone else, for a restricted agent. */
+export async function needInScope(me: Actor, assigneeId: unknown) {
+  if (assigneeId && assigneeId !== me._id && (await scopeFor(me))) throw new HttpError(403, 'This chat is assigned to someone else.')
+}
+/** Refuses moving work the person's role doesn't allow (src/app/lib/permissions.ts mayAssign). */
+export function needCanAssign(me: Actor, to: string | null, from: unknown) {
+  if (!mayAssign(me.role, me._id, to, from ? String(from) : null)) throw new HttpError(403, 'Only supervisors, admins and owners move work that belongs to someone else.')
 }
 
 // ---- validation of the settings form ----
@@ -96,6 +114,7 @@ function parseSettings(b: Obj, members: Set<string>): SupportSettings {
     routing,
     teams,
     csat: { enabled: c.enabled !== false, question: String(c.question ?? '').trim().slice(0, 200) || DEFAULT_SETTINGS.csat.question },
+    restrictAgents: b.restrictAgents === true,
   }
 }
 
@@ -196,7 +215,9 @@ async function list(u: URL, me: Actor) {
   if (p('assignee') === 'me') where.assigneeId = me._id
   if (p('assignee') === 'none') where.assigneeId = null
   if (PRIORITIES.includes(p('priority') as never)) where.priority = p('priority')
-  if (p('phone')) where.phone = p('phone').replace(/\D/g, '')
+  if (p('phone')) where.phone = parseCustomerKey(p('phone'))
+  const scope = await scopeFor(me)
+  if (scope) where.$and = [scope]
   const rows = await tickets().find(where).sort({ createdAt: -1 }).limit(500).toArray()
   const names = await contactNames(rows.map((r) => String(r.phone)))
   const q = p('q').toLowerCase()
@@ -224,8 +245,10 @@ async function update(number: number, b: Obj, me: Actor) {
       resolveDueAt: addBusinessMinutes(t.createdAt as Date, s.sla[b.priority as Priority].resolve, s.hours),
     })
   }
+  await needInScope(me, t.assigneeId)
   if (b.assigneeId !== undefined) {
     const id = b.assigneeId === null ? null : String(b.assigneeId)
+    needCanAssign(me, id, t.assigneeId)
     if (id && !(await col('memberships').findOne({ workspaceId: ws(), userId: id }))) throw new HttpError(400, 'That person isn’t in this workspace.')
     set.assigneeId = id
     await conversations().updateOne({ workspaceId: ws(), phone: t.phone }, { $set: { assigneeId: id } })
@@ -278,7 +301,7 @@ async function notifications(me: Actor) {
   })
   // Account alerts (budget, number quality, templates) are for owners, and stay on top until dismissed.
   const alerts =
-    me.role === 'owner'
+    can(me.role, 'alerts.receive')
       ? (await openAlerts(me._id)).map((a) => ({ id: `alert:${String(a.key)}`, kind: a.severity === 'critical' ? 'alert_critical' : 'alert', text: `${String(a.title)}. ${String(a.detail)}`, at: a.createdAt as Date, target: String(a.target) }))
       : []
   return [...alerts, ...(await dueReminders(me._id)), ...items.sort((a, z) => +z.at - +a.at)].slice(0, 30)
@@ -372,7 +395,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   }
   if (path === '/api/support/settings' && m === 'GET') return { ...(await getSettings()), aiSummary: !!env('ANTHROPIC_API_KEY') }
   if (path === '/api/support/settings' && m === 'PUT') {
-    if (me.role !== 'owner') throw new HttpError(403, 'Only owners can change support settings.')
+    if (!can(me.role, 'settings.manage')) throw new HttpError(403, 'Only owners and admins can change support settings.')
     const members = new Set((await col('memberships').find({ workspaceId: ws() }).toArray()).map((x) => String(x.userId)))
     const settings = parseSettings(obj(await readJson(req)), members)
     await settingsCol().updateOne({ workspaceId: ws() }, { $set: { settings, updatedAt: new Date(), updatedBy: me._id } }, { upsert: true })

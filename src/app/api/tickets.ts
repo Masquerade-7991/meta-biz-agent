@@ -34,6 +34,8 @@ export interface SupportSettings {
   routing: { mode: 'unassigned' | 'round_robin' | 'fixed'; teamId: string | null; userId: string | null }
   teams: { id: string; name: string; memberIds: string[] }[]
   csat: { enabled: boolean; question: string }
+  /** Agents see only their own chats and tickets, plus unassigned ones. */
+  restrictAgents: boolean
   /** Whether the server can write AI summaries (ANTHROPIC_API_KEY set). */
   aiSummary: boolean
 }

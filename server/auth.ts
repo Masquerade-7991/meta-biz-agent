@@ -14,9 +14,10 @@ import { col, db, dbOffReason } from './db.ts'
 import { appUrl, mail } from './mail.ts'
 import { HttpError, readJson, serveJson, type Titles } from './http.ts'
 import { migrateEnvAccount } from './accounts.ts'
+import { can, canSetRole, isRole, roleLabel, type Action, type Role } from '../src/app/lib/permissions.ts'
+import { trace } from './trace.ts'
 
 type Obj = Record<string, unknown>
-type Role = 'owner' | 'member'
 type Purpose = 'signup' | 'invite' | 'reset' | 'email_change'
 interface User {
   _id: string
@@ -29,6 +30,8 @@ interface User {
   /** Invited but not finished setup: the workspace they join when they do. */
   pendingWorkspaceId?: string
   pendingInvitedBy?: string
+  /** The role the invite offered; given on joining. */
+  pendingRole?: Role
   /** Opened a reset link: must choose a new password before anything else. */
   mustSetPassword?: boolean
 }
@@ -55,6 +58,8 @@ interface MagicLink {
   purpose: Purpose
   workspaceId?: string
   invitedBy?: string
+  /** For an invite: the role the person joins with. */
+  role?: Role
   userId?: string
   expiresAt: Date
   createdAt: Date
@@ -230,9 +235,9 @@ function needWorkspace(s: Session | null): Session & { workspace: Workspace } {
   if (!x.workspace) throw new HttpError(403, 'Create or join a workspace first.')
   return x as Session & { workspace: Workspace }
 }
-function needOwner(s: Session | null) {
+function needCan(s: Session | null, action: Action) {
   const x = needWorkspace(s)
-  if (x.role !== 'owner') throw new HttpError(403, 'Only workspace owners can do this.')
+  if (!can(x.role, action)) throw new HttpError(403, 'Your role doesn’t allow this. Ask an owner or admin.')
   return x
 }
 
@@ -336,29 +341,32 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     const people = await users().find({ _id: { $in: ms.map((mm) => mm.userId) } }).toArray()
     const byId = new Map(people.map((p) => [p._id, p]))
     const members = ms.map((mm) => ({ userId: mm.userId, name: byId.get(mm.userId)?.name ?? '', email: byId.get(mm.userId)?.email ?? '', role: mm.role, joinedAt: mm.createdAt }))
-    if (x.role !== 'owner') return { members, invites: [], joining: [] }
+    if (!can(x.role, 'members.manage')) return { members, invites: [], joining: [] }
     const inv = await links().find({ workspaceId: x.workspace._id, purpose: 'invite', ...live() }).sort({ createdAt: -1 }).toArray()
     // Opened their invite (email verified) but haven't finished setup yet.
     const joining = await users().find({ pendingWorkspaceId: x.workspace._id }).toArray()
     return {
       members,
-      invites: inv.map((i) => ({ id: String((i as MagicLink & { _id: ObjectId })._id), email: i.email, invitedAt: i.createdAt, expiresAt: i.expiresAt })),
+      invites: inv.map((i) => ({ id: String((i as MagicLink & { _id: ObjectId })._id), email: i.email, role: i.role ?? 'agent', invitedAt: i.createdAt, expiresAt: i.expiresAt })),
       joining: joining.map((j) => ({ email: j.email, verifiedAt: j.emailVerifiedAt })),
     }
   }
   if (path === '/api/workspace/invites' && m === 'POST') {
-    const x = needOwner(s)
+    const x = needCan(s, 'members.manage')
     const e = email(body.email)
+    const role: Role = isRole(body.role) ? body.role : 'agent'
+    if (!canSetRole(x.role, 'agent', role)) throw new HttpError(403, `Your role can’t invite someone as ${roleLabel(role)}.`)
     limit(`invite|${x.workspace._id}`, 50, 'Too many invites sent. Try again in an hour.')
     const existing = await users().findOne({ email: e })
     if (existing && (await memberships().findOne({ userId: existing._id }))) throw new HttpError(409, 'This person is already in a workspace.')
     if (await links().findOne({ email: e, workspaceId: x.workspace._id, purpose: 'invite', ...live() }))
       throw new HttpError(409, 'This person is already invited. Resend the invite from the list.')
-    await mailLink({ email: e, purpose: 'invite', workspaceId: x.workspace._id, invitedBy: x.user._id }, (t) => mail.invite(e, t, x.user.name, x.workspace.name))
+    await mailLink({ email: e, purpose: 'invite', workspaceId: x.workspace._id, invitedBy: x.user._id, role }, (t) => mail.invite(e, t, x.user.name, x.workspace.name))
+    trace('member.invited', { role })
     return { ok: true }
   }
   if ((seg = path.match(/^\/api\/workspace\/invites\/([a-f0-9]{24})(\/resend)?$/))) {
-    const x = needOwner(s)
+    const x = needCan(s, 'members.manage')
     const inv = await links().findOne({ _id: new ObjectId(seg[1]), workspaceId: x.workspace._id, purpose: 'invite', ...live() })
     if (!inv) throw new HttpError(404, 'This invite was already accepted, revoked or has expired.')
     if (m === 'DELETE' && !seg[2]) {
@@ -367,29 +375,32 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     }
     if (m === 'POST' && seg[2]) {
       limit(`send|${inv.email}`, 5, 'Too many emails sent to this address. Try again in an hour.')
-      await mailLink({ email: inv.email, purpose: 'invite', workspaceId: x.workspace._id, invitedBy: x.user._id }, (t) => mail.invite(inv.email, t, x.user.name, x.workspace.name))
+      await mailLink({ email: inv.email, purpose: 'invite', workspaceId: x.workspace._id, invitedBy: x.user._id, role: inv.role }, (t) => mail.invite(inv.email, t, x.user.name, x.workspace.name))
       await links().updateOne({ tokenHash: inv.tokenHash }, { $set: { revokedAt: new Date() } }) // sent: the old link stops working
       return { ok: true }
     }
   }
   if ((seg = path.match(/^\/api\/workspace\/members\/([0-9a-f-]{36})$/))) {
-    const x = needOwner(s)
+    const x = needCan(s, 'members.manage')
     const target = await memberships().findOne({ workspaceId: x.workspace._id, userId: seg[1] })
     const person = target && (await users().findOne({ _id: target.userId }))
     if (!target || !person) throw new HttpError(404, 'This person isn’t in your workspace.')
     if (m === 'DELETE') {
       if (target.userId === x.user._id) throw new HttpError(400, 'You can’t remove yourself.')
+      if (!canSetRole(x.role, target.role, 'agent')) throw new HttpError(403, 'Only owners can remove an owner.')
       await memberships().deleteOne({ workspaceId: x.workspace._id, userId: target.userId })
       await sessions().deleteMany({ userId: target.userId })
       await mail.removed(person.email, x.workspace.name)
       return { ok: true }
     }
     if (m === 'PUT') {
-      const role = body.role === 'owner' || body.role === 'member' ? body.role : null
-      if (!role) throw new HttpError(400, 'Role must be owner or member.')
+      const role = isRole(body.role) ? body.role : null
+      if (!role) throw new HttpError(400, 'Role must be owner, admin, supervisor or agent.')
       if (role === target.role) return { ok: true }
-      if (role === 'member' && (await ownersLeft(x.workspace._id, target.userId)) === 0) throw new HttpError(400, 'A workspace needs at least one owner.')
+      if (!canSetRole(x.role, target.role, role)) throw new HttpError(403, 'Only owners can make someone an owner or change an owner’s role.')
+      if (target.role === 'owner' && (await ownersLeft(x.workspace._id, target.userId)) === 0) throw new HttpError(400, 'A workspace needs at least one owner.')
       await memberships().updateOne({ workspaceId: x.workspace._id, userId: target.userId }, { $set: { role } })
+      trace('member.role_changed', { from: target.role, to: role })
       await mail.roleChanged(person.email, x.workspace.name, role)
       return { ok: true }
     }
@@ -438,14 +449,14 @@ async function verify(res: http.ServerResponse, token: unknown) {
       // A finished account without a workspace (e.g. removed earlier) just joins.
       if (await memberships().findOne({ userId: existing._id })) throw new HttpError(409, 'You’re already in a workspace.')
       await consumeLink(l)
-      await memberships().insertOne({ workspaceId: w._id, userId: existing._id, role: 'member', createdAt: now })
+      await memberships().insertOne({ workspaceId: w._id, userId: existing._id, role: l.role ?? 'agent', createdAt: now })
       await startSession(res, existing._id)
       const inviter = l.invitedBy ? await users().findOne({ _id: l.invitedBy }) : null
       if (inviter) await mail.memberJoined(inviter.email, existing.name, w.name)
       return { purpose: l.purpose, me: await me((await sessionFor(existing._id))!) }
     }
     await consumeLink(l)
-    const pending = { pendingWorkspaceId: w._id, ...(l.invitedBy ? { pendingInvitedBy: l.invitedBy } : {}), emailVerifiedAt: now }
+    const pending = { pendingWorkspaceId: w._id, pendingRole: l.role ?? 'agent', ...(l.invitedBy ? { pendingInvitedBy: l.invitedBy } : {}), emailVerifiedAt: now }
     const id = existing?._id ?? randomUUID()
     if (existing) await users().updateOne({ _id: id }, { $set: pending })
     else await users().insertOne({ _id: id, email: l.email, name: '', createdAt: now, ...pending })
@@ -473,11 +484,11 @@ async function finishSetup(x: Session, body: Obj) {
   const workspaceName = joining ? null : text(body.workspaceName, 'a workspace name')
   await users().updateOne(
     { _id: x.user._id },
-    { $set: { name, passwordHash: await hashPassword(pw) }, $unset: { pendingWorkspaceId: '', pendingInvitedBy: '' } },
+    { $set: { name, passwordHash: await hashPassword(pw) }, $unset: { pendingWorkspaceId: '', pendingInvitedBy: '', pendingRole: '' } },
   )
   if (joining) {
     if (!(await memberships().findOne({ userId: x.user._id })))
-      await memberships().insertOne({ workspaceId: joining._id, userId: x.user._id, role: 'member', createdAt: new Date() })
+      await memberships().insertOne({ workspaceId: joining._id, userId: x.user._id, role: x.user.pendingRole ?? 'agent', createdAt: new Date() })
     const inviter = x.user.pendingInvitedBy ? await users().findOne({ _id: x.user.pendingInvitedBy }) : null
     if (inviter) await mail.memberJoined(inviter.email, name, joining.name)
   } else await createWorkspace(x.user._id, workspaceName!)

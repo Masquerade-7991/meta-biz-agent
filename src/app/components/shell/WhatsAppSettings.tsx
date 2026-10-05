@@ -13,6 +13,7 @@ import { SettingsSection } from './SettingsSection'
 import { NumberHealthCard } from '@/app/whatsapp/NumberHealthCard'
 import { WebhookStatusCard } from '@/app/whatsapp/WebhookStatusCard'
 import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
+import { can } from '@/app/lib/permissions'
 
 const SOURCE: Record<WaAccount['source'], string> = { env: 'Set up by Helo.ai', signup: 'Connected with Embedded Signup', coexistence: 'WhatsApp Business app number' }
 
@@ -69,7 +70,7 @@ function AccountCard({ a, isOwner, onChange, onRemove }: { a: WaAccount; isOwner
 /** Settings → WhatsApp: the numbers this workspace works with, and connecting more. */
 export function WhatsAppSettings() {
   const { me } = useAuth()
-  const isOwner = me?.role === 'owner'
+  const isOwner = can(me?.role, 'whatsapp.manage')
   const [rows, setRows] = useState<WaAccount[] | null>(null)
   const [config, setConfig] = useState<SignupConfig | null>(null)
   const [error, setError] = useState<string | null>(null)

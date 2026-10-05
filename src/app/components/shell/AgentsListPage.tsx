@@ -49,6 +49,8 @@ import { listStoredAgents, ms, putStoredAgent, putStoredAgents } from '@/app/api
 import { storageKey } from '@/app/api/dummy'
 import { useWizard } from '@/app/wizard/WizardContext'
 import type { AgentInstanceSummary, AgentRolloutStatus } from '@/app/wizard/types'
+import { can } from '@/app/lib/permissions'
+import { useAuth } from '@/app/auth/AuthContext'
 
 const CREATED_AGENTS_KEY = storageKey('meta-agent-wizard-created-agents-v1')
 
@@ -190,6 +192,8 @@ function statusBadge(status: AgentRolloutStatus) {
   }
 }
 
+const READ_ONLY = 'Only owners and admins change AI agents. You can open them and see their activity.'
+
 export function AgentsListPage({
   onOpenBuilder,
   onAgentCreated,
@@ -200,7 +204,11 @@ export function AgentsListPage({
   onOpenActivity: () => void
 }) {
   const { state, patch, setSection, resetWizard } = useWizard()
-  const [modalOpen, setModalOpen] = useState(false)
+  const { me } = useAuth()
+  // Supervisors and agents can look at the AI agents and their activity; changing them is for admins.
+  const canEdit = can(me?.role, 'agent.edit')
+  const [modalOpen, setModalOpenRaw] = useState(false)
+  const setModalOpen = (open: boolean) => (open && !canEdit ? toast(READ_ONLY) : setModalOpenRaw(open))
   const [createdAgents, setCreatedAgents] = useState<AgentInstanceSummary[]>(loadCreatedAgents)
 
   // Meta is the source of truth for which agents exist. If it can't be reached, the list falls back
@@ -350,6 +358,7 @@ export function AgentsListPage({
   }
 
   function handleAction(agent: AgentRow, action: string) {
+    if (!canEdit && !['open', 'activity', 'compiled'].includes(action)) return void toast(READ_ONLY)
     if (action === 'open') {
       openAgentConfiguration(agent)
       return

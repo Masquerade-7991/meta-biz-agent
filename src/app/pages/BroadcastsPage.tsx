@@ -40,6 +40,7 @@ import { usePolling } from '@/app/lib/usePolling'
 import { customerLabel } from '@/app/lib/customer'
 import { FAILURE_HELP, FAILURE_LABEL } from '@/app/broadcasts/sendErrors'
 import { formatMoney } from '@/app/lib/money'
+import { can } from '@/app/lib/permissions'
 
 const LIVE_BROADCASTS = ['broadcast.']
 
@@ -259,6 +260,7 @@ function NewBroadcastDialog({ templates, segments, fields, onClose, onCreated }:
 }
 
 function BroadcastDetailDialog({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+  const { me } = useAuth()
   const [b, setB] = useState<BroadcastDetail | null>(null)
   const [confirm, setConfirm] = useState(false)
   usePolling(() => void getBroadcast(id).then(setB, (err) => toast.error(errorDetail(err))), 4000, [id], true, LIVE_BROADCASTS)
@@ -348,7 +350,7 @@ function BroadcastDetailDialog({ id, onClose, onChanged }: { id: string; onClose
               </Table>
             </div>
             <DialogFooter>
-              {(b.status === 'scheduled' || b.status === 'sending') && (
+              {(b.status === 'scheduled' || b.status === 'sending') && can(me?.role, 'broadcasts.send') && (
                 <Button variant="outline" onClick={() => setConfirm(true)}>
                   Cancel broadcast
                 </Button>
@@ -550,15 +552,23 @@ export function BroadcastsPage() {
           <p className="mt-1 text-muted-foreground">Send approved WhatsApp templates to groups of contacts, now or later.</p>
         </div>
         {tab === 'broadcasts' ? (
-          <Button onClick={() => setCreating(true)} disabled={!templates}>
-            <Plus className="size-4" />
-            New broadcast
-          </Button>
+          can(me?.role, 'broadcasts.send') ? (
+            <Button onClick={() => setCreating(true)} disabled={!templates}>
+              <Plus className="size-4" />
+              New broadcast
+            </Button>
+          ) : (
+            <p className="text-muted-foreground" style={TEXT_SM}>
+              Supervisors, admins and owners send broadcasts.
+            </p>
+          )
         ) : (
-          <Button onClick={() => setCreatingTpl(true)}>
-            <Plus className="size-4" />
-            New template
-          </Button>
+          can(me?.role, 'templates.create') && (
+            <Button onClick={() => setCreatingTpl(true)}>
+              <Plus className="size-4" />
+              New template
+            </Button>
+          )
         )}
       </div>
       {error && (
@@ -657,7 +667,7 @@ export function BroadcastsPage() {
                     </div>
                     <span className="flex items-center gap-1">
                       <Badge className={TPL_STATUS[t.status] ?? 'bg-muted text-foreground'}>{t.status.toLowerCase()}</Badge>
-                      {me?.role === 'owner' && (
+                      {can(me?.role, 'templates.delete') && (
                         <Button variant="ghost" size="sm" className="h-7 px-1.5" aria-label={`Delete ${t.name}`} onClick={() => setRemoving(t)}>
                           <Trash2 className="size-3.5" />
                         </Button>

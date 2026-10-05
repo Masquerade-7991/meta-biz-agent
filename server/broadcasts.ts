@@ -16,6 +16,7 @@ import { estimate } from './billing.ts'
 import { conversations, ensureConversation, sendTemplateMessage, type Actor } from './inbox.ts'
 import { contactNames, segmentQuery, type SegmentFilter } from './contacts.ts'
 import { renderTemplate, slotsOf, templatePayload, type Template } from '../src/app/broadcasts/templates.ts'
+import { can } from '../src/app/lib/permissions.ts'
 
 const broadcasts = () => col('broadcasts')
 const recipients = () => col('broadcast_recipients')
@@ -319,10 +320,13 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   const m = req.method ?? 'GET'
   let seg: RegExpMatchArray | null
   if (path === '/api/broadcasts/templates' && m === 'GET') return listTemplates()
-  if (path === '/api/broadcasts/templates' && m === 'POST') return createTemplate(obj(await readJson(req)))
+  if (path === '/api/broadcasts/templates' && m === 'POST') {
+    if (!can(me.role, 'templates.create')) throw new HttpError(403, 'Supervisors, admins and owners create templates.')
+    return createTemplate(obj(await readJson(req)))
+  }
   if ((seg = path.match(/^\/api\/broadcasts\/templates\/([a-z0-9_]+)$/)) && m === 'DELETE') {
     needMetaAssets()
-    if (me.role !== 'owner') throw new HttpError(403, 'Only owners can delete templates.')
+    if (!can(me.role, 'templates.delete')) throw new HttpError(403, 'Only owners and admins can delete templates.')
     await metaJson('graph', 'DELETE', `/WABA_ID/message_templates?name=${seg[1]}`)
     return { ok: true }
   }
@@ -347,6 +351,8 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   }
   if (path === '/api/broadcasts/preflight' && m === 'POST') return preflight(obj(await readJson(req)))
   if (path === '/api/broadcasts' && m === 'GET') return list()
+  // Sending to many people is for supervisors and up; agents can still see what went out.
+  if ((path === '/api/broadcasts' || path.endsWith('/cancel')) && m === 'POST' && !can(me.role, 'broadcasts.send')) throw new HttpError(403, 'Supervisors, admins and owners send broadcasts.')
   if (path === '/api/broadcasts' && m === 'POST') return createBroadcast(obj(await readJson(req)), me)
   if ((seg = path.match(/^\/api\/broadcasts\/([a-f0-9]{24})(\/cancel)?$/))) {
     if (seg[2] && m === 'POST') {

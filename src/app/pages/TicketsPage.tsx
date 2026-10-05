@@ -13,6 +13,8 @@ import { useMembers } from '@/app/auth/useMembers'
 import { usePolling } from '@/app/lib/usePolling'
 import { PillTabs, SearchInput } from '@/app/components/Filters'
 import { customerLabel } from '@/app/lib/customer'
+import { can } from '@/app/lib/permissions'
+import { useAuth } from '@/app/auth/AuthContext'
 
 const LIVE_TICKETS = ['ticket.']
 
@@ -45,6 +47,10 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
   const [error, setError] = useState<string | null>(null)
   const [picked, setPicked] = useState<Set<number>>(new Set())
   const members = useMembers()
+  const { me } = useAuth()
+  const reassign = can(me?.role, 'tickets.reassign')
+  // Agents hand tickets only to themselves or back to nobody.
+  const assignable = reassign ? members : members.filter((m) => m.userId === me?.user.id)
   const [busy, setBusy] = useState(false)
 
   const refresh = useCallback(() => {
@@ -124,7 +130,7 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">Unassigned</SelectItem>
-              {members.map((m) => (
+              {assignable.map((m) => (
                 <SelectItem key={m.userId} value={m.userId}>
                   {m.name}
                 </SelectItem>

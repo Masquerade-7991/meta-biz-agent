@@ -13,12 +13,18 @@ import { FormError } from '@/app/auth/AuthLayout'
 import { deleteCanned, listCanned, saveCanned, type CannedResponse } from '@/app/api/inbox'
 import { errorDetail } from '@/app/api/meta'
 import { SECTION_TITLE, TEXT_SM_OPEN } from '@/app/lib/text'
+import { can } from '@/app/lib/permissions'
+import { useAuth } from '@/app/auth/AuthContext'
+import { cn } from '@/app/lib/utils'
 
 type Draft = Omit<CannedResponse, 'id'>
 const EMPTY: Draft = { title: '', shortcut: '', body: '', shared: true }
 
 function Editor({ initial, onClose, onSaved }: { initial: CannedResponse | null; onClose: () => void; onSaved: (c: CannedResponse) => void }) {
-  const [d, setD] = useState<Draft>(initial ? { title: initial.title, shortcut: initial.shortcut, body: initial.body, shared: initial.shared } : EMPTY)
+  const { me } = useAuth()
+  // Shared responses are the team's: owners and admins share them; others keep their own.
+  const admin = can(me?.role, 'settings.manage')
+  const [d, setD] = useState<Draft>(initial ? { title: initial.title, shortcut: initial.shortcut, body: initial.body, shared: initial.shared } : { ...EMPTY, shared: admin })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const set = (patch: Partial<Draft>) => setD((p) => ({ ...p, ...patch }))
@@ -68,10 +74,10 @@ function Editor({ initial, onClose, onSaved }: { initial: CannedResponse | null;
             <span>
               Share with the whole team
               <span className="block text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                Off: only you see it.
+                {admin ? 'Off: only you see it.' : 'Owners and admins share responses with the team. Yours are only for you.'}
               </span>
             </span>
-            <Switch checked={d.shared} onCheckedChange={(v) => set({ shared: v })} />
+            <Switch checked={d.shared} onCheckedChange={(v) => set({ shared: v })} disabled={!admin} />
           </label>
           {error && <FormError>{error}</FormError>}
           <DialogFooter>
@@ -91,6 +97,8 @@ function Editor({ initial, onClose, onSaved }: { initial: CannedResponse | null;
 
 /** Settings → Canned responses: saved replies the team inserts with a /shortcut. */
 export function CannedResponsesSettings() {
+  const { me } = useAuth()
+  const admin = can(me?.role, 'settings.manage')
   const [rows, setRows] = useState<CannedResponse[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<CannedResponse | 'new' | null>(null)
@@ -141,7 +149,7 @@ export function CannedResponsesSettings() {
                   {c.body}
                 </p>
               </div>
-              <div className="flex shrink-0 gap-1">
+              <div className={cn('flex shrink-0 gap-1', c.shared && !admin && 'hidden')}>
                 <Button variant="ghost" size="sm" aria-label={`Edit ${c.shortcut}`} onClick={() => setEditing(c)}>
                   <Pencil className="size-4" />
                 </Button>
