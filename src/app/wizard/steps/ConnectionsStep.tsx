@@ -1463,9 +1463,9 @@ function ActionEditorDialog({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => addValue('query')}>Query value</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => addValue('query')}>Web address value (?name=…)</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => addValue('header')}>Header value</DropdownMenuItem>
-                    {bodyAllowed && <DropdownMenuItem onClick={() => addValue('body')}>Body value</DropdownMenuItem>}
+                    {bodyAllowed && <DropdownMenuItem onClick={() => addValue('body')}>Request body value (JSON)</DropdownMenuItem>}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -1549,6 +1549,18 @@ function ValueRow({
           </button>
         )}
       </div>
+
+      {/* Where the value travels: easy to mix up (a "query value" is not a GraphQL query). */}
+      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        Sent{' '}
+        {value.location === 'path'
+          ? 'in the path'
+          : value.location === 'query'
+            ? `in the web address: ?${value.name || 'name'}=…`
+            : value.location === 'header'
+              ? `as a header: ${value.name || 'name'}: …`
+              : `in the request body: { "${value.name || 'name'}": … }`}
+      </p>
 
       <label className="flex items-center gap-1.5" style={{ fontSize: 'var(--text-xs)' }}>
         <input type="checkbox" checked={value.required} disabled={isPath} onChange={(e) => onChange({ required: e.target.checked })} />
