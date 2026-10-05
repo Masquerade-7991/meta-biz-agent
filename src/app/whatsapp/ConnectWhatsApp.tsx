@@ -8,6 +8,7 @@ import { isDummyMode } from '@/app/api/dummy'
 import { errorDetail } from '@/app/api/meta'
 import { connectAccount, PAYMENT_URL, retryAccount, setBilling, STEP_LABEL, type Billing, type Flow, type SignupConfig, type StepName, type WaAccount } from '@/app/api/whatsapp'
 import { startSignup } from './embeddedSignup'
+import { SignupWindow } from './SignupWindow'
 import { TEXT_SM, TEXT_SM_OPEN, TEXT_XS } from '@/app/lib/text'
 import { cn } from '@/app/lib/utils'
 
@@ -80,41 +81,6 @@ export function AccountSteps({ account, canEdit, onChange }: { account: WaAccoun
   )
 }
 
-/** Dummy mode: a stand-in for Meta's popup, so the journey can be shown without Meta keys. */
-function SimulatedSignup({ flow, onDone, onClose }: { flow: Flow; onDone: (ids: { wabaId: string; phoneNumberId: string; businessId: string }) => void; onClose: () => void }) {
-  const screens =
-    flow === 'coexistence'
-      ? ['Continue as Asha Rao', 'Choose your business: Asha Foods', 'Scan the QR code in your WhatsApp Business app', 'Share your chat history and contacts']
-      : ['Continue as Asha Rao', 'Choose your business: Asha Foods', 'Create a WhatsApp account and display name', 'Add +91 90000 12345 and enter the SMS code']
-  const [i, setI] = useState(0)
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Facebook (demo)</DialogTitle>
-          <DialogDescription>A simulated Meta signup. With Meta keys on the server, Facebook&rsquo;s real window opens here.</DialogDescription>
-        </DialogHeader>
-        <ol className="space-y-2" style={TEXT_SM}>
-          {screens.map((s, j) => (
-            <li key={s} className={cn('flex items-center gap-2', j > i && 'text-muted-foreground')}>
-              {j < i ? <Check className="size-4 text-success" /> : <span className="flex size-4 items-center justify-center rounded-full border border-border" style={{ fontSize: 10 }}>{j + 1}</span>}
-              {s}
-            </li>
-          ))}
-        </ol>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={() => (i < screens.length - 1 ? setI(i + 1) : onDone({ wabaId: `99${Date.now()}`.slice(0, 15), phoneNumberId: `98${Date.now()}`.slice(0, 15), businessId: '990000000000003' }))}>
-            {i < screens.length - 1 ? 'Next' : 'Finish'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 /**
  * Connects a WhatsApp Business number with Meta's Embedded Signup: a new number, or one already on
  * the WhatsApp Business app (it keeps working). `hero` is Home's big first step; `compact` sits in Settings.
@@ -125,7 +91,8 @@ export function ConnectWhatsApp({ config, isOwner, workspaceName, variant, onCon
   const billing: Billing = picked ?? (config?.partnerCredit || isDummyMode() ? 'partner_credit' : 'own')
   const [phase, setPhase] = useState<'idle' | 'meta' | 'finishing'>('idle')
   const [flow, setFlow] = useState<Flow>('new')
-  const [simulating, setSimulating] = useState<Flow | null>(null)
+  // Meta's window can't open (dummy mode, or Meta settings not on the server yet): show the preview.
+  const [preview, setPreview] = useState<Flow | null>(null)
   const [result, setResult] = useState<{ account: WaAccount; pin?: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -144,8 +111,7 @@ export function ConnectWhatsApp({ config, isOwner, workspaceName, variant, onCon
   async function start(f: Flow) {
     setError(null)
     setFlow(f)
-    if (isDummyMode()) return setSimulating(f)
-    if (!config?.ready || !config.appId || !config.configId) return
+    if (isDummyMode() || !config?.ready || !config.appId || !config.configId) return setPreview(f)
     setPhase('meta')
     try {
       const r = await startSignup({ appId: config.appId, configId: config.configId, sdkVersion: config.sdkVersion }, f)
@@ -162,25 +128,14 @@ export function ConnectWhatsApp({ config, isOwner, workspaceName, variant, onCon
         Ask an owner of {workspaceName} to connect a WhatsApp number. Only owners can connect accounts.
       </p>
     )
-  const ready = isDummyMode() || !!config?.ready
   const hero = variant === 'hero'
   return (
     <div className="space-y-5">
-      {!ready ? (
-        <div className="space-y-2 rounded-md bg-muted px-3 py-2.5" style={TEXT_SM_OPEN}>
-          <p>Connecting WhatsApp from the console isn&rsquo;t switched on for this server yet. Helo.ai can connect your number for you meanwhile.</p>
-          <Button size="sm" variant="outline" asChild>
-            <a href="https://helo.ai/contact-us" target="_blank" rel="noreferrer">
-              Talk to Helo.ai <ArrowUpRight className="size-3.5" />
-            </a>
-          </Button>
-        </div>
-      ) : (
-        <>
+      <>
           <div className={cn('grid gap-3', hero && 'sm:grid-cols-2')}>
             {(
               [
-                ['new', 'Connect a new number', 'A number that isn’t on WhatsApp yet. You’ll verify it by SMS or call.'],
+                ['new', 'Connect WhatsApp', 'A number that isn’t on WhatsApp yet. You’ll verify it by SMS or call.'],
                 ['coexistence', 'I use the WhatsApp Business app', 'Keep using the app on your phone. Your last 6 months of chats and your contacts come along.'],
               ] as const
             ).map(([f, label, hint]) => (
@@ -239,21 +194,22 @@ export function ConnectWhatsApp({ config, isOwner, workspaceName, variant, onCon
               </p>
             </div>
           )}
-        </>
-      )}
+      </>
       {error && (
         <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-destructive" style={TEXT_SM}>
           {error}
         </p>
       )}
-      {simulating && (
-        <SimulatedSignup
-          flow={simulating}
-          onClose={() => setSimulating(null)}
-          onDone={(ids) => {
-            const f = simulating
-            setSimulating(null)
-            void finish({ ...ids, code: 'demo' }, f)
+      {preview && (
+        <SignupWindow
+          flow={preview}
+          mode={isDummyMode() ? 'demo' : 'preview'}
+          missing={config?.missing}
+          onClose={() => setPreview(null)}
+          onDone={() => {
+            const f = preview
+            setPreview(null)
+            void finish({ wabaId: `99${Date.now()}`.slice(0, 15), phoneNumberId: `98${Date.now()}`.slice(0, 15), businessId: '990000000000003', code: 'demo' }, f)
           }}
         />
       )}

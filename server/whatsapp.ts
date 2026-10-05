@@ -19,10 +19,12 @@ import { enqueue } from './jobs.ts'
 import { can } from '../src/app/lib/permissions.ts'
 
 type Step = keyof Account['steps']
+// The app is the console's own Meta app; APP_ID / APP_SECRET (also used to check webhook
+// signatures) count when the META_ names aren't set.
 const cfg = () => ({
-  appId: env('META_APP_ID'),
+  appId: env('META_APP_ID') || env('APP_ID'),
   configId: env('META_ES_CONFIG_ID'),
-  appSecret: env('META_APP_SECRET'),
+  appSecret: env('META_APP_SECRET') || env('APP_SECRET'),
   creditLineId: env('WA_CREDIT_LINE_ID'),
   creditCurrency: env('WA_CREDIT_CURRENCY') || 'INR',
   sdkVersion: env('META_SDK_VERSION') || 'v23.0',
