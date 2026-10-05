@@ -105,6 +105,8 @@ const INDEXES: Record<string, IndexDescription[]> = {
   // Meta's own billing figures (billing.ts): one row per day, country, category and pricing type.
   spend_daily: [{ key: { workspaceId: 1, day: 1, country: 1, category: 1, type: 1 }, unique: true }],
   billing: [{ key: { workspaceId: 1 }, unique: true }],
+  // AI tokens this console spends, per workspace, day, feature and model (aiUsage.ts).
+  ai_usage: [{ key: { workspaceId: 1, day: 1, feature: 1, model: 1 }, unique: true }],
   // Latest quality and limits per WhatsApp number (health.ts).
   number_health: [{ key: { workspaceId: 1, phoneNumberId: 1 }, unique: true }],
   // Every number of the workspace's WhatsApp accounts, as Meta last reported it (numbers.ts).

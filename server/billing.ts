@@ -12,6 +12,7 @@ import { trace } from './trace.ts'
 import { countryOf } from './dialCodes.ts'
 import type { Actor } from './inbox.ts'
 import { can } from '../src/app/lib/permissions.ts'
+import { aiUsageMonth } from './aiUsage.ts'
 
 const DAY = 86_400_000
 const spend = () => col('spend_daily')
@@ -144,6 +145,7 @@ async function overview() {
     lastSyncError: s?.lastSyncError ?? null,
     month: await monthToDate(),
     days: days.map((d) => ({ day: String(d._id), cost: d.cost, volume: d.volume })),
+    ai: await aiUsageMonth(),
   }
 }
 

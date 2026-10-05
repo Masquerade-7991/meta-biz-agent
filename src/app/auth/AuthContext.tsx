@@ -12,15 +12,23 @@ interface AuthValue {
   setMe: (me: Me | null) => void
   refresh: () => Promise<void>
   logout: () => Promise<void>
+  /** The API server didn't answer (e.g. only the front-end is deployed): login can't work. */
+  serverDown: boolean
 }
 const AuthContext = createContext<AuthValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null | undefined>(isDummyMode() ? DEMO : undefined)
+  const [serverDown, setServerDown] = useState(false)
 
   const refresh = useCallback(async () => {
     if (isDummyMode()) return
-    setMe(await authApi.me().catch(() => null))
+    // A host without the API (a front-end-only deploy) answers /api with a 404 page, not JSON.
+    const up = await fetch('/api/health')
+      .then((r) => r.ok && (r.headers.get('content-type') ?? '').includes('json'))
+      .catch(() => false)
+    setServerDown(!up)
+    setMe(up ? await authApi.me().catch(() => null) : null)
   }, [])
 
   useEffect(() => {
@@ -35,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMe(null)
   }, [])
 
-  const value = useMemo(() => ({ me, setMe, refresh, logout }), [me, refresh, logout])
+  const value = useMemo(() => ({ me, setMe, refresh, logout, serverDown }), [me, refresh, logout, serverDown])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

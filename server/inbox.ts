@@ -26,6 +26,7 @@ import { SAMPLE_CHATS } from '../src/app/inbox/sampleData.ts'
 import { ensureTicket, needCanAssign, needInScope, onAgentReply, onCustomerMessage, scopeFor } from './tickets.ts'
 import { can, type Role } from '../src/app/lib/permissions.ts'
 import { setBlocked } from './numbers.ts'
+import { recordAiUsage } from './aiUsage.ts'
 
 export interface Actor {
   _id: string
@@ -581,6 +582,7 @@ async function summarize(phone: string) {
     signal: AbortSignal.timeout(30_000),
   }).catch(() => null)
   const json = r ? obj(await r.json().catch(() => ({}))) : {}
+  recordAiUsage('chat_summary', 'claude-haiku-4-5-20251001', json.usage)
   const out = str(obj(arr(json.content)[0]).text)
   if (!r?.ok || !out) throw new HttpError(502, 'Couldn’t write a summary right now. Try again.')
   return out

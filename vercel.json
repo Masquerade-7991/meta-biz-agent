@@ -1,8 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
-    { "source": "/api/shopify-mcp", "destination": "/api/shopify-mcp" },
-    { "source": "/api/:path*", "destination": "https://helo-wizard-api.onrender.com/api/:path*" },
-    { "source": "/((?!assets/).*)", "destination": "/index.html" }
-  ]
+  "rewrites": [{ "source": "/((?!api/|assets/).*)", "destination": "/index.html" }]
 }

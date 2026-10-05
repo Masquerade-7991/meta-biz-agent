@@ -583,6 +583,7 @@ export async function dummyBilling<T>(method: string, path: string, body: unknow
     lastSyncError: null,
     month: { total, byCategory: [{ category: 'MARKETING', cost: total * 0.78, volume: 0 }, { category: 'UTILITY', cost: total * 0.17, volume: 0 }, { category: 'AUTHENTICATION', cost: total * 0.05, volume: 0 }] },
     days,
+    ai: { console: [{ feature: 'chat_summary', model: 'claude-haiku-4-5-20251001', input: 48210, output: 6920, calls: 61 }], agentConversations: 1180 },
   } as T
 }
 

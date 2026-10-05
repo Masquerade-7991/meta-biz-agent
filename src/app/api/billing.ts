@@ -9,6 +9,8 @@ export interface Billing {
   lastSyncError: string | null
   month: { total: number; byCategory: { category: string; cost: number; volume: number }[] }
   days: { day: string; cost: number; volume: number }[]
+  /** This month: AI tokens the console spent (by feature), and the Meta AI agent's conversations. */
+  ai: { console: { feature: string; model: string; input: number; output: number; calls: number }[]; agentConversations: number | null }
 }
 
 const call = jsonClient(dummyBilling)

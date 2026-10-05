@@ -4,14 +4,54 @@ import { Button } from '@/app/components/ui/button'
 import { useAuth } from './AuthContext'
 import { authApi } from './api'
 import { errorDetail } from '@/app/api/meta'
+import { setDummyMode } from '@/app/api/dummy'
 import { AuthHeading, AuthLayout, Field, FormError, TextButton } from './AuthLayout'
 
 type Mode = 'login' | 'signup' | 'forgot'
 
 /** Signed-out screens: log in, sign up, forgot password. */
+/** Shown instead of the login form when the API server can't be reached, so nobody gets a raw
+ *  "page could not be found" from the host. The demo works with no server at all. */
+function ServerDown() {
+  const { refresh } = useAuth()
+  const [checking, setChecking] = useState(false)
+  return (
+    <div className="space-y-4">
+      <h1>Helo.ai can&rsquo;t reach its server</h1>
+      <p className="text-muted-foreground">
+        This site is up, but the server that handles logins, chats and WhatsApp isn&rsquo;t answering. If you run Helo.ai, deploy the server (see render.yaml) and point this site at it.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          disabled={checking}
+          onClick={() => {
+            setChecking(true)
+            void refresh().finally(() => setChecking(false))
+          }}
+        >
+          {checking && <Loader2 className="size-4 animate-spin" />}
+          Try again
+        </Button>
+        <Button onClick={() => setDummyMode(true)}>Explore the demo</Button>
+      </div>
+      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        The demo runs in your browser with sample data. Nothing reaches WhatsApp.
+      </p>
+    </div>
+  )
+}
+
 export function AuthScreen() {
+  const { serverDown } = useAuth()
   const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
+  if (serverDown)
+    return (
+      <AuthLayout>
+        <ServerDown />
+      </AuthLayout>
+    )
   return (
     <AuthLayout>
       {mode === 'login' && <Login email={email} setEmail={setEmail} go={setMode} />}

@@ -13,6 +13,7 @@ import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { SettingsSection } from './SettingsSection'
 import { can } from '@/app/lib/permissions'
 
+const FEATURE: Record<string, string> = { chat_summary: 'Chat summaries' }
 const CATEGORY: Record<string, string> = { MARKETING: 'Marketing', UTILITY: 'Utility', AUTHENTICATION: 'Login codes', SERVICE: 'Service replies' }
 const ago = (iso: string) => {
   const m = Math.round((Date.now() - Date.parse(iso)) / 60_000)
@@ -112,6 +113,32 @@ export function BillingSettingsTab() {
             <SpendBars days={b.days} currency={b.currency} />
           </div>
         </div>
+      </SettingsSection>
+      <SettingsSection title="AI usage" description="This month so far. Meta bills the AI agent’s own conversations; Helo.ai features like chat summaries use Claude and are counted in tokens here.">
+        <dl className="space-y-3" style={TEXT_SM}>
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted-foreground">AI agent conversations (Meta)</dt>
+            <dd>{b.ai.agentConversations === null ? 'Not collected yet' : b.ai.agentConversations.toLocaleString()}</dd>
+          </div>
+          {b.ai.console.length === 0 ? (
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Helo.ai AI features</dt>
+              <dd>No use yet</dd>
+            </div>
+          ) : (
+            b.ai.console.map((u) => (
+              <div key={u.feature + u.model} className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">{FEATURE[u.feature] ?? u.feature}</dt>
+                <dd className="text-right">
+                  {(u.input + u.output).toLocaleString()} tokens
+                  <span className="block text-muted-foreground" style={TEXT_XS}>
+                    {u.calls} uses &middot; {u.input.toLocaleString()} in, {u.output.toLocaleString()} out
+                  </span>
+                </dd>
+              </div>
+            ))
+          )}
+        </dl>
       </SettingsSection>
       <SettingsSection title="Monthly budget" description="Owners get an email and a notification at 80% and 100%. Messages keep sending; the budget only alerts you.">
         <form
