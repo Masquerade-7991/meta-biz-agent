@@ -3,6 +3,7 @@
 // Field names and paths follow developers.facebook.com/documentation/meta-business-agent/reference.
 import type {
   ActionValue,
+  ApiKeyEntry,
   Connection,
   ConnectionAction,
   ConnectionStatus,
@@ -497,6 +498,21 @@ interface MetaConnector {
   connector_protocol?: 'HTTP' | 'MCP'
   connection_status?: { status: MetaConnStatus; error_message?: string }
   mcp_tool_sync?: { status: 'PENDING' | 'READY' | 'ERROR'; tool_count?: number } | null
+  auth_config?: { api_key?: Partial<Record<'headers' | 'query_params', { field_name: string; value: string; prefix?: string }[]>> } | null
+}
+/** The keys as Meta holds them: where each goes and its last 4 characters. The value stays the one
+ *  this browser knows (Meta never returns it), matched by field name and place. */
+function metaApiKeys(r: MetaConnector, local: ApiKeyEntry[] = []): ApiKeyEntry[] | undefined {
+  const k = r.auth_config?.api_key
+  if (!k) return undefined
+  const rows = [
+    ...(k.headers ?? []).map((x) => ({ x, location: 'header' as const })),
+    ...(k.query_params ?? []).map((x) => ({ x, location: 'query' as const })),
+  ]
+  return rows.map(({ x, location }, i) => {
+    const mine = local.find((l) => l.fieldName === x.field_name && l.location === location)
+    return { id: mine?.id ?? `key-${r.id}-${i}`, value: mine?.value ?? '', location, fieldName: x.field_name, prefix: x.prefix ?? '', hint: x.value.replace(/^\*+/, '').slice(-4) }
+  })
 }
 const CONN_STATUS: Record<MetaConnStatus, ConnectionStatus> = {
   ACTIVE: 'working',
@@ -1028,6 +1044,12 @@ export async function hydrateFromMeta(state: WizardState): Promise<{ patch: Patc
       createdAt: now,
       ...(connectorFields(r) as Omit<Connection, 'id' | 'authMethod' | 'createdAt'>),
     }))
+    // Keys: Meta's placement and masked tail win; the value stays whatever this browser knew.
+    for (const c of conns) {
+      const r = connectors.find((x) => x.id === c.metaId)
+      const keys = r && metaApiKeys(r, c.apiKeys)
+      if (keys) c.apiKeys = keys
+    }
     const toolLists = await Promise.all(
       conns.filter((c) => c.metaId).map(async (c) => ({ c, tools: await get(`tools of ${c.name}`, () => listTools(c.metaId!)) })),
     )

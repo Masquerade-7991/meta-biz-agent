@@ -161,15 +161,19 @@ interface ApiKeyDraftRow {
   location: ApiKeyLocation
   fieldName: string
   prefix: string
+  /** Last characters of the saved key, from Meta. */
+  hint?: string
+  /** Whether this browser still has the saved key (needed to re-send it on save). */
+  known: boolean
 }
 
 function newDraftApiKeyRow(): ApiKeyDraftRow {
-  return { id: newId('key'), touched: true, value: '', location: 'header', fieldName: '', prefix: '' }
+  return { id: newId('key'), touched: true, value: '', location: 'header', fieldName: '', prefix: '', known: false }
 }
 
 function draftApiKeyRows(initial?: Connection): ApiKeyDraftRow[] {
   if (initial?.apiKeys && initial.apiKeys.length > 0) {
-    return initial.apiKeys.map((k) => ({ id: k.id, touched: false, value: '', location: k.location, fieldName: k.fieldName, prefix: k.prefix }))
+    return initial.apiKeys.map((k) => ({ id: k.id, touched: false, value: '', location: k.location, fieldName: k.fieldName, prefix: k.prefix, hint: k.hint, known: !!k.value }))
   }
   return [newDraftApiKeyRow()]
 }
@@ -993,7 +997,9 @@ function CustomConnectionDialog({
 
   const urlValid = /^https:\/\//.test(baseUrl.trim())
   const nameValid = META_NAME.test(name.trim())
-  const canSave = nameValid && description.trim().length > 0 && urlValid
+  // Saving re-sends every key, so each one must be typed now or still known to this browser.
+  const keysReady = authMethod !== 'api_key' || apiKeyRows.every((r) => (r.touched ? r.value.trim() : r.known))
+  const canSave = nameValid && description.trim().length > 0 && urlValid && keysReady
 
   function copyChecklist() {
     navigator.clipboard?.writeText(buildDeveloperChecklist()).then(() => {
@@ -1123,6 +1129,8 @@ function CustomConnectionDialog({
                           id={`conn-api-key-${row.id}`}
                           label="Access key"
                           touched={row.touched}
+                          hint={row.hint}
+                          missing={!row.touched && !row.known}
                           value={row.value}
                           onChange={(v) =>
                             setApiKeyRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, value: v } : r)))
@@ -1265,6 +1273,8 @@ function SecretField({
   id,
   label,
   touched,
+  hint,
+  missing,
   value,
   onChange,
   onReplace,
@@ -1272,6 +1282,8 @@ function SecretField({
   id: string
   label: string
   touched: boolean
+  hint?: string
+  missing?: boolean
   value: string
   onChange: (value: string) => void
   onReplace: () => void
@@ -1282,12 +1294,17 @@ function SecretField({
         <Label>{label}</Label>
         <div className="flex items-center justify-between gap-3 rounded-md border border-input px-3 py-2">
           <span className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-            ••••••••
+            {hint ? `Saved key ending ${hint}` : '••••••••'}
           </span>
           <button type="button" onClick={onReplace} className="text-primary" style={{ fontSize: 'var(--text-xs)' }}>
             Replace
           </button>
         </div>
+        <p className={missing ? 'text-destructive' : 'text-muted-foreground'} style={{ fontSize: 'var(--text-xs)' }}>
+          {missing
+            ? 'This browser doesn’t have the saved key, so saving would send it empty. Click Replace and enter the key again.'
+            : 'The key is never shown again. Use Replace to enter a new one.'}
+        </p>
       </div>
     )
   }

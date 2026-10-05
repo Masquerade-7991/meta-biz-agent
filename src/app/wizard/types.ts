@@ -394,6 +394,8 @@ export interface ApiKeyEntry {
   location: ApiKeyLocation
   fieldName: string
   prefix: string
+  /** The last characters of the key Meta holds (Meta returns it masked, never in full). */
+  hint?: string
 }
 
 export interface Connection {
