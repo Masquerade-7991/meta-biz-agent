@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { FlaskConical, Monitor, Moon, Plus, Settings, Sun } from 'lucide-react'
+import { FlaskConical, Monitor, Moon, Plus, Rows3, Rows4, Settings, Sun } from 'lucide-react'
+import { setDensity } from '@/app/lib/density'
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/app/components/ui/command'
 import { OPEN_COMMAND_PALETTE } from '@/app/lib/commandPalette'
 import { navFor, pathFor } from '@/app/nav'
@@ -93,6 +94,21 @@ export function CommandPalette() {
             <CommandItem key={s.tab} value={`settings ${s.label}`} onSelect={() => go(pathFor('settings', s.tab))}>
               <Settings />
               {s.label}
+            </CommandItem>
+          ))}
+        </CommandGroup>
+        <CommandGroup heading="Lists">
+          {(['comfortable', 'compact'] as const).map((d) => (
+            <CommandItem
+              key={d}
+              value={`density ${d} lists`}
+              onSelect={() => {
+                setDensity(d)
+                setOpen(false)
+              }}
+            >
+              {d === 'compact' ? <Rows4 /> : <Rows3 />}
+              {d === 'compact' ? 'Compact lists' : 'Comfortable lists'}
             </CommandItem>
           ))}
         </CommandGroup>

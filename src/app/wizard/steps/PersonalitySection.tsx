@@ -124,10 +124,10 @@ export function PersonalitySection({ saveSlot }: { saveSlot?: HTMLElement | null
       {/* In the tab row when this tab is showing (Identity), otherwise above the form. */}
       {saveSlot === undefined ? (
         <div className="flex items-center justify-end">
-          <SaveButton dirty={section.dirty} saving={section.saveStatus === 'saving'} onSave={section.performSave} />
+          <SaveButton dirty={section.dirty} saving={section.saveStatus === 'saving'} onSave={section.performSave} onDiscard={section.discard} />
         </div>
       ) : (
-        saveSlot && createPortal(<SaveButton dirty={section.dirty} saving={section.saveStatus === 'saving'} onSave={section.performSave} />, saveSlot)
+        saveSlot && createPortal(<SaveButton dirty={section.dirty} saving={section.saveStatus === 'saving'} onSave={section.performSave} onDiscard={section.discard} />, saveSlot)
       )}
 
       {section.loadStatus === 'failed' && (

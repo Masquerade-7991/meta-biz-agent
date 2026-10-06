@@ -22,7 +22,7 @@ export interface SaveOnNextOptions<T> {
  *  controls), and the unsaved-changes navigation guard. Shared by every step section that follows
  *  the Business Profile save model, so each one doesn't hand-roll the same ~60 lines. */
 export function useSaveOnNextSection<K extends SliceKey>(slice: K, options: SaveOnNextOptions<WizardState[K]> = {}) {
-  const { state } = useWizard()
+  const { state, patch } = useWizard()
   const data = state[slice]
   const dataRef = useRef(data)
   useEffect(() => {
@@ -110,6 +110,11 @@ export function useSaveOnNextSection<K extends SliceKey>(slice: K, options: Save
 
   useReportSaveStatus(dirty, saveStatus === 'saving')
 
+  /** Puts the slice back to what was last saved. */
+  function discard() {
+    if (savedSnapshot) patch(slice, savedSnapshot as never)
+  }
+
   return {
     data,
     dataRef,
@@ -122,6 +127,7 @@ export function useSaveOnNextSection<K extends SliceKey>(slice: K, options: Save
     simulateLoadFailure,
     retryLoad,
     performSave,
+    discard,
     unsavedDialogOpen,
     resolveUnsaved,
     // Escape hatches for a step that needs bespoke load behaviour (e.g. "load saved profile"

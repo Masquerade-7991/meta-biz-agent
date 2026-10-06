@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Check, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun, UserPlus } from 'lucide-react'
+import { Check, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Rows4, Settings, Sun, UserPlus } from 'lucide-react'
+import { getDensity, setDensity, type Density } from '@/app/lib/density'
 import { Avatar, AvatarFallback, AvatarImage } from '@/app/components/ui/avatar'
 import avatar from '@/assets/helo-avatar.svg'
 import {
@@ -156,6 +157,11 @@ function AccountMenu({
   onLogout: () => void
 }) {
   const [theme, setThemeState] = useState<ThemeChoice>(getTheme)
+  const [density, setDensityState] = useState<Density>(getDensity)
+  const pickDensity = (d: Density) => {
+    setDensity(d)
+    setDensityState(d)
+  }
   const pick = (t: ThemeChoice) => {
     setTheme(t)
     setThemeState(t)
@@ -208,6 +214,14 @@ function AccountMenu({
           <DropdownMenuItem key={t.id} onSelect={(e) => (e.preventDefault(), pick(t.id))}>
             <t.icon className="size-4" /> {t.label}
             {theme === t.id && <Check className="ml-auto size-4" />}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-meta font-normal text-muted-foreground">Lists</DropdownMenuLabel>
+        {(['comfortable', 'compact'] as const).map((d) => (
+          <DropdownMenuItem key={d} onSelect={(e) => (e.preventDefault(), pickDensity(d))}>
+            {d === 'compact' ? <Rows4 className="size-4" /> : <Rows3 className="size-4" />} {d === 'compact' ? 'Compact' : 'Comfortable'}
+            {density === d && <Check className="ml-auto size-4" />}
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />

@@ -215,3 +215,18 @@
     stroke-dasharray: 30 70;
   }
 }
+
+/* Compact density (src/app/lib/density.ts): tighter rows and 13px text in tables and the chat list. */
+html[data-density='compact'] [data-slot='table-cell'] {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  font-size: 0.8125rem;
+}
+html[data-density='compact'] [data-slot='table-head'] {
+  height: 2rem;
+  font-size: 0.8125rem;
+}
+html[data-density='compact'] [data-density-row] {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}

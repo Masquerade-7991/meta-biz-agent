@@ -309,7 +309,7 @@ export function BusinessProfileStep() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-end">
-        <SaveButton dirty={section.dirty} saving={saveStatus === 'saving'} onSave={performSave} />
+        <SaveButton dirty={section.dirty} saving={saveStatus === 'saving'} onSave={performSave} onDiscard={section.discard} />
       </div>
 
       {loadStatus === 'failed' && (

@@ -109,6 +109,7 @@ function ChatRow({ c, active, onOpen }: { c: ChatSummary; active: boolean; onOpe
     <button
       type="button"
       onClick={onOpen}
+      data-density-row
       className={cn('flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:bg-muted focus-visible:outline-none', active && 'bg-muted')}
     >
       <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground" style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
@@ -467,6 +468,7 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
           <div className="flex items-end gap-2">
             <Textarea
               ref={box}
+              data-composer
               value={draft}
               onPaste={(e) => {
                 const f = e.clipboardData.files[0]
@@ -820,6 +822,38 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
       toast.error(errorDetail(err))
     }
   }
+
+  // Keyboard triage: J / K move between chats, R jumps to the reply box, T takes over or hands back.
+  // Ignored while typing, and with modifier keys (so ⌘K and browser shortcuts still work).
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (e.metaKey || e.ctrlKey || e.altKey || (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) || document.querySelector('[role=dialog]')) return
+      const key = e.key.toLowerCase()
+      if ((key === 'j' || key === 'k') && chats?.length) {
+        const i = chats.findIndex((c) => c.phone === open)
+        const next = chats[Math.max(0, Math.min(chats.length - 1, i < 0 ? 0 : i + (key === 'j' ? 1 : -1)))]
+        if (next && next.phone !== open) void openChat(next.phone)
+        e.preventDefault()
+      } else if (key === 'r' && chat) {
+        document.querySelector<HTMLTextAreaElement>('[data-composer]')?.focus()
+        e.preventDefault()
+      } else if (key === 't' && chat && !isBsuid(chat.conversation.phone)) {
+        e.preventDefault()
+        const take = chat.conversation.owner === 'ai'
+        setChatControl(chat.conversation.phone, take ? 'take' : 'release').then(
+          (d) => {
+            setChat(d)
+            toast.success(take ? 'You took over. The AI agent stays quiet in this chat.' : 'The AI agent is answering again.')
+          },
+          (err) => toast.error(errorDetail(err)),
+        )
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chats, open, chat])
 
   const demo = useMemo(
     () => (

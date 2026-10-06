@@ -41,3 +41,11 @@ export const HELP_GROUPS: HelpGroup[] = [
     ],
   },
 ]
+
+/** Keyboard shortcuts, listed in the help menu. */
+export const SHORTCUTS: { keys: string; what: string }[] = [
+  { keys: '⌘K / Ctrl K', what: 'Search and jump anywhere' },
+  { keys: 'J / K', what: 'Inbox: next or previous chat' },
+  { keys: 'R', what: 'Inbox: reply to the open chat' },
+  { keys: 'T', what: 'Inbox: take over or hand back to AI' },
+]

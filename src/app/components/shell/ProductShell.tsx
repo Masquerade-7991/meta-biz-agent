@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/app/components/ui/dropdown-menu'
-import { HELP_GROUPS } from '@/app/home/helpLinks'
+import { HELP_GROUPS, SHORTCUTS } from '@/app/home/helpLinks'
 import mark from '@/assets/helo-mark.svg'
 import { AppSidebar } from './AppSidebar'
 import { AgentsListPage } from './AgentsListPage'
@@ -189,6 +189,16 @@ function HelpMenu() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-[70vh] w-80 overflow-y-auto">
+        <DropdownMenuLabel className="text-meta font-medium text-muted-foreground">Keyboard shortcuts</DropdownMenuLabel>
+        <ul className="space-y-1 px-2 pb-2">
+          {SHORTCUTS.map((s) => (
+            <li key={s.keys} className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">{s.what}</span>
+              <kbd className="shrink-0 rounded border border-border bg-muted px-1.5 font-mono text-[0.6875rem]">{s.keys}</kbd>
+            </li>
+          ))}
+        </ul>
+        <DropdownMenuSeparator />
         {HELP_GROUPS.map((g, i) => (
           <div key={g.title}>
             {i > 0 && <DropdownMenuSeparator />}
