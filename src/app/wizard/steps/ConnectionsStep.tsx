@@ -13,6 +13,7 @@ import type { Connection, ConnectionAction, ConnectionStatus } from '@/app/wizar
 import { readToolRun } from '@/app/wizard/toolRun'
 import { deleteConnector, deleteTool, errorText, listTools, refreshMcpTools, runTool, saveConnector, saveTool, toolToAction } from '@/app/api/meta'
 import { IntegrationsTab } from './IntegrationsTab'
+import { BusinessEventsPanel } from './ActivityPage'
 import { isDummyMode } from '@/app/api/dummy'
 import { INTEGRATION_CATALOG } from '@/app/wizard/mockData'
 import { StatusPill } from '@/app/components/ui/status'
@@ -32,6 +33,7 @@ export function ConnectionsStep() {
       <TabsList>
         <TabsTrigger value="connections">Your systems</TabsTrigger>
         <TabsTrigger value="integrations">Ready-made</TabsTrigger>
+        <TabsTrigger value="events">Business events</TabsTrigger>
       </TabsList>
       <TabsContent value="connections" forceMount className="data-[state=inactive]:hidden">
         <CustomConnections />
@@ -41,6 +43,9 @@ export function ConnectionsStep() {
       </TabsContent>
       <TabsContent value="integrations" forceMount className="data-[state=inactive]:hidden">
         {isDummyMode() ? <IntegrationsTab /> : <ComingSoonIntegrations />}
+      </TabsContent>
+      <TabsContent value="events">
+        <BusinessEventsPanel />
       </TabsContent>
     </Tabs>
   )

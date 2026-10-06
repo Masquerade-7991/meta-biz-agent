@@ -193,6 +193,7 @@ export function TestEvalStep() {
     try {
       const r = await sendTestMessage(text, conversationId)
       setConversationId(r.conversation_id)
+      if (!state.publish.chatTested) patch('publish', { chatTested: true })
       const replyAt = Date.now()
       const lookTools = hasTools && !!r.agent_response && !!r.conversation_id
       const details: ReplyInfo = {
@@ -522,12 +523,15 @@ export function TestEvalStep() {
                       ) : (
                         <AlertTriangle className="size-4 shrink-0 text-warning" />
                       )}
-                      <span className="truncate text-sm">
-                        {row.situation}
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm">{row.situation}</span>
+                        {row.status !== 'pending' && (
+                          <span className="block truncate text-xs text-muted-foreground">{row.reply ? `“${row.reply.replace(/\s+/g, ' ')}”` : 'No reply'}</span>
+                        )}
                       </span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2 text-muted-foreground text-sm">
-                      {row.status === 'pending' ? 'Checking…' : row.status === 'normal' ? 'Replied normally' : 'Check this'}
+                      {row.status === 'pending' ? 'Checking…' : row.status === 'normal' ? 'Answered' : 'Check this'}
                       {row.status !== 'pending' && <ChevronDown className={cn('size-4 transition-transform', expanded && 'rotate-180')} />}
                     </span>
                   </button>

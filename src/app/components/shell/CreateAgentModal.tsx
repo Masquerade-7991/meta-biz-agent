@@ -286,6 +286,12 @@ export function CreateAgentModal({
     setCheckStatus('idle')
   }
 
+  // Checking is part of picking a number, not a separate step.
+  useEffect(() => {
+    if (phoneId && checkStatus === 'idle') void runCheck()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phoneId, checkStatus])
+
   // Real call unless the Demo controls force a specific outcome.
   async function eligibilityCheck(): Promise<MockApiResult> {
     if (forcedOutcome !== 'ready' || source === 'mock' || !phoneId) return mockEligibilityCheck(forcedOutcome)
@@ -335,12 +341,12 @@ export function CreateAgentModal({
     if (realPhoneId) {
       setActivePhoneNumberId(realPhoneId)
       try {
-        const { agent_id } = await onboardAgent(realPhoneId)
-        toast.success('Agent created on Meta', { description: `agent_id ${agent_id}` })
+        await onboardAgent(realPhoneId)
       } catch (err) {
         // A number onboarded earlier (e.g. in WhatsApp Manager) rejects a second onboarding;
-        // the existing agent is still usable, so carry on and say what Meta returned.
-        toast.warning('Meta onboarding call failed', { description: err instanceof Error ? err.message : String(err) })
+        // the existing agent is still usable, so carry on and connect to it.
+        console.log('[agent_onboarding]', err instanceof Error ? err.message : err)
+        toast.info('This number already had an AI agent on Meta', { description: 'We’ve connected to it, so its existing setup is kept.' })
       }
       // Starting business details: the number's WhatsApp Business Profile, plus the workspace's saved
       // support hours as opening hours. Only empty fields are filled. Before onCreate, so the agent
@@ -409,7 +415,7 @@ export function CreateAgentModal({
           </div>
 
           <div className="space-y-1.5">
-            <Label>WhatsApp Business Account</Label>
+            <Label>WhatsApp account</Label>
             {!wabas ? (
               <div className="flex items-center gap-2 text-muted-foreground text-sm">
                 <Loader2 className="size-4 animate-spin" />
@@ -417,21 +423,19 @@ export function CreateAgentModal({
               </div>
             ) : wabas.length === 0 ? (
               <p className="text-muted-foreground text-sm">
-                No WhatsApp Business Account is connected to this workspace. An owner can connect one from Home or Settings → WhatsApp.
+                No WhatsApp account is connected to this workspace yet. An owner can connect one from the WhatsApp page.
               </p>
             ) : wabas.length === 1 ? (
-              <div className="rounded-md border border-border px-3 py-2 text-sm">
-                <TwoLineOption primary={wabas[0].name} secondary={wabas[0].id} />
-              </div>
+              <p className="text-sm">{wabas[0].name}</p>
             ) : (
               <Select value={wabaId ?? undefined} onValueChange={handleWabaChange}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a WhatsApp Business Account">{selectedWaba?.name}</SelectValue>
+                  <SelectValue placeholder="Pick a WhatsApp account">{selectedWaba?.name}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {wabas.map((waba) => (
                     <SelectItem key={waba.id} value={waba.id}>
-                      <TwoLineOption primary={waba.name} secondary={waba.id} />
+                      {waba.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -451,7 +455,7 @@ export function CreateAgentModal({
                 <SelectValue
                   placeholder={
                     !wabaId
-                      ? 'Select a WABA first'
+                      ? 'Pick a WhatsApp account first'
                       : numbersFailed
                         ? 'Couldn’t load numbers'
                         : !phoneNumbers
@@ -487,9 +491,7 @@ export function CreateAgentModal({
 
           {selectedPhone && (
             <div className="space-y-2 rounded-lg border border-border p-3">
-              {checkStatus === 'idle' && <Button onClick={runCheck}>Check this number</Button>}
-
-              {checkStatus === 'checking' && (
+              {(checkStatus === 'idle' || checkStatus === 'checking') && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
                   <span className="text-sm">Checking with Meta&hellip;</span>
@@ -508,7 +510,7 @@ export function CreateAgentModal({
                   <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-2 text-destructive">
                     <XCircle className="mt-0.5 size-4 shrink-0" />
                     <span className="text-sm">
-                      Number not eligible, please try another number or WABA profile.
+                      Meta doesn&rsquo;t allow an AI agent on this number yet. Try another number.
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-2">

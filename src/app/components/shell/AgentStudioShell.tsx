@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Eye, Loader2, Menu } from 'lucide-react'
+import { ArrowLeft, Eye, Loader2, Menu, Rocket } from 'lucide-react'
 import { StatusPill } from '@/app/components/ui/status'
 import { Sheet, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
 import { AGENT_STATUS, agentStatusOf } from '@/app/lib/status'
@@ -127,7 +127,8 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
   const ungrouped = STUDIO_NAV_SECTIONS.filter((item) => !item.group)
   const ActiveComponent = SECTION_COMPONENTS[state.currentSection]
   const activeLabel = STUDIO_NAV_SECTIONS.find((item) => item.id === state.currentSection)?.label ?? ''
-  const agentStatus = AGENT_STATUS[agentStatusOf(state.publish)]
+  const statusId = agentStatusOf(state.publish)
+  const agentStatus = AGENT_STATUS[statusId]
   const saveText = readOnly
     ? 'View only'
     : saveStatus.saving
@@ -187,6 +188,12 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
               {saveStatus.dirty && !readOnly && <span aria-hidden className="size-1.5 rounded-full bg-warning" />}
               {saveText}
             </span>
+          )}
+          {!readOnly && (statusId === 'draft' || statusId === 'paused') && state.currentSection !== 'publish' && state.currentSection !== 'overview' && (
+            <Button size="sm" onClick={() => navigate('publish')} disabled={pending}>
+              <Rocket className="size-4" />
+              {statusId === 'paused' ? 'Resume' : 'Go live'}
+            </Button>
           )}
         </div>
       </header>

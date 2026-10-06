@@ -1,7 +1,17 @@
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { AlertCircle, AlertTriangle, FileText, Loader2 } from 'lucide-react'
+import { AlertCircle, AlertTriangle, ChevronDown, FileText, Loader2, Sparkles } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/app/components/ui/dropdown-menu'
+import { getNumber } from '@/app/api/numbers'
+import { isDummyMode } from '@/app/api/dummy'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { Textarea } from '@/app/components/ui/textarea'
@@ -25,6 +35,7 @@ import { useSaveOnNextSection } from '@/app/wizard/useSaveOnNextSection'
 import {
   BUSINESS_CATEGORY_OPTIONS,
   CATEGORY_SUGGESTIONS,
+  CATEGORY_FROM_VERTICAL,
   SIGNAL_LIBRARY,
   composeSentence,
   looksLikeInstruction,
@@ -116,7 +127,6 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
   const { identity } = state
   const section = useSaveOnNextSection('identity')
   const [pendingApply, setPendingApply] = useState<{ text: string; fromDocument: boolean } | null>(null)
-  const [showOtherExamples, setShowOtherExamples] = useState(false)
   const demoCategory = state.demo.businessCategory
   const [noteOpen, setNoteOpen] = useState(false)
   const [docStatus, setDocStatus] = useState<'idle' | 'reading'>('idle')
@@ -132,7 +142,15 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
     ? 'This looks like an instruction rather than a description. Rephrase it in plain language.'
     : null
 
-  const category = demoCategory !== 'No category' && CATEGORY_SUGGESTIONS[demoCategory] ? demoCategory : null
+  // The business's own category, from its WhatsApp profile; Demo controls can override it in demo mode.
+  const [profileCategory, setProfileCategory] = useState<string | null>(null)
+  useEffect(() => {
+    const id = state.gate.selectedPhoneNumberId
+    if (!id) return
+    getNumber(id).then((n) => setProfileCategory(CATEGORY_FROM_VERTICAL[n.profile.vertical] ?? null), () => {})
+  }, [state.gate.selectedPhoneNumberId])
+  const demoPick = isDummyMode() && demoCategory !== 'No category' && CATEGORY_SUGGESTIONS[demoCategory] ? demoCategory : null
+  const category = demoPick ?? profileCategory
 
   useRegisterDevControls(
     'identity',
@@ -145,7 +163,6 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
         value={demoCategory}
         onChange={(e) => {
           patch('demo', { businessCategory: e.target.value })
-          setShowOtherExamples(false)
         }}
         className="rounded border border-border bg-background text-xs"
       >
@@ -290,62 +307,41 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
           </span>
         </div>
 
-        <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
-          {category ? (
-            <>
-              <Button type="button" variant="outline" size="sm" onClick={handleCategorySuggestion}>
-                Suggest for {category}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" size="sm" disabled={docStatus === 'reading'}>
+                <Sparkles className="size-3.5" />
+                Need ideas?
+                <ChevronDown className="size-3.5" />
               </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setShowOtherExamples((v) => !v)}>
-                Show other examples
-              </Button>
-            </>
-          ) : (
-            ROLE_EXAMPLES.map((example) => (
-              <Button
-                key={example.label}
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => requestApplyText(example.text)}
-              >
-                {example.label}
-              </Button>
-            ))
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-72">
+              {category && (
+                <>
+                  <DropdownMenuItem onSelect={handleCategorySuggestion}>Suggest for {category.toLowerCase()} businesses</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Start from an example</DropdownMenuLabel>
+              {ROLE_EXAMPLES.map((example) => (
+                <DropdownMenuItem key={example.label} onSelect={() => requestApplyText(example.text)}>
+                  {example.label}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={handleDocumentButtonClick}>
+                <FileText className="size-4" />
+                Draft from a document
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {docStatus === 'reading' && (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" /> Reading your document&hellip;
+            </span>
           )}
-
-          <div className="space-y-1">
-            <Button type="button" variant="outline" size="sm" onClick={handleDocumentButtonClick} disabled={docStatus === 'reading'}>
-              <FileText className="size-3.5" />
-              Draft from a document
-            </Button>
-            {docStatus === 'reading' ? (
-              <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
-                <Loader2 className="size-3.5 animate-spin" /> Reading your document&hellip;
-              </span>
-            ) : (
-              <p className="text-muted-foreground text-xs">
-                Reads a document and suggests a starting point below
-              </p>
-            )}
-          </div>
         </div>
-
-        {category && showOtherExamples && (
-          <div className="flex flex-wrap gap-2">
-            {ROLE_EXAMPLES.map((example) => (
-              <Button
-                key={example.label}
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => requestApplyText(example.text)}
-              >
-                {example.label}
-              </Button>
-            ))}
-          </div>
-        )}
 
         <input
           ref={fileInputRef}

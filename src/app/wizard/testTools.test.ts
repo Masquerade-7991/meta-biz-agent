@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { findToolCalls, isMetaFallback, toolCallsSince } from './testTools.ts'
+import { findToolCalls, isMetaFallback, readableName, toolCallsSince } from './testTools.ts'
 
 const turn = (timestamp: number, tool?: string) => ({
   turn_id: String(timestamp),
@@ -29,4 +29,10 @@ test('keeps checking until the turn shows up', async () => {
 test('recognises Meta’s fallback reply, and only that', () => {
   assert.equal(isMetaFallback('I had trouble responding fully — could you rephrase or add more details?'), true)
   assert.equal(isMetaFallback('Email support@helo.ai or call 022 6785 6785.'), false)
+})
+
+test('names tools and connections the way people read them', () => {
+  assert.equal(readableName('search_products'), 'Search products')
+  assert.equal(readableName('Shopify_store'), 'Shopify store')
+  assert.equal(readableName('lookUpOrder'), 'Look Up Order')
 })

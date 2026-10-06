@@ -276,26 +276,20 @@ export function SafetyHandoffStep() {
               fields keep patching the shared guardrails/replies slices no matter which tab is
               showing — otherwise switching tabs mid-edit would silently drop unsaved changes. */}
           <TabsContent value="avoids" forceMount className="space-y-7 data-[state=inactive]:hidden">
-            <p className="text-muted-foreground text-sm">
-              These become instructions the agent follows strongly, not a filter that blocks a
-              message after it&rsquo;s written.
-            </p>
-
             <div className="space-y-1.5">
               <span className="flex items-center gap-1.5">
-                <Label>How much the agent can improvise</Label>
-                <InfoTooltip text="Strict keeps every answer grounded in what you've configured, and hands off to a person rather than guessing. Assisted allows some natural conversation within its role." />
+                <Label>How freely your agent answers</Label>
               </span>
               <div className="grid gap-2 sm:grid-cols-2">
                 <SelectableCard
-                  title="Strict"
-                  helper="Only answers from what you've told it, otherwise asks a person."
+                  title="Only from my knowledge"
+                  helper="Answers from what you've given it; otherwise hands over to a person."
                   selected={state.guardrails.groundingMode === 'strict'}
                   onClick={() => patch('guardrails', { groundingMode: 'strict' })}
                 />
                 <SelectableCard
-                  title="Assisted"
-                  helper="Some natural conversation allowed within its role."
+                  title="Can chat naturally"
+                  helper="Small talk and general help within its role, still grounded in your knowledge."
                   selected={state.guardrails.groundingMode === 'assisted'}
                   onClick={() => patch('guardrails', { groundingMode: 'assisted' })}
                 />

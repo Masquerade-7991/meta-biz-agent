@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { AlertTriangle, CheckCircle2, Play, Plus, Rocket, Square, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, CircleDashed, Pause, Play, Plus, Rocket, X } from 'lucide-react'
+import { Card } from '@/app/components/ui/card'
+import { readiness } from '@/app/wizard/readiness'
+import { cn } from '@/app/lib/utils'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { SelectableCard } from '@/app/components/wizard/SelectableCard'
@@ -16,7 +19,6 @@ import {
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
-import { useExitWizard } from '@/app/wizard/ExitContext'
 import { addAllowlistNumber, removeAllowlistNumber, setRollout } from '@/app/api/meta'
 
 const E164_RE = /^\+[1-9]\d{6,14}$/
@@ -27,9 +29,8 @@ const MAX_ALLOWLIST = 20
 // one. Nothing here should ever talk about "the WABA" going live.
 
 export function PublishStep() {
-  const { state, patch } = useWizard()
+  const { state, patch, setSection } = useWizard()
   const { publish } = state
-  const exitWizard = useExitWizard()
 
   // Every change here goes to Meta first (settings: rollout + ai_audience; allowlist entries) and
   // only lands in the UI once Meta accepts it, so the screen never shows a state Meta doesn't have.
@@ -113,23 +114,28 @@ export function PublishStep() {
 
   const audiencePhrase = publish.audienceMode === 'everyone' ? 'everyone who messages this number' : 'the numbers on your allowlist'
 
+  const checks = readiness(state).filter((i) => i.id !== 'live' && i.id !== 'number')
+  const notReady = checks.filter((i) => !i.done)
+
   return (
-    <div className="space-y-10">
-      {/* Who can talk to your agent */}
-      <section className="space-y-3">
-        <h3>Who can talk to your agent</h3>
+    <div className="space-y-6">
+      <Card className="gap-4 px-5">
+        <div>
+          <h2 className="text-section font-semibold">Who your agent answers</h2>
+          <p className="text-muted-foreground">Start with a few test numbers, then open it to everyone.</p>
+        </div>
 
         <div className="grid gap-2 sm:grid-cols-2">
           <SelectableCard
-            title="Only the numbers I list below"
-            helper="Recommended for testing"
-            info="Add the WhatsApp numbers you want to test with below. Only those numbers can reach your agent until you switch this to Everyone."
+            title="Only my test numbers"
+            helper="Recommended while you try it"
+            info="Only the WhatsApp numbers you add below can reach your agent until you switch this to Everyone."
             selected={publish.audienceMode === 'allowlisted'}
             onClick={() => setAudienceMode('allowlisted')}
           />
           <SelectableCard
             title="Everyone"
-            info="Opens your agent to any customer who messages this number. Best once you've tested with a smaller group first."
+            info="Any customer who messages this number reaches your agent. Best once you've tested with a few numbers."
             selected={publish.audienceMode === 'everyone'}
             onClick={() => setAudienceMode('everyone')}
           />
@@ -149,29 +155,26 @@ export function PublishStep() {
                     if (e.key === 'Enter') addNumber()
                   }}
                   placeholder="+15551234567"
+                  aria-label="Test number with country code"
                 />
-                {numberError && (
-                  <p className="mt-1 text-destructive text-xs">
-                    {numberError}
-                  </p>
-                )}
+                {numberError && <p className="mt-1 text-xs text-destructive">{numberError}</p>}
               </div>
               <Button variant="outline" onClick={addNumber} disabled={publish.allowlistNumbers.length >= MAX_ALLOWLIST}>
                 <Plus className="size-4" />
                 Add
               </Button>
             </div>
-            {publish.allowlistNumbers.length >= MAX_ALLOWLIST && (
-              <p className="text-muted-foreground text-xs">
-                You've reached the limit of 20 numbers. Remove one to add another.
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground">
+              {publish.allowlistNumbers.length >= MAX_ALLOWLIST
+                ? 'You’ve reached the limit of 20 numbers. Remove one to add another.'
+                : 'These numbers can chat with your agent as soon as they’re added, even before it goes live.'}
+            </p>
             {publish.allowlistNumbers.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {publish.allowlistNumbers.map((n) => (
-                  <span key={n} className="badge flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-accent-foreground">
+                  <span key={n} className="flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 font-mono text-xs">
                     {n}
-                    <button type="button" onClick={() => removeNumber(n)} aria-label={`Remove ${n}`}>
+                    <button type="button" onClick={() => removeNumber(n)} aria-label={`Remove ${n}`} className="text-muted-foreground hover:text-foreground">
                       <X className="size-3" />
                     </button>
                   </span>
@@ -180,86 +183,88 @@ export function PublishStep() {
             )}
           </div>
         ) : (
-          <p className="text-muted-foreground text-sm">
-            Any customer who messages this number will reach your agent immediately once you
-            activate.
-          </p>
+          <p className="text-sm text-muted-foreground">Any customer who messages this number reaches your agent as soon as it&rsquo;s live.</p>
         )}
-      </section>
+      </Card>
 
-      {/* Activate on channels */}
-      <section className="space-y-4">
-        {publish.stopped ? (
-          <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 p-4">
-            <span className="flex items-center gap-3">
-              <Square className="size-5 text-destructive" />
-              <p className="font-medium">This agent is stopped.</p>
-            </span>
-            <Button size="sm" onClick={resumeAgent}>
-              <Play className="size-3.5" />
+      <Card className="gap-4 px-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-section font-semibold">Go live</h2>
+            <p className="text-muted-foreground">
+              {publish.stopped
+                ? 'Paused: customers get no AI replies until you resume it.'
+                : publish.activated
+                  ? `Live for ${audiencePhrase}.`
+                  : 'Switch your agent on when the checks below look right.'}
+            </p>
+          </div>
+          {publish.stopped ? (
+            <Button onClick={resumeAgent}>
+              <Play className="size-4" />
               Resume
             </Button>
-          </div>
-        ) : publish.activated ? (
-          <div className="flex items-center justify-between rounded-lg border border-success bg-success/10 p-4">
-            <span className="flex items-center gap-3">
-              <CheckCircle2 className="size-5 text-success" />
-              <p className="font-medium">Your agent is live.</p>
-            </span>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setStopConfirmOpen(true)}>
-                <Square className="size-3.5" />
-                Stop agent
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => exitWizard()}>
-                Back to agents list
-              </Button>
-            </div>
-          </div>
-        ) : activateFailed ? (
-          <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
-            <span className="flex items-center gap-2">
-              <AlertTriangle className="size-4 text-destructive" />
-              <p className="font-semibold">Couldn&rsquo;t activate</p>
-            </span>
-            <p className="text-muted-foreground text-sm">
-              Something went wrong switching this agent on. Nothing has changed.
-            </p>
-            <Button size="sm" onClick={confirmActivate}>
+          ) : publish.activated ? (
+            <Button variant="outline" onClick={() => setStopConfirmOpen(true)}>
+              <Pause className="size-4" />
+              Pause agent
+            </Button>
+          ) : (
+            <Button onClick={() => setConfirmOpen(true)}>
+              <Rocket className="size-4" />
+              Go live
+            </Button>
+          )}
+        </div>
+
+        {!publish.activated && !publish.stopped && (
+          <ul className="divide-y divide-border rounded-lg border border-border">
+            {checks.map((c) => (
+              <li key={c.id}>
+                <button type="button" onClick={() => setSection(c.section)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/60">
+                  {c.done ? <CheckCircle2 className="size-4 shrink-0 text-success" /> : <CircleDashed className="size-4 shrink-0 text-muted-foreground" />}
+                  <span className={cn('flex-1 text-sm', c.done && 'text-muted-foreground')}>{c.label}</span>
+                  {c.detail && <span className="text-xs text-muted-foreground">{c.detail}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {activateFailed && (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg bg-destructive/10 px-4 py-3">
+            <AlertTriangle className="size-4 text-destructive" />
+            <p className="flex-1 text-sm">Couldn&rsquo;t switch your agent on. Nothing has changed.</p>
+            <Button size="sm" variant="outline" onClick={confirmActivate}>
               Try again
             </Button>
           </div>
-        ) : (
-          <Button size="lg" onClick={() => setConfirmOpen(true)}>
-            <Rocket className="size-4" />
-            Activate on channels
-          </Button>
         )}
-      </section>
+      </Card>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Ready to go live?</DialogTitle>
             <DialogDescription>
-              Once activated, your agent becomes the main responder for {audiencePhrase}. Meta charges for every
-              message it sends. This is not a test anymore.
+              Your agent becomes the main responder for {audiencePhrase}. Meta charges for each message it sends.
+              {notReady.length > 0 && ` Still to do: ${notReady.map((c) => c.label.toLowerCase()).join(', ')}.`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>
               Go back
             </Button>
-            <Button onClick={confirmActivate}>Yes, activate</Button>
+            <Button onClick={confirmActivate}>Go live</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <ConfirmDialog
         open={stopConfirmOpen}
-        title="Stop this agent?"
-        description="Customers messaging this number will no longer reach your agent until you resume."
-        confirmLabel="Stop agent"
+        title="Pause this agent?"
+        description="Customers messaging this number get no AI replies until you resume it. Your team still sees their messages."
+        confirmLabel="Pause agent"
         onConfirm={confirmStop}
         onCancel={() => setStopConfirmOpen(false)}
       />

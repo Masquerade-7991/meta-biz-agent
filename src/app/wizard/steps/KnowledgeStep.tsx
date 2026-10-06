@@ -20,7 +20,8 @@ export function KnowledgeStep() {
   const { knowledge, business } = state
   const category = state.demo.businessCategory
 
-  const [activeTab, setActiveTab] = useState<TabId>('business')
+  // Adding the website is the quickest way to give the agent knowledge, so it comes first.
+  const [activeTab, setActiveTab] = useState<TabId>('website')
   const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'failed'>(() => (state.demo.forceNextFailure ? 'loading' : 'loaded'))
 
   // Arriving here via a "Compiled configuration" link on Test & publish — jump to the tab it named.
@@ -139,7 +140,12 @@ export function KnowledgeStep() {
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
         <TabsList>
-          <TabsTrigger value="business">Business details</TabsTrigger>
+          <TabsTrigger value="website" className="gap-1.5">
+            Website
+            <Badge variant="secondary" className="text-muted-foreground">
+              {siteCount}
+            </Badge>
+          </TabsTrigger>
           <TabsTrigger value="faq" className="gap-1.5">
             FAQ
             <Badge variant="secondary" className="text-muted-foreground">
@@ -152,12 +158,7 @@ export function KnowledgeStep() {
               {docCount}
             </Badge>
           </TabsTrigger>
-          <TabsTrigger value="website" className="gap-1.5">
-            Website
-            <Badge variant="secondary" className="text-muted-foreground">
-              {siteCount}
-            </Badge>
-          </TabsTrigger>
+          <TabsTrigger value="business">Business details</TabsTrigger>
         </TabsList>
 
         {/* forceMount + CSS-hidden (not Radix's default unmount-when-inactive) so Business

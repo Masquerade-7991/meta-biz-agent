@@ -627,6 +627,8 @@ export interface PublishState {
    *  longer read by Publish to gate Activate — that precondition was Helo's own invention, with
    *  no basis in Meta's platform, and was removed. */
   standardChecksRun: boolean
+  /** Someone has chatted with the agent in Test & Eval (the readiness checklist's "Try it"). */
+  chatTested?: boolean
 }
 
 // ---- Agent Activity page: quality checks history ----

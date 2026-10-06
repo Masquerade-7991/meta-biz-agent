@@ -14,7 +14,6 @@ import {
 import { Button } from '@/app/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/app/components/ui/tooltip'
-import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { InlineError } from '@/app/components/wizard/RetryBanner'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { cn } from '@/app/lib/utils'
@@ -119,7 +118,7 @@ export function AnalyticsPage() {
         </p>
       </header>
 
-      <section className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <section className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <Kpi label="AI conversations" loading={kLoading} value={k?.aiThreads} format={compact} />
         <Kpi
           label="Handed to a person"
@@ -134,14 +133,6 @@ export function AnalyticsPage() {
           loading={kLoading}
           value={k?.toolSuccessRate}
           format={pct}
-        />
-        <Kpi label="Avg tool latency" loading={kLoading} value={k?.avgToolLatencyMs} format={ms} />
-        <Kpi
-          label="Events processed"
-          note={k?.eventsReceived != null ? `of ${compact(k.eventsReceived)} received` : undefined}
-          loading={kLoading}
-          value={k?.eventsProcessed}
-          format={compact}
         />
       </section>
       {kpis.status === 'error' && <InlineError message="Couldn't load the summary from Meta." onRetry={reloadKpis} />}
@@ -167,6 +158,23 @@ export function AnalyticsPage() {
         </Section>
       )}
 
+      {/* For whoever runs the connections: speed, events and per-tool detail, out of the way by default. */}
+      <details className="group rounded-lg border border-border">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-medium [&::-webkit-details-marker]:hidden">
+          Technical details
+          <span className="text-sm font-normal text-muted-foreground">Tool speed, business events and connector health</span>
+        </summary>
+        <div className="space-y-10 border-t border-border p-4">
+      <section className="grid grid-cols-2 gap-4">
+        <Kpi label="Avg tool latency" loading={kLoading} value={k?.avgToolLatencyMs} format={ms} />
+        <Kpi
+          label="Business events processed"
+          note={k?.eventsReceived != null ? `of ${compact(k.eventsReceived)} received` : undefined}
+          loading={kLoading}
+          value={k?.eventsProcessed}
+          format={compact}
+        />
+      </section>
       <Section title="Tools" info="How often each tool ran and how those calls ended.">
         <Loaded load={tools} onRetry={reloadTools} what="tool calls" skeleton="h-32">
           {(rows) => (rows.length === 0 ? <Empty>No tool calls in this period.</Empty> : <ToolTable rows={rows} />)}
@@ -205,6 +213,8 @@ export function AnalyticsPage() {
           </Loaded>
         )}
       </Section>
+        </div>
+      </details>
     </div>
   )
 }
@@ -216,10 +226,10 @@ export function AnalyticsPage() {
 function Section({ title, info, children }: { title: string; info: string; children: ReactNode }) {
   return (
     <section className="space-y-3">
-      <span className="flex items-center gap-1.5">
+      <div>
         <h3>{title}</h3>
-        <InfoTooltip text={info} />
-      </span>
+        <p className="text-sm text-muted-foreground">{info}</p>
+      </div>
       {children}
     </section>
   )

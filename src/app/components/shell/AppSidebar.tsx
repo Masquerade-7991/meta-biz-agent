@@ -99,7 +99,7 @@ export function AppSidebar({
                       )}
                     >
                       {/* The Helo red marks where you are. */}
-                      {isActive && <span aria-hidden className="absolute top-2 bottom-2 -left-2.5 w-[3px] rounded-r-full bg-brand" />}
+                      {isActive && <span aria-hidden className="absolute top-2 bottom-2 -left-2.5 w-0.75 rounded-r-full bg-brand" />}
                       <Icon className={cn('size-4 shrink-0', isActive ? 'text-foreground' : 'text-muted-foreground')} />
                       {!collapsed && <span className="truncate">{item.label}</span>}
                     </button>

@@ -1288,6 +1288,23 @@ export const CATEGORY_SUGGESTIONS: Record<string, SignalId[]> = {
   'E-commerce': ['browse_products', 'track_orders', 'start_return'],
 }
 
+/** A WhatsApp profile category (Meta's `vertical`) → the role suggestions above. */
+export const CATEGORY_FROM_VERTICAL: Record<string, string> = {
+  RETAIL: 'Retail',
+  APPAREL: 'Retail',
+  GROCERY: 'Food and Beverage',
+  RESTAURANT: 'Food and Beverage',
+  HEALTH: 'Health',
+  BEAUTY: 'Services',
+  PROF_SERVICES: 'Services',
+  EVENT_PLAN: 'Services',
+  AUTO: 'Services',
+  HOTEL: 'Services',
+  TRAVEL: 'Services',
+  EDU: 'Services',
+  FINANCE: 'Services',
+}
+
 export const BUSINESS_CATEGORY_OPTIONS = ['Retail', 'Services', 'Food and Beverage', 'Health', 'E-commerce', 'No category']
 
 export function composeSentence(signalIds: SignalId[]): string {

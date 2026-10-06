@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Plus, Search, X } from 'lucide-react'
+import { Loader2, Plus, X } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
@@ -11,18 +11,13 @@ import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
+import { useExitWizard } from '@/app/wizard/ExitContext'
 import { InboundEventsMonitor } from './InboundEventsMonitor'
 import {
   SAMPLE_AGENT_EVENT_TYPES,
-  SAMPLE_CONVERSATION_NUMBER,
-  SAMPLE_QUALITY_CHECK_RUN,
   buildDeveloperEventsChecklist,
   buildSampleAgentEventLog,
-  buildSampleConversationTurns,
-  buildSlowOrFailedTurn,
-  formatConversationTurnTime,
   formatFullTimestamp,
-  formatLatencySeconds,
   newId,
   newSecretKey,
   newWebhookUrl,
@@ -34,123 +29,19 @@ import type {
   AgentEventTypeDef,
   AgentEventsState,
   ConnectionsPageState,
-  ConversationTurn,
-  QualityCheckItem,
-  QualityCheckRun,
-} from '@/app/wizard/types'
+  } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
 import { Textarea } from '@/app/components/ui/textarea'
 import { InlineError } from '@/app/components/wizard/RetryBanner'
 import {
-  conversationInsights,
-  conversationTurns,
   errorText,
   getAgentEvent,
-  MetaError,
   sendAgentEvent,
-  threadControl,
-} from '@/app/api/meta'
-import { listAgentEvents, listAudit, listTraces, ms, type AuditRow, type StoredTrace } from '@/app/api/store'
+  } from '@/app/api/meta'
+import { listAgentEvents, listAudit, ms, type AuditRow } from '@/app/api/store'
 
 // ==================================================================================
 // QUALITY CHECKS
-// ==================================================================================
-
-function QualityCheckItemRow({ item }: { item: QualityCheckItem }) {
-  const [expanded, setExpanded] = useState(false)
-  return (
-    <div className="rounded-lg border border-border px-3 py-2">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 text-left"
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          {item.status === 'normal' ? (
-            <CheckCircle2 className="size-4 shrink-0 text-success" />
-          ) : (
-            <AlertTriangle className="size-4 shrink-0 text-warning" />
-          )}
-          <span className="truncate text-sm">
-            {item.situation}
-          </span>
-        </span>
-        <span className="flex shrink-0 items-center gap-2">
-          <span className="text-muted-foreground text-sm">
-            {item.status === 'normal' ? 'Responded normally' : 'Check this'}
-          </span>
-          <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
-        </span>
-      </button>
-      {expanded && (
-        <div className="mt-2 space-y-1.5 border-t border-border pt-2">
-          <p className="text-sm">
-            <span className="text-muted-foreground">Customer: </span>
-            {item.sent}
-          </p>
-          <p className="text-sm">
-            <span className="text-muted-foreground">Agent: </span>
-            {item.reply}
-          </p>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function QualityChecksSection({ runs, onGoToTestPublish }: { runs: QualityCheckRun[]; onGoToTestPublish: () => void }) {
-  const [viewedRunId, setViewedRunId] = useState<string | null>(null)
-  const sorted = [...runs].sort((a, b) => b.timestamp - a.timestamp)
-
-  return (
-    <section className="space-y-3">
-      <span className="flex items-center gap-1.5">
-        <h3>Quality checks</h3>
-        <InfoTooltip text="Results from the standard checks run on the Test & Eval step." />
-      </span>
-
-      {sorted.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          No checks run yet. Run the standard checks from{' '}
-          <button type="button" onClick={onGoToTestPublish} className="text-primary underline underline-offset-2">
-            Test &amp; Eval
-          </button>{' '}
-          to see results here.
-        </p>
-      ) : (
-        <div className="space-y-2">
-          {sorted.map((run) => {
-            const passed = run.items.filter((i) => i.status === 'normal').length
-            const viewed = viewedRunId === run.id
-            return (
-              <div key={run.id} className="rounded-lg border border-border">
-                <div className="flex items-center justify-between gap-3 px-4 py-3">
-                  <span className="text-sm">{formatFullTimestamp(run.timestamp)}</span>
-                  <span className="text-muted-foreground text-sm">
-                    {passed} of {run.items.length} passed
-                  </span>
-                  <Button size="sm" variant="outline" onClick={() => setViewedRunId(viewed ? null : run.id)}>
-                    View
-                  </Button>
-                </div>
-                {viewed && (
-                  <div className="space-y-1 border-t border-border p-3">
-                    {run.items.map((item) => (
-                      <QualityCheckItemRow key={item.id} item={item} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </section>
-  )
-}
-
-// ==================================================================================
-// CONNECTOR ACTIVITY
 // ==================================================================================
 
 function ConnectorActivitySection({
@@ -510,206 +401,11 @@ function InboundEventsSection({
 // CONVERSATIONS
 // ==================================================================================
 
-type ConversationLookupStatus = 'idle' | 'loading' | 'found' | 'not_found' | 'failed'
 type TestEvent = { to: string; type: string; description: string; payload: string }
 
 /** Precomputes each turn's display time in one pass: the turn's own timestamp when Meta actually
  *  returned one, otherwise `~` plus the last turn that did have one — never an invented time,
  *  since `timestamp` is documented as present only "if available." */
-function turnDisplayTimes(turns: ConversationTurn[]): (string | null)[] {
-  let lastKnown: string | null = null
-  return turns.map((turn) => {
-    if (turn.timestamp !== undefined) {
-      lastKnown = formatConversationTurnTime(turn.timestamp)
-      return lastKnown
-    }
-    return lastKnown ? `~${lastKnown}` : null
-  })
-}
-
-function ConversationTurnRow({ turn, displayTime }: { turn: ConversationTurn; displayTime: string | null }) {
-  return (
-    <div className="space-y-0.5">
-      {displayTime && (
-        <p className="text-sm">
-          <span className="text-muted-foreground">{displayTime}</span>
-          {turn.e2eLatencyMs !== undefined && (
-            <span className="text-muted-foreground"> &middot; Responded in {formatLatencySeconds(turn.e2eLatencyMs)}</span>
-          )}
-        </p>
-      )}
-      {turn.tool && (
-        <p className="text-muted-foreground text-sm">
-          Used: {turn.tool}
-          {turn.toolWorked === true && ' — worked'}
-          {turn.toolWorked === false && " — this didn't work"}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function ConversationsSection({
-  numberDraft,
-  onNumberDraftChange,
-  status,
-  turns,
-  onLookup,
-  lookupError,
-  insights,
-  onThreadControl,
-  past,
-}: {
-  past: PastConversation[]
-  numberDraft: string
-  onNumberDraftChange: (value: string) => void
-  status: ConversationLookupStatus
-  turns: ConversationTurn[]
-  onLookup: () => void
-  lookupError: string | null
-  insights: { aiThreads: number; aiHandoffs: number } | null
-  onThreadControl: (action: 'take' | 'release') => Promise<string | null>
-}) {
-  const displayTimes = turnDisplayTimes(turns)
-  const [controlBusy, setControlBusy] = useState(false)
-  const [controlNote, setControlNote] = useState<string | null>(null)
-
-  async function control(action: 'take' | 'release') {
-    setControlBusy(true)
-    const err = await onThreadControl(action)
-    setControlBusy(false)
-    setControlNote(
-      err
-        ? `Could not ${action === 'take' ? 'take over' : 'hand back'}: ${err}`
-        : action === 'take'
-          ? 'You now hold this conversation. The agent stops replying until you hand it back.'
-          : 'Handed back. The agent replies to this customer again.',
-    )
-  }
-
-  return (
-    <section className="space-y-3">
-      <div>
-        <h3>Conversations</h3>
-        <p className="mt-1 text-muted-foreground text-sm">
-          Look up a customer&rsquo;s real conversation with your agent.
-        </p>
-      </div>
-
-      {insights && (
-        <div className="grid max-w-md grid-cols-2 gap-2">
-          <div className="rounded-lg bg-muted p-3">
-            <p className="text-muted-foreground text-xs">
-              AI conversations, last 30 days
-            </p>
-            <p className="font-semibold">{insights.aiThreads}</p>
-          </div>
-          <div className="rounded-lg bg-muted p-3">
-            <p className="text-muted-foreground text-xs">
-              Handed to a person right now
-            </p>
-            <p className="font-semibold">{insights.aiHandoffs}</p>
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-end gap-2">
-        <div className="max-w-xs flex-1 space-y-1.5">
-          <Label htmlFor="convo-number">Customer&rsquo;s WhatsApp number</Label>
-          <Input
-            id="convo-number"
-            value={numberDraft}
-            onChange={(e) => onNumberDraftChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onLookup()
-            }}
-            placeholder="+15551234567"
-          />
-        </div>
-        <Button variant="outline" onClick={onLookup} disabled={!numberDraft.trim() || status === 'loading'}>
-          {status === 'loading' ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
-          Look up
-        </Button>
-      </div>
-
-      {status === 'not_found' && (
-        <p className="text-muted-foreground text-sm">
-          No conversation found for this number.
-        </p>
-      )}
-
-      {status === 'failed' && <InlineError message={`Could not look up this conversation. ${lookupError ?? ''}`} onRetry={onLookup} />}
-
-      {status === 'found' && (
-        <div className="space-y-3 rounded-lg border border-border p-4">
-          {/* Human takeover via WhatsApp thread control (PRD 5.3.7 d). */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => void control('take')} disabled={controlBusy}>
-              Take over conversation
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => void control('release')} disabled={controlBusy}>
-              Hand back to agent
-            </Button>
-            {controlBusy && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
-          </div>
-          {controlNote && (
-            <p className="text-muted-foreground text-xs">
-              {controlNote}
-            </p>
-          )}
-          {turns.map((turn, i) => (
-            <ConversationTurnRow key={i} turn={turn} displayTime={displayTimes[i]} />
-          ))}
-        </div>
-      )}
-
-      {/* Earlier conversations the server recorded, newest first (only when it has a database). */}
-      {past.length > 0 && (
-        <div className="space-y-2">
-          <p className="font-medium">Earlier conversations</p>
-          {past.map((c) => {
-            const times = turnDisplayTimes(c.turns)
-            return (
-              <details key={c.id} className="rounded-lg border border-border p-3">
-                <summary className="cursor-pointer text-sm">
-                  {formatFullTimestamp(c.startedAt)} &middot; {c.turns.length} turn{c.turns.length === 1 ? '' : 's'}
-                </summary>
-                <div className="mt-2 space-y-3">
-                  {c.turns.map((turn, i) => (
-                    <ConversationTurnRow key={i} turn={turn} displayTime={times[i]} />
-                  ))}
-                </div>
-              </details>
-            )
-          })}
-        </div>
-      )}
-    </section>
-  )
-}
-
-type PastConversation = { id: string; startedAt: number; turns: ConversationTurn[] }
-
-function toPastConversation(c: StoredTrace): PastConversation {
-  return {
-    id: c.conversationId,
-    startedAt: ms(c.startedAt),
-    turns: c.turns.map((t) => {
-      const tool = t.steps.find((st) => st.type === 'TOOL_CALL')
-      return {
-        timestamp: ms(t.ts) || undefined,
-        e2eLatencyMs: t.e2eLatencyMs ?? undefined,
-        tool: tool?.tool_name,
-        toolWorked: tool?.status ? tool.status === 'SUCCESS' : undefined,
-      }
-    }),
-  }
-}
-
-// ==================================================================================
-// CHANGE HISTORY (the server's audit log; hidden when it has no database)
-// ==================================================================================
-
 function ChangeHistorySection({ rows }: { rows: AuditRow[] }) {
   return (
     <section className="space-y-3">
@@ -768,31 +464,12 @@ function ChangeHistorySection({ rows }: { rows: AuditRow[] }) {
 // Monitor > Activity — quality checks, connector calls, and inbound business events in one
 // place, exactly as the old Agent Activity view had it, now a plain section in the free-nav
 // sidebar instead of a separate Configure/Activity toggle screen.
-export function ActivityPage() {
+/** Business events (orders paid, bookings made…) the business sends the agent: setup, a test send
+ *  and the live log. Lives under Connections, since it is another way systems talk to the agent. */
+export function BusinessEventsPanel() {
   const { state, patch, setSection, setPendingSkillPrefill } = useWizard()
-
-  // ---- Conversations: real customer lookup, local to this visit only, not wizard config ----
-  const [convoNumberDraft, setConvoNumberDraft] = useState('')
-  const [convoStatus, setConvoStatus] = useState<ConversationLookupStatus>('idle')
-  const [convoTurns, setConvoTurns] = useState<ConversationTurn[]>([])
-
-  function normalizePhone(value: string): string {
-    return value.replace(/[^\d+]/g, '')
-  }
-
-  const [lookupError, setLookupError] = useState<string | null>(null)
-  const [insights, setInsights] = useState<{ aiThreads: number; aiHandoffs: number } | null>(null)
-  useEffect(() => {
-    conversationInsights().then(setInsights, () => {})
-  }, [])
-
-  // From the server's store; each stays empty/null when it has no database.
-  const [pastConvos, setPastConvos] = useState<PastConversation[]>([])
-  const [audit, setAudit] = useState<AuditRow[] | null>(null)
   const [storedEvents, setStoredEvents] = useState<AgentEventRow[]>([])
   useEffect(() => {
-    // Without the store these stay empty, which the page already shows as "nothing yet".
-    listAudit().then(setAudit, () => setAudit([]))
     listAgentEvents().then((rows) => rows && setStoredEvents(rows), () => {})
   }, [])
   // This browser's rows win for events it sent (they update live); the store adds everything else.
@@ -800,58 +477,6 @@ export function ActivityPage() {
   const events = [...state.agentEvents.events, ...storedEvents.filter((e) => !knownEventIds.has(e.agentEventId))].sort(
     (a, b) => b.createdAt - a.createdAt,
   )
-
-  /** Meta's conversation-turns insight: the customer's most recent conversation, turn metadata only. */
-  async function lookupConversation() {
-    const query = convoNumberDraft.trim()
-    if (!query) return
-    setConvoStatus('loading')
-    setLookupError(null)
-    setPastConvos([])
-    // The demo sample number still shows the sample conversation without calling Meta.
-    if (normalizePhone(query) === normalizePhone(SAMPLE_CONVERSATION_NUMBER)) {
-      setConvoTurns(buildSampleConversationTurns())
-      setConvoStatus('found')
-      return
-    }
-    const tracesPromise = listTraces(query)
-    try {
-      const turns = await conversationTurns(query)
-      const latestId = turns[0]?.conversation_id
-      void tracesPromise.then((list) => setPastConvos((list ?? []).filter((c) => c.conversationId !== latestId).map(toPastConversation)))
-      setConvoTurns(
-        turns.map((t) => {
-          const tool = t.steps?.find((st) => st.type === 'TOOL_CALL')
-          return {
-            timestamp: t.timestamp,
-            e2eLatencyMs: t.e2e_latency_ms,
-            tool: tool?.tool_name,
-            toolWorked: tool?.status ? tool.status === 'SUCCESS' : undefined,
-          }
-        }),
-      )
-      setConvoStatus(turns.length > 0 ? 'found' : 'not_found')
-    } catch (err) {
-      void tracesPromise.then((list) => setPastConvos((list ?? []).map(toPastConversation)))
-      if (err instanceof MetaError && (err.status === 404 || /not found/i.test(err.message))) {
-        setConvoTurns([])
-        setConvoStatus('not_found')
-      } else {
-        setLookupError(errorText(err))
-        setConvoStatus('failed')
-      }
-    }
-  }
-
-  async function handleThreadControl(action: 'take' | 'release'): Promise<string | null> {
-    try {
-      await threadControl(action, convoNumberDraft)
-      conversationInsights().then(setInsights, () => {})
-      return null
-    } catch (err) {
-      return errorText(err)
-    }
-  }
 
   /** POST agent_event, then poll its status every 2 s until Meta reports a final one. */
   async function sendTestEvent(ev: TestEvent): Promise<string | null> {
@@ -897,14 +522,6 @@ export function ActivityPage() {
     return null
   }
 
-  function goToTestPublish() {
-    setSection('testEval')
-  }
-
-  function goToConnections() {
-    setSection('connections')
-  }
-
   function addSkillForEvent() {
     setPendingSkillPrefill({
       name: 'Business event handling',
@@ -913,13 +530,32 @@ export function ActivityPage() {
     setSection('abilities')
   }
 
+  return (
+    <InboundEventsSection
+      agentEvents={{ ...state.agentEvents, events }}
+      onPatch={(p) => patch('agentEvents', p)}
+      onAddSkillForEvent={addSkillForEvent}
+      onSendEvent={sendTestEvent}
+    />
+  )
+}
+
+export function ActivityPage() {
+  const { state, patch, setSection } = useWizard()
+
+  const exitTo = useExitWizard()
+  // From the server's store; null when it has no database.
+  const [audit, setAudit] = useState<AuditRow[] | null>(null)
+  useEffect(() => {
+    listAudit().then(setAudit, () => setAudit([]))
+  }, [])
+
+  function goToConnections() {
+    setSection('connections')
+  }
+
   function demoLoadSampleActivity() {
     const now = Date.now()
-
-    const runItems: QualityCheckItem[] = SAMPLE_QUALITY_CHECK_RUN.map((c) => ({ id: newId('qc'), ...c }))
-    patch('qualityChecks', (prev) => ({
-      runs: [{ id: newId('qcrun'), timestamp: now, items: runItems }, ...prev.runs],
-    }))
 
     const existingConnection = state.connections.connections[0]
     const existingAction = state.connections.actions[0]
@@ -979,20 +615,7 @@ export function ActivityPage() {
         : SAMPLE_AGENT_EVENT_TYPES.map((t) => ({ id: newId('etype'), ...t }))
     patch('agentEvents', { configured: true, webhookUrl, secretKey, eventTypes, events: [...buildSampleAgentEventLog(), ...state.agentEvents.events] })
 
-    setConvoNumberDraft(SAMPLE_CONVERSATION_NUMBER)
-    setConvoTurns(buildSampleConversationTurns())
-    setConvoStatus('found')
-
     toast.success('Sample activity loaded')
-  }
-
-  // Appends one slow, failed-tool-call turn to whatever conversation is currently shown, seeding
-  // the sample conversation first if none has been looked up yet — for reviewing how that line
-  // reads in plain language without a fresh lookup.
-  function demoSimulateSlowOrFailedTurn() {
-    setConvoNumberDraft((prev) => prev || SAMPLE_CONVERSATION_NUMBER)
-    setConvoTurns((prev) => [...(prev.length > 0 ? prev : buildSampleConversationTurns()), buildSlowOrFailedTurn()])
-    setConvoStatus('found')
   }
 
   // One event arrives as `request_received` and, over a few seconds, walks forward through the
@@ -1045,33 +668,18 @@ export function ActivityPage() {
       <Button variant="outline" size="sm" onClick={demoSimulateLiveEvent}>
         Demo: simulate live event arriving
       </Button>
-      <Button variant="outline" size="sm" onClick={demoSimulateSlowOrFailedTurn}>
-        Demo: simulate a slow or failed turn
-      </Button>
     </DemoControlsGroup>,
   )
 
   return (
     <div className="space-y-10">
-      <QualityChecksSection runs={state.qualityChecks.runs} onGoToTestPublish={goToTestPublish} />
       <ConnectorActivitySection connectionsState={state.connections} onGoToConnections={goToConnections} />
-      <InboundEventsSection
-        agentEvents={{ ...state.agentEvents, events }}
-        onPatch={(p) => patch('agentEvents', p)}
-        onAddSkillForEvent={addSkillForEvent}
-        onSendEvent={sendTestEvent}
-      />
-      <ConversationsSection
-        numberDraft={convoNumberDraft}
-        onNumberDraftChange={setConvoNumberDraft}
-        status={convoStatus}
-        turns={convoTurns}
-        onLookup={() => void lookupConversation()}
-        lookupError={lookupError}
-        insights={insights}
-        onThreadControl={handleThreadControl}
-        past={pastConvos}
-      />
+      <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        To read a customer&rsquo;s conversation or take it over from the agent, open it in the Inbox.
+        <Button variant="outline" size="sm" onClick={() => exitTo('inbox')}>
+          Open Inbox
+        </Button>
+      </p>
       {audit && <ChangeHistorySection rows={audit} />}
     </div>
   )

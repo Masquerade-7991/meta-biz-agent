@@ -17,6 +17,12 @@ export interface ToolCall {
 /** What the chat shows under a reply: still checking, the calls (maybe none), or couldn't tell. */
 export type ToolCallsState = { state: 'checking' } | { state: 'done'; calls: ToolCall[] } | { state: 'unknown' }
 
+/** A connector or tool name as people read it: "search_products" → "Search products". */
+export const readableName = (name: string) => {
+  const words = name.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim()
+  return words ? words[0].toUpperCase() + words.slice(1) : name
+}
+
 /** Meta's canned reply when its agent fails to produce an answer (seen live with a turn that has no steps).
  *  ponytail: matches Meta's wording; if Meta rewords it, the reply just shows as a normal one again. */
 export const isMetaFallback = (reply: string) => /^I had trouble responding fully/i.test(reply.trim())

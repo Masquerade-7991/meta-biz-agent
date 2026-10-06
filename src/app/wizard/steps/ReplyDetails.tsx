@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronRight, Clock, Loader2, MessageSquareOff, UserRound, Wrench, XCircle } from 'lucide-react'
 import { cn } from '@/app/lib/utils'
-import { readable, type ToolCall, type ToolCallsState } from '@/app/wizard/testTools'
+import { readable, readableName, type ToolCall, type ToolCallsState } from '@/app/wizard/testTools'
 
 const SM = { fontSize: 'var(--text-sm)' } as const
 
@@ -144,8 +144,8 @@ function Call({ call: c, onOpenConnections }: { call: ToolCall; onOpenConnection
       >
         <Wrench className="size-3 shrink-0 text-muted-foreground" />
         <span className="min-w-0 truncate">
-          <span className="font-mono">{c.tool}</span>
-          {c.connector && <span className="text-muted-foreground"> · {c.connector}</span>}
+          <span title={c.tool}>{readableName(c.tool)}</span>
+          {c.connector && <span className="text-muted-foreground"> · {readableName(c.connector)}</span>}
         </span>
         {ok ? <CheckCircle2 className="size-3 shrink-0 text-success" /> : <XCircle className="size-3 shrink-0 text-destructive" />}
         <span className="shrink-0 whitespace-nowrap text-muted-foreground">

@@ -57,7 +57,7 @@ function computeSkillWarnings(instruction: string, skills: CustomSkill[], exclud
   }
   if (SKILL_CONFLICT_PHRASES.some((phrase) => lower.includes(phrase))) {
     warnings.push({
-      text: 'Tone, languages and answer length are controlled in the section above. Setting them here too can conflict with those choices.',
+      text: 'Tone, languages and answer length are set under Identity → Personality. Setting them here too can conflict with those choices.',
     })
   }
   if (instruction.includes('[') && instruction.includes(']')) {
@@ -73,9 +73,9 @@ type SkillEditorState = { mode: 'add' | 'edit'; skillId?: string; name: string; 
 const MAX_SKILL_DESCRIPTION = 1024
 
 const REVIEW_LABEL: Record<NonNullable<CustomSkill['reviewStatus']>, { label: string; className: string }> = {
-  active: { label: 'Active', className: 'bg-success/15 text-success' },
-  pending_review: { label: 'Pending Review', className: 'bg-warning/15 text-warning-foreground' },
-  blocked: { label: 'Blocked', className: 'bg-destructive/15 text-destructive' },
+  active: { label: 'In use', className: 'bg-success/10 text-success' },
+  pending_review: { label: 'In review', className: 'bg-warning/15 text-warning-foreground' },
+  blocked: { label: 'Rejected', className: 'bg-destructive/10 text-destructive' },
 }
 
 /** Creates each imported skill on Meta, 5 at a time; rejected rows come back in `failed`. */
@@ -367,9 +367,9 @@ export function SkillsSection() {
                             className={cn('rounded-full px-2 py-0.5 text-xs font-medium', REVIEW_LABEL[skill.reviewStatus].className)}
                             title={
                               skill.reviewStatus === 'blocked'
-                                ? 'This skill failed review, most often because it asks for or refers to sensitive personal information. Edit and save it to have it reviewed again.'
+                                ? 'Rejected in review, most often because it asks for or refers to sensitive personal information. Edit and save it to have it reviewed again.'
                                 : skill.reviewStatus === 'pending_review'
-                                  ? 'Meta is reviewing this skill. The agent uses it once it is Active.'
+                                  ? 'Meta reviews each new skill, usually within minutes. The agent starts using it once it shows In use.'
                                   : 'The agent is using this skill.'
                             }
                           >
