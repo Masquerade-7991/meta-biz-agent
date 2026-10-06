@@ -14,6 +14,7 @@ import { navFromPath, NAV_ITEMS, pathFor, type NavId } from '@/app/nav'
 import { sectionFromSlug, STUDIO_BASE, studioPath } from '@/app/wizard/studioPaths'
 import type { SettingsTab } from '@/app/components/shell/SettingsPage'
 import { ProductShell } from '@/app/components/shell/ProductShell'
+import { CommandPalette } from '@/app/components/shell/CommandPalette'
 import { isDummyMode } from '@/app/api/dummy'
 import { AuthProvider, useAuth } from '@/app/auth/AuthContext'
 import { AuthScreen, CreateWorkspaceScreen } from '@/app/auth/AuthScreens'
@@ -137,6 +138,7 @@ export default function App() {
         <TooltipProvider>
           <DevControlsProvider>
             <Gate />
+            <CommandPalette />
             {(isDummyMode() || import.meta.env.DEV) && <DevControlsButton />}
           </DevControlsProvider>
           <Toaster />

@@ -6,7 +6,8 @@ import { ContactsPage } from '@/app/pages/ContactsPage'
 import { BroadcastsPage } from '@/app/pages/BroadcastsPage'
 import { SupportAnalyticsPage } from '@/app/pages/SupportAnalyticsPage'
 import { WhatsAppPage } from '@/app/pages/WhatsAppPage'
-import { CircleHelp, ExternalLink, Menu } from 'lucide-react'
+import { CircleHelp, ExternalLink, Menu, Search } from 'lucide-react'
+import { openCommandPalette, PALETTE_SHORTCUT } from '@/app/lib/commandPalette'
 import { NotificationsBell } from './NotificationsBell'
 import { Sheet, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
 import {
@@ -147,7 +148,19 @@ export function ProductShell({
           </button>
           <img src={mark} alt="Helo.ai" className="size-6 md:hidden" />
           <span className="truncate text-sm font-medium md:hidden">{activeItem.label}</span>
-          <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={openCommandPalette}
+            className="ml-auto hidden h-9 w-72 items-center gap-2 rounded-md border border-border bg-muted/50 px-3 text-sm text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground md:flex"
+          >
+            <Search className="size-4" />
+            <span className="flex-1 text-left">Search or jump to…</span>
+            <kbd className="rounded border border-border bg-card px-1.5 font-mono text-[0.6875rem]">{PALETTE_SHORTCUT}</kbd>
+          </button>
+          <div className="ml-auto flex items-center gap-1 md:ml-2">
+            <button type="button" onClick={openCommandPalette} aria-label="Search or jump to" className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground md:hidden">
+              <Search className="size-5" />
+            </button>
             <HelpMenu />
             <NotificationsBell
               onOpenChat={openChat}

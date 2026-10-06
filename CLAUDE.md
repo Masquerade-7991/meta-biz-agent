@@ -34,6 +34,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Page pieces** in `src/app/components/ui/page.tsx` (PageContainer, PageHeader, EmptyState, SaveBar), `sheet.tsx` for side panels, `status.tsx` StatusPill with the words in `src/app/lib/status.ts` (agent: Draft · Testing · Live · Paused).
 - **Addresses:** every page has a URL (`src/app/nav.ts` `pathFor`); the studio is `/agents/studio/<section>` (`src/app/wizard/studioPaths.ts`) and follows the wizard's `currentSection` both ways (`StudioUrlSync` in `App.tsx`). Real IDs never go in URLs.
 - **Demo controls** render only in dummy mode or dev (`App.tsx`).
+- **⌘K palette** (`shell/CommandPalette.tsx`) lists pages, settings, the open agent's sections and quick actions; add new pages there. The studio's **Try it** panel (`steps/TryItPanel.tsx`) is the quick test chat from any section.
+- Effects return nothing or a cleanup function: wrap calls like `scrollIntoView` in a block body (newer browsers return a Promise from it, which crashes React).
 
 ## Support platform (Home, Inbox, Tickets, Contacts, Broadcasts, Analytics)
 

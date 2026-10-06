@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Eye, Loader2, Menu, Rocket } from 'lucide-react'
+import { ArrowLeft, Eye, Loader2, Menu, MessageCircle, Rocket } from 'lucide-react'
+import { TryItPanel } from '@/app/wizard/steps/TryItPanel'
 import { StatusPill } from '@/app/components/ui/status'
 import { Sheet, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
 import { AGENT_STATUS, agentStatusOf } from '@/app/lib/status'
@@ -71,6 +72,7 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
   const { state, setSection, patch } = useWizard()
   const { runGuard, pending, status: saveStatus } = useNavigationGuard()
   const [navOpen, setNavOpen] = useState(false)
+  const [tryOpen, setTryOpen] = useState(false)
   // Supervisors and agents may look at the agent, but only owners and admins change it (server/app.ts).
   const { me } = useAuth()
   const readOnly = !can(me?.role, 'agent.edit')
@@ -189,6 +191,12 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
               {saveText}
             </span>
           )}
+          {state.currentSection !== 'testEval' && (
+            <Button variant="outline" size="sm" onClick={() => setTryOpen(true)}>
+              <MessageCircle className="size-4" />
+              <span className="hidden sm:inline">Try it</span>
+            </Button>
+          )}
           {!readOnly && (statusId === 'draft' || statusId === 'paused') && state.currentSection !== 'publish' && state.currentSection !== 'overview' && (
             <Button size="sm" onClick={() => navigate('publish')} disabled={pending}>
               <Rocket className="size-4" />
@@ -198,6 +206,7 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
         </div>
       </header>
 
+      <TryItPanel open={tryOpen} onOpenChange={setTryOpen} />
       <div className="flex min-h-0 flex-1">
         <aside className="hidden w-56 shrink-0 overflow-y-auto border-r border-sidebar-border bg-sidebar md:block">{nav}</aside>
         <Sheet open={navOpen} onOpenChange={setNavOpen}>
