@@ -109,7 +109,8 @@ export async function callUpstream(
       ...base,
       status: r.status,
       ms: Date.now() - at.getTime(),
-      ...(e ? { error: [e.title, e.detail ?? e.error?.message].filter(Boolean).join(': ').slice(0, 500) || text.slice(0, 300) } : {}),
+      // A non-JSON failure (seen: agent_test's 500 after 30 s) keeps its raw text, so a reference still shows Meta's words.
+      ...(r.ok ? {} : { error: (e && [e.title, e.detail ?? e.error?.message].filter(Boolean).join(': ').slice(0, 500)) || text.slice(0, 300) || `HTTP ${r.status} ${r.statusText}` }),
       ...(e?.fbtrace_id || e?.error?.fbtrace_id ? { fbtraceId: e.fbtrace_id ?? e.error?.fbtrace_id } : {}),
     })
     return { status: r.status, text, contentType: r.headers.get('content-type') ?? 'application/json' }

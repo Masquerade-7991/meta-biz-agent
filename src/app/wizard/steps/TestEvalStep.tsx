@@ -23,7 +23,7 @@ import {
 import type { Connection, ConnectionAction, WizardState } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
 import { checkEligibility, errorText, MetaError, sendTestMessage, testConversationTurns } from '@/app/api/meta'
-import { findToolCalls } from '@/app/wizard/testTools'
+import { findToolCalls, isMetaFallback } from '@/app/wizard/testTools'
 import { BehindTheScenes, type ReplyInfo } from './ReplyDetails'
 import { listTestConversations } from '@/app/api/store'
 import { storageKey } from '@/app/api/dummy'
@@ -198,7 +198,7 @@ export function TestEvalStep() {
       const details: ReplyInfo = {
         asked: shown ?? text,
         ms: replyAt - sentAt,
-        outcome: r.handoff_reason ? 'handoff' : r.agent_response ? 'replied' : 'no_reply',
+        outcome: r.handoff_reason ? 'handoff' : !r.agent_response ? 'no_reply' : isMetaFallback(r.agent_response) ? 'failed' : 'replied',
         reason: r.handoff_reason || (!r.agent_response ? r.no_response_reason : undefined) || undefined,
         ...(lookTools ? { tools: { state: 'checking' as const } } : {}),
       }
@@ -225,8 +225,12 @@ export function TestEvalStep() {
             : "You've reached this agent's testing limit for the hour. Try again shortly.",
         )
       } else {
-        toast.error("Couldn't reach the agent", { description: errorText(err) })
-        setChatMessages((prev) => [...prev, { from: 'system', text: `Couldn’t reach the agent: ${errorText(err)}`, at: Date.now() }])
+        // A 5xx is Meta's agent failing (seen live: a 500 after 30 s), not our connection.
+        const metaFailed = err instanceof MetaError && err.status >= 500
+        const ref = /\(Reference: [^)]+\)/.exec(errorText(err))?.[0]
+        const text = metaFailed ? `The agent didn’t answer this time (Meta’s error). Try sending it again.${ref ? ` ${ref}` : ''}` : `Couldn’t reach the agent: ${errorText(err)}`
+        toast.error(metaFailed ? 'The agent didn’t answer' : "Couldn't reach the agent", { description: metaFailed ? text : errorText(err) })
+        setChatMessages((prev) => [...prev, { from: 'system', text, at: Date.now() }])
       }
     } finally {
       setSending(false)
@@ -472,7 +476,7 @@ export function TestEvalStep() {
               </div>
             )}
           </div>
-          <div className="lg:sticky lg:top-4 lg:max-h-[42rem]">
+          <div className="lg:sticky lg:top-4 lg:max-h-168">
             <BehindTheScenes replies={replies} selected={selected} onSelect={setSelected} hasTools={hasTools} onOpenConnections={openConnections} />
           </div>
         </div>

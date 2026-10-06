@@ -18,6 +18,7 @@ import type {
 } from '../wizard/types'
 import { compileConfig } from '../wizard/compiler'
 import { validateRichReply } from '../wizard/richReplies'
+import type { Profile } from '../whatsapp/profileRules'
 import type { EvalConversationResult, EvalScenario, TranscriptLine } from '../wizard/steps/evalData'
 import { isDummyMode } from './dummy'
 import { toolBody, toolToAction, type MetaTool } from '../wizard/toolRequest'
@@ -294,6 +295,37 @@ interface MetaSettings {
 // ---- Business info (full replace) ----
 export const saveBusinessInfo = (state: WizardState) =>
   metaFetch(`${agent()}/agent_config/business_info`, 'PUT', compileConfig(state).business_info)
+
+/**
+ * A new agent's starting business details: description (or the About line), email and address from
+ * its number's WhatsApp Business Profile, and opening hours from the workspace's support hours (the
+ * profile has none). Only empty fields are filled, so nothing an agent already has is overwritten.
+ * Returns which fields were filled.
+ */
+export async function prefillBusinessInfo(p: Pick<Profile, 'description' | 'about' | 'email' | 'address'> | null, hours: string): Promise<string[]> {
+  type Info = { business_description?: string; contact_info?: { email?: string; hours_of_operation?: string; address?: string } }
+  const current = await metaFetch<Info>(`${agent()}/agent_config/business_info`).catch((err: unknown) => {
+    if (err instanceof MetaError && err.status === 404) return {} as Info
+    throw err
+  })
+  const c = current.contact_info ?? {}
+  const pick = (now: string | undefined, next: string | undefined) => (now?.trim() ? null : next?.trim() || null)
+  const fill = {
+    description: pick(current.business_description, p?.description || p?.about),
+    email: pick(c.email, p?.email),
+    address: pick(c.address, p?.address),
+    'opening hours': pick(c.hours_of_operation, hours),
+  }
+  const filled = Object.keys(fill).filter((k) => fill[k as keyof typeof fill])
+  if (!filled.length) return []
+  // Full replace: everything Meta has, plus the filled fields.
+  await metaFetch(`${agent()}/agent_config/business_info`, 'PUT', {
+    ...current,
+    business_description: fill.description ?? current.business_description ?? '',
+    contact_info: { ...c, email: fill.email ?? c.email ?? '', address: fill.address ?? c.address ?? '', hours_of_operation: fill['opening hours'] ?? c.hours_of_operation ?? '' },
+  })
+  return filled
+}
 
 // ---- Skills ----
 interface MetaSkill {

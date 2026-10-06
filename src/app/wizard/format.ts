@@ -34,6 +34,14 @@ function formatTimeLabel(time: string): string {
   return time.replace(/^0(\d:)/, '$1')
 }
 
+/** The workspace's support hours (Settings → Support, keyed 'mon'…'sun') as Business details rows. */
+export function rowsFromSupportHours(week: Record<string, { open: string; close: string } | null>): BusinessHourRow[] {
+  return (Object.keys(DAY_FULL) as Day[]).map((day) => {
+    const h = week[day.toLowerCase()]
+    return h ? { day, closed: false, open: h.open, close: h.close } : { day, closed: true, open: '', close: '' }
+  })
+}
+
 export function composeBusinessHoursSentence(rows: BusinessHourRow[]): string {
   if (rows.length > 0 && rows.every((r) => r.closed)) return 'Closed every day'
 

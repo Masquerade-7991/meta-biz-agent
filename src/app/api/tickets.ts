@@ -38,6 +38,8 @@ export interface SupportSettings {
   restrictAgents: boolean
   /** Whether the server can write AI summaries (ANTHROPIC_API_KEY set). */
   aiSummary: boolean
+  /** False until the workspace saves these settings (the hours above are then Helo.ai's defaults). */
+  saved?: boolean
 }
 /** Something about one ticket: an SLA due or overdue, or a ticket that's yours or nobody's. */
 export interface TicketNotice {

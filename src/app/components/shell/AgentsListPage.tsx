@@ -48,7 +48,7 @@ import {
 import { listStoredAgents, ms, putStoredAgent, putStoredAgents } from '@/app/api/store'
 import { storageKey } from '@/app/api/dummy'
 import { useWizard } from '@/app/wizard/WizardContext'
-import type { AgentInstanceSummary, AgentRolloutStatus } from '@/app/wizard/types'
+import type { AgentInstanceSummary, AgentRolloutStatus, BusinessState } from '@/app/wizard/types'
 import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
 
@@ -240,9 +240,10 @@ export function AgentsListPage({
   // A brand new agent skips the agents table entirely and goes straight into the setup front
   // door — "Open configuration" for an EXISTING draft row still goes straight to the wizard via
   // openAgentConfiguration below, unaffected.
-  function handleAgentCreated(agent: AgentInstanceSummary, phoneNumberId?: string, wabaId?: string) {
+  function handleAgentCreated(agent: AgentInstanceSummary, phoneNumberId?: string, wabaId?: string, business?: Partial<BusinessState>) {
     resetWizard()
     patch('identity', { agentName: agent.name, companyName: agent.companyName })
+    if (business) patch('business', business)
     patch('gate', {
       gatePassed: true,
       selectedPhoneNumber: agent.phoneNumber,

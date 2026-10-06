@@ -223,6 +223,7 @@ const MIN = 60_000
 let tickets: Ticket[] | null = null
 let nextNumber = 1001
 let settings: SupportSettings = {
+  saved: true,
   hours: {
     timezone: 'Asia/Kolkata',
     week: { sun: null, mon: { open: '09:30', close: '18:30' }, tue: { open: '09:30', close: '18:30' }, wed: { open: '09:30', close: '18:30' }, thu: { open: '09:30', close: '18:30' }, fri: { open: '09:30', close: '18:30' }, sat: { open: '10:00', close: '14:00' } },
@@ -314,7 +315,7 @@ export async function dummyTickets<T>(method: string, path: string, body: unknow
     return withSla(t) as T
   }
   if (u.pathname === '/api/support/settings') {
-    if (method === 'PUT') settings = { ...(b as unknown as SupportSettings), aiSummary: false }
+    if (method === 'PUT') settings = { ...(b as unknown as SupportSettings), aiSummary: false, saved: true }
     return settings as T
   }
   if (u.pathname.startsWith('/api/support/notifications/')) {

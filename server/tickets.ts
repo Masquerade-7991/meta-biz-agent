@@ -399,7 +399,8 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     if (m === 'GET') return one(n)
     if (m === 'PATCH') return update(n, obj(await readJson(req)), me)
   }
-  if (path === '/api/support/settings' && m === 'GET') return { ...(await getSettings()), aiSummary: !!env('ANTHROPIC_API_KEY') }
+  if (path === '/api/support/settings' && m === 'GET')
+    return { ...(await getSettings()), aiSummary: !!env('ANTHROPIC_API_KEY'), saved: !!(await settingsCol().findOne({ workspaceId: ws() }, { projection: { _id: 1 } })) }
   if (path === '/api/support/settings' && m === 'PUT') {
     if (!can(me.role, 'settings.manage')) throw new HttpError(403, 'Only owners and admins can change support settings.')
     const members = new Set((await col('memberships').find({ workspaceId: ws() }).toArray()).map((x) => String(x.userId)))

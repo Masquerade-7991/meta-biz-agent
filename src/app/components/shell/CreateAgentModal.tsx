@@ -31,7 +31,9 @@ import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { newId } from '@/app/wizard/mockData'
-import type { AgentInstanceSummary } from '@/app/wizard/types'
+import type { AgentInstanceSummary, BusinessState } from '@/app/wizard/types'
+import { composeBusinessHoursSentence, rowsFromSupportHours } from '@/app/wizard/format'
+import { getSupportSettings } from '@/app/api/tickets'
 import {
   checkEligibility,
   getAgentOnNumber,
@@ -41,8 +43,10 @@ import {
   errorText,
   MetaError,
   onboardAgent,
+  prefillBusinessInfo,
   setActivePhoneNumberId,
 } from '@/app/api/meta'
+import { getNumber } from '@/app/api/numbers'
 import { putStoredAgent } from '@/app/api/store'
 
 // ---- WABA / phone number directory: Meta's, else the .env number, else a mock (offline demo) ----
@@ -139,7 +143,7 @@ export function CreateAgentModal({
   open: boolean
   onClose: () => void
   /** phoneNumberId is Meta's id for the number; undefined for the offline mock directory. */
-  onCreate: (agent: AgentInstanceSummary, phoneNumberId?: string, wabaId?: string) => void
+  onCreate: (agent: AgentInstanceSummary, phoneNumberId?: string, wabaId?: string, business?: Partial<BusinessState>) => void
   existingAgentNames: string[]
 }) {
   const [agentName, setAgentName] = useState('')
@@ -330,6 +334,7 @@ export function CreateAgentModal({
   async function handleCreate() {
     if (!canCreate || !selectedWaba || !selectedPhone) return
     const realPhoneId = source === 'mock' ? undefined : selectedPhone.id
+    let business: Partial<BusinessState> | undefined
     if (realPhoneId) {
       setActivePhoneNumberId(realPhoneId)
       try {
@@ -339,6 +344,22 @@ export function CreateAgentModal({
         // A number onboarded earlier (e.g. in WhatsApp Manager) rejects a second onboarding;
         // the existing agent is still usable, so carry on and say what Meta returned.
         toast.warning('Meta onboarding call failed', { description: err instanceof Error ? err.message : String(err) })
+      }
+      // Starting business details: the number's WhatsApp Business Profile, plus the workspace's saved
+      // support hours as opening hours. Only empty fields are filled. Before onCreate, so the agent
+      // opens with them already on Meta.
+      try {
+        const [num, support] = await Promise.all([getNumber(realPhoneId).catch(() => null), getSupportSettings().catch(() => null)])
+        const rows = support?.saved ? rowsFromSupportHours(support.hours.week) : null
+        const filled = await prefillBusinessInfo(num?.profile ?? null, rows ? composeBusinessHoursSentence(rows) : '')
+        // Opening hours live as rows in the console (Meta keeps only the sentence), so it gets them too.
+        if (rows && filled.includes('opening hours')) business = { businessHours: rows, businessHoursEnabled: true }
+        if (filled.length)
+          toast.success('Business details filled in', {
+            description: `${filled.join(', ')}.${filled.includes('opening hours') ? '' : ' Add your opening hours in Business details.'}`,
+          })
+      } catch {
+        // Optional: the agent works without it, and Business details can be filled in by hand.
       }
     }
     if (realPhoneId) void putStoredAgent(realPhoneId, { wabaId: selectedWaba.id, displayName: trimmedName, createdAt: Date.now() })
@@ -354,7 +375,7 @@ export function CreateAgentModal({
       allowlistCount: 0,
       evalScore: null,
       updatedAt: 'Just now',
-    }, realPhoneId, source === 'mock' ? undefined : selectedWaba.id)
+    }, realPhoneId, source === 'mock' ? undefined : selectedWaba.id, business)
     handleClose()
   }
 

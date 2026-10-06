@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CheckCircle2, ChevronRight, Clock, Loader2, MessageSquareOff, UserRound, Wrench, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronRight, Clock, Loader2, MessageSquareOff, UserRound, Wrench, XCircle } from 'lucide-react'
 import { cn } from '@/app/lib/utils'
 import { readable, type ToolCall, type ToolCallsState } from '@/app/wizard/testTools'
 
@@ -12,7 +12,8 @@ export interface ReplyInfo {
   asked: string
   /** Time from sending to the reply, in ms. */
   ms: number
-  outcome: 'replied' | 'handoff' | 'no_reply'
+  /** 'failed': Meta sent its fallback text instead of an answer (isMetaFallback). */
+  outcome: 'replied' | 'handoff' | 'no_reply' | 'failed'
   /** Meta's handoff or no-reply reason. */
   reason?: string
   /** Connector tools it called (looked up only when the agent has tools). */
@@ -68,7 +69,9 @@ function Row({ info, selected, onSelect, hasTools, onOpenConnections }: { info: 
     if (selected) ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [selected])
   const outcome =
-    info.outcome === 'handoff'
+    info.outcome === 'failed'
+      ? { icon: AlertTriangle, text: 'Couldn’t answer', tone: 'text-warning-foreground' }
+      : info.outcome === 'handoff'
       ? { icon: UserRound, text: 'Handed to a person', tone: 'text-warning-foreground' }
       : info.outcome === 'no_reply'
         ? { icon: MessageSquareOff, text: 'Didn’t reply', tone: 'text-muted-foreground' }
@@ -89,6 +92,11 @@ function Row({ info, selected, onSelect, hasTools, onOpenConnections }: { info: 
             <Clock className="size-3.5" /> {(info.ms / 1000).toFixed(1)} s
           </span>
         </p>
+        {info.outcome === 'failed' && (
+          <p className="text-muted-foreground" style={XS}>
+            Meta&rsquo;s agent gave its fallback reply instead of an answer. Send it again; if it keeps happening, the problem is on Meta&rsquo;s side.
+          </p>
+        )}
         {info.reason && (
           <p className="text-muted-foreground" style={XS}>
             {info.reason.replace(/_/g, ' ')}

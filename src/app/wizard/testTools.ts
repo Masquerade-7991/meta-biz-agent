@@ -17,6 +17,10 @@ export interface ToolCall {
 /** What the chat shows under a reply: still checking, the calls (maybe none), or couldn't tell. */
 export type ToolCallsState = { state: 'checking' } | { state: 'done'; calls: ToolCall[] } | { state: 'unknown' }
 
+/** Meta's canned reply when its agent fails to produce an answer (seen live with a turn that has no steps).
+ *  ponytail: matches Meta's wording; if Meta rewords it, the reply just shows as a normal one again. */
+export const isMetaFallback = (reply: string) => /^I had trouble responding fully/i.test(reply.trim())
+
 /** The tool calls in the newest turn that started at or after `since` (ms), or null when it isn't there yet. */
 export function toolCallsSince(turns: MetaTurn[], since: number): ToolCall[] | null {
   const turn = turns.filter((t) => (t.timestamp ?? 0) >= since - 2000).sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))[0]
