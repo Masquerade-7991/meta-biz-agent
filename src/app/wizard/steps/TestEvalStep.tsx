@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { AlertTriangle, CheckCircle2, ChevronDown, History, Loader2, Send } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, History, Loader2, MessageSquarePlus, Play, Sparkles } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
-import { Input } from '@/app/components/ui/input'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
-import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { EvalTab } from './EvalTab'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
@@ -24,11 +23,10 @@ import {
 import type { Connection, ConnectionAction, WizardState } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
 import { checkEligibility, errorText, MetaError, sendTestMessage, testConversationTurns } from '@/app/api/meta'
-import { findToolCalls, type ToolCallsState } from '@/app/wizard/testTools'
-import { ToolCallsNote } from './ToolCallsNote'
-import { TestToolsStrip } from './TestToolsStrip'
+import { findToolCalls } from '@/app/wizard/testTools'
+import { BehindTheScenes, type ReplyInfo } from './ReplyDetails'
 import { listTestConversations } from '@/app/api/store'
-import { isDummyMode, storageKey } from '@/app/api/dummy'
+import { storageKey } from '@/app/api/dummy'
 import type { DummyRich } from '@/app/api/dummyMeta'
 import { DemoWhatsAppChat } from './DemoWhatsAppChat'
 import { InlineError } from '@/app/components/wizard/RetryBanner'
@@ -39,8 +37,8 @@ interface ChatMessage {
   at: number
   quickReplies?: string[]
   rich?: DummyRich
-  /** Connector tools the agent called for this reply (agent messages only). */
-  tools?: ToolCallsState
+  /** What happened behind this reply (agent and no-reply messages): shown beside the phone, never in it. */
+  details?: ReplyInfo
 }
 interface TestConversation {
   id: string
@@ -122,7 +120,7 @@ function buildStandardChecks(state: WizardState, forceAmberGreeting: boolean): C
     rows.push({
       id: 'action',
       situation: 'A configured action, if any',
-      sent: `Can you help with ${action.name.toLowerCase()}?`,
+      sent: action.exampleQuestion?.trim() || `Can you help me ${action.name.replace(/_/g, ' ').toLowerCase()}?`,
       reply: connection ? pickConnectionPreviewReply({ action, connection }) : state.replies.fallbackReply,
       finalStatus: 'normal',
     })
@@ -148,6 +146,8 @@ export function TestEvalStep() {
   const [history, setHistory] = useState<TestConversation[]>(loadTestHistory)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [viewing, setViewing] = useState<TestConversation | null>(null)
+  // The agent message whose details are highlighted beside the phone.
+  const [selected, setSelected] = useState<number | null>(null)
   // True once the store answered: the server keeps history then, so this browser stops writing it.
   const [storeOn, setStoreOn] = useState(false)
   useEffect(() => {
@@ -184,6 +184,7 @@ export function TestEvalStep() {
     const text = (textArg ?? chatDraft).trim()
     if (!text || sending) return
     if (!textArg) setChatDraft('')
+    setViewing(null)
     setChatMessages((prev) => [...prev, { from: 'customer', text: shown ?? text, at: Date.now() }])
     setSending(true)
     const sentAt = Date.now()
@@ -192,20 +193,26 @@ export function TestEvalStep() {
       setConversationId(r.conversation_id)
       const replyAt = Date.now()
       const lookTools = hasTools && !!r.agent_response && !!r.conversation_id
+      const details: ReplyInfo = {
+        asked: shown ?? text,
+        ms: replyAt - sentAt,
+        outcome: r.handoff_reason ? 'handoff' : r.agent_response ? 'replied' : 'no_reply',
+        reason: r.handoff_reason || (!r.agent_response ? r.no_response_reason : undefined) || undefined,
+        ...(lookTools ? { tools: { state: 'checking' as const } } : {}),
+      }
+      // The phone shows only what the customer would see; the rest goes beside it (details).
       setChatMessages((prev) => [
         ...prev,
-        ...(r.agent_response
-          ? [{ from: 'agent' as const, text: r.agent_response, at: replyAt, quickReplies: r.quick_replies, rich: r.dummy_rich, ...(lookTools ? { tools: { state: 'checking' as const } } : {}) }]
-          : []),
-        ...(r.handoff_reason ? [{ from: 'system' as const, text: 'This message would hand off to a human agent here.', at: Date.now() }] : []),
-        ...(!r.agent_response && !r.handoff_reason && r.no_response_reason
-          ? [{ from: 'system' as const, text: `The agent did not reply: ${r.no_response_reason}`, at: Date.now() }]
-          : []),
+        ...(r.agent_response ? [{ from: 'agent' as const, text: r.agent_response, at: replyAt, quickReplies: r.quick_replies, rich: r.dummy_rich, details }] : []),
+        ...(r.handoff_reason ? [{ from: 'system' as const, text: 'Test note: a person on your team would take over here.', at: replyAt + 1, ...(r.agent_response ? {} : { details }) }] : []),
+        ...(!r.agent_response && !r.handoff_reason ? [{ from: 'system' as const, text: 'Test note: the agent didn’t reply to this.', at: replyAt + 1, details }] : []),
       ])
       // Which tools it used: from the conversation's turns, which land about a second after the reply.
       if (lookTools)
         void findToolCalls(() => testConversationTurns(r.conversation_id), sentAt).then((calls) =>
-          setChatMessages((prev) => prev.map((m) => (m.at === replyAt && m.from === 'agent' ? { ...m, tools: calls ? { state: 'done', calls } : { state: 'unknown' } } : m))),
+          setChatMessages((prev) =>
+            prev.map((m) => (m.at === replyAt && m.from === 'agent' && m.details ? { ...m, details: { ...m.details, tools: calls ? { state: 'done', calls } : { state: 'unknown' } } } : m)),
+          ),
         )
     } catch (err) {
       if (err instanceof MetaError && err.status === 429) {
@@ -217,7 +224,7 @@ export function TestEvalStep() {
         )
       } else {
         toast.error("Couldn't reach the agent", { description: errorText(err) })
-        setChatMessages((prev) => [...prev, { from: 'system', text: errorText(err), at: Date.now() }])
+        setChatMessages((prev) => [...prev, { from: 'system', text: `Couldn’t reach the agent: ${errorText(err)}`, at: Date.now() }])
       }
     } finally {
       setSending(false)
@@ -233,6 +240,7 @@ export function TestEvalStep() {
     setChatMessages([])
     setConversationId(undefined)
     setViewing(null)
+    setSelected(null)
   }
 
   // ---- Standard checks: each situation is sent to the real agent as its own conversation ----
@@ -339,233 +347,203 @@ export function TestEvalStep() {
     </DemoControlsGroup>,
   )
 
+  const shownMessages = viewing ? viewing.messages : chatMessages
+  const replies = shownMessages.flatMap((m, index) => (m.details ? [{ index, info: m.details }] : []))
+  // Questions to try: a few every agent should handle, plus each tool's own example.
+  const suggestions = [
+    ...state.connections.actions.map((a) => a.exampleQuestion?.trim()).filter((q): q is string => !!q),
+    'What do you sell?',
+    'Can I talk to a person?',
+    'Where is my order?',
+  ].filter((q, i, all) => all.indexOf(q) === i).slice(0, 5)
+  const blocked = ineligible || !!limitMessage
+  const checksDone = checkRows?.filter((r) => r.status !== 'pending') ?? []
+  const toReview = checksDone.filter((r) => r.status === 'warn').length
+
   return (
-    <Tabs defaultValue="testing">
+    <Tabs defaultValue="chat">
       <TabsList>
-        <TabsTrigger value="testing">Testing</TabsTrigger>
+        <TabsTrigger value="chat">Chat</TabsTrigger>
+        <TabsTrigger value="checks">
+          Standard checks
+          {checksDone.length > 0 && toReview > 0 && <span className="rounded-full bg-warning/20 px-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>{toReview}</span>}
+        </TabsTrigger>
         <TabsTrigger value="eval">Evaluation</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="testing" className="space-y-4">
-        <TestToolsStrip onAsk={(q) => void sendQuickTest(q)} onManage={openConnections} disabled={sending || ineligible || !!limitMessage || !!viewing} />
-        {/* Quick test */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-1.5">
-              <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Quick test</p>
-              <InfoTooltip text="Test messages here are free and do not count toward your usage." />
-            </span>
-            <span className="flex items-center gap-1">
-              <Button size="sm" variant="ghost" onClick={() => setHistoryOpen((o) => !o)} aria-label="Test history">
-                <History className="size-4" />
-                Test history
-              </Button>
-              <Button size="sm" variant="outline" onClick={startNewConversation}>
-                Start new conversation
-              </Button>
-            </span>
-          </div>
-
-          {ineligible && (
-            <InlineError message="This number is no longer eligible for Meta Business Agent. Testing is unavailable until this is resolved." />
-          )}
-          {!ineligible && !hasAnyConfig && (
-            <p className="flex items-center gap-1.5 rounded-lg bg-warning/10 p-2 text-warning-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+      <TabsContent value="chat" className="space-y-4">
+        {/* One notice at most, above everything. */}
+        {ineligible ? (
+          <InlineError message="This number is no longer eligible for Meta Business Agent. Testing is unavailable until this is resolved." />
+        ) : limitMessage ? (
+          <InlineError message={limitMessage} onRetry={() => setLimitMessage(null)} />
+        ) : (
+          !hasAnyConfig && (
+            <p className="flex items-center gap-2 rounded-lg bg-warning/10 px-3 py-2 text-warning-foreground" style={{ fontSize: 'var(--text-sm)' }}>
               <AlertTriangle className="size-4 shrink-0" />
-              This agent has no knowledge, skills, or other configuration set. Please navigate to the agent configuration section.
+              Your agent has nothing to go on yet. Add knowledge or a skill first, then test it here.
             </p>
-          )}
+          )
+        )}
 
-          {historyOpen && (
-            <div className="space-y-1 rounded-lg border border-border p-3">
-              {history.length === 0 ? (
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                  No past test conversations yet.
-                </p>
-              ) : (
-                history.map((h) => (
-                  <button
-                    key={h.id}
-                    type="button"
-                    onClick={() => {
-                      setViewing(h)
-                      setHistoryOpen(false)
-                    }}
-                    className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left hover:bg-accent"
-                    style={{ fontSize: 'var(--text-sm)' }}
-                  >
-                    <span className="truncate">{h.messages[0]?.text ?? '(empty)'}</span>
-                    <span className="shrink-0 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                      {new Date(h.startedAt).toLocaleString()}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-
-          {isDummyMode() && !viewing ? (
-            <DemoWhatsAppChat
-              belowAgent={(m) => <ToolCallsNote tools={(m as ChatMessage).tools} hasTools={hasTools} onOpenConnections={openConnections} />}
-              name={state.identity.companyName.trim() || state.gate.selectedWabaName?.trim() || state.identity.agentName.trim() || 'Your business'}
-              messages={chatMessages}
-              sending={sending}
-              disabled={ineligible || !!limitMessage}
-              onSend={(text, shown) => void sendQuickTest(text, shown)}
-            />
-          ) : (
-            <div className="space-y-2 rounded-lg border border-border p-4">
-              {viewing && (
-                <div className="flex items-center justify-between gap-2 rounded-md bg-muted px-2 py-1" style={{ fontSize: 'var(--text-xs)' }}>
-                  <span className="text-muted-foreground">Read-only: conversation from {new Date(viewing.startedAt).toLocaleString()}</span>
-                  <button type="button" className="text-primary" onClick={() => setViewing(null)}>
-                    Back to testing
-                  </button>
-                </div>
-              )}
-              <div className="max-h-64 space-y-2 overflow-y-auto">
-                {(viewing ? viewing.messages : chatMessages).length === 0 ? (
-                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                    No messages yet.
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            Chat with your agent as a customer would. Free, up to 500 messages an hour.
+          </p>
+          <div className="flex items-center gap-2">
+            <DropdownMenu open={historyOpen} onOpenChange={setHistoryOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost">
+                  <History className="size-4" /> History
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-80 w-80 overflow-y-auto">
+                <DropdownMenuLabel style={{ fontSize: 'var(--text-xs)' }}>Past test conversations</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {history.length === 0 ? (
+                  <p className="px-2 py-3 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                    None yet.
                   </p>
                 ) : (
-                  (viewing ? viewing.messages : chatMessages).map((m, i, all) =>
-                    m.from === 'system' ? (
-                      <p key={i} className="text-center text-muted-foreground italic" style={{ fontSize: 'var(--text-xs)' }}>
-                        {m.text}
-                      </p>
-                    ) : (
-                      <div key={i} className={cn('flex flex-col', m.from === 'customer' ? 'items-end' : 'items-start')}>
-                        <p
-                          className={cn(
-                            'max-w-[80%] rounded-lg px-3 py-1.5 whitespace-pre-wrap',
-                            m.from === 'customer' ? 'rounded-br-sm bg-primary text-primary-foreground' : 'rounded-bl-sm bg-muted',
-                          )}
-                          style={{ fontSize: 'var(--text-sm)' }}
-                        >
-                          {m.text}
-                        </p>
-                        {viewing && (
-                          <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                            {new Date(m.at).toLocaleTimeString()}
-                          </span>
-                        )}
-                        {m.from === 'agent' && (
-                          <div className="mt-1 w-full">
-                            <ToolCallsNote tools={m.tools} hasTools={hasTools} onOpenConnections={openConnections} />
-                          </div>
-                        )}
-                        {/* Quick replies on the latest agent message, tappable like on WhatsApp. */}
-                        {!viewing && m.quickReplies && m.quickReplies.length > 0 && i === all.length - 1 && (
-                          <div className="mt-1 flex flex-wrap gap-1.5">
-                            {m.quickReplies.map((qr) => (
-                              <button
-                                key={qr}
-                                type="button"
-                                onClick={() => void sendQuickTest(qr)}
-                                disabled={sending || !!limitMessage || ineligible}
-                                className="rounded-full border border-primary px-2.5 py-0.5 text-primary hover:bg-accent"
-                                style={{ fontSize: 'var(--text-xs)' }}
-                              >
-                                {qr}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ),
-                  )
-                )}
-                {sending && !viewing && (
-                  <p className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                    <Loader2 className="size-3 animate-spin" /> The agent is replying...
-                  </p>
-                )}
-              </div>
-              {limitMessage && <InlineError message={limitMessage} onRetry={() => setLimitMessage(null)} />}
-              {!viewing && (
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={chatDraft}
-                    onChange={(e) => setChatDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void sendQuickTest()
-                    }}
-                    placeholder="Type a message to try..."
-                    disabled={ineligible || !!limitMessage}
-                  />
-                  <Button size="icon" onClick={() => void sendQuickTest()} disabled={!chatDraft.trim() || sending || ineligible || !!limitMessage}>
-                    <Send className="size-4" />
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Standard checks */}
-        <div className="space-y-2">
-          <div>
-            <span className="flex items-center gap-1.5">
-              <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Standard checks</p>
-              <InfoTooltip text="A short set of common situations, run automatically, so you don’t have to think of them yourself." />
-            </span>
-          </div>
-          <Button variant="outline" onClick={() => void runStandardChecks(false)} disabled={checkRows !== null && checkRows.some((r) => r.status === 'pending')}>
-            Run standard checks
-          </Button>
-
-          {checkRows && (
-            <div className="space-y-2">
-              {checkRows.map((row) => {
-                const expanded = expandedCheck === row.id
-                return (
-                  <div key={row.id} className="rounded-lg border border-border px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedCheck(expanded ? null : row.id)}
-                      disabled={row.status === 'pending'}
-                      className="flex w-full items-center justify-between gap-3 text-left"
+                  history.map((h) => (
+                    <DropdownMenuItem
+                      key={h.id}
+                      onClick={() => {
+                        setViewing(h)
+                        setSelected(null)
+                      }}
+                      className="flex flex-col items-start gap-0.5"
                     >
-                      <span className="flex min-w-0 items-center gap-2">
-                        {row.status === 'pending' ? (
-                          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
-                        ) : row.status === 'normal' ? (
-                          <CheckCircle2 className="size-4 shrink-0 text-success" />
-                        ) : (
-                          <AlertTriangle className="size-4 shrink-0 text-warning" />
-                        )}
-                        <span className="truncate" style={{ fontSize: 'var(--text-sm)' }}>
-                          {row.situation}
-                        </span>
+                      <span className="line-clamp-1" style={{ fontSize: 'var(--text-sm)' }}>
+                        {h.messages[0]?.text ?? '(empty)'}
                       </span>
-                      <span className="flex shrink-0 items-center gap-2">
-                        <span className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                          {row.status === 'pending' ? '' : row.status === 'normal' ? 'Responded normally' : 'Check this'}
-                        </span>
-                        {row.status !== 'pending' && (
-                          <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
-                        )}
+                      <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                        {new Date(h.startedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · {h.messages.length} messages
                       </span>
-                    </button>
-                    {expanded && row.status !== 'pending' && (
-                      <div className="mt-2 space-y-1.5 border-t border-border pt-2">
-                        <p style={{ fontSize: 'var(--text-sm)' }}>
-                          <span className="text-muted-foreground">Customer: </span>
-                          {row.sent}
-                        </p>
-                        <p style={{ fontSize: 'var(--text-sm)' }}>
-                          <span className="text-muted-foreground">Agent: </span>
-                          {row.reply}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
+                    </DropdownMenuItem>
+                  ))
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button size="sm" variant="outline" onClick={startNewConversation} disabled={sending}>
+              <MessageSquarePlus className="size-4" /> New conversation
+            </Button>
+          </div>
         </div>
+
+        {viewing && (
+          <div className="flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2" style={{ fontSize: 'var(--text-sm)' }}>
+            <span className="text-muted-foreground">Viewing a past test from {new Date(viewing.startedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+            <button type="button" className="text-primary hover:underline" onClick={() => setViewing(null)}>
+              Back to testing
+            </button>
+          </div>
+        )}
+
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+          <div className="space-y-3">
+            <DemoWhatsAppChat
+              name={state.identity.companyName.trim() || state.gate.selectedWabaName?.trim() || state.identity.agentName.trim() || 'Your business'}
+              messages={shownMessages}
+              sending={sending && !viewing}
+              disabled={blocked}
+              readOnly={!!viewing}
+              selected={selected}
+              onSelect={(i) => setSelected(i)}
+              onSend={(text, shown) => void sendQuickTest(text, shown)}
+            />
+            {!viewing && !sending && !blocked && (
+              <div className="space-y-1.5">
+                <p className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  <Sparkles className="size-3.5" /> Try asking
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {suggestions.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => void sendQuickTest(q)}
+                      className="rounded-full border border-border bg-card px-3 py-1 text-left hover:border-primary hover:text-primary"
+                      style={{ fontSize: 'var(--text-xs)' }}
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="lg:sticky lg:top-4 lg:max-h-[42rem]">
+            <BehindTheScenes replies={replies} selected={selected} onSelect={setSelected} hasTools={hasTools} onOpenConnections={openConnections} />
+          </div>
+        </div>
+      </TabsContent>
+
+      <TabsContent value="checks" className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+          <div className="space-y-0.5">
+            <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>
+              {!checkRows
+                ? 'Common situations, checked for you'
+                : checksDone.length < checkRows.length
+                  ? `Checking ${checksDone.length + 1} of ${checkRows.length}…`
+                  : `${checkRows.length} situations · ${checkRows.length - toReview} replied normally${toReview ? ` · ${toReview} to check` : ''}`}
+            </p>
+            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              Each one is sent to your real agent as a new conversation, so you don&rsquo;t have to think of them.
+            </p>
+          </div>
+          <Button onClick={() => void runStandardChecks(false)} disabled={(checkRows !== null && checksDone.length < checkRows.length) || ineligible}>
+            {checkRows !== null && checksDone.length < checkRows.length ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+            {checkRows ? 'Run again' : 'Run standard checks'}
+          </Button>
+        </div>
+
+        {checkRows && (
+          <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+            {checkRows.map((row) => {
+              const expanded = expandedCheck === row.id
+              return (
+                <li key={row.id}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedCheck(expanded ? null : row.id)}
+                    disabled={row.status === 'pending'}
+                    aria-expanded={expanded}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-accent/30"
+                  >
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      {row.status === 'pending' ? (
+                        <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+                      ) : row.status === 'normal' ? (
+                        <CheckCircle2 className="size-4 shrink-0 text-success" />
+                      ) : (
+                        <AlertTriangle className="size-4 shrink-0 text-warning" />
+                      )}
+                      <span className="truncate" style={{ fontSize: 'var(--text-sm)' }}>
+                        {row.situation}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                      {row.status === 'pending' ? 'Checking…' : row.status === 'normal' ? 'Replied normally' : 'Check this'}
+                      {row.status !== 'pending' && <ChevronDown className={cn('size-4 transition-transform', expanded && 'rotate-180')} />}
+                    </span>
+                  </button>
+                  {expanded && row.status !== 'pending' && (
+                    <div className="space-y-2 bg-muted/30 px-4 py-3">
+                      <p className="ml-auto w-fit max-w-[80%] rounded-lg rounded-br-sm bg-primary px-3 py-1.5 text-primary-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                        {row.sent}
+                      </p>
+                      <p className="w-fit max-w-[80%] rounded-lg rounded-bl-sm border border-border bg-card px-3 py-1.5 whitespace-pre-wrap" style={{ fontSize: 'var(--text-sm)' }}>
+                        {row.reply || '(no reply)'}
+                      </p>
+                    </div>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
       </TabsContent>
 
       <TabsContent value="eval">

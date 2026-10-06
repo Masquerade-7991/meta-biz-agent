@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CheckCircle2, CreditCard, ExternalLink, Landmark, Loader2, Mic, Package, Send, ShieldCheck, Smartphone, X } from 'lucide-react'
 import { BUY, PAID, rupees, type DummyRich, type Order } from '@/app/api/dummyMeta'
 import { Bubble, BubbleButton, Meta, PhoneFrame } from './WhatsAppPreview'
 import { WA } from './whatsappTheme'
+import { WaText } from './WaText'
 
 export interface DemoChatMessage {
   from: 'customer' | 'agent' | 'system'
@@ -14,19 +15,24 @@ export interface DemoChatMessage {
 
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
-/** The dummy-mode Quick test: the scripted conversation in a WhatsApp phone, with a carousel,
- *  an order-details message, an in-chat payment sheet, and an order confirmation. */
+/** The Test & Eval chat as a WhatsApp phone: only what the customer would see. Dummy mode adds a
+ *  scripted carousel, order details, an in-chat payment sheet and a confirmation. */
 export function DemoWhatsAppChat({
   name,
   messages,
   sending,
   disabled,
+  readOnly,
+  selected,
+  onSelect,
   onSend,
-  belowAgent,
 }: {
-  /** Extra lines under an agent message, e.g. the tools it used. */
-  belowAgent?: (m: DemoChatMessage) => ReactNode
   name: string
+  /** A past conversation: no composer, nothing tappable. */
+  readOnly?: boolean
+  /** The agent message whose details are open beside the phone. */
+  selected?: number | null
+  onSelect?: (index: number) => void
   messages: DemoChatMessage[]
   sending: boolean
   disabled?: boolean
@@ -55,7 +61,7 @@ export function DemoWhatsAppChat({
   }, [messages])
 
   const paidOrders = new Set(messages.flatMap((m) => (m.rich?.kind === 'order_confirmed' ? [m.rich.order.id] : [])))
-  const busy = sending || !!disabled
+  const busy = sending || !!disabled || !!readOnly
 
   function send() {
     const t = draft.trim()
@@ -83,7 +89,7 @@ export function DemoWhatsAppChat({
         )
       }
       composer={
-        <form
+        readOnly ? null : <form
           className="flex items-center gap-1.5 px-1.5 pb-3 pt-1.5"
           onSubmit={(e) => {
             e.preventDefault()
@@ -130,12 +136,17 @@ export function DemoWhatsAppChat({
         if (m.from === 'customer')
           return (
             <Bubble key={i} out>
-              <span className="whitespace-pre-wrap wrap-break-word">{m.text}</span>
+              <WaText text={m.text} />
               <Meta out time={clock(m.at)} />
             </Bubble>
           )
         return (
-          <div key={i} className="space-y-1.5">
+          <div
+            key={i}
+            className={`space-y-1.5 rounded-lg transition-shadow ${onSelect ? 'cursor-pointer' : ''} ${selected === i ? 'ring-2 ring-offset-2' : ''}`}
+            style={selected === i ? ({ '--tw-ring-color': WA.green, '--tw-ring-offset-color': 'transparent' } as React.CSSProperties) : undefined}
+            onClick={onSelect ? () => onSelect(i) : undefined}
+          >
             <AgentMessage
               m={m}
               busy={busy}
@@ -143,7 +154,6 @@ export function DemoWhatsAppChat({
               onBuy={(id, label) => onSend(BUY + id, label)}
               onPay={(o) => setPaying(o)}
             />
-            {belowAgent && <div className="pl-2">{belowAgent(m)}</div>}
             {last && !sending && m.quickReplies?.length ? (
               <div className="flex flex-wrap justify-end gap-1.5 pl-8">
                 {m.quickReplies.map((qr) => (
@@ -197,7 +207,7 @@ function AgentMessage({
   const time = clock(m.at)
   const text = (
     <>
-      <span className="whitespace-pre-wrap wrap-break-word">{m.text}</span>
+      <WaText text={m.text} />
       <Meta time={time} />
     </>
   )
