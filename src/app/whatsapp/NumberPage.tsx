@@ -163,7 +163,7 @@ export function NumberPage({ id, showBack, onBack, initialTab = 'profile' }: { i
       )}
 
       <Tabs value={tab} onValueChange={(v) => guard(() => setTab(v as NumberTab))}>
-        <TabsList className="max-w-full justify-start overflow-x-auto">
+        <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="name">Display name</TabsTrigger>
           <TabsTrigger value="automation">Ice breakers</TabsTrigger>
@@ -171,22 +171,22 @@ export function NumberPage({ id, showBack, onBack, initialTab = 'profile' }: { i
           <TabsTrigger value="blocked">Blocked</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
         </TabsList>
-        <TabsContent value="profile" className="pt-4">
+        <TabsContent value="profile">
           <ProfileTab {...props} />
         </TabsContent>
-        <TabsContent value="name" className="pt-4">
+        <TabsContent value="name">
           <DisplayNameTab {...props} onRegister={() => setTab('security')} />
         </TabsContent>
-        <TabsContent value="automation" className="pt-4">
+        <TabsContent value="automation">
           <AutomationTab {...props} />
         </TabsContent>
-        <TabsContent value="security" className="pt-4">
+        <TabsContent value="security">
           <SecurityTab {...props} />
         </TabsContent>
-        <TabsContent value="blocked" className="pt-4">
+        <TabsContent value="blocked">
           <BlockedTab {...props} />
         </TabsContent>
-        <TabsContent value="activity" className="pt-4">
+        <TabsContent value="activity">
           {d.activity.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground" style={TEXT_SM}>
               No changes from this console yet. Changes made here, and WhatsApp&rsquo;s reviews, show up in this list.

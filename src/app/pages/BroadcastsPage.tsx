@@ -581,7 +581,7 @@ export function BroadcastsPage() {
           <TabsTrigger value="broadcasts">Broadcasts</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
         </TabsList>
-        <TabsContent value="broadcasts" className="pt-2">
+        <TabsContent value="broadcasts">
           <div className="overflow-x-auto rounded-lg border border-border">
             {!rows ? (
               <p className="flex items-center gap-2 p-6 text-muted-foreground" style={TEXT_SM}>
@@ -647,7 +647,7 @@ export function BroadcastsPage() {
             )}
           </div>
         </TabsContent>
-        <TabsContent value="templates" className="pt-2">
+        <TabsContent value="templates">
           {!templates ? (
             <p className="flex items-center gap-2 p-6 text-muted-foreground" style={TEXT_SM}>
               <Loader2 className="size-4 animate-spin" /> Loading templates from WhatsApp&hellip;

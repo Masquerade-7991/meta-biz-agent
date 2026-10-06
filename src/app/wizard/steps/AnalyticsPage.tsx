@@ -99,7 +99,7 @@ export function AnalyticsPage() {
       <header className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
           <Tabs value={String(range)} onValueChange={(v) => setRange(Number(v) as AnalyticsRange)}>
-            <TabsList aria-label="Date range">
+            <TabsList variant="segmented" aria-label="Date range">
               <TabsTrigger value="7">7 days</TabsTrigger>
               <TabsTrigger value="14">14 days</TabsTrigger>
               <TabsTrigger value="30">30 days</TabsTrigger>

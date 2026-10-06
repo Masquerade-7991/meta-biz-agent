@@ -30,10 +30,10 @@ export function ConnectionsStep() {
         <TabsTrigger value="connections">Custom</TabsTrigger>
         <TabsTrigger value="integrations">Native</TabsTrigger>
       </TabsList>
-      <TabsContent value="connections" forceMount className="mt-4 data-[state=inactive]:hidden">
+      <TabsContent value="connections" forceMount className="data-[state=inactive]:hidden">
         <CustomConnections />
       </TabsContent>
-      <TabsContent value="integrations" forceMount className="mt-4 data-[state=inactive]:hidden">
+      <TabsContent value="integrations" forceMount className="data-[state=inactive]:hidden">
         <IntegrationsTab />
       </TabsContent>
       <p className="mt-6 text-muted-foreground" style={XS}>

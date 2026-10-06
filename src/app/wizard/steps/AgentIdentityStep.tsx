@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { AlertCircle, AlertTriangle, FileText, Loader2 } from 'lucide-react'
@@ -83,6 +84,7 @@ type TabId = 'about' | 'personality'
 export function AgentIdentityStep() {
   const { state, setPendingStepFocus } = useWizard()
   const [tab, setTab] = useState<TabId>('about')
+  const [saveSlot, setSaveSlot] = useState<HTMLDivElement | null>(null)
 
   // Arriving from an Overview link that named the Personality tab.
   useEffect(() => {
@@ -95,21 +97,21 @@ export function AgentIdentityStep() {
 
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
-      <TabsList>
+      <TabsList actions={<div ref={setSaveSlot} className="flex" />}>
         <TabsTrigger value="about">About</TabsTrigger>
         <TabsTrigger value="personality">Personality</TabsTrigger>
       </TabsList>
-      <TabsContent value="about" forceMount className="mt-6 data-[state=inactive]:hidden">
-        <AboutSection />
+      <TabsContent value="about" forceMount className="data-[state=inactive]:hidden">
+        <AboutSection saveSlot={tab === 'about' ? saveSlot : null} />
       </TabsContent>
-      <TabsContent value="personality" forceMount className="mt-6 data-[state=inactive]:hidden">
-        <PersonalitySection />
+      <TabsContent value="personality" forceMount className="data-[state=inactive]:hidden">
+        <PersonalitySection saveSlot={tab === 'personality' ? saveSlot : null} />
       </TabsContent>
     </Tabs>
   )
 }
 
-function AboutSection() {
+function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
   const { state, patch } = useWizard()
   const { identity } = state
   const section = useSaveOnNextSection('identity')
@@ -232,9 +234,14 @@ function AboutSection() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        <SaveButton dirty={section.dirty} saving={section.saveStatus === 'saving'} onSave={section.performSave} />
-      </div>
+      {/* In the tab row when this tab is showing (Identity), otherwise above the form. */}
+      {saveSlot === undefined ? (
+        <div className="flex items-center justify-end">
+          <SaveButton dirty={section.dirty} saving={section.saveStatus === 'saving'} onSave={section.performSave} />
+        </div>
+      ) : (
+        saveSlot && createPortal(<SaveButton dirty={section.dirty} saving={section.saveStatus === 'saving'} onSave={section.performSave} />, saveSlot)
+      )}
 
       {section.loadStatus === 'failed' && (
         <LoadFailedBanner

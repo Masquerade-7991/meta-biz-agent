@@ -365,7 +365,7 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
       <h1 className="mb-6">Settings</h1>
       <Tabs value={shown} onValueChange={(v) => onTabChange(v as SettingsTab)}>
-        <TabsList className="max-w-full justify-start overflow-x-auto">
+        <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
           {billing && <TabsTrigger value="billing">Billing</TabsTrigger>}
@@ -374,27 +374,27 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
           <TabsTrigger value="support">Support rules</TabsTrigger>
           <TabsTrigger value="fields">Contact fields</TabsTrigger>
         </TabsList>
-        <TabsContent value="profile" className="pt-2">
+        <TabsContent value="profile">
           <Profile />
         </TabsContent>
-        <TabsContent value="whatsapp" className="pt-2">
+        <TabsContent value="whatsapp">
           <WhatsAppSettings onManageNumbers={onManageNumbers} />
         </TabsContent>
         {billing && (
-          <TabsContent value="billing" className="pt-2">
+          <TabsContent value="billing">
             <BillingSettingsTab />
           </TabsContent>
         )}
-        <TabsContent value="members" className="pt-2">
+        <TabsContent value="members">
           <Members />
         </TabsContent>
-        <TabsContent value="canned" className="pt-2">
+        <TabsContent value="canned">
           <CannedResponsesSettings />
         </TabsContent>
-        <TabsContent value="support" className="pt-2">
+        <TabsContent value="support">
           <SupportSettingsTab />
         </TabsContent>
-        <TabsContent value="fields" className="pt-2">
+        <TabsContent value="fields">
           <ContactFieldsSettings />
         </TabsContent>
       </Tabs>

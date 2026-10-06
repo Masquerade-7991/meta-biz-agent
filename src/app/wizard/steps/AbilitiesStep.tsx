@@ -34,11 +34,11 @@ export function AbilitiesStep() {
         <TabsTrigger value="richReplies">Rich replies</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="skills" forceMount className="mt-6 data-[state=inactive]:hidden">
+      <TabsContent value="skills" forceMount className="data-[state=inactive]:hidden">
         <SkillsSection />
       </TabsContent>
 
-      <TabsContent value="richReplies" forceMount className="mt-6 data-[state=inactive]:hidden">
+      <TabsContent value="richReplies" forceMount className="data-[state=inactive]:hidden">
         <RichRepliesSection />
       </TabsContent>
     </Tabs>

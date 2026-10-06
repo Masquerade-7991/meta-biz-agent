@@ -346,7 +346,7 @@ export function TestEvalStep() {
         <TabsTrigger value="eval">Evaluation</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="testing" className="space-y-4 pt-3">
+      <TabsContent value="testing" className="space-y-4">
         <TestToolsStrip onAsk={(q) => void sendQuickTest(q)} onManage={openConnections} disabled={sending || ineligible || !!limitMessage || !!viewing} />
         {/* Quick test */}
         <div className="space-y-2">
@@ -568,7 +568,7 @@ export function TestEvalStep() {
         </div>
       </TabsContent>
 
-      <TabsContent value="eval" className="pt-3">
+      <TabsContent value="eval">
         <EvalTab />
       </TabsContent>
     </Tabs>

@@ -162,11 +162,11 @@ export function KnowledgeStep() {
         {/* forceMount + CSS-hidden (not Radix's default unmount-when-inactive) so Business
             details keeps its own guard registered and its load/save state alive regardless of
             which tab is showing — otherwise switching tabs would silently drop unsaved changes. */}
-        <TabsContent value="business" forceMount className="mt-4 data-[state=inactive]:hidden">
+        <TabsContent value="business" forceMount className="data-[state=inactive]:hidden">
           <BusinessProfileStep />
         </TabsContent>
 
-        <TabsContent value="faq" className="mt-4 space-y-3">
+        <TabsContent value="faq" className="space-y-3">
           {loadStatus === 'failed' ? (
             <LoadFailedBanner message="We could not load what is saved here." onRetry={retryLoad} />
           ) : (
@@ -181,7 +181,7 @@ export function KnowledgeStep() {
           )}
         </TabsContent>
 
-        <TabsContent value="documents" className="mt-4 space-y-3">
+        <TabsContent value="documents" className="space-y-3">
           {loadStatus === 'failed' ? (
             <LoadFailedBanner message="We could not load what is saved here." onRetry={retryLoad} />
           ) : (
@@ -194,7 +194,7 @@ export function KnowledgeStep() {
           )}
         </TabsContent>
 
-        <TabsContent value="website" className="mt-4 space-y-3">
+        <TabsContent value="website" className="space-y-3">
           {loadStatus === 'failed' ? (
             <LoadFailedBanner message="We could not load what is saved here." onRetry={retryLoad} />
           ) : (

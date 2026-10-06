@@ -259,7 +259,7 @@ export function SafetyHandoffStep() {
 
       <div className={cn(loading && 'pointer-events-none opacity-50')} aria-hidden={loading}>
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
-          <TabsList>
+          <TabsList actions={<SaveButton dirty={dirty} saving={saveStatus === 'saving'} onSave={performSave} />}>
             <TabsTrigger value="avoids" className="gap-1.5">
               What the agent avoids
               {avoidsCount > 0 && (
@@ -282,10 +282,7 @@ export function SafetyHandoffStep() {
           {/* forceMount + CSS-hidden (not Radix's default unmount-when-inactive) so every tab's
               fields keep patching the shared guardrails/replies slices no matter which tab is
               showing — otherwise switching tabs mid-edit would silently drop unsaved changes. */}
-          <TabsContent value="avoids" forceMount className="mt-6 space-y-7 data-[state=inactive]:hidden">
-            <div className="flex items-center justify-end">
-              <SaveButton dirty={dirty} saving={saveStatus === 'saving'} onSave={performSave} />
-            </div>
+          <TabsContent value="avoids" forceMount className="space-y-7 data-[state=inactive]:hidden">
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
               These become instructions the agent follows strongly, not a filter that blocks a
               message after it&rsquo;s written.
@@ -334,10 +331,7 @@ export function SafetyHandoffStep() {
             </div>
           </TabsContent>
 
-          <TabsContent value="handoff" forceMount className="mt-6 space-y-7 data-[state=inactive]:hidden">
-            <div className="flex items-center justify-end">
-              <SaveButton dirty={dirty} saving={saveStatus === 'saving'} onSave={performSave} />
-            </div>
+          <TabsContent value="handoff" forceMount className="space-y-7 data-[state=inactive]:hidden">
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
               Once handed over, your team picks the conversation up from your usual inbox —
               that part isn&rsquo;t set up in this wizard.
@@ -401,10 +395,7 @@ export function SafetyHandoffStep() {
             </div>
           </TabsContent>
 
-          <TabsContent value="followup" forceMount className="mt-6 space-y-6 data-[state=inactive]:hidden">
-            <div className="flex items-center justify-end">
-              <SaveButton dirty={dirty} saving={saveStatus === 'saving'} onSave={performSave} />
-            </div>
+          <TabsContent value="followup" forceMount className="space-y-6 data-[state=inactive]:hidden">
             <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
               If a customer goes quiet mid-conversation, the agent can re-engage them with one
               short check-in message.

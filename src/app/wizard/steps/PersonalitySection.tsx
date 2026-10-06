@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { Label } from '@/app/components/ui/label'
 import { Textarea } from '@/app/components/ui/textarea'
 import { Switch } from '@/app/components/ui/switch'
@@ -61,7 +62,7 @@ function pickLayer1(p: PersonalizationState): Layer1 {
   return { tone, customToneInstructions, emojiUse, nameIntroduction, answerLength, defaultLanguage, additionalLanguages, matchCustomerLanguage, allowMixedLanguage }
 }
 
-export function PersonalitySection() {
+export function PersonalitySection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
   const { state, patch } = useWizard()
   const { personalization } = state
   const agentName = state.identity.agentName.trim() || 'your agent'
@@ -120,9 +121,14 @@ export function PersonalitySection() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        <SaveButton dirty={section.dirty} saving={section.saveStatus === 'saving'} onSave={section.performSave} />
-      </div>
+      {/* In the tab row when this tab is showing (Identity), otherwise above the form. */}
+      {saveSlot === undefined ? (
+        <div className="flex items-center justify-end">
+          <SaveButton dirty={section.dirty} saving={section.saveStatus === 'saving'} onSave={section.performSave} />
+        </div>
+      ) : (
+        saveSlot && createPortal(<SaveButton dirty={section.dirty} saving={section.saveStatus === 'saving'} onSave={section.performSave} />, saveSlot)
+      )}
 
       {section.loadStatus === 'failed' && (
         <LoadFailedBanner
