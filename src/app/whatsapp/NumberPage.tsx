@@ -57,7 +57,7 @@ export function NumberAvatar({ photo, name, size = 'md' }: { photo: string | nul
 }
 
 /** One number, managed like WhatsApp Manager does it: profile, name, ice breakers, security, blocks. */
-export function NumberPage({ id, showBack, onBack, initialTab = 'profile' }: { id: string; showBack: boolean; onBack: () => void; initialTab?: NumberTab }) {
+export function NumberPage({ id, showBack, onBack, backLabel = 'All numbers', initialTab = 'profile' }: { id: string; showBack: boolean; onBack: () => void; backLabel?: string; initialTab?: NumberTab }) {
   const [d, setD] = useState<NumberDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<NumberTab>(initialTab)
@@ -88,7 +88,7 @@ export function NumberPage({ id, showBack, onBack, initialTab = 'profile' }: { i
           </Button>
           {showBack && (
             <Button variant="ghost" onClick={onBack}>
-              Back to numbers
+              {backLabel}
             </Button>
           )}
         </div>
@@ -110,7 +110,7 @@ export function NumberPage({ id, showBack, onBack, initialTab = 'profile' }: { i
     <div className="space-y-6">
       {showBack && (
         <button type="button" className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground" style={TEXT_SM} onClick={() => guard(onBack)}>
-          <ArrowLeft className="size-4" /> All numbers
+          <ArrowLeft className="size-4" /> {backLabel}
         </button>
       )}
       <div className="flex flex-wrap items-center gap-4">

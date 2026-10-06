@@ -11,6 +11,12 @@ import { startBilling } from './billing.ts'
 import { startHealth } from './health.ts'
 import { agentUpstream, env, upstream } from './upstream.ts'
 
+// One stray failure (an unanswered Meta call, a dropped database socket) shouldn't take the whole
+// API down: under `node --watch` a crashed server stays down until a file changes, and the console
+// then only says it can't reach its servers. Log it and keep serving.
+process.on('unhandledRejection', (err) => console.error(`unhandled rejection (kept running): ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`))
+process.on('uncaughtException', (err) => console.error(`uncaught exception (kept running): ${err.stack ?? err.message}`))
+
 // Hosts like Render hand the port in PORT.
 const PORT = Number(env('SERVER_PORT') || env('PORT') || 8787)
 
