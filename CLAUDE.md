@@ -53,6 +53,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - A tool run can answer `status: "success"` with the failure inside `output` (`{status:{code}, body}`; code 1 = finished). Read it with `readToolRun` (`src/app/wizard/toolRun.ts`).
   - `agent_test` doesn't report tool calls; its conversation turns do (`user_phone_number=<conversation_id>`), about a second after the reply (`src/app/wizard/testTools.ts`).
   - All tool request building goes through `src/app/wizard/toolRequest.ts` (payload, read-back, preview, test input).
+  - Websites: Meta answers `completed` with `pages_crawled: 0` even when the agent learned from the site (checked with a question only the page answers), so never show 0 pages as fact (`src/app/wizard/websites.ts`). A `PUT` with the same URL queues a fresh read and stamps `last_crawled_at` at queue time.
 
 ## Deliberately not wired
 

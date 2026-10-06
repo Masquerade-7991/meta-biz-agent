@@ -1,11 +1,15 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
+  CheckCircle2,
   ChevronDown,
+  Clock,
   File as FileIcon,
   Globe,
+  Info,
   Loader2,
   Plus,
+  RefreshCw,
   Search,
   Upload,
 } from 'lucide-react'
@@ -41,6 +45,7 @@ import {
   newId,
 } from '@/app/wizard/mockData'
 import { formatRelativeDate } from '@/app/wizard/format'
+import { coveredBy, siteView } from '@/app/wizard/websites'
 import { downloadCsv, normalizeForCompare, parseCsv } from '@/app/wizard/csv'
 import type { DocumentFile, FaqRow, KnowledgeState, WebsiteSource } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
@@ -1204,11 +1209,17 @@ export function WebsiteTab({
     setPendingRemoveId(null)
   }
 
+  const inputUrl = /^https?:\/\//i.test(urlInput.trim()) ? urlInput.trim() : `https://${urlInput.trim()}`
+  const inputCovered = urlInput.trim() && isWebsiteShapeValid(inputUrl) ? coveredBy(inputUrl, websites) : undefined
+  const views = websites.map((site) => ({ site, view: siteView(site), covered: coveredBy(site.url, websites.filter((w) => w.id !== site.id)) }))
+  const ready = views.filter((v) => v.view.stage === 'ready').length
+  const working = views.filter((v) => v.view.stage === 'queued' || v.view.stage === 'reading').length
+
   return (
-    <div className={cn('space-y-4', loading && 'pointer-events-none opacity-50')} aria-hidden={loading}>
-      <div className="flex items-end gap-2">
-        <div className="flex-1 space-y-1.5">
-          <Label htmlFor="website-address">Website address</Label>
+    <div className={cn('space-y-5', loading && 'pointer-events-none opacity-50')} aria-hidden={loading}>
+      <div className="space-y-1.5">
+        <Label htmlFor="website-address">Add a website</Label>
+        <div className="flex flex-wrap items-start gap-2">
           <Input
             id="website-address"
             value={urlInput}
@@ -1218,182 +1229,200 @@ export function WebsiteTab({
             }}
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
             placeholder="https://yourbusiness.com"
+            className="min-w-0 flex-[1_1_16rem]"
+            aria-invalid={!!inputError}
           />
-          {inputError && (
-            <p className="flex items-center gap-1.5 text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
-              <AlertTriangle className="size-3.5 shrink-0" /> {inputError}
-            </p>
-          )}
+          <Button onClick={handleAdd} disabled={!urlInput.trim()}>
+            <Globe className="size-4" />
+            Add
+          </Button>
+          <Button variant="outline" onClick={() => setBulkOpen(true)}>
+            <Upload className="size-4" />
+            Add several
+          </Button>
         </div>
-        <Button onClick={handleAdd} disabled={!urlInput.trim()}>
-          <Globe className="size-4" />
-          Add website
-        </Button>
-        <Button variant="outline" onClick={() => setBulkOpen(true)}>
-          <Upload className="size-4" />
-          Bulk add
-        </Button>
+        {inputError ? (
+          <p className="flex items-center gap-1.5 text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+            <AlertTriangle className="size-3.5 shrink-0" /> {inputError}
+          </p>
+        ) : inputCovered ? (
+          <p className="flex items-center gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            <Info className="size-3.5 shrink-0" /> Already covered by {inputCovered.url}: Meta reads the whole site from there. Add it only to make sure this page is read.
+          </p>
+        ) : (
+          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            Meta reads the whole site from the address you add, re-reads it now and then, and your agent answers from it.
+          </p>
+        )}
       </div>
 
       {websites.length === 0 ? (
-        <div className="rounded-lg bg-accent p-4">
-          <span className="flex items-center gap-1.5">
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-              No websites yet.
-            </p>
-            <InfoTooltip text="Your main website or help centre is usually the fastest way to give the agent real knowledge." />
-          </span>
+        <div className="rounded-lg border border-dashed border-border px-6 py-10 text-center">
+          <Globe className="mx-auto size-6 text-muted-foreground" />
+          <p className="mt-2" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-medium)' }}>
+            No websites yet
+          </p>
+          <p className="mx-auto mt-1 max-w-sm text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            Your main website or help centre is usually the fastest way to give your agent real knowledge.
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
-          {websites.map((site) => (
-            <div key={site.id} className="rounded-lg border border-border px-3 py-2">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <Globe className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate" style={{ fontSize: 'var(--text-sm)' }}>
-                    {site.url}
-                  </span>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  {(isCrawlDone(site.status) || site.stalled) && (
-                    <button
-                      type="button"
-                      onClick={() => void recrawl(site)}
-                      disabled={busy.has(site.id)}
-                      className="text-primary disabled:opacity-50"
-                      style={{ fontSize: 'var(--text-sm)' }}
-                    >
-                      Re-crawl
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingId(site.id)
-                      setEditUrl(site.url)
-                    }}
-                    className="text-muted-foreground"
-                    style={{ fontSize: 'var(--text-sm)' }}
-                  >
-                    Edit
-                  </button>
-                  <button type="button" onClick={() => setPendingRemoveId(site.id)} className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                    Remove
-                  </button>
-                </div>
-              </div>
-
-              {editingId === site.id && (
-                <div className="mt-2 flex items-center gap-2">
-                  <Input
-                    value={editUrl}
-                    onChange={(e) => setEditUrl(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && void saveEditUrl(site)}
-                    aria-label="Website address"
-                  />
-                  <Button size="sm" onClick={() => void saveEditUrl(site)} disabled={!editUrl.trim() || busy.has(site.id)}>
-                    Save
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>
-                    Cancel
-                  </Button>
-                </div>
-              )}
-
-              <div className="mt-1 flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                {site.status === 'not_started' && <span>Not started</span>}
-                {site.status === 'waiting' && <span>{site.stalled ? 'Still pending on Meta’s side. Try Re-crawl later.' : 'Pending'}</span>}
-                {site.status === 'reading' && (
-                  <>
-                    <Loader2 className="size-3 animate-spin" />
-                    <span>
-                      In progress · {site.pagesRead} pages so far{site.stalled ? '. Still running on Meta’s side. Try Re-crawl later.' : ''}
+          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            {websites.length} website{websites.length === 1 ? '' : 's'} · {ready} ready{working ? ` · ${working} in progress` : ''}
+          </p>
+          <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+            {views.map(({ site, view, covered }) => {
+              const Icon = view.stage === 'ready' ? CheckCircle2 : view.stage === 'reading' ? Loader2 : view.stage === 'queued' ? Clock : AlertTriangle
+              const tone =
+                view.tone === 'success'
+                  ? 'bg-success/10 text-success'
+                  : view.tone === 'info'
+                    ? 'bg-primary/10 text-primary'
+                    : view.tone === 'warning'
+                      ? 'bg-warning/15 text-warning-foreground'
+                      : view.tone === 'danger'
+                        ? 'bg-destructive/10 text-destructive'
+                        : 'bg-muted text-muted-foreground'
+              return (
+                <li key={site.id} className="space-y-2 px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Globe className="size-4 shrink-0 text-muted-foreground" />
+                      <a href={site.url} target="_blank" rel="noreferrer" title={site.url} className="truncate hover:underline" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-medium)' }}>
+                        {site.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                      </a>
+                    </div>
+                    <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5', tone)} style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-medium)' }}>
+                      <Icon className={cn('size-3.5', view.stage === 'reading' && 'animate-spin')} />
+                      {view.label}
                     </span>
-                  </>
-                )}
-                {site.status === 'done' && (
-                  <span>
-                    Completed · {site.pagesRead} pages crawled · last crawled {formatRelativeDate(site.lastCrawledAt ?? site.updatedAt)}
-                  </span>
-                )}
-                {site.status === 'done_no_data' && (
-                  <span>Completed (No Data) · last crawled {formatRelativeDate(site.lastCrawledAt ?? site.updatedAt)}</span>
-                )}
-                {site.status === 'failed' && <span>Failed{site.crawlError ? `: ${site.crawlError}` : ''}</span>}
-              </div>
+                  </div>
 
-              {site.status === 'done' && site.subpages.length > 0 && (
-                <div className="mt-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button type="button" className="flex items-center gap-1 text-primary" style={{ fontSize: 'var(--text-xs)' }}>
-                        <ChevronDown className="size-3.5" />
-                        View pages ({site.subpages.length})
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="max-h-80 w-96 overflow-y-auto">
-                      <DropdownMenuLabel className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                        Sub-pages found under this site
-                      </DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {site.subpages.map((path) => (
-                        <div key={path} className="truncate px-2 py-1 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                          {path}
-                        </div>
+                  {view.step !== null && (
+                    <ol className="flex items-center gap-2" aria-label="Progress">
+                      {['Queued', 'Reading', 'Ready'].map((label, i) => (
+                        <li key={label} className="flex items-center gap-2" style={{ fontSize: 'var(--text-xs)' }}>
+                          <span className={cn('size-2 rounded-full', i < view.step! ? 'bg-success' : i === view.step ? 'bg-primary ring-4 ring-primary/15' : 'bg-border')} />
+                          <span className={i === view.step ? 'text-foreground' : 'text-muted-foreground'} aria-current={i === view.step ? 'step' : undefined}>
+                            {label}
+                          </span>
+                          {i < 2 && <span className="h-px w-6 bg-border" aria-hidden />}
+                        </li>
                       ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              )}
+                    </ol>
+                  )}
 
-              {site.status === 'failed' && (
-                <div className="mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setWhyOpen((prev) => ({ ...prev, [site.id]: !prev[site.id] }))}
-                    className="flex items-center gap-1 text-primary"
-                    style={{ fontSize: 'var(--text-xs)' }}
-                  >
-                    <ChevronDown className={cn('size-3.5 transition-transform', whyOpen[site.id] && 'rotate-180')} />
-                    Why might this happen?
-                  </button>
-                  {whyOpen[site.id] && (
-                    <div className="mt-2 space-y-2 rounded-lg bg-muted p-3 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                      <p>We are not told the exact reason. The most common causes:</p>
-                      <ul className="list-disc space-y-1 pl-4">
-                        <li>The site blocks automatic readers</li>
-                        <li>The pages need a login to view</li>
-                        <li>The content only appears after the page runs in a browser</li>
-                      </ul>
-                      <p>If you can, try adding a simpler page instead, like your help or FAQ page. Then press Re-read.</p>
+                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                    {view.line}
+                    {view.stage === 'ready' && site.lastCrawledAt ? ` Last read ${formatRelativeDate(site.lastCrawledAt)}.` : ''}
+                  </p>
+                  {covered && (
+                    <p className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                      <Info className="size-3.5 shrink-0" /> Also covered by {covered.url.replace(/^https?:\/\//, '')}, which Meta reads as a whole site.
+                    </p>
+                  )}
+
+                  {editingId === site.id && (
+                    <div className="flex items-center gap-2">
+                      <Input value={editUrl} onChange={(e) => setEditUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void saveEditUrl(site)} aria-label="Website address" />
+                      <Button size="sm" onClick={() => void saveEditUrl(site)} disabled={!editUrl.trim() || busy.has(site.id)}>
+                        Save
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>
+                        Cancel
+                      </Button>
                     </div>
                   )}
-                </div>
-              )}
 
-              {rowErrors[site.id] && <InlineError message={rowErrors[site.id]} onRetry={() => setRowErrors((prev) => ({ ...prev, [site.id]: '' }))} />}
-            </div>
-          ))}
+                  {site.status === 'done' && site.subpages.length > 0 && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className="flex items-center gap-1 text-primary" style={{ fontSize: 'var(--text-xs)' }}>
+                          <ChevronDown className="size-3.5" />
+                          View pages ({site.subpages.length})
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="max-h-80 w-96 overflow-y-auto">
+                        <DropdownMenuLabel className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                          Sub-pages found under this site
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {site.subpages.map((path) => (
+                          <div key={path} className="truncate px-2 py-1 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                            {path}
+                          </div>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+
+                  {(view.stage === 'failed' || view.stage === 'empty') && (
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setWhyOpen((prev) => ({ ...prev, [site.id]: !prev[site.id] }))}
+                        className="flex items-center gap-1 text-primary"
+                        style={{ fontSize: 'var(--text-xs)' }}
+                        aria-expanded={!!whyOpen[site.id]}
+                      >
+                        <ChevronDown className={cn('size-3.5 transition-transform', whyOpen[site.id] && 'rotate-180')} />
+                        Why might this happen?
+                      </button>
+                      {whyOpen[site.id] && (
+                        <div className="mt-2 space-y-2 rounded-lg bg-muted p-3 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                          <p>The most common causes:</p>
+                          <ul className="list-disc space-y-1 pl-4">
+                            <li>The site blocks automatic readers</li>
+                            <li>The pages need a login to view</li>
+                            <li>The text only appears after the page runs in a browser</li>
+                          </ul>
+                          <p>If you can, add a simpler page instead, like your help or FAQ page, then choose Read again.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {rowErrors[site.id] && <InlineError message={rowErrors[site.id]} onRetry={() => setRowErrors((prev) => ({ ...prev, [site.id]: '' }))} />}
+
+                  <div className="flex items-center gap-4" style={{ fontSize: 'var(--text-xs)' }}>
+                    {(isCrawlDone(site.status) || site.stalled) && (
+                      <button type="button" onClick={() => void recrawl(site)} disabled={busy.has(site.id)} className="flex items-center gap-1 text-primary hover:underline disabled:opacity-50" style={{ fontSize: 'var(--text-xs)' }}>
+                        <RefreshCw className="size-3.5" /> Read again
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingId(site.id)
+                        setEditUrl(site.url)
+                      }}
+                      className="text-muted-foreground hover:text-foreground"
+                      style={{ fontSize: 'var(--text-xs)' }}
+                    >
+                      Edit address
+                    </button>
+                    <button type="button" onClick={() => setPendingRemoveId(site.id)} className="text-muted-foreground hover:text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+                      Remove
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
         </div>
       )}
 
       <ConfirmDialog
         open={pendingRemoveId !== null}
         title="Remove this website?"
-        description="The agent will stop using anything it learned from it."
+        description="Your agent stops using anything it learned from it."
         confirmLabel="Remove"
         onConfirm={confirmRemove}
         onCancel={() => setPendingRemoveId(null)}
       />
 
-      {bulkOpen && (
-        <WebsiteBulkImportDialog
-          existingWebsites={websites}
-          onImport={(urls) => void addWebsites(urls)}
-          onClose={() => setBulkOpen(false)}
-        />
-      )}
+      {bulkOpen && <WebsiteBulkImportDialog existingWebsites={websites} onImport={(urls) => void addWebsites(urls)} onClose={() => setBulkOpen(false)} />}
     </div>
   )
 }

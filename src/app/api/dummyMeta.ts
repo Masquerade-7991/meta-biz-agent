@@ -387,6 +387,7 @@ export async function dummyMeta(method: string, fullPath: string, body: Record<s
         crawl_status: 'not_started',
         pages_crawled: 0,
         created_at: now(),
+        last_crawled_at: now(),
         _reads: 0,
       }
       db.websites.push(row)
@@ -398,7 +399,8 @@ export async function dummyMeta(method: string, fullPath: string, body: Record<s
       const w = db.websites.find((x) => x.id === ws[1])
       if (!w) return notFound(ws[1])
       if (m === 'DELETE') return ok(void db.websites.splice(db.websites.indexOf(w), 1), 204)
-      if (m === 'PUT') Object.assign(w, { url: body.url, crawl_status: 'pending', _reads: 0 })
+      // Like Meta: a PUT queues a fresh read and stamps last_crawled_at right away.
+      if (m === 'PUT') Object.assign(w, { url: body.url, crawl_status: 'pending', _reads: 0, last_crawled_at: now() })
       else crawl(w)
       save()
       return ok(pub(w))
@@ -691,7 +693,7 @@ function crawl(w: Row) {
   const reads = ((w._reads as number) ?? 0) + 1
   w._reads = reads
   w.crawl_status = reads < 2 ? 'pending' : reads < 3 ? 'in_progress' : 'completed'
-  w.pages_crawled = reads < 3 ? reads * 4 : 14
-  if (w.crawl_status === 'completed') w.last_crawled_at = now()
+  // Like Meta today: the page count stays 0 even once the site is read.
+  w.pages_crawled = 0
 }
 const pub = (r: Row) => Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith('_')))
