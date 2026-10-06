@@ -137,7 +137,6 @@ export function TestEvalStep() {
 
   // ---- Quick test: Meta's Agent Test API (not billed, 500/hour per number) ----
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
-  const [chatDraft, setChatDraft] = useState('')
   const [sending, setSending] = useState(false)
   // conversation_id threads follow-ups into one conversation; cleared by Start New Conversation.
   const [conversationId, setConversationId] = useState<string | undefined>()
@@ -148,6 +147,10 @@ export function TestEvalStep() {
   const [viewing, setViewing] = useState<TestConversation | null>(null)
   // The agent message whose details are highlighted beside the phone.
   const [selected, setSelected] = useState<number | null>(null)
+  const showConversation = (c: TestConversation | null) => {
+    setViewing(c)
+    setSelected(null)
+  }
   // True once the store answered: the server keeps history then, so this browser stops writing it.
   const [storeOn, setStoreOn] = useState(false)
   useEffect(() => {
@@ -180,11 +183,10 @@ export function TestEvalStep() {
     state.business.businessDescription.trim() !== ''
 
   /** `shown` replaces the customer's bubble text when `text` is a dummy-mode tap token. */
-  async function sendQuickTest(textArg?: string, shown?: string) {
-    const text = (textArg ?? chatDraft).trim()
+  async function sendQuickTest(raw: string, shown?: string) {
+    const text = raw.trim()
     if (!text || sending) return
-    if (!textArg) setChatDraft('')
-    setViewing(null)
+    showConversation(null)
     setChatMessages((prev) => [...prev, { from: 'customer', text: shown ?? text, at: Date.now() }])
     setSending(true)
     const sentAt = Date.now()
@@ -239,8 +241,7 @@ export function TestEvalStep() {
     }
     setChatMessages([])
     setConversationId(undefined)
-    setViewing(null)
-    setSelected(null)
+    showConversation(null)
   }
 
   // ---- Standard checks: each situation is sent to the real agent as its own conversation ----
@@ -259,7 +260,7 @@ export function TestEvalStep() {
       } else {
         try {
           const r = await sendTestMessage(d.sent)
-          const reply = r.agent_response || (r.handoff_reason ? 'This message would hand off to a human agent here.' : r.no_response_reason ?? '')
+          const reply = r.agent_response || (r.handoff_reason ? 'A person on your team would take over here.' : r.no_response_reason ?? '')
           row = { ...d, reply, status: r.handoff_reason || !r.agent_response ? 'warn' : 'normal' }
         } catch (err) {
           row = { ...d, reply: `Could not reach the agent: ${errorText(err)}`, status: 'warn' }
@@ -308,11 +309,11 @@ export function TestEvalStep() {
     const demoConnections: Connection[] = [
       {
         id: connectionId,
-        name: 'Order lookup API',
+        name: 'Order_lookup_API',
         description: 'Looks up order status by order number.',
         baseUrl: 'https://api.example.com',
         authMethod: 'api_key',
-        apiKeys: [{ id: newId('key'), value: 'sample-key', location: 'header', fieldName: 'X-API-Key', prefix: '' }],
+        apiKeys: [{ id: newId('key'), value: '', location: 'header', fieldName: 'X-API-Key', prefix: '', hint: 'k3y9' }],
         createdAt: now,
         demoStatus: 'working',
       },
@@ -321,11 +322,12 @@ export function TestEvalStep() {
       {
         id: newId('action'),
         connectionId,
-        name: 'Look up an order',
-        description: 'find an order by its order number',
+        name: 'look_up_order',
+        description: 'Use when a customer asks where their order is. Looks up the order by its number and returns its status.',
+        exampleQuestion: 'Where is my order ORD-12345?',
         method: 'GET',
         path: '/orders/{order_id}',
-        values: [],
+        values: [{ id: newId('value'), name: 'order_id', type: 'text', required: true, location: 'path', source: 'conversation', description: 'The order number, like ORD-12345' }],
         createdAt: now,
       },
     ]
@@ -408,10 +410,7 @@ export function TestEvalStep() {
                   history.map((h) => (
                     <DropdownMenuItem
                       key={h.id}
-                      onClick={() => {
-                        setViewing(h)
-                        setSelected(null)
-                      }}
+                      onClick={() => showConversation(h)}
                       className="flex flex-col items-start gap-0.5"
                     >
                       <span className="line-clamp-1" style={{ fontSize: 'var(--text-sm)' }}>
@@ -434,7 +433,7 @@ export function TestEvalStep() {
         {viewing && (
           <div className="flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2" style={{ fontSize: 'var(--text-sm)' }}>
             <span className="text-muted-foreground">Viewing a past test from {new Date(viewing.startedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
-            <button type="button" className="text-primary hover:underline" onClick={() => setViewing(null)}>
+            <button type="button" className="text-primary hover:underline" onClick={() => showConversation(null)}>
               Back to testing
             </button>
           </div>

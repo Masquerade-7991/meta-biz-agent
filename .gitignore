@@ -98,3 +98,6 @@ desktop.ini
 *.sw?
 *~
 .env*
+
+# Setup notes for the Meta admin, kept local
+WEBHOOK_SETUP.txt
