@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Bot, Check, ChevronRight, Inbox, Smartphone, Ticket } from 'lucide-react'
+import { Bot, Check, ChevronRight, Inbox, Megaphone, MessageCircle, Smartphone, Ticket, UserPlus, Users } from 'lucide-react'
 import { useNavigate } from 'react-router'
-import { listChats } from '@/app/api/inbox'
-import { listTickets } from '@/app/api/tickets'
+import { listChats, type ChatSummary } from '@/app/api/inbox'
+import { getSupportAnalytics, listTickets, type SupportAnalytics } from '@/app/api/tickets'
 import { getNumberHealth } from '@/app/api/whatsapp'
 import { StatusPill } from '@/app/components/ui/status'
 import { AGENT_STATUS, agentStatusOf, type Tone } from '@/app/lib/status'
@@ -258,8 +258,191 @@ function AtAGlance({ agent, onNavigate }: { agent: AgentOnNumber; onNavigate: (i
   )
 }
 
+const timeAgo = (iso: string | null) => {
+  if (!iso) return ''
+  const m = Math.round((Date.now() - Date.parse(iso)) / 60_000)
+  if (m < 1) return 'now'
+  if (m < 60) return `${m}m`
+  if (m < 1440) return `${Math.round(m / 60)}h`
+  return `${Math.round(m / 1440)}d`
+}
+const initialsOf = (name: string | null, phone: string) => (name ? name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() : phone.slice(-2))
+
+/** The latest conversations, each one click from its chat. */
+function RecentChats({ onOpenChat, onNavigate }: { onOpenChat: (phone: string) => void; onNavigate: (id: NavId) => void }) {
+  const [chats, setChats] = useState<ChatSummary[] | null>(null)
+  useEffect(() => {
+    listChats().then((c) => setChats(c.slice(0, 6)), () => setChats([]))
+  }, [])
+  return (
+    <section className="rounded-lg border border-border bg-card">
+      <div className="flex items-center justify-between border-b border-border px-5 py-3">
+        <h2 className="text-section font-semibold">Recent conversations</h2>
+        <Button variant="link" size="sm" onClick={() => onNavigate('inbox')}>
+          Open Inbox
+        </Button>
+      </div>
+      {!chats ? (
+        <div className="space-y-3 p-5">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-10 animate-pulse rounded-md bg-muted" />
+          ))}
+        </div>
+      ) : chats.length === 0 ? (
+        <p className="px-5 py-10 text-center text-sm text-muted-foreground">No conversations yet. They show up here as customers message your number.</p>
+      ) : (
+        <ul className="divide-y divide-border">
+          {chats.map((c) => (
+            <li key={c.phone}>
+              <button type="button" onClick={() => onOpenChat(c.phone)} className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-muted/50">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">{initialsOf(c.name, c.phone)}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className={cn('truncate', c.unread ? 'font-semibold' : 'font-medium')}>{c.name || (c.username ? `@${c.username}` : `+${c.phone}`)}</span>
+                    <StatusPill tone={c.owner === 'ai' ? 'info' : 'warning'} dot={false}>
+                      {c.owner === 'ai' ? 'AI' : 'Team'}
+                    </StatusPill>
+                  </span>
+                  <span className="block truncate text-sm text-muted-foreground">
+                    {c.preview?.author === 'ai' ? 'AI: ' : c.preview?.author === 'agent' ? 'You: ' : ''}
+                    {c.preview?.body ?? 'No messages yet'}
+                  </span>
+                </span>
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="text-xs text-muted-foreground tabular-nums">{timeAgo(c.lastMessageAt)}</span>
+                  {c.unread > 0 && <span className="flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[0.6875rem] leading-5 text-primary-foreground">{c.unread}</span>}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+/** The things people do most, one click away. */
+function QuickActions({ onNavigate, hasAgent }: { onNavigate: (id: NavId, tab?: SettingsTab) => void; hasAgent: boolean }) {
+  const navigate = useNavigate()
+  const { me } = useAuth()
+  const actions = [
+    hasAgent && { icon: MessageCircle, label: 'Test your AI agent', hint: 'Chat with it as a customer would', run: () => navigate('/agents') },
+    can(me?.role, 'broadcasts.send') && { icon: Megaphone, label: 'Send a broadcast', hint: 'A template to a group of contacts', run: () => onNavigate('broadcasts') },
+    { icon: UserPlus, label: 'Add a contact', hint: 'Or import a CSV', run: () => onNavigate('contacts') },
+    can(me?.role, 'members.manage') && { icon: Users, label: 'Invite a teammate', hint: 'Agents, supervisors or admins', run: () => onNavigate('settings', 'members') },
+  ].filter(Boolean) as { icon: typeof Inbox; label: string; hint: string; run: () => void }[]
+  return (
+    <section className="rounded-lg border border-border bg-card">
+      <h2 className="border-b border-border px-5 py-3 text-section font-semibold">Quick actions</h2>
+      <ul className="p-2">
+        {actions.map((a) => (
+          <li key={a.label}>
+            <button type="button" onClick={a.run} className="group flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/60">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground group-hover:text-foreground">
+                <a.icon className="size-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">{a.label}</span>
+                <span className="block truncate text-xs text-muted-foreground">{a.hint}</span>
+              </span>
+              <ChevronRight className="size-4 text-muted-foreground" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+const minutes = (m: number | null) => (m == null ? '—' : m < 60 ? `${Math.round(m)}m` : `${(m / 60).toFixed(1)}h`)
+
+/** The last 7 days: how chats split between the AI and the team, and tickets opened vs resolved. */
+function ThisWeek({ onNavigate }: { onNavigate: (id: NavId) => void }) {
+  const [d, setD] = useState<SupportAnalytics | null | 'none'>(null)
+  useEffect(() => {
+    getSupportAnalytics(7).then(setD, () => setD('none'))
+  }, [])
+  if (d === 'none') return null
+  const max = d ? Math.max(1, ...d.series.map((x) => Math.max(x.created, x.resolved))) : 1
+  const aiShare = d && d.chats.total ? d.chats.aiOnly / d.chats.total : null
+  const stats = d
+    ? [
+        { label: 'Conversations', value: d.chats.total.toLocaleString() },
+        { label: 'Handled by AI alone', value: aiShare == null ? '—' : `${Math.round(aiShare * 100)}%` },
+        { label: 'Median first reply', value: minutes(d.medianFirstReplyMin) },
+        { label: 'Customer rating', value: d.csat.average == null ? '—' : `${d.csat.average.toFixed(1)} / 3` },
+      ]
+    : []
+  return (
+    <section className="rounded-lg border border-border bg-card">
+      <div className="flex items-center justify-between border-b border-border px-5 py-3">
+        <h2 className="text-section font-semibold">This week</h2>
+        <Button variant="link" size="sm" onClick={() => onNavigate('analytics')}>
+          Full analytics
+        </Button>
+      </div>
+      {!d ? (
+        <div className="h-56 animate-pulse rounded-b-lg bg-muted/40" />
+      ) : (
+        <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+          <div className="space-y-5">
+            <dl className="grid grid-cols-2 gap-4">
+              {stats.map((s) => (
+                <div key={s.label}>
+                  <dt className="text-xs text-muted-foreground">{s.label}</dt>
+                  <dd className="text-title font-semibold tabular-nums">{s.value}</dd>
+                </div>
+              ))}
+            </dl>
+            {d.chats.total > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex h-2 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${d.chats.aiOnly} chats by the AI alone, ${d.chats.withTeam} with your team`}>
+                  <div className="bg-primary" style={{ width: `${(d.chats.aiOnly / d.chats.total) * 100}%` }} />
+                  <div className="bg-warning" style={{ width: `${(d.chats.withTeam / d.chats.total) * 100}%` }} />
+                </div>
+                <p className="flex gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-primary" /> AI alone {d.chats.aiOnly}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-warning" /> With your team {d.chats.withTeam}
+                  </span>
+                </p>
+              </div>
+            )}
+          </div>
+          <div>
+            <p className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+              <span>Tickets per day</span>
+              <span className="flex gap-3">
+                <span className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-sm bg-border-strong" /> Opened
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-sm bg-success" /> Resolved
+                </span>
+              </span>
+            </p>
+            <div className="flex h-36 items-end gap-2" role="img" aria-label={`Tickets opened and resolved per day: ${d.created} opened, ${d.resolved} resolved this week`}>
+              {d.series.map((x) => (
+                <div key={x.date} className="flex flex-1 flex-col items-center gap-1.5">
+                  <div className="flex h-28 w-full items-end justify-center gap-1">
+                    <div className="w-1/3 rounded-t-sm bg-border-strong" style={{ height: `${(x.created / max) * 100}%`, minHeight: x.created ? 3 : 0 }} title={`${x.created} opened`} />
+                    <div className="w-1/3 rounded-t-sm bg-success" style={{ height: `${(x.resolved / max) * 100}%`, minHeight: x.resolved ? 3 : 0 }} title={`${x.resolved} resolved`} />
+                  </div>
+                  <span className="text-[0.6875rem] text-muted-foreground">{new Date(x.date + 'T12:00').toLocaleDateString(undefined, { weekday: 'short' })}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
 /** Home: connect WhatsApp and build the agent; once that's done, what needs attention today. */
-export function HomePage({ onNavigate, onOpenSettings }: { onNavigate: (id: NavId) => void; onOpenSettings: (tab: SettingsTab) => void }) {
+export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigate: (id: NavId) => void; onOpenSettings: (tab: SettingsTab) => void; onOpenChat: (phone: string) => void }) {
   const { me } = useAuth()
   const navigate = useNavigate()
   const [snap, setSnap] = useState<Snapshot | null>(null)
@@ -320,7 +503,18 @@ export function HomePage({ onNavigate, onOpenSettings }: { onNavigate: (id: NavI
         <PageLoader context="home" />
       ) : (
         <>
-          {snap.agent && accounts[0] && billingDone(accounts[0]) && <AtAGlance agent={snap.agent} onNavigate={onNavigate} />}
+          {snap.agent && accounts[0] && billingDone(accounts[0]) && (
+            <>
+              <AtAGlance agent={snap.agent} onNavigate={onNavigate} />
+              <div className="grid items-start gap-6 lg:grid-cols-3">
+                <div className="lg:col-span-2">
+                  <RecentChats onOpenChat={onOpenChat} onNavigate={onNavigate} />
+                </div>
+                <QuickActions hasAgent onNavigate={(id, tab) => (tab ? onOpenSettings(tab) : onNavigate(id))} />
+              </div>
+              <ThisWeek onNavigate={onNavigate} />
+            </>
+          )}
           {!(snap.agent && accounts[0] && billingDone(accounts[0])) && (
         <GetStarted
           onCreateAgent={() => navigate('/agents?new')}

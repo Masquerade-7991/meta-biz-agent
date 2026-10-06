@@ -93,6 +93,7 @@ export function ProductShell({
           <HomePage
             onNavigate={setActive}
             onOpenSettings={openSettings}
+            onOpenChat={openChat}
           />
         )
       case 'inbox':
