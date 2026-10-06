@@ -13,6 +13,9 @@ import type { Connection, ConnectionAction, ConnectionStatus } from '@/app/wizar
 import { readToolRun } from '@/app/wizard/toolRun'
 import { deleteConnector, deleteTool, errorText, listTools, refreshMcpTools, runTool, saveConnector, saveTool, toolToAction } from '@/app/api/meta'
 import { IntegrationsTab } from './IntegrationsTab'
+import { isDummyMode } from '@/app/api/dummy'
+import { INTEGRATION_CATALOG } from '@/app/wizard/mockData'
+import { StatusPill } from '@/app/components/ui/status'
 import { ConnectionCard } from './connections/ConnectionCard'
 import { ConnectionDialog } from './connections/ConnectionDialog'
 import { ErrorsDialog } from './connections/ErrorsDialog'
@@ -20,26 +23,52 @@ import { ToolDialog } from './connections/ToolDialog'
 import { ToolTestDialog, type TestOutcome } from './connections/ToolTestDialog'
 import { metaErrorHint } from './connections/helpers'
 
-const XS = { fontSize: 'var(--text-xs)' } as const
 
-/** Connections: Custom (real, on Meta) first; Native is a preview, since Meta has no API for those yet. */
+/** Connections: the business's own systems (real, on Meta) first. Ready-made integrations have no
+ *  Meta API yet, so outside demo mode they show as coming soon rather than a simulated install. */
 export function ConnectionsStep() {
   return (
     <Tabs defaultValue="connections">
       <TabsList>
-        <TabsTrigger value="connections">Custom</TabsTrigger>
-        <TabsTrigger value="integrations">Native</TabsTrigger>
+        <TabsTrigger value="connections">Your systems</TabsTrigger>
+        <TabsTrigger value="integrations">Ready-made</TabsTrigger>
       </TabsList>
       <TabsContent value="connections" forceMount className="data-[state=inactive]:hidden">
         <CustomConnections />
+        <p className="mt-6 text-meta text-muted-foreground">
+          To steer when your agent uses a tool, add a skill under Abilities, e.g. &ldquo;Always check live stock before saying something is available.&rdquo;
+        </p>
       </TabsContent>
       <TabsContent value="integrations" forceMount className="data-[state=inactive]:hidden">
-        <IntegrationsTab />
+        {isDummyMode() ? <IntegrationsTab /> : <ComingSoonIntegrations />}
       </TabsContent>
-      <p className="mt-6 text-muted-foreground" style={XS}>
-        Your agent tells customers what it can and can&rsquo;t do from what&rsquo;s connected here. To steer when it uses a tool, add a skill under Abilities, e.g. &ldquo;Always check live stock before saying something is available.&rdquo;
-      </p>
     </Tabs>
+  )
+}
+
+function ComingSoonIntegrations() {
+  return (
+    <div className="space-y-4">
+      <p className="text-muted-foreground">
+        One-click connections to popular tools are on the way. Until then, connect any system that has an API under <span className="font-medium text-foreground">Your systems</span>.
+      </p>
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {INTEGRATION_CATALOG.map((i) => (
+          <li key={i.id} className="flex items-start gap-3 rounded-lg border border-border p-4">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted font-semibold text-muted-foreground">{i.name[0]}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <p className="truncate font-medium">{i.name}</p>
+                <StatusPill tone="neutral" dot={false}>
+                  Coming soon
+                </StatusPill>
+              </div>
+              <p className="text-meta text-muted-foreground">{i.category}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -222,13 +251,12 @@ function CustomConnections() {
       {connections.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
           {connections.map((c) => (
-            <label key={c.id} className="flex items-center gap-1.5" style={XS}>
+            <label key={c.id} className="flex items-center gap-1.5 text-xs">
               {c.name}
               <select
                 value={c.demoStatus}
                 onChange={(e) => patch('connections', { connections: connections.map((x) => (x.id === c.id ? { ...x, demoStatus: e.target.value as ConnectionStatus } : x)) })}
-                className="rounded border border-warning bg-warning/10 text-warning-foreground"
-                style={XS}
+                className="rounded border border-warning bg-warning/10 text-warning-foreground text-xs"
               >
                 {Object.entries(CONNECTION_STATUS_META).map(([id, m]) => (
                   <option key={id} value={id}>
@@ -252,8 +280,8 @@ function CustomConnections() {
           <span className="flex size-10 items-center justify-center rounded-full bg-muted">
             <Plug className="size-5 text-muted-foreground" />
           </span>
-          <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-weight-semi-bold)' }}>Connect your agent to your systems</h3>
-          <p className="max-w-md text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <h3 className="text-base font-semibold">Connect your agent to your systems</h3>
+          <p className="max-w-md text-muted-foreground text-sm">
             Let your agent look things up and act for customers, like checking stock or an order, instead of only answering from its knowledge. You&rsquo;ll need the system&rsquo;s web address and a key, so you may want your developer nearby.
           </p>
           {canEdit && (
@@ -265,7 +293,7 @@ function CustomConnections() {
       ) : (
         <>
           <div className="flex items-center justify-between gap-3">
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            <p className="text-muted-foreground text-sm">
               {connections.length} connection{connections.length === 1 ? '' : 's'} · {actions.length} tool{actions.length === 1 ? '' : 's'}
             </p>
             {canEdit && (

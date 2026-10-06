@@ -123,7 +123,7 @@ export function FollowUpBanner({ chat, onChange }: { chat: ChatDetail; onChange:
   const next = chat.reminders?.[0]
   if (!until && !next) return null
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border bg-muted/50 px-4 py-2 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border bg-muted/50 px-4 py-2 text-muted-foreground text-xs">
       {until && (
         <span className="flex items-center gap-2">
           <AlarmClock className="size-3.5" /> Snoozed until {fmt(until)}

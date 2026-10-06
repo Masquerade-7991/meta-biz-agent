@@ -109,7 +109,7 @@ function ChatRow({ c, active, onOpen }: { c: ChatSummary; active: boolean; onOpe
       onClick={onOpen}
       className={cn('flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:bg-muted focus-visible:outline-none', active && 'bg-muted')}
     >
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary" style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground" style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
         {initials(c)}
       </span>
       <span className="min-w-0 flex-1">
@@ -117,12 +117,12 @@ function ChatRow({ c, active, onOpen }: { c: ChatSummary; active: boolean; onOpe
           <span className="truncate" style={{ ...TEXT_SM, fontWeight: c.unread ? 'var(--font-weight-semi-bold)' : 'var(--font-weight-medium)' }}>
             {display(c)}
           </span>
-          <span className={cn('shrink-0', c.unread ? 'text-primary' : 'text-muted-foreground')} style={TEXT_XS}>
+          <span className={cn('shrink-0 text-xs', c.unread ? 'text-primary' : 'text-muted-foreground')}>
             {when(c.lastMessageAt)}
           </span>
         </span>
         <span className="mt-0.5 flex items-center justify-between gap-2">
-          <span className="truncate text-muted-foreground" style={TEXT_XS}>
+          <span className="truncate text-muted-foreground text-xs">
             {c.preview ? who + (c.preview.body ?? 'Sent a message') : 'No messages yet'}
           </span>
           {c.unread > 0 && (
@@ -132,7 +132,7 @@ function ChatRow({ c, active, onOpen }: { c: ChatSummary; active: boolean; onOpe
           )}
         </span>
         <span className="mt-1 flex flex-wrap items-center gap-1.5">
-          <span className={cn('inline-flex items-center gap-1 rounded px-1.5', c.owner === 'ai' ? 'bg-primary/10 text-primary' : 'bg-warning/15 text-foreground')} style={{ fontSize: '0.6875rem', lineHeight: '1.125rem' }}>
+          <span className={cn('inline-flex items-center gap-1 rounded px-1.5', c.owner === 'ai' ? 'bg-accent text-accent-foreground' : 'bg-warning/15 text-warning-foreground')} style={{ fontSize: '0.6875rem', lineHeight: '1.125rem' }}>
             {c.owner === 'ai' ? <Bot className="size-3" /> : <Hand className="size-3" />}
             {c.owner === 'ai' ? 'AI' : 'Team'}
           </span>
@@ -163,8 +163,8 @@ function Bubble({ m, highlight }: { m: ChatMessage; highlight?: boolean }) {
     )
   if (m.kind === 'note')
     return (
-      <div className="mx-auto w-full max-w-xl rounded-lg border border-warning/40 bg-warning/10 px-3 py-2" style={TEXT_SM}>
-        <p className="flex items-center gap-1.5 text-muted-foreground" style={TEXT_XS}>
+      <div className="mx-auto w-full max-w-xl rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+        <p className="flex items-center gap-1.5 text-muted-foreground text-xs">
           <StickyNote className="size-3" /> Internal note &middot; {m.authorName ?? 'Team'} &middot; {time(m.at)}
         </p>
         <p className="mt-1 whitespace-pre-wrap">{m.body}</p>
@@ -373,7 +373,7 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
         <span className="ml-2 flex items-center gap-1">
           <Button type="button" size="sm" variant="ghost" className="h-7 px-2" disabled={assist !== null || !conv.windowOpen} onClick={() => void runAssist('suggest')} title="Ask your AI agent how it would answer">
             {assist === 'suggest' ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-            <span style={TEXT_XS}>Suggest reply</span>
+            <span className="text-xs">Suggest reply</span>
           </Button>
           {mode === 'reply' && !locked && (
             <>
@@ -382,7 +382,7 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
               </Button>
               <Button type="button" size="sm" variant="ghost" className="h-7 px-2" disabled={busy || !!file} onClick={() => setButtonsOpen(true)} title="Send reply buttons or a list">
                 <ListChecks className="size-3.5" />
-                <span style={TEXT_XS}>Buttons</span>
+                <span className="text-xs">Buttons</span>
               </Button>
             </>
           )}
@@ -390,18 +390,18 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
           {aiSummary && (
             <Button type="button" size="sm" variant="ghost" className="h-7 px-2" disabled={assist !== null} onClick={() => void runAssist('summary')}>
               {assist === 'summary' ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}
-              <span style={TEXT_XS}>Summarize</span>
+              <span className="text-xs">Summarize</span>
             </Button>
           )}
         </span>
         {mode === 'reply' && conv.owner === 'ai' && conv.windowOpen && (
-          <span className="ml-auto hidden text-muted-foreground sm:inline" style={TEXT_XS}>
+          <span className="ml-auto hidden text-muted-foreground sm:inline text-xs">
             Replying takes the chat over from the AI agent.
           </span>
         )}
       </div>
       {locked ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-md bg-muted px-3 py-2.5 text-muted-foreground" style={TEXT_SM}>
+        <div className="flex flex-wrap items-center gap-3 rounded-md bg-muted px-3 py-2.5 text-muted-foreground text-sm">
           <Clock className="size-4 shrink-0" />
           <span className="min-w-48 flex-1">WhatsApp allows free replies only within 24 hours of the customer&rsquo;s last message. Send an approved template to restart the chat.</span>
           <Button size="sm" onClick={() => setTemplating(true)}>
@@ -432,7 +432,7 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
                       applyCanned(c)
                     }} className={cn('block w-full px-3 py-2 text-left', i === pick && 'bg-muted')}>
                     <span style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>{c.shortcut}</span>
-                    <span className="ml-2 text-muted-foreground" style={TEXT_XS}>
+                    <span className="ml-2 text-muted-foreground text-xs">
                       {c.title}
                     </span>
                   </button>
@@ -444,10 +444,10 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
             <div className="mb-2 flex items-center gap-3 rounded-md border border-border p-2">
               {preview ? <img src={preview} alt="" className="size-12 rounded object-cover" /> : <FileText className="size-8 text-muted-foreground" />}
               <span className="min-w-0 flex-1">
-                <span className="block truncate" style={TEXT_SM}>
+                <span className="block truncate text-sm">
                   {file.name}
                 </span>
-                <span className="text-muted-foreground" style={TEXT_XS}>
+                <span className="text-muted-foreground text-xs">
                   {formatSize(file.size)}
                   {progress !== null && ` · uploading ${Math.round(progress * 100)}%`}
                 </span>
@@ -579,7 +579,7 @@ function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Me
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
       <div className="min-w-0">
-        <p className="truncate" style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>
+        <p className="truncate font-semibold">
           {display({ name: contact?.name, phone: conv.phone, username: contact?.username })}
           {contact?.blocked && (
             <Badge variant="destructive" className="ml-2 align-middle">
@@ -587,7 +587,7 @@ function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Me
             </Badge>
           )}
         </p>
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground" style={TEXT_XS}>
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
           <span>
             {conv.owner === 'ai' ? 'The AI agent is answering this chat' : assignee ? `With ${assignee.name}` : 'With your team, unassigned'}
             {contact?.name ? ` · ${customerLabel(conv.phone, contact.username)}` : ''}
@@ -595,7 +595,7 @@ function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Me
           <WindowChip lastInboundAt={conv.lastInboundAt} />
         </p>
         {!!chat.viewers?.length && (
-          <p className="text-primary" style={TEXT_XS}>
+          <p className="text-primary text-xs">
             {chat.viewers.map((v) => `${v.name} is ${v.typing ? 'typing…' : 'viewing'}`).join(' · ')}
           </p>
         )}
@@ -646,24 +646,24 @@ function CustomerPanel({ chat, version, onChanged }: { chat: ChatDetail; version
   return (
     <aside className="hidden w-72 shrink-0 space-y-6 overflow-y-auto border-l border-border p-5 xl:block">
       <div className="flex flex-col items-center gap-2 text-center">
-        <span className="flex size-16 items-center justify-center rounded-full bg-primary/10 text-primary" style={{ fontSize: '1.25rem', fontWeight: 'var(--font-weight-semi-bold)' }}>
+        <span className="flex size-16 items-center justify-center rounded-full bg-accent text-accent-foreground" style={{ fontSize: '1.25rem', fontWeight: 'var(--font-weight-semi-bold)' }}>
           {initials({ name: contact?.name, phone: conv.phone })}
         </span>
-        <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{contact?.name ?? 'Unknown name'}</p>
-        <p className="text-muted-foreground" style={TEXT_SM}>
+        <p className="font-semibold">{contact?.name ?? 'Unknown name'}</p>
+        <p className="text-muted-foreground text-sm">
           {customerLabel(conv.phone, contact?.username)}
         </p>
       </div>
       <TicketPanel phone={conv.phone} windowOpen={conv.windowOpen} version={version} onChanged={onChanged} />
-      <dl className="space-y-4" style={TEXT_SM}>
+      <dl className="space-y-4 text-sm">
         <div>
-          <dt className="text-muted-foreground" style={TEXT_XS}>
+          <dt className="text-muted-foreground text-xs">
             Reply window
           </dt>
           <dd>{conv.windowOpen && closes ? `Open until ${closes.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Closed. Templates only.'}</dd>
         </div>
         <div>
-          <dt className="text-muted-foreground" style={TEXT_XS}>
+          <dt className="text-muted-foreground text-xs">
             Tags
           </dt>
           <dd className="mt-1 flex flex-wrap gap-1">
@@ -694,9 +694,9 @@ function SavedViews({ views, current, onApply, onChange }: { views: SavedView[];
   const active = views.find((v) => v.filter === current.filter && v.q === current.q)
   if (!views.length && !custom) return null
   return (
-    <div className="flex flex-wrap items-center gap-1.5" style={TEXT_XS}>
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
       {views.map((v) => (
-        <span key={v.id} className={cn('inline-flex items-center rounded-full border pl-2.5', v === active ? 'border-primary bg-primary/10 text-primary' : 'border-border')}>
+        <span key={v.id} className={cn('inline-flex items-center rounded-full border pl-2.5', v === active ? 'border-primary bg-accent text-accent-foreground' : 'border-border')}>
           <button type="button" onClick={() => onApply(v)}>
             {v.name}
           </button>
@@ -850,17 +850,17 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {listError ? (
-            <p className="p-4 text-destructive" style={TEXT_SM}>
+            <p className="p-4 text-destructive text-sm">
               {listError}
             </p>
           ) : !chats ? (
-            <p className="flex items-center gap-2 p-4 text-muted-foreground" style={TEXT_SM}>
+            <p className="flex items-center gap-2 p-4 text-muted-foreground text-sm">
               <Loader2 className="size-4 animate-spin" /> Loading chats&hellip;
             </p>
           ) : chats.length === 0 ? (
-            <div className="space-y-2 p-6 text-center text-muted-foreground" style={TEXT_SM}>
+            <div className="space-y-2 p-6 text-center text-muted-foreground text-sm">
               <p>{q || filter !== 'all' ? 'No chats match.' : 'No customer chats yet.'}</p>
-              {!q && filter === 'all' && <p style={TEXT_XS}>Chats appear here when customers message your WhatsApp number and the AI agent answers them.</p>}
+              {!q && filter === 'all' && <p className="text-xs">Chats appear here when customers message your WhatsApp number and the AI agent answers them.</p>}
             </div>
           ) : (
             <ul className="divide-y divide-border">
@@ -880,15 +880,15 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
                 {hits.map((h) => (
                   <li key={h.id}>
                     <button type="button" className="block w-full px-4 py-2.5 text-left hover:bg-muted/60" onClick={() => void openChat(h.phone, h.id)}>
-                      <span className="flex justify-between gap-2" style={TEXT_SM}>
-                        <span className="truncate" style={{ fontWeight: 'var(--font-weight-medium)' }}>
+                      <span className="flex justify-between gap-2 text-sm">
+                        <span className="truncate font-medium">
                           {h.name || customerLabel(h.phone)}
                         </span>
-                        <span className="shrink-0 text-muted-foreground" style={TEXT_XS}>
+                        <span className="shrink-0 text-muted-foreground text-xs">
                           {when(h.at)}
                         </span>
                       </span>
-                      <span className="line-clamp-2 text-muted-foreground" style={TEXT_XS}>
+                      <span className="line-clamp-2 text-muted-foreground text-xs">
                         {h.kind === 'note' ? 'Note: ' : ''}
                         <Highlight text={h.body} q={q} />
                       </span>
@@ -905,16 +905,16 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
         {!open ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center text-muted-foreground">
             <MessageSquareText className="size-8" />
-            <p style={TEXT_SM}>Pick a chat to read it, reply, or take over from the AI agent.</p>
+            <p className="text-sm">Pick a chat to read it, reply, or take over from the AI agent.</p>
           </div>
         ) : !chat ? (
-          <div className="flex flex-1 items-center justify-center gap-2 text-muted-foreground" style={TEXT_SM}>
+          <div className="flex flex-1 items-center justify-center gap-2 text-muted-foreground text-sm">
             <Loader2 className="size-4 animate-spin" /> Loading the chat&hellip;
           </div>
         ) : (
           <>
             <div className="border-b border-border px-4 py-2 md:hidden">
-              <button type="button" className="text-primary" style={TEXT_SM} onClick={() => setOpen(null)}>
+              <button type="button" className="text-primary text-sm" onClick={() => setOpen(null)}>
                 &larr; All chats
               </button>
             </div>
@@ -934,7 +934,7 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
               }}
             />
             {summary && (
-              <div className="flex items-start gap-2 border-b border-border bg-primary/5 px-4 py-3" style={TEXT_SM}>
+              <div className="flex items-start gap-2 border-b border-border bg-primary/5 px-4 py-3 text-sm">
                 <FileText className="mt-0.5 size-4 shrink-0 text-primary" />
                 <p className="flex-1">{summary}</p>
                 <button type="button" aria-label="Close summary" onClick={() => setSummary(null)} className="text-muted-foreground hover:text-foreground">

@@ -1,5 +1,5 @@
 import {
-  Activity,
+  ScrollText,
   BadgeCheck,
   BarChart3,
   BrainCircuit,
@@ -22,7 +22,7 @@ export interface StudioNavItem {
 
 export const STUDIO_GROUP_LABEL: Record<'build' | 'deploy' | 'monitor', string> = {
   build: 'Build',
-  deploy: 'Deploy',
+  deploy: 'Test & launch',
   monitor: 'Monitor',
 }
 
@@ -38,6 +38,6 @@ export const STUDIO_NAV_SECTIONS: StudioNavItem[] = [
   { id: 'safety', label: 'Safety & handoff', icon: ShieldAlert, group: 'build' },
   { id: 'testEval', label: 'Test & Eval', icon: FlaskConical, group: 'deploy' },
   { id: 'publish', label: 'Publish', icon: Rocket, group: 'deploy' },
-  { id: 'analytics', label: 'Analytics', icon: BarChart3, group: 'monitor' },
-  { id: 'activity', label: 'Activity', icon: Activity, group: 'monitor' },
+  { id: 'analytics', label: 'Performance', icon: BarChart3, group: 'monitor' },
+  { id: 'activity', label: 'Logs', icon: ScrollText, group: 'monitor' },
 ]

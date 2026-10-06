@@ -55,7 +55,7 @@ export function SelectableCard({
         )}
         <div className="min-w-0">
           <span className="flex items-center gap-1.5">
-            <p style={{ fontWeight: 'var(--font-weight-medium)' }}>{title}</p>
+            <p className="font-medium">{title}</p>
             {info && (
               <span onClick={(e) => e.stopPropagation()}>
                 <InfoTooltip text={info} />
@@ -63,7 +63,7 @@ export function SelectableCard({
             )}
           </span>
           {helper && (
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            <p className="text-muted-foreground text-xs">
               {helper}
             </p>
           )}

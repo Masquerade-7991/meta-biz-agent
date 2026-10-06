@@ -105,12 +105,12 @@ function IntegrationCard({
         ) : null}
       </div>
       <div>
-        <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{integration.name}</p>
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        <p className="font-semibold">{integration.name}</p>
+        <p className="text-muted-foreground text-xs">
           {integration.category}
         </p>
       </div>
-      <span className="text-primary" style={{ fontSize: 'var(--text-xs)' }}>
+      <span className="text-primary text-xs">
         {record ? 'Manage' : 'View integration'}
       </span>
     </button>
@@ -209,7 +209,7 @@ export function IntegrationsTab() {
         </div>
       </div>
 
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+      <p className="text-muted-foreground text-xs">
         This is a prototype. Installing and connecting here are both simulated; no real account is
         contacted.
       </p>
@@ -325,14 +325,14 @@ function IntegrationDetailDialog({
         </DialogHeader>
 
         <div className="max-h-[60vh] space-y-4 overflow-y-auto">
-          <p style={{ fontSize: 'var(--text-sm)' }}>{integration.description}</p>
+          <p className="text-sm">{integration.description}</p>
 
           {!installedRecord ? (
             <div className="space-y-1.5">
-              <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Setup</p>
+              <p className="font-medium">Setup</p>
               <ol className="list-decimal space-y-1 pl-5">
                 {integration.setupSteps.map((step, i) => (
-                  <li key={i} className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                  <li key={i} className="text-muted-foreground text-sm">
                     {step}
                   </li>
                 ))}
@@ -352,16 +352,16 @@ function IntegrationDetailDialog({
               </div>
 
               <div>
-                <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>Connections</p>
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <p className="font-semibold">Connections</p>
+                <p className="text-muted-foreground text-xs">
                   Manage the connection this integration uses.
                 </p>
               </div>
 
               {phase === 'failed' && (
                 <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
-                  <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>Could not connect</p>
-                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                  <p className="font-semibold">Could not connect</p>
+                  <p className="text-muted-foreground text-sm">
                     Something went wrong connecting to {integration.name}. Check your details and
                     try again.
                   </p>
@@ -394,14 +394,14 @@ function IntegrationDetailDialog({
               {phase === 'redirecting' && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
-                  <span style={{ fontSize: 'var(--text-sm)' }}>Redirecting to {integration.name} to sign in&hellip;</span>
+                  <span className="text-sm">Redirecting to {integration.name} to sign in&hellip;</span>
                 </div>
               )}
 
               {phase === 'consent' && (
                 <div className="space-y-3 rounded-lg bg-muted p-3">
-                  <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>Approve access for Helo</p>
-                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                  <p className="font-semibold">Approve access for Helo</p>
+                  <p className="text-muted-foreground text-sm">
                     Helo is requesting access to your {integration.name} account to use the tools
                     listed below.
                   </p>
@@ -419,14 +419,14 @@ function IntegrationDetailDialog({
               {phase === 'connecting' && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
-                  <span style={{ fontSize: 'var(--text-sm)' }}>Connecting to {integration.name}&hellip;</span>
+                  <span className="text-sm">Connecting to {integration.name}&hellip;</span>
                 </div>
               )}
 
               {phase === 'idle' &&
                 (installedRecord.connectedAs ? (
                   <div className="space-y-2">
-                    <p className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                    <p className="flex items-center gap-1.5 text-muted-foreground text-sm">
                       <span className="size-1.5 shrink-0 rounded-full bg-success" />
                       Connected to {installedRecord.connectedAs}
                     </p>
@@ -436,7 +436,7 @@ function IntegrationDetailDialog({
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <p className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                    <p className="flex items-center gap-1.5 text-muted-foreground text-sm">
                       <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/50" />
                       You are not connected to {integration.name}.
                     </p>
@@ -450,10 +450,10 @@ function IntegrationDetailDialog({
           )}
 
           <div className="space-y-1.5">
-            <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Tools this makes available</p>
+            <p className="font-medium">Tools this makes available</p>
             <ul className="space-y-1.5 rounded-lg bg-muted p-3">
               {integration.tools.map((tool) => (
-                <li key={tool.name} style={{ fontSize: 'var(--text-xs)' }}>
+                <li key={tool.name} className="text-xs">
                   <code className="text-foreground">{tool.name}</code>{' '}
                   <span className="text-muted-foreground">{tool.description}</span>
                 </li>

@@ -138,7 +138,7 @@ export function SkillsSection() {
   useRegisterDevControls(
     'skills',
     <DemoControlsGroup label="Skills">
-      <label className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+      <label className="flex items-center gap-1.5 text-muted-foreground text-xs">
         <input type="checkbox" checked={forceSaveFailure} onChange={(e) => setForceSaveFailure(e.target.checked)} />
         Force save failure
       </label>
@@ -275,7 +275,7 @@ export function SkillsSection() {
               {skillCount} custom skill{skillCount === 1 ? '' : 's'}
             </span>
             {skillCount >= SKILL_COUNT_WARNING_THRESHOLD && (
-              <p className="mt-1 max-w-md text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              <p className="mt-1 max-w-md text-warning-foreground text-xs">
                 Many overlapping skills can make the agent inconsistent. Fewer, clearer skills work better than many
                 small ones.
               </p>
@@ -301,8 +301,8 @@ export function SkillsSection() {
 
       {personalization.lastSkillImport && (
         <div className="flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2">
-          <span style={{ fontSize: 'var(--text-sm)' }}>{personalization.lastSkillImport.count} skills imported.</span>
-          <button type="button" onClick={() => setPendingUndoSkillImport(true)} className="text-primary" style={{ fontSize: 'var(--text-sm)' }}>
+          <span className="text-sm">{personalization.lastSkillImport.count} skills imported.</span>
+          <button type="button" onClick={() => setPendingUndoSkillImport(true)} className="text-primary text-sm">
             Undo this import
           </button>
         </div>
@@ -324,7 +324,7 @@ export function SkillsSection() {
       {skillCount === 0 && !skillEditor ? (
         <div className="space-y-3 rounded-lg border border-border bg-accent p-4 text-center">
           <span className="flex items-center justify-center gap-1.5">
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            <p className="text-muted-foreground text-sm">
               No custom skills yet, and most agents do not need any.
             </p>
             <InfoTooltip text="The controls under Identity → Personality cover tone, languages and length. When there is a specific situation you want handled your way, like warranty questions or discount requests, start from a template or add your own." />
@@ -360,12 +360,11 @@ export function SkillsSection() {
                     <MessageSquare className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                     <ChevronRight className={cn('mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-90')} />
                     <div className="min-w-0 flex-1">
-                      <p className="flex flex-wrap items-center gap-2" style={{ fontWeight: 'var(--font-weight-medium)' }}>
+                      <p className="flex flex-wrap items-center gap-2 font-medium">
                         {skill.name}
                         {skill.reviewStatus && (
                           <span
-                            className={cn('rounded-full px-2 py-0.5', REVIEW_LABEL[skill.reviewStatus].className)}
-                            style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-medium)' }}
+                            className={cn('rounded-full px-2 py-0.5 text-xs font-medium', REVIEW_LABEL[skill.reviewStatus].className)}
                             title={
                               skill.reviewStatus === 'blocked'
                                 ? 'This skill failed review, most often because it asks for or refers to sensitive personal information. Edit and save it to have it reviewed again.'
@@ -379,11 +378,11 @@ export function SkillsSection() {
                         )}
                       </p>
                       {expanded && skill.description && (
-                        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                        <p className="text-muted-foreground text-xs">
                           When it applies: {skill.description}
                         </p>
                       )}
-                      <p className={cn('text-muted-foreground', !expanded && 'line-clamp-2')} style={{ fontSize: 'var(--text-sm)' }}>
+                      <p className={cn('text-muted-foreground text-sm', !expanded && 'line-clamp-2')}>
                         {skill.instruction}
                       </p>
                     </div>
@@ -400,7 +399,7 @@ export function SkillsSection() {
                 {warnings && warnings.length > 0 && (
                   <div className="space-y-1 border-t border-border bg-warning/10 px-3 py-2">
                     {warnings.map((w, i) => (
-                      <p key={i} className="flex items-center gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                      <p key={i} className="flex items-center gap-1.5 text-warning-foreground text-xs">
                         <AlertTriangle className="size-3.5 shrink-0" />
                         {w.text}
                         {w.viewExistingId && (
@@ -539,7 +538,7 @@ function SkillEditorCard({
         />
         <div className="flex items-center justify-end">
           {editor.instruction.length > 1600 && (
-            <span className="shrink-0 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            <span className="shrink-0 text-muted-foreground text-xs">
               {editor.instruction.length}/{MAX_SKILL_INSTRUCTION}
             </span>
           )}
@@ -576,7 +575,7 @@ function SkillTemplatesDialog({
     if (templates.length === 0) return null
     return (
       <div className="space-y-2">
-        <p style={{ fontWeight: 'var(--font-weight-medium)' }}>{heading}</p>
+        <p className="font-medium">{heading}</p>
         <div className="grid grid-cols-2 gap-3">
           {templates.map((template) => {
             const alreadyAdded = existingTitles.includes(kebabCase(template.name))
@@ -585,7 +584,7 @@ function SkillTemplatesDialog({
                 <p className={cn(alreadyAdded && 'text-muted-foreground')} style={{ fontWeight: 'var(--font-weight-medium)' }}>
                   {template.name}
                 </p>
-                <p className="line-clamp-2 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <p className="line-clamp-2 text-muted-foreground text-xs">
                   {template.instruction}
                 </p>
                 <Button size="sm" variant="outline" disabled={alreadyAdded} onClick={() => onUseTemplate(template)}>
@@ -744,7 +743,7 @@ function SkillImportPanel({
         {stage === 'upload' && (
           <div className="space-y-4">
             <div className="space-y-1">
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              <p className="text-muted-foreground text-sm">
                 Your file needs two columns: name and instruction.
               </p>
               <button
@@ -756,8 +755,7 @@ function SkillImportPanel({
                     '"Out of stock requests","When a product is out of stock, apologise, say when it is expected back if known, and offer a similar product."',
                   ])
                 }
-                className="text-primary"
-                style={{ fontSize: 'var(--text-sm)' }}
+                className="text-primary text-sm"
               >
                 Download the template
               </button>
@@ -825,18 +823,18 @@ function SkillImportPanel({
 
         {stage === 'review' && review && (
           <div className="space-y-3">
-            <p style={{ fontSize: 'var(--text-sm)' }}>{dataRows.length} skills found</p>
-            <p style={{ fontSize: 'var(--text-sm)' }}>{review.toImport.length} will be imported</p>
+            <p className="text-sm">{dataRows.length} skills found</p>
+            <p className="text-sm">{review.toImport.length} will be imported</p>
             {review.skipped.length > 0 && (
               <div>
-                <p className="flex items-center gap-2 text-warning-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                <p className="flex items-center gap-2 text-warning-foreground text-sm">
                   {review.skipped.length} have problems and will be skipped
                   <button type="button" onClick={() => setProblemsOpen((v) => !v)} className="text-primary underline">
                     View problems
                   </button>
                 </p>
                 {problemsOpen && (
-                  <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto rounded-lg bg-muted p-3" style={{ fontSize: 'var(--text-xs)' }}>
+                  <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto rounded-lg bg-muted p-3 text-xs">
                     {review.skipped.map((s) => (
                       <li key={s.rowNumber}>
                         Row {s.rowNumber}: {s.reason}
@@ -847,7 +845,7 @@ function SkillImportPanel({
               </div>
             )}
             {review.toImport.some((r) => r.warnings.length > 0) && (
-              <ul className="max-h-40 space-y-1.5 overflow-y-auto rounded-lg bg-warning/10 p-3" style={{ fontSize: 'var(--text-xs)' }}>
+              <ul className="max-h-40 space-y-1.5 overflow-y-auto rounded-lg bg-warning/10 p-3 text-xs">
                 {review.toImport
                   .filter((r) => r.warnings.length > 0)
                   .map((r) => (
@@ -871,13 +869,13 @@ function SkillImportPanel({
         {stage === 'saving' && (
           <div className="flex items-center gap-2 py-4 text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            <span style={{ fontSize: 'var(--text-sm)' }}>Importing&hellip;</span>
+            <span className="text-sm">Importing&hellip;</span>
           </div>
         )}
 
         {stage === 'done' && saveResult && saveResult.failed.length > 0 && (
           <div className="space-y-3">
-            <p style={{ fontSize: 'var(--text-sm)' }}>
+            <p className="text-sm">
               {saveResult.imported} imported, {saveResult.failed.length} could not be saved.{' '}
               <button type="button" onClick={retryFailed} className="text-primary underline">
                 Retry failed rows

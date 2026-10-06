@@ -85,7 +85,7 @@ export function automationErrors(a: Automation): string | null {
 
 /** What each phone-number status means for the business, and the one thing to do about it. */
 export const STATUS_HELP: Record<string, { label: string; tone: 'ok' | 'warn' | 'bad'; help: string; action?: 'verify' | 'register' | 'manager' }> = {
-  CONNECTED: { label: 'Live', tone: 'ok', help: 'Sending and receiving messages.' },
+  CONNECTED: { label: 'Connected', tone: 'ok', help: 'Sending and receiving messages.' },
   PENDING: { label: 'Pending verification', tone: 'warn', help: 'Prove you own this number with a code by SMS or call, then register it.', action: 'verify' },
   UNVERIFIED: { label: 'Not verified', tone: 'warn', help: 'Prove you own this number with a code by SMS or call.', action: 'verify' },
   DISCONNECTED: { label: 'Disconnected', tone: 'bad', help: 'The number isn’t registered for messaging. Register it again with its PIN.', action: 'register' },

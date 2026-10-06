@@ -50,11 +50,11 @@ export function NotificationsBell({ onOpenChat, onOpenTarget }: { onOpenChat: (p
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
-        <p className="border-b border-border px-4 py-3" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-semi-bold)' }}>
+        <p className="border-b border-border px-4 py-3 text-sm font-semibold">
           Notifications
         </p>
         {items.length === 0 ? (
-          <p className="px-4 py-6 text-center text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="px-4 py-6 text-center text-muted-foreground text-sm">
             You&rsquo;re all caught up.
           </p>
         ) : (

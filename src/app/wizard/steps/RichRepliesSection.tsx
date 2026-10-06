@@ -154,7 +154,7 @@ export function RichRepliesSection() {
   useRegisterDevControls(
     'richReplies',
     <DemoControlsGroup label="Rich replies">
-      <label className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+      <label className="flex items-center gap-1.5 text-muted-foreground text-xs">
         <input
           type="checkbox"
           checked={forceSaveFailure}
@@ -279,7 +279,7 @@ export function RichRepliesSection() {
       </span>
 
       {replyCount > 0 && replyCount >= RICH_REPLY_COUNT_WARNING_THRESHOLD && (
-        <p className="flex items-center gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        <p className="flex items-center gap-1.5 text-warning-foreground text-xs">
           <AlertTriangle className="size-3.5 shrink-0" />
           Many rich replies with similar triggers can make the agent pick the wrong one. Fewer,
           clearly triggered ones work better.
@@ -290,7 +290,7 @@ export function RichRepliesSection() {
 
       {replyCount === 0 ? (
         <div className="space-y-3 rounded-lg border border-border bg-accent p-4 text-center">
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="text-muted-foreground text-sm">
             No rich replies yet. These make the agent&rsquo;s answers feel like a real WhatsApp
             business: a button to your website, a photo of a product, or a menu of choices. Add
             one to see how it works.
@@ -314,17 +314,17 @@ export function RichRepliesSection() {
                   <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p style={{ fontWeight: 'var(--font-weight-medium)' }}>{reply.name}</p>
-                      <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                      <p className="font-medium">{reply.name}</p>
+                      <span className="text-muted-foreground text-xs">
                         {RICH_REPLY_TYPE_LABEL[reply.type]}
                       </span>
                     </div>
-                    <p className="truncate text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                    <p className="truncate text-muted-foreground text-xs">
                       {isRaw ? reply.instructionSentence : reply.trigger}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
-                    <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                    <span className="text-muted-foreground text-xs">
                       {reply.enabled ? 'On' : 'Off'}
                     </span>
                     <Switch checked={reply.enabled} onCheckedChange={() => toggleEnabled(reply)} />
@@ -347,7 +347,7 @@ export function RichRepliesSection() {
                 {warnings && warnings.length > 0 && (
                   <div className="space-y-1 border-t border-border bg-warning/10 px-3 py-2">
                     {warnings.map((w, i) => (
-                      <p key={i} className="flex items-center gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                      <p key={i} className="flex items-center gap-1.5 text-warning-foreground text-xs">
                         <AlertTriangle className="size-3.5 shrink-0" />
                         {w.text}
                         {w.viewExistingId && (
@@ -431,8 +431,8 @@ function RichReplyGalleryDialog({ onSelect, onClose }: { onSelect: (type: RichRe
                 <div className="flex h-16 items-center justify-center rounded-md bg-muted">
                   <Icon className="size-6 text-muted-foreground" />
                 </div>
-                <p style={{ fontWeight: 'var(--font-weight-medium)' }}>{card.name}</p>
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <p className="font-medium">{card.name}</p>
+                <p className="text-muted-foreground text-xs">
                   {card.description}
                 </p>
               </button>
@@ -529,13 +529,12 @@ function RichReplyEditorDialog({
               <WhatsAppPreview draft={editor} />
               <details className="group rounded-lg border border-border">
                 <summary
-                  className="flex cursor-pointer list-none items-center gap-1.5 rounded-lg px-3 py-2 focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
-                  style={{ fontSize: 'var(--text-sm)' }}
+                  className="flex cursor-pointer list-none items-center gap-1.5 rounded-lg px-3 py-2 focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden text-sm"
                 >
                   <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
                   Instruction the agent will read
                 </summary>
-                <p className="whitespace-pre-wrap wrap-break-word border-t border-border px-3 py-2 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <p className="whitespace-pre-wrap wrap-break-word border-t border-border px-3 py-2 text-muted-foreground text-xs">
                   {compileRichReplySentence(editor)}
                 </p>
               </details>
@@ -549,8 +548,7 @@ function RichReplyEditorDialog({
             <button
               type="button"
               onClick={() => setShowAll(true)}
-              className="text-left text-muted-foreground underline-offset-2 hover:underline"
-              style={{ fontSize: 'var(--text-xs)' }}
+              className="text-left text-muted-foreground underline-offset-2 hover:underline text-xs"
             >
               {issues.length === 1 ? '1 field needs attention before you can save' : `${issues.length} fields need attention before you can save`}
               {!showAll && '. Show them'}
@@ -616,10 +614,10 @@ function FieldShell({
           {max !== undefined && count !== undefined && (
             <span
               className={cn(
+                'text-xs',
                 'tabular-nums text-muted-foreground',
                 count > max ? 'text-destructive' : count >= max * 0.9 && 'text-warning-foreground',
               )}
-              style={{ fontSize: 'var(--text-xs)' }}
             >
               {count}/{max}
             </span>
@@ -629,7 +627,7 @@ function FieldShell({
       </div>
       {children}
       {error && (
-        <p id={errorId} className="text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+        <p id={errorId} className="text-destructive text-xs">
           {error}
         </p>
       )}
@@ -688,7 +686,7 @@ function TextField({
 function OptionalGroup({ children }: { children: ReactNode }) {
   return (
     <fieldset className="space-y-4 rounded-lg border border-dashed border-border px-3 pb-3 pt-1">
-      <legend className="px-1 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+      <legend className="px-1 text-muted-foreground text-xs">
         Optional
       </legend>
       {children}
@@ -717,10 +715,10 @@ function Segmented<T extends string>({
           aria-checked={o.value === value}
           onClick={() => onChange(o.value)}
           className={cn(
+            'text-xs',
             'rounded px-2.5 py-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring',
             o.value === value && 'bg-background text-foreground shadow-sm',
           )}
-          style={{ fontSize: 'var(--text-xs)' }}
         >
           {o.label}
         </button>
@@ -760,7 +758,7 @@ function ImageSourcePicker({
   }
   const aria = { 'aria-invalid': err ? true : undefined, 'aria-describedby': err ? `${id}-err` : undefined }
   const empty = (text: string, section: 'knowledge' | 'connections', where: string) => (
-    <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+    <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground text-xs">
       {text}{' '}
       <button type="button" className="text-primary underline underline-offset-2" onClick={() => setSection(section)}>
         Add one in {where}
@@ -845,7 +843,7 @@ function ImageSourcePicker({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              <p className="text-muted-foreground text-xs">
                 Pick a tool whose response includes a link to the {media}.
               </p>
             </>
@@ -1004,7 +1002,7 @@ function RichReplyBlanksForm({
             <TextField field="latitude" label="Latitude" required inputMode="decimal" value={b.latitude} onChange={(v) => up(b, { latitude: v })} placeholder="e.g. 19.0596" />
             <TextField field="longitude" label="Longitude" required inputMode="decimal" value={b.longitude} onChange={(v) => up(b, { longitude: v })} placeholder="e.g. 72.8295" />
           </div>
-          <p className="flex items-start gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+          <p className="flex items-start gap-1.5 text-muted-foreground text-xs">
             <MapPin className="mt-px size-3.5 shrink-0" />
             Copy the coordinates from a verified source, like your Google Business Profile or a pin dropped at your door. A wrong pin sends customers to the wrong place.
           </p>
@@ -1025,7 +1023,7 @@ function RichReplyBlanksForm({
                 </Button>
               )}
               {businessAddress.trim() && b.address === businessAddress && (
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <p className="text-muted-foreground text-xs">
                   Filled from your business details. Edit if this reply should point somewhere else.
                 </p>
               )}
@@ -1088,7 +1086,7 @@ function RichReplyBlanksForm({
 function CountError({ field }: { field: string }) {
   const message = useContext(FormContext).issue(field)
   return message ? (
-    <p className="text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+    <p className="text-destructive text-xs">
       {message}
     </p>
   ) : null
@@ -1180,8 +1178,7 @@ function MenuOptionsEditor({
         <button
           type="button"
           onClick={() => onToggleGroups(!groupsEnabled)}
-          className="text-primary underline-offset-2 hover:underline"
-          style={{ fontSize: 'var(--text-xs)' }}
+          className="text-primary underline-offset-2 hover:underline text-xs"
         >
           {groupsEnabled ? 'Remove groups' : 'Group these rows'}
         </button>
@@ -1189,7 +1186,7 @@ function MenuOptionsEditor({
       {options.map((option, i) => (
         <div key={option.id} className="space-y-3 rounded-lg border border-border p-3">
           <div className="flex items-center justify-between">
-            <p style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-medium)' }}>Row {i + 1}</p>
+            <p className="text-xs font-medium">Row {i + 1}</p>
             {options.length > L.rowsMin && <RemoveButton label={`Remove row ${i + 1}`} onClick={() => onChange(options.filter((o) => o.id !== option.id))} />}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -1281,7 +1278,7 @@ function CarouselCardsEditor({
         >
           <div className="flex items-center gap-2">
             <GripVertical className="size-4 shrink-0 cursor-grab text-muted-foreground" />
-            <p className="flex-1" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-medium)' }}>
+            <p className="flex-1 text-xs font-medium">
               Card {i + 1}
             </p>
             {cards.length > L.cardsMin && <RemoveButton label={`Remove card ${i + 1}`} onClick={() => onChange(cards.filter((c) => c.id !== card.id))} />}

@@ -86,11 +86,11 @@ function AssembledBox({ text, warning }: { text: string; warning?: string | null
         <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0">
           <p className="caption text-muted-foreground">What we will tell the agent</p>
-          <p style={{ fontSize: 'var(--text-sm)' }}>{text}</p>
+          <p className="text-sm">{text}</p>
         </div>
       </div>
       {warning && (
-        <p className="flex items-center gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        <p className="flex items-center gap-1.5 text-warning-foreground text-xs">
           <AlertTriangle className="size-3.5 shrink-0" /> {warning}
         </p>
       )}
@@ -123,9 +123,9 @@ function PolicyHelpPopover({
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-80 space-y-3" side="top" align="start">
-        <p style={{ fontSize: 'var(--text-sm)' }}>{helper}</p>
+        <p className="text-sm">{helper}</p>
         <div className="space-y-2 rounded-lg bg-muted p-3">
-          <p style={{ fontSize: 'var(--text-sm)' }}>{example}</p>
+          <p className="text-sm">{example}</p>
           <Button size="sm" variant="outline" onClick={onUseExample}>
             Use this example
           </Button>
@@ -285,7 +285,7 @@ export function BusinessProfileStep() {
       <Button variant="outline" size="sm" onClick={simulateLoadFailure}>
         Force load failure
       </Button>
-      <label className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+      <label className="flex items-center gap-1.5 text-muted-foreground text-xs">
         <input type="checkbox" checked={forceSaveFailure} onChange={(e) => setForceSaveFailure(e.target.checked)} />
         Force save failure
       </label>
@@ -341,7 +341,7 @@ export function BusinessProfileStep() {
                 <InfoTooltip text="Background about the business. What the agent does is set in step 1, Your agent. What you sell, who you serve, and anything customers often ask about." />
               </span>
               {business.businessDescription.length > 400 && (
-                <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <span className="text-muted-foreground text-xs">
                   {business.businessDescription.length}/{MAX_DESCRIPTION}
                 </span>
               )}
@@ -364,7 +364,7 @@ export function BusinessProfileStep() {
             {business.paymentSource === 'text' ? (
               <div className="space-y-1.5">
                 <Textarea readOnly rows={2} value={business.paymentPlainText} className="bg-muted text-muted-foreground" />
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <p className="text-muted-foreground text-xs">
                   These payment details were entered elsewhere.{' '}
                   <button
                     type="button"
@@ -445,7 +445,7 @@ export function BusinessProfileStep() {
                       />
                     </span>
                     {business[key].length > 800 && (
-                      <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                      <span className="text-muted-foreground text-xs">
                         {business[key].length}/{MAX_POLICY}
                       </span>
                     )}
@@ -486,7 +486,7 @@ export function BusinessProfileStep() {
               placeholder="support@yourbusiness.com"
             />
             {emailInvalid && (
-              <p className="text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              <p className="text-warning-foreground text-xs">
                 This does not look like an email address
               </p>
             )}
@@ -521,8 +521,7 @@ export function BusinessProfileStep() {
               <button
                 type="button"
                 onClick={() => setHoursExpanded(true)}
-                className="text-primary"
-                style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-medium)' }}
+                className="text-primary text-sm font-medium"
               >
                 + Add business hours
               </button>
@@ -540,7 +539,7 @@ export function BusinessProfileStep() {
                 <div className="space-y-2">
                   {business.businessHours.map((row) => (
                     <div key={row.day} className="flex flex-wrap items-center gap-3">
-                      <span className="w-24 shrink-0" style={{ fontSize: 'var(--text-sm)' }}>
+                      <span className="w-24 shrink-0 text-sm">
                         {row.day === 'Mon' && 'Monday'}
                         {row.day === 'Tue' && 'Tuesday'}
                         {row.day === 'Wed' && 'Wednesday'}
@@ -561,7 +560,7 @@ export function BusinessProfileStep() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <span className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>to</span>
+                      <span className="text-muted-foreground text-sm">to</span>
                       <Select
                         value={row.close || undefined}
                         disabled={row.closed}
@@ -574,7 +573,7 @@ export function BusinessProfileStep() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <label className="flex items-center gap-1.5" style={{ fontSize: 'var(--text-sm)' }}>
+                      <label className="flex items-center gap-1.5 text-sm">
                         <input
                           type="checkbox"
                           checked={row.closed}
@@ -596,8 +595,7 @@ export function BusinessProfileStep() {
                 <button
                   type="button"
                   onClick={() => setPendingRemoveHours(true)}
-                  className="text-primary"
-                  style={{ fontSize: 'var(--text-xs)' }}
+                  className="text-primary text-xs"
                 >
                   Remove hours
                 </button>

@@ -14,7 +14,7 @@ import { isDummyMode } from '@/app/api/dummy'
 import { resetDummyWhatsApp } from '@/app/api/supportDummy'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
-import { SECTION_TITLE, TEXT_SM_OPEN } from '@/app/lib/text'
+import { TEXT_SM_OPEN } from '@/app/lib/text'
 
 interface Snapshot {
   number: { id: string; display: string; name: string } | null
@@ -53,7 +53,7 @@ function Step({ n, done, locked, title, note, children, action }: { n: number; d
         }
         aria-label={done ? 'Done' : `Step ${n}`}
       >
-        {done ? <Check className="size-4" /> : <span style={{ fontSize: 'var(--text-sm)' }}>{n}</span>}
+        {done ? <Check className="size-4 text-sm" /> : <span>{n}</span>}
       </span>
       <div className="min-w-0 space-y-2">
         <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }} className={done || locked ? 'text-muted-foreground' : undefined}>
@@ -61,18 +61,18 @@ function Step({ n, done, locked, title, note, children, action }: { n: number; d
         </p>
         {done ? (
           note && (
-            <div className="text-muted-foreground" style={TEXT_SM_OPEN}>
+            <div className="text-muted-foreground text-sm">
               {note}
             </div>
           )
         ) : locked ? (
-          <p className="text-muted-foreground/80" style={TEXT_SM_OPEN}>
+          <p className="text-muted-foreground/80 text-sm">
             {locked}
           </p>
         ) : (
           <>
             {children && (
-              <div className="text-muted-foreground" style={TEXT_SM_OPEN}>
+              <div className="text-muted-foreground text-sm">
                 {children}
               </div>
             )}
@@ -113,7 +113,7 @@ function GetStarted({
   const agent = snap.agent
   return (
     <section className="rounded-xl border border-border p-6 md:p-8">
-      <h2 style={SECTION_TITLE}>{!connected ? 'Start by connecting WhatsApp' : agent ? 'You’re set up' : 'Next, build your AI agent'}</h2>
+      <h2 className="text-section font-semibold">{!connected ? 'Start by connecting WhatsApp' : agent ? 'You’re set up' : 'Next, build your AI agent'}</h2>
       <ol className="mt-2 divide-y divide-border">
         <Step
           n={1}
@@ -187,10 +187,10 @@ function GetStarted({
 function HelpGuides() {
   return (
     <section className="space-y-6">
-      <h2 style={SECTION_TITLE}>Product guides</h2>
+      <h2 className="text-section font-semibold">Product guides</h2>
       {HELP_GROUPS.map((g) => (
         <div key={g.title} className="space-y-2">
-          <h3 className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-semi-bold)' }}>
+          <h3 className="text-muted-foreground text-sm font-semibold">
             {g.title}
           </h3>
           <ul className="grid gap-x-8 sm:grid-cols-2 lg:grid-cols-3">
@@ -201,7 +201,7 @@ function HelpGuides() {
                     {l.title}
                     <ArrowUpRight className="size-3.5 shrink-0" />
                   </span>
-                  <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)', lineHeight: 1.5 }}>
+                  <span className="text-muted-foreground text-xs">
                     {l.description}
                   </span>
                 </a>
@@ -261,18 +261,18 @@ export function HomePage({ onNavigate, onOpenSettings }: { onNavigate: (id: NavI
   return (
     <div className="mx-auto w-full max-w-5xl space-y-10 px-6 py-8">
       <div>
-        <h1 style={{ fontSize: 'clamp(2rem, 6vw, var(--text-2xl))', lineHeight: 1.1 }}>{greeting(me?.user.name)}</h1>
+        <h1 className="text-display">{greeting(me?.user.name)}</h1>
         <p className="mt-1 text-muted-foreground">{me?.workspace?.name}</p>
       </div>
       {error ? (
-        <div className="rounded-xl border border-border p-6" style={TEXT_SM_OPEN}>
+        <div className="rounded-xl border border-border p-6 text-sm">
           <p className="text-destructive">Couldn&rsquo;t check your WhatsApp setup. {error}</p>
           <Button variant="outline" size="sm" className="mt-3" onClick={() => setAttempt((n) => n + 1)}>
             Try again
           </Button>
         </div>
       ) : !snap ? (
-        <div className="flex items-center gap-2 py-10 text-muted-foreground" style={TEXT_SM_OPEN}>
+        <div className="flex items-center gap-2 py-10 text-muted-foreground text-sm">
           <Loader2 className="size-4 animate-spin" />
           Checking your WhatsApp setup&hellip;
         </div>

@@ -7,7 +7,7 @@ import { connectorLogs, errorText, type ConnectorLogs } from '@/app/api/meta'
 import type { Connection } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
 import { formatActivityTime } from './helpers'
-import { DIALOG_TITLE } from './places'
+
 
 /** A connection's record: Meta's last 7 days of errors and stats, or this browser's test runs before it's on Meta. */
 export function ErrorsDialog({
@@ -46,7 +46,7 @@ export function ErrorsDialog({
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle style={DIALOG_TITLE}>Errors and stats: <span className="font-mono">{connection.name}</span></DialogTitle>
+          <DialogTitle>Errors and stats: <span className="font-mono">{connection.name}</span></DialogTitle>
           <DialogDescription>
             {connection.metaId
               ? 'The last 7 days on Meta, plus tests run from this browser. Meta keeps only failed calls, so successful chats count in the totals, not the list.'
@@ -63,20 +63,20 @@ export function ErrorsDialog({
               ['Avg latency', `${(logs.stats.avg_latency_s ?? 0).toFixed(2)} s`],
             ].map(([label, value]) => (
               <div key={label} className="rounded-lg bg-muted p-2">
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <p className="text-muted-foreground text-xs">
                   {label}
                 </p>
-                <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{value}</p>
+                <p className="font-semibold">{value}</p>
               </div>
             ))}
           </div>
         )}
         {connection.metaId && !logs && !logsError ? (
-          <p className="flex items-center gap-2 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="flex items-center gap-2 text-muted-foreground text-sm">
             <Loader2 className="size-3.5 animate-spin" /> Loading activity...
           </p>
         ) : sorted.length === 0 ? (
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="text-muted-foreground text-sm">
             {connection.metaId ? 'No errors in the last 7 days.' : 'No tests run yet.'}
           </p>
         ) : (
@@ -88,19 +88,18 @@ export function ErrorsDialog({
                   onClick={() => row.outcome === 'failed' && setExpandedRowId(expandedRowId === row.id ? null : row.id)}
                   className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left"
                 >
-                  <span className="flex items-center gap-3" style={{ fontSize: 'var(--text-sm)' }}>
+                  <span className="flex items-center gap-3 text-sm">
                     <span className="text-muted-foreground">{formatActivityTime(row.timestamp)}</span>
                     <span>{row.actionName}</span>
                   </span>
                   <span
-                    className={cn(row.outcome === 'worked' ? 'text-success' : 'text-warning-foreground')}
-                    style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-medium)' }}
+                    className={cn('text-sm font-medium', row.outcome === 'worked' ? 'text-success' : 'text-warning-foreground')}
                   >
                     {row.outcome === 'worked' ? 'Worked' : 'Failed'}
                   </span>
                 </button>
                 {row.outcome === 'failed' && expandedRowId === row.id && (
-                  <pre className="mx-3 mb-2 max-h-32 min-w-0 overflow-auto rounded-md bg-muted p-2 break-all whitespace-pre-wrap" style={{ fontSize: 'var(--text-xs)' }}>
+                  <pre className="mx-3 mb-2 max-h-32 min-w-0 overflow-auto rounded-md bg-muted p-2 break-all whitespace-pre-wrap text-xs">
                     {row.errorText}
                   </pre>
                 )}
@@ -109,7 +108,7 @@ export function ErrorsDialog({
           </div>
         )}
         {sorted.length > 10 && (
-          <div className="flex items-center justify-between gap-2" style={{ fontSize: 'var(--text-xs)' }}>
+          <div className="flex items-center justify-between gap-2 text-xs">
             <label className="flex items-center gap-1.5 text-muted-foreground">
               Per page
               <select

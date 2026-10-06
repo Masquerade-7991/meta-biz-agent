@@ -12,6 +12,7 @@
           "useExitWizard",
           "useNavigationGuard",
           "useRegisterNavGuard",
+          "useReportSaveStatus",
           "useRegisterDevControls",
           "useDevControlsEntries",
           "useAuth"

@@ -8,9 +8,6 @@ export const PLACE: Record<ValueLocation, { label: string; short: string; exampl
   body: { label: 'Body (JSON)', short: 'Body', example: '{ "query": … }', tone: 'var(--chart-2)' },
 }
 
-/** Dialog titles: the theme's --text-lg is a display size, too big for a dialog. */
-export const DIALOG_TITLE = { fontSize: '1.25rem', lineHeight: 1.3 } as const
-
 // How an access key is sent. "Bearer token" is the common case, so it needs no field name.
 export type KeyMode = 'bearer' | 'header' | 'query'
 export const KEY_MODES: { id: KeyMode; title: string; hint: string }[] = [

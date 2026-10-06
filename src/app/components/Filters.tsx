@@ -1,6 +1,5 @@
 import { Search } from 'lucide-react'
 import { Input } from '@/app/components/ui/input'
-import { TEXT_XS } from '@/app/lib/text'
 import { cn } from '@/app/lib/utils'
 
 /** A row of pill buttons that picks one option: a filter, a status, a date range. */
@@ -26,8 +25,7 @@ export function PillTabs<T extends string | number>({
           role="tab"
           aria-selected={value === o.id}
           onClick={() => onChange(o.id)}
-          className={cn('rounded-full px-3', compact ? 'py-1' : 'py-1.5', value === o.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}
-          style={TEXT_XS}
+          className={cn('rounded-full px-3 text-xs', compact ? 'py-1' : 'py-1.5', value === o.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}
         >
           {o.label}
         </button>

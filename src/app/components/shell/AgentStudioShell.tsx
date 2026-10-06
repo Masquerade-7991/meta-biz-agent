@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Eye, Loader2, LogOut } from 'lucide-react'
+import { ArrowLeft, Eye, Loader2, Menu } from 'lucide-react'
+import { StatusPill } from '@/app/components/ui/status'
+import { Sheet, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
+import { AGENT_STATUS, agentStatusOf } from '@/app/lib/status'
 import { toast } from 'sonner'
 import { hydrateFromMeta, setActivePhoneNumberId } from '@/app/api/meta'
 import { getDraft, keepLocalSecrets, ms, putStoredAgent, setDraftSyncPhone } from '@/app/api/store'
 import { migrateRichReply } from '@/app/wizard/richReplies'
 import type { SliceKey, WizardState } from '@/app/wizard/types'
 import { Button } from '@/app/components/ui/button'
-import { Avatar, AvatarFallback } from '@/app/components/ui/avatar'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useNavigationGuard } from '@/app/wizard/NavigationGuardContext'
 import { STUDIO_GROUP_LABEL, STUDIO_NAV_SECTIONS } from '@/app/wizard/studioNav'
@@ -67,7 +69,8 @@ const GROUPS = ['build', 'deploy', 'monitor'] as const
 // Test & Eval, Publish, Activity) — just no longer gated by Back/Next.
 export function AgentStudioShell({ onExit }: { onExit: () => void }) {
   const { state, setSection, patch } = useWizard()
-  const { runGuard, pending } = useNavigationGuard()
+  const { runGuard, pending, status: saveStatus } = useNavigationGuard()
+  const [navOpen, setNavOpen] = useState(false)
   // Supervisors and agents may look at the agent, but only owners and admins change it (server/app.ts).
   const { me } = useAuth()
   const readOnly = !can(me?.role, 'agent.edit')
@@ -110,6 +113,7 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
     if (id === state.currentSection || pending) return
     const ok = await runGuard(readOnly ? 'discard' : 'save')
     if (!ok) return
+    setNavOpen(false)
     setSection(id)
   }
 
@@ -123,75 +127,102 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
   const ungrouped = STUDIO_NAV_SECTIONS.filter((item) => !item.group)
   const ActiveComponent = SECTION_COMPONENTS[state.currentSection]
   const activeLabel = STUDIO_NAV_SECTIONS.find((item) => item.id === state.currentSection)?.label ?? ''
+  const agentStatus = AGENT_STATUS[agentStatusOf(state.publish)]
+  const saveText = readOnly
+    ? 'View only'
+    : saveStatus.saving
+      ? 'Saving…'
+      : saveStatus.dirty
+        ? 'Unsaved changes'
+        : saveStatus.savedAt
+          ? 'Saved'
+          : null
+
+  const nav = (
+    <nav aria-label="Agent sections" className="space-y-5 px-3 py-4">
+      <ul className="space-y-0.5">
+        {ungrouped.map((item) => (
+          <NavRow key={item.id} item={item} active={state.currentSection === item.id} onClick={() => navigate(item.id)} />
+        ))}
+      </ul>
+      {GROUPS.map((group) => (
+        <div key={group}>
+          <p className="px-2.5 pb-1.5 text-meta font-medium text-muted-foreground">{STUDIO_GROUP_LABEL[group]}</p>
+          <ul className="space-y-0.5">
+            {STUDIO_NAV_SECTIONS.filter((item) => item.group === group).map((item) => (
+              <NavRow key={item.id} item={item} active={state.currentSection === item.id} onClick={() => navigate(item.id)} />
+            ))}
+          </ul>
+        </div>
+      ))}
+    </nav>
+  )
 
   return (
-    <div className="flex h-screen flex-col bg-background">
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <p className="truncate" style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>
-          {state.identity.agentName.trim() || 'Untitled agent'}
-        </p>
-        <div className="flex items-center gap-4">
-          <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-            {readOnly ? 'View only' : 'All changes saved'}
-          </span>
-          <Button variant="ghost" size="sm" onClick={handleExit} disabled={pending}>
-            <LogOut className="size-4" />
-            Exit
-          </Button>
+    <div className="flex h-dvh flex-col bg-background">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-3 sm:px-4">
+        <button
+          type="button"
+          onClick={() => setNavOpen(true)}
+          aria-label="Open agent sections"
+          className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
+        >
+          <Menu className="size-5" />
+        </button>
+        <Button variant="ghost" size="sm" onClick={handleExit} disabled={pending} className="hidden text-muted-foreground sm:inline-flex">
+          <ArrowLeft className="size-4" />
+          All agents
+        </Button>
+        <span aria-hidden className="hidden h-5 w-px bg-border sm:block" />
+        <div className="flex min-w-0 items-center gap-2.5">
+          <p className="truncate font-semibold">{state.identity.agentName.trim() || 'Untitled agent'}</p>
+          <StatusPill tone={agentStatus.tone}>{agentStatus.label}</StatusPill>
+          {state.gate.selectedPhoneNumber && (
+            <span className="hidden truncate font-mono text-meta text-muted-foreground lg:inline">{state.gate.selectedPhoneNumber}</span>
+          )}
+        </div>
+        <div className="ml-auto flex items-center gap-3">
+          {saveText && (
+            <span className="flex items-center gap-1.5 text-meta text-muted-foreground" aria-live="polite">
+              {saveStatus.dirty && !readOnly && <span aria-hidden className="size-1.5 rounded-full bg-warning" />}
+              {saveText}
+            </span>
+          )}
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <nav className="w-60 shrink-0 space-y-4 overflow-y-auto border-r border-sidebar-border bg-sidebar px-3 py-4">
-          <ul className="space-y-0.5">
-            {ungrouped.map((item) => (
-              <NavRow key={item.id} item={item} active={state.currentSection === item.id} onClick={() => navigate(item.id)} />
-            ))}
-          </ul>
-
-          {GROUPS.map((group) => (
-            <div key={group}>
-              <p
-                className="px-2 pb-1 text-muted-foreground uppercase"
-                style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-semi-bold)', letterSpacing: '0.04em' }}
-              >
-                {STUDIO_GROUP_LABEL[group]}
-              </p>
-              <ul className="space-y-0.5">
-                {STUDIO_NAV_SECTIONS.filter((item) => item.group === group).map((item) => (
-                  <NavRow key={item.id} item={item} active={state.currentSection === item.id} onClick={() => navigate(item.id)} />
-                ))}
-              </ul>
+        <aside className="hidden w-56 shrink-0 overflow-y-auto border-r border-sidebar-border bg-sidebar md:block">{nav}</aside>
+        <Sheet open={navOpen} onOpenChange={setNavOpen}>
+          <SheetContent side="left" className="w-72 overflow-y-auto bg-sidebar p-0 sm:max-w-72">
+            <SheetTitle className="sr-only">Agent sections</SheetTitle>
+            <div className="border-b border-sidebar-border p-3">
+              <Button variant="ghost" size="sm" onClick={handleExit} disabled={pending}>
+                <ArrowLeft className="size-4" />
+                All agents
+              </Button>
             </div>
-          ))}
-        </nav>
+            {nav}
+          </SheetContent>
+        </Sheet>
 
-        <main className="min-h-0 flex-1 overflow-y-auto bg-muted">
-          <div className="mx-auto w-full max-w-5xl px-10 py-10">
-            <div className="mb-6 flex min-w-0 items-center gap-3">
-              <h2 className="truncate">{activeLabel}</h2>
-              {state.currentSection === 'overview' && (
-                <Avatar>
-                  <AvatarFallback className="bg-muted text-muted-foreground">
-                    {agentInitials(state.identity.agentName)}
-                  </AvatarFallback>
-                </Avatar>
-              )}
-            </div>
+        <main className="min-h-0 flex-1 overflow-y-auto bg-canvas">
+          <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-8">
+            <h1 className="mb-5 truncate text-title font-semibold">{activeLabel}</h1>
             {readOnly && (
-              <p className="mb-6 flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              <p className="mb-5 flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-muted-foreground">
                 <Eye className="size-4 shrink-0" />
                 View only. Owners and admins change this agent; anything you edit here isn&rsquo;t saved.
               </p>
             )}
             {!hydrated ? (
-              <p className="flex items-center gap-2 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                <Loader2 className="size-4 animate-spin" /> Loading your agent from Meta...
+              <p className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" /> Loading your agent…
               </p>
             ) : state.currentSection === 'overview' || state.currentSection === 'publish' ? (
               <ActiveComponent />
             ) : (
-              <div className="rounded-lg border border-border bg-card p-8">
+              <div className="rounded-lg border border-border bg-card p-5 sm:p-6">
                 <ActiveComponent />
               </div>
             )}
@@ -200,15 +231,6 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
       </div>
     </div>
   )
-}
-
-function agentInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  return parts
-    .slice(0, 2)
-    .map((p) => p[0]!.toUpperCase())
-    .join('')
 }
 
 function NavRow({
@@ -228,12 +250,12 @@ function NavRow({
         onClick={onClick}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors',
-          active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent/60',
+          'relative flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          active ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent/70 hover:text-foreground',
         )}
-        style={{ fontSize: 'var(--text-sm)', fontWeight: active ? 'var(--font-weight-medium)' : 'var(--font-weight-regular)' }}
       >
-        <Icon className="size-4 shrink-0" />
+        {active && <span aria-hidden className="absolute top-2 bottom-2 -left-3 w-[3px] rounded-r-full bg-brand" />}
+        <Icon className={cn('size-4 shrink-0', active ? 'text-foreground' : 'text-muted-foreground')} />
         <span className="truncate">{item.label}</span>
       </button>
     </li>

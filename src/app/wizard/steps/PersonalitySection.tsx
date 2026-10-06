@@ -82,7 +82,7 @@ export function PersonalitySection({ saveSlot }: { saveSlot?: HTMLElement | null
       <Button variant="outline" size="sm" onClick={section.simulateLoadFailure}>
         Force load failure
       </Button>
-      <label className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+      <label className="flex items-center gap-1.5 text-muted-foreground text-xs">
         <input
           type="checkbox"
           checked={section.forceSaveFailure}
@@ -161,12 +161,12 @@ export function PersonalitySection({ saveSlot }: { saveSlot?: HTMLElement | null
                     active ? 'border-primary bg-accent' : 'border-border hover:border-primary/50',
                   )}
                 >
-                  <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{preset.label}</p>
-                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  <p className="font-semibold">{preset.label}</p>
+                  <p className="text-muted-foreground text-xs">
                     {preset.description}
                   </p>
                   {preset.id === 'custom' && showCustomFallbackNote && (
-                    <p className="mt-1 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                    <p className="mt-1 text-warning-foreground text-xs">
                       No custom tone written yet, so the standard professional tone is used.
                     </p>
                   )}
@@ -183,7 +183,7 @@ export function PersonalitySection({ saveSlot }: { saveSlot?: HTMLElement | null
                   <InfoTooltip text="Describe how the agent should sound, not instructions to it. Keep it in plain English." />
                 </span>
                 {personalization.customToneInstructions.length > 200 && (
-                  <span className="shrink-0 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  <span className="shrink-0 text-muted-foreground text-xs">
                     {personalization.customToneInstructions.length}/{MAX_CUSTOM_TONE}
                   </span>
                 )}
@@ -211,7 +211,7 @@ export function PersonalitySection({ saveSlot }: { saveSlot?: HTMLElement | null
                 checked={personalization.nameIntroduction}
                 onChange={(e) => patch('personalization', { nameIntroduction: e.target.checked })}
               />
-              <span style={{ fontSize: 'var(--text-sm)' }}>
+              <span className="text-sm">
                 Agent introduces itself as &ldquo;{agentName}&rdquo; when conversations start
               </span>
             </label>
@@ -261,7 +261,7 @@ export function PersonalitySection({ saveSlot }: { saveSlot?: HTMLElement | null
                   disabled={matchingOff}
                 />
                 {alreadyDefaultNote && (
-                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  <p className="text-muted-foreground text-xs">
                     Already your default language.
                   </p>
                 )}
@@ -274,11 +274,11 @@ export function PersonalitySection({ saveSlot }: { saveSlot?: HTMLElement | null
                   checked={personalization.allowMixedLanguage}
                   onChange={(e) => patch('personalization', { allowMixedLanguage: e.target.checked })}
                 />
-                <span style={{ fontSize: 'var(--text-sm)' }}>Allow natural mixed-language replies (e.g. Hinglish)</span>
+                <span className="text-sm">Allow natural mixed-language replies (e.g. Hinglish)</span>
               </label>
 
               {matchingOff && (
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <p className="text-muted-foreground text-xs">
                   Switch on language matching to use additional languages.
                 </p>
               )}

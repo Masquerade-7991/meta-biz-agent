@@ -1414,7 +1414,7 @@ export const AGENT_EVENT_STATUS_META: Record<AgentEventStatus, { label: string; 
   sent: { label: 'Sent', badgeVariant: 'secondary', badgeClassName: 'bg-success/15 text-success' },
   success: { label: 'Delivered', badgeVariant: 'secondary', badgeClassName: 'bg-success text-success-foreground' },
   failed: { label: 'Failed', badgeVariant: 'destructive' },
-  skipped: { label: 'Skipped', badgeVariant: 'secondary', badgeClassName: 'bg-warning text-warning-foreground' },
+  skipped: { label: 'Skipped', badgeVariant: 'secondary', badgeClassName: 'bg-warning/15 text-warning-foreground' },
 }
 
 export function formatFullTimestamp(timestamp: number): string {

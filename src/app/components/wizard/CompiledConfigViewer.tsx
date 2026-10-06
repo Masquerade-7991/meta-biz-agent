@@ -33,7 +33,7 @@ function FieldTable({ rows }: { rows: { label: string; value: string }[] }) {
 function connectionStatusBadge(status: ConnectionStatus) {
   const meta = CONNECTION_STATUS_META[status]
   if (meta.dot === 'success') return <Badge className="bg-success text-success-foreground">{meta.label}</Badge>
-  if (meta.dot === 'warning') return <Badge className="bg-warning text-warning-foreground">{meta.label}</Badge>
+  if (meta.dot === 'warning') return <Badge className="bg-warning/15 text-warning-foreground">{meta.label}</Badge>
   return (
     <Badge variant="outline" className="text-muted-foreground">
       {meta.label}
@@ -138,7 +138,7 @@ export function CompiledConfigViewer({
 
       <TabsContent value="connections">
         {connections.connections.length === 0 ? (
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="text-muted-foreground text-sm">
             No connections yet.
           </p>
         ) : (
@@ -156,7 +156,7 @@ export function CompiledConfigViewer({
                 const actionCount = connections.actions.filter((a) => a.connectionId === conn.id).length
                 return (
                   <TableExtendedRow key={conn.id}>
-                    <TableExtendedCell style={{ fontWeight: 'var(--font-weight-medium)' }}>{conn.name}</TableExtendedCell>
+                    <TableExtendedCell className="font-medium">{conn.name}</TableExtendedCell>
                     <TableExtendedCell>{connectionStatusBadge(conn.demoStatus)}</TableExtendedCell>
                     <TableExtendedCell className="text-muted-foreground">
                       {actionCount} action{actionCount === 1 ? '' : 's'}
@@ -174,7 +174,7 @@ export function CompiledConfigViewer({
 
       <TabsContent value="rich_replies">
         {richReplies.richReplies.length === 0 ? (
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="text-muted-foreground text-sm">
             No rich replies yet.
           </p>
         ) : (
@@ -190,7 +190,7 @@ export function CompiledConfigViewer({
             <TableExtendedBody>
               {richReplies.richReplies.map((reply) => (
                 <TableExtendedRow key={reply.id}>
-                  <TableExtendedCell style={{ fontWeight: 'var(--font-weight-medium)' }}>{reply.name}</TableExtendedCell>
+                  <TableExtendedCell className="font-medium">{reply.name}</TableExtendedCell>
                   <TableExtendedCell className="text-muted-foreground">{RICH_REPLY_TYPE_LABEL[reply.type]}</TableExtendedCell>
                   <TableExtendedCell>{enabledBadge(reply.enabled)}</TableExtendedCell>
                   <TableExtendedCell>
@@ -224,7 +224,7 @@ export function CompiledConfigViewer({
 
       <TabsContent value="allowlist">
         {config.allowlist.length === 0 ? (
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="text-muted-foreground text-sm">
             No allowlist entries yet.
           </p>
         ) : (
@@ -255,7 +255,7 @@ function SkillGroup({
   if (skills.length === 0) return null
   return (
     <div>
-      <p className="mb-2 text-muted-foreground" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-medium)' }}>
+      <p className="mb-2 text-muted-foreground text-xs font-medium">
         {title}
       </p>
       <Accordion type="multiple" className="rounded-lg border border-border px-3">
@@ -264,17 +264,16 @@ function SkillGroup({
             <AccordionTrigger>
               <span className="flex items-center gap-2">
                 <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-                <code style={{ fontSize: 'var(--text-xs)' }}>{skill.title}</code>
+                <code className="text-xs">{skill.title}</code>
                 <Badge variant="secondary">{skill.channel}</Badge>
               </span>
             </AccordionTrigger>
             <AccordionContent>
-              <p className="mb-2 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              <p className="mb-2 text-muted-foreground text-xs">
                 {skill.description}
               </p>
               <pre
-                className="overflow-x-auto rounded-lg bg-muted p-4 text-foreground"
-                style={{ fontSize: 'var(--text-xs)' }}
+                className="overflow-x-auto rounded-lg bg-muted p-4 text-foreground text-xs"
               >
                 {skill.skill}
               </pre>

@@ -10,7 +10,7 @@ import { META_NAME } from '@/app/api/meta'
 import { newId } from '@/app/wizard/mockData'
 import type { ApiKeyEntry, Connection } from '@/app/wizard/types'
 import { Field, FormSection, Segmented, SecretInput } from './parts'
-import { DIALOG_TITLE, KEY_MODES, keyEntry, keyMode, type KeyMode } from './places'
+import { KEY_MODES, keyEntry, keyMode, type KeyMode } from './places'
 
 // Create or edit a connection. Keys are typed once and never kept in this browser: Meta holds
 // them, and an edit only sends sign-in details when they change (Meta keeps them otherwise).
@@ -159,8 +159,8 @@ export function ConnectionDialog({
     <Dialog open onOpenChange={(o) => !o && requestClose()}>
       <DialogContent className="flex max-h-[92dvh] flex-col gap-0 p-0 sm:max-w-xl">
         <div className="space-y-1 border-b border-border px-6 pt-5 pb-4 pr-12">
-          <DialogTitle style={DIALOG_TITLE}>{editing ? `Edit ${initial?.name}` : 'Connect a system'}</DialogTitle>
-          <DialogDescription style={XS}>Lets your agent look things up or take actions in another system, like your store or booking tool.</DialogDescription>
+          <DialogTitle>{editing ? `Edit ${initial?.name}` : 'Connect a system'}</DialogTitle>
+          <DialogDescription className="text-xs">Lets your agent look things up or take actions in another system, like your store or booking tool.</DialogDescription>
         </div>
 
         <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-6 py-5">
@@ -185,7 +185,7 @@ export function ConnectionDialog({
               ]}
             />
             {editing && (
-              <p className="-mt-2 text-muted-foreground" style={XS}>
+              <p className="-mt-2 text-muted-foreground text-xs">
                 The type can&rsquo;t change after creating. Make a new connection to switch.
               </p>
             )}
@@ -234,7 +234,7 @@ export function ConnectionDialog({
                       {rows.length > 1 && (
                         <div className="flex items-center justify-between">
                           <p style={{ ...XS, fontWeight: 'var(--font-weight-semi-bold)' }}>Key {i + 1}</p>
-                          <button type="button" onClick={() => setRows((p) => p.filter((x) => x.id !== r.id))} className="flex items-center gap-1 text-muted-foreground hover:text-destructive" style={XS}>
+                          <button type="button" onClick={() => setRows((p) => p.filter((x) => x.id !== r.id))} className="flex items-center gap-1 text-muted-foreground hover:text-destructive text-xs">
                             <Trash2 className="size-3.5" /> Remove
                           </button>
                         </div>
@@ -264,7 +264,7 @@ export function ConnectionDialog({
                           <Input id={`key-prefix-${r.id}`} value={r.prefix} onChange={(e) => patchRow(r.id, { prefix: e.target.value })} className="font-mono" />
                         </Field>
                       )}
-                      <p className="font-mono break-all text-muted-foreground" style={XS}>
+                      <p className="font-mono break-all text-muted-foreground text-xs">
                         Sends {sent}
                       </p>
                     </div>
@@ -309,13 +309,13 @@ export function ConnectionDialog({
             )}
 
             {authMethod === 'none' && (
-              <p className="rounded-lg bg-muted px-3 py-2 text-muted-foreground" style={XS}>
+              <p className="rounded-lg bg-muted px-3 py-2 text-muted-foreground text-xs">
                 Anyone can call this system without a key, so only use it for public information.
               </p>
             )}
 
             {authMethod !== 'none' && (
-              <button type="button" onClick={() => setAdvanced((a) => !a)} className="text-primary hover:underline" style={XS} aria-expanded={advanced}>
+              <button type="button" onClick={() => setAdvanced((a) => !a)} className="text-primary hover:underline text-xs" aria-expanded={advanced}>
                 {advanced ? 'Hide advanced options' : 'Advanced options'}
               </button>
             )}
@@ -324,16 +324,16 @@ export function ConnectionDialog({
 
         <div className="space-y-3 border-t border-border px-6 py-4">
           {saveError && (
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-destructive" style={XS} role="alert">
+            <p className="rounded-md bg-destructive/10 px-3 py-2 text-destructive text-xs" role="alert">
               {saveError}
             </p>
           )}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0 space-y-0.5">
-              <p className="text-muted-foreground" style={XS}>
+              <p className="text-muted-foreground text-xs">
                 {!canSave && problems[0] ? problems[0] : 'Saved changes apply to your agent straight away.'}
               </p>
-              <button type="button" onClick={copyChecklist} className="text-primary hover:underline" style={XS}>
+              <button type="button" onClick={copyChecklist} className="text-primary hover:underline text-xs">
                 {copied === 'yes' ? 'Checklist copied' : copied === 'no' ? 'Couldn’t copy. Your browser blocked it.' : 'Copy a checklist for your developer'}
               </button>
             </div>

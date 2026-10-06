@@ -14,9 +14,8 @@ import type { ActionMethod, ActionValue, Connection, ConnectionAction, ValueLoca
 import { cn } from '@/app/lib/utils'
 import { newValue, similarTool, syncPathValues } from './helpers'
 import { Field, FormSection, PlaceBadge, RequestPreviewBlock } from './parts'
-import { DIALOG_TITLE, PLACE } from './places'
+import { PLACE } from './places'
 
-const XS = { fontSize: 'var(--text-xs)' } as const
 const SM = { fontSize: 'var(--text-sm)' } as const
 const METHODS: ActionMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 const TYPES: { id: ValueType; label: string }[] = [
@@ -102,8 +101,8 @@ export function ToolDialog({
     <Dialog open onOpenChange={(o) => !o && (dirty && !saving ? setConfirmDiscard(true) : onClose())}>
       <DialogContent className="flex max-h-[92dvh] flex-col gap-0 p-0 sm:max-w-2xl">
         <div className="space-y-1 border-b border-border px-6 pt-5 pb-4 pr-12">
-          <DialogTitle style={DIALOG_TITLE}>{initial ? `Edit ${initial.name}` : `Add a tool to ${connection.name}`}</DialogTitle>
-          <DialogDescription style={XS}>A tool is one request your agent can make to this system, like looking up an order.</DialogDescription>
+          <DialogTitle>{initial ? `Edit ${initial.name}` : `Add a tool to ${connection.name}`}</DialogTitle>
+          <DialogDescription className="text-xs">A tool is one request your agent can make to this system, like looking up an order.</DialogDescription>
         </div>
 
         <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-6 py-5">
@@ -112,7 +111,7 @@ export function ToolDialog({
               <Input id="tool-name" value={draft.name} onChange={(e) => set({ name: e.target.value })} placeholder="search_products" className="font-mono" aria-invalid={!!nameError} autoFocus={!initial} />
             </Field>
             {similar && (
-              <p className="-mt-3 flex items-center gap-1.5 text-warning-foreground" style={XS}>
+              <p className="-mt-3 flex items-center gap-1.5 text-warning-foreground text-xs">
                 <AlertTriangle className="size-3.5 shrink-0" /> Very close to “{similar.name}”. Clearly different names help the agent pick the right one.
               </p>
             )}
@@ -154,7 +153,7 @@ export function ToolDialog({
                 </SelectContent>
               </Select>
               <div className="flex min-w-0 flex-1 items-center rounded-md border border-input focus-within:ring-2 focus-within:ring-ring">
-                <span className="max-w-[45%] shrink truncate border-r border-input bg-muted/50 px-2 py-2 font-mono text-muted-foreground" style={XS} title={connection.baseUrl}>
+                <span className="max-w-[45%] shrink truncate border-r border-input bg-muted/50 px-2 py-2 font-mono text-muted-foreground text-xs" title={connection.baseUrl}>
                   {connection.baseUrl.replace(/^https:\/\//, '').replace(/\/+$/, '')}
                 </span>
                 <input
@@ -162,13 +161,12 @@ export function ToolDialog({
                   value={draft.path}
                   onChange={(e) => set({ path: e.target.value, values: syncPathValues(e.target.value, draft.values) })}
                   placeholder="/orders/{order_id}"
-                  className="min-w-0 flex-1 bg-transparent px-2 py-2 font-mono outline-none"
-                  style={SM}
+                  className="min-w-0 flex-1 bg-transparent px-2 py-2 font-mono outline-none text-sm"
                 />
               </div>
             </div>
             {pathError && (
-              <p className="text-destructive" style={XS}>
+              <p className="text-destructive text-xs">
                 {pathError}
               </p>
             )}
@@ -176,7 +174,7 @@ export function ToolDialog({
 
           <FormSection n={3} title="Values it sends" help="Each value goes in one place. Pick the place first, then name it exactly as the system expects.">
             {vp[''] && (
-              <p className="rounded-md bg-destructive/10 px-3 py-2 text-destructive" style={XS}>
+              <p className="rounded-md bg-destructive/10 px-3 py-2 text-destructive text-xs">
                 {vp['']}
               </p>
             )}
@@ -185,7 +183,7 @@ export function ToolDialog({
               const noBody = place === 'body' && !bodyAllowed(draft.method)
               if (noBody && !vs.length)
                 return (
-                  <div key={place} className="flex items-center gap-2 text-muted-foreground" style={XS}>
+                  <div key={place} className="flex items-center gap-2 text-muted-foreground text-xs">
                     <PlaceBadge place="body" /> {draft.method} requests have no body.
                   </div>
                 )
@@ -195,18 +193,18 @@ export function ToolDialog({
                     <div className="flex min-w-0 items-center gap-2">
                       <PlaceBadge place={place} />
                       <span style={{ ...SM, fontWeight: 'var(--font-weight-medium)' }}>{PLACE[place].label}</span>
-                      <span className="truncate font-mono text-muted-foreground" style={XS}>
+                      <span className="truncate font-mono text-muted-foreground text-xs">
                         {PLACE[place].example}
                       </span>
                     </div>
                     {place !== 'path' && !noBody && (
-                      <button type="button" onClick={() => addValue(place)} className="flex shrink-0 items-center gap-1 text-primary hover:underline" style={XS}>
+                      <button type="button" onClick={() => addValue(place)} className="flex shrink-0 items-center gap-1 text-primary hover:underline text-xs">
                         <Plus className="size-3.5" /> Add
                       </button>
                     )}
                   </div>
                   {place === 'path' && !vs.length && (
-                    <p className="text-muted-foreground" style={XS}>
+                    <p className="text-muted-foreground text-xs">
                       None. Add {'{placeholders}'} to the path to create them.
                     </p>
                   )}
@@ -233,7 +231,7 @@ export function ToolDialog({
             {previewOpen && (
               <>
                 <RequestPreviewBlock preview={preview} />
-                <p className="text-muted-foreground" style={XS}>
+                <p className="text-muted-foreground text-xs">
                   Highlighted parts are filled in by the agent during a chat.
                 </p>
               </>
@@ -243,12 +241,12 @@ export function ToolDialog({
 
         <div className="space-y-3 border-t border-border px-6 py-4">
           {saveError && (
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-destructive" style={XS} role="alert">
+            <p className="rounded-md bg-destructive/10 px-3 py-2 text-destructive text-xs" role="alert">
               {saveError}
             </p>
           )}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="min-w-0 text-muted-foreground" style={XS}>
+            <p className="min-w-0 text-muted-foreground text-xs">
               {!canSave && problems[0] ? problems[0] : 'Saved tools are live for your agent straight away.'}
             </p>
             <div className="flex shrink-0 gap-2">
@@ -312,7 +310,7 @@ function ValueRow({
   const source = v.source === 'conversation_memory' ? 'conversation' : v.source
   if (v.raw)
     return (
-      <div className="flex items-center justify-between gap-2 rounded-md border border-dashed border-border px-3 py-2" style={XS}>
+      <div className="flex items-center justify-between gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs">
         <span>
           <span className="font-mono">{v.name}</span> <span className="text-muted-foreground">· {String(v.raw.type)} · kept exactly as the system defined it</span>
         </span>
@@ -372,30 +370,30 @@ function ValueRow({
             placeholder="What to take from the chat, e.g. the order number, like ORD-12345"
             className="h-8 flex-1"
           />
-          <label className="flex shrink-0 items-center gap-2" style={XS}>
+          <label className="flex shrink-0 items-center gap-2 text-xs">
             <Switch size="sm" checked={isPath || v.required} disabled={isPath} onCheckedChange={(c) => onChange({ required: c })} />
             Required
           </label>
         </div>
       )}
       {source === 'whatsapp_number' && (
-        <p className="text-muted-foreground" style={XS}>
+        <p className="text-muted-foreground text-xs">
           Filled in automatically with the customer&rsquo;s number. In Test &amp; Eval chats there&rsquo;s no customer number.
         </p>
       )}
 
       {problem ? (
-        <p className="text-destructive" style={XS} role="alert">
+        <p className="text-destructive text-xs" role="alert">
           {problem}
         </p>
       ) : clashesWithKey ? (
-        <p className="flex items-center gap-1.5 text-warning-foreground" style={XS}>
+        <p className="flex items-center gap-1.5 text-warning-foreground text-xs">
           <AlertTriangle className="size-3.5 shrink-0" /> The connection already sends this header with your key. Remove this one unless the system needs both.
         </p>
       ) : (
         agentFills(v) &&
         !v.description.trim() && (
-          <p className="text-muted-foreground" style={XS}>
+          <p className="text-muted-foreground text-xs">
             Tip: without a description the agent has to guess what goes here.
           </p>
         )

@@ -11,7 +11,7 @@ import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
 import { saveProfile, uploadPhoto } from '@/app/api/numbers'
 import { can } from '@/app/lib/permissions'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
+import { TEXT_XS } from '@/app/lib/text'
 import { WA } from '@/app/wizard/steps/whatsappTheme'
 import { PROFILE_LIMITS, profileErrors, VERTICALS, type Profile } from './profileRules'
 import { useForcedFailure } from './useForcedFailure'
@@ -116,7 +116,7 @@ export function ProfileTab({ detail, onSaved, onDirty }: TabProps) {
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <fieldset disabled={!canEdit || busy} className="min-w-0 space-y-5">
         {!canEdit && (
-          <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground" style={TEXT_SM}>
+          <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground text-sm">
             Owners and admins change the profile. You can see what customers see.
           </p>
         )}
@@ -127,7 +127,7 @@ export function ProfileTab({ detail, onSaved, onDirty }: TabProps) {
             {photoBusy ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
             Change photo
           </Button>
-          <span className="text-muted-foreground" style={TEXT_XS}>
+          <span className="text-muted-foreground text-xs">
             Square JPG or PNG, at least 192 &times; 192, up to 5 MB.
           </span>
         </div>
@@ -136,14 +136,14 @@ export function ProfileTab({ detail, onSaved, onDirty }: TabProps) {
             About <Count n={p.about.length} max={PROFILE_LIMITS.about} />
           </Label>
           <Input id="pf-about" value={p.about} onChange={(e) => set({ about: e.target.value })} placeholder="Fresh groceries delivered in 30 minutes" />
-          {errors.about && <p className="text-destructive" style={TEXT_XS}>{errors.about}</p>}
+          {errors.about && <p className="text-destructive text-xs">{errors.about}</p>}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="pf-desc" className="flex justify-between">
             Description <Count n={p.description.length} max={PROFILE_LIMITS.description} />
           </Label>
           <Textarea id="pf-desc" rows={3} value={p.description} onChange={(e) => set({ description: e.target.value })} placeholder="What you do, in a sentence or two." />
-          {errors.description && <p className="text-destructive" style={TEXT_XS}>{errors.description}</p>}
+          {errors.description && <p className="text-destructive text-xs">{errors.description}</p>}
         </div>
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-1.5">
@@ -164,7 +164,7 @@ export function ProfileTab({ detail, onSaved, onDirty }: TabProps) {
           <div className="space-y-1.5">
             <Label htmlFor="pf-email">Email</Label>
             <Input id="pf-email" type="email" value={p.email} onChange={(e) => set({ email: e.target.value })} placeholder="hello@yourbusiness.com" />
-            {errors.email && <p className="text-destructive" style={TEXT_XS}>{errors.email}</p>}
+            {errors.email && <p className="text-destructive text-xs">{errors.email}</p>}
           </div>
         </div>
         <div className="space-y-1.5">
@@ -178,7 +178,7 @@ export function ProfileTab({ detail, onSaved, onDirty }: TabProps) {
           {p.websites.map((w, i) => (
             <Input key={i} value={w} placeholder={i === 0 ? 'https://yourbusiness.com' : 'https:// (optional)'} aria-label={`Website ${i + 1}`} onChange={(e) => set({ websites: p.websites.map((x, j) => (j === i ? e.target.value : x)) })} />
           ))}
-          {errors.websites && <p className="text-destructive" style={TEXT_XS}>{errors.websites}</p>}
+          {errors.websites && <p className="text-destructive text-xs">{errors.websites}</p>}
         </div>
         {error && <FormError>{error}</FormError>}
         {canEdit && (
@@ -196,7 +196,7 @@ export function ProfileTab({ detail, onSaved, onDirty }: TabProps) {
         )}
       </fieldset>
       <div className="space-y-2">
-        <p className="text-muted-foreground" style={TEXT_XS}>
+        <p className="text-muted-foreground text-xs">
           What customers see
         </p>
         <Preview p={clean(p)} name={detail.number.verifiedName || detail.number.display} photo={detail.profile.photo} />

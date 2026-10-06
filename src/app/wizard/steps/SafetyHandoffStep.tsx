@@ -16,7 +16,7 @@ import { SaveButton } from '@/app/components/wizard/SaveButton'
 import { SelectableCard } from '@/app/components/wizard/SelectableCard'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
-import { useNavigationGuard, useRegisterNavGuard, type NavIntent } from '@/app/wizard/NavigationGuardContext'
+import { useNavigationGuard, useRegisterNavGuard, useReportSaveStatus, type NavIntent } from '@/app/wizard/NavigationGuardContext'
 import {
   FOLLOW_UP_INTERVALS,
   SAMPLE_CUSTOM_HANDOFF_MESSAGE,
@@ -102,21 +102,13 @@ export function SafetyHandoffStep() {
     currentRef.current = currentSnapshot()
   })
 
-  const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'failed'>('loading')
-  const [savedSnapshot, setSavedSnapshot] = useState<SafetySnapshot | null>(null)
+  // The studio loads the agent before this opens, so the saved snapshot is what's on screen.
+  const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'failed'>('loaded')
+  const [savedSnapshot, setSavedSnapshot] = useState<SafetySnapshot | null>(currentSnapshot)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'failed'>('idle')
   const [forceSaveFailure, setForceSaveFailure] = useState(false)
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false)
   const resolverRef = useRef<((result: boolean) => void) | null>(null)
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoadStatus('loaded')
-      setSavedSnapshot(currentRef.current)
-    }, 600)
-    return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   function retryLoad() {
     setLoadStatus('loading')
@@ -189,6 +181,7 @@ export function SafetyHandoffStep() {
   // Same combined-slice comparison guard() uses — all three tabs share one saved snapshot, so
   // each tab's Save button reflects the whole step's dirty state, not just its own fields.
   const dirty = savedSnapshot !== null && JSON.stringify(savedSnapshot) !== JSON.stringify(currentSnapshot())
+  useReportSaveStatus(dirty, saveStatus === 'saving')
 
   async function customiseHandoffRules() {
     // Same save-or-warn discipline as Back/Next — this button navigates away from the page too,
@@ -216,7 +209,7 @@ export function SafetyHandoffStep() {
       <Button variant="outline" size="sm" onClick={loadSampleSettings}>
         Load sample safety settings
       </Button>
-      <label className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+      <label className="flex items-center gap-1.5 text-muted-foreground text-xs">
         <input
           type="checkbox"
           checked={state.demo.simulateMultipleLanguages}
@@ -227,7 +220,7 @@ export function SafetyHandoffStep() {
       <Button variant="outline" size="sm" onClick={simulateLoadFailure}>
         Force load failure
       </Button>
-      <label className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+      <label className="flex items-center gap-1.5 text-muted-foreground text-xs">
         <input type="checkbox" checked={forceSaveFailure} onChange={(e) => setForceSaveFailure(e.target.checked)} />
         Force save failure
       </label>
@@ -240,7 +233,7 @@ export function SafetyHandoffStep() {
 
   return (
     <div className="space-y-6">
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+      <p className="text-muted-foreground text-sm">
         Words and topics your agent avoids, what happens when a person takes over, and whether it
         follows up with quiet customers.
       </p>
@@ -283,7 +276,7 @@ export function SafetyHandoffStep() {
               fields keep patching the shared guardrails/replies slices no matter which tab is
               showing — otherwise switching tabs mid-edit would silently drop unsaved changes. */}
           <TabsContent value="avoids" forceMount className="space-y-7 data-[state=inactive]:hidden">
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            <p className="text-muted-foreground text-sm">
               These become instructions the agent follows strongly, not a filter that blocks a
               message after it&rsquo;s written.
             </p>
@@ -322,8 +315,8 @@ export function SafetyHandoffStep() {
 
             <div className="flex items-start gap-2.5">
               <ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
-                <span style={{ fontWeight: 'var(--font-weight-medium)' }}>Always protected</span>{' '}
+              <p className="text-muted-foreground text-xs">
+                <span className="font-medium">Always protected</span>{' '}
                 &mdash; no matter what you configure above, the agent never claims to be human
                 when directly asked, never shares one customer&rsquo;s details with another, and
                 never states medical, legal, or financial advice as certain fact.
@@ -332,19 +325,19 @@ export function SafetyHandoffStep() {
           </TabsContent>
 
           <TabsContent value="handoff" forceMount className="space-y-7 data-[state=inactive]:hidden">
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            <p className="text-muted-foreground text-sm">
               Once handed over, your team picks the conversation up from your usual inbox —
               that part isn&rsquo;t set up in this wizard.
             </p>
 
             <div className="space-y-2 rounded-lg bg-muted p-3">
-              <p style={{ fontSize: 'var(--text-sm)' }}>
-                <span style={{ fontWeight: 'var(--font-weight-medium)' }}>This happens automatically</span>{' '}
+              <p className="text-sm">
+                <span className="font-medium">This happens automatically</span>{' '}
                 &mdash; the agent hands off when it&rsquo;s unsure, something seems wrong, or the
                 customer asks for a person, and this can&rsquo;t be turned off. Below, you control
                 what it says at that moment.
               </p>
-              <button type="button" onClick={customiseHandoffRules} className="text-primary" style={{ fontSize: 'var(--text-xs)' }}>
+              <button type="button" onClick={customiseHandoffRules} className="text-primary text-xs">
                 Customise handoff rules for your business
               </button>
             </div>
@@ -384,7 +377,7 @@ export function SafetyHandoffStep() {
                     disabled={loading}
                   />
                   {hasMultipleLanguages && (
-                    <p className="flex items-start gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                    <p className="flex items-start gap-1.5 text-warning-foreground text-xs">
                       <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
                       This is sent exactly as written, in this one language — Meta&rsquo;s
                       standard message adapts to the customer&rsquo;s language instead.
@@ -396,7 +389,7 @@ export function SafetyHandoffStep() {
           </TabsContent>
 
           <TabsContent value="followup" forceMount className="space-y-6 data-[state=inactive]:hidden">
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            <p className="text-muted-foreground text-sm">
               If a customer goes quiet mid-conversation, the agent can re-engage them with one
               short check-in message.
             </p>
@@ -429,7 +422,7 @@ export function SafetyHandoffStep() {
 
             {followUpOn && (
               <>
-                <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <p className="text-muted-foreground text-xs">
                   Follow-up messages are charged the same way as any other message the agent sends.
                 </p>
                 <div className="space-y-2">
@@ -528,18 +521,18 @@ function WordsToAvoidField({
       {duplicateError && <InlineError message={duplicateError} />}
       {suggestion && suggestion.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted px-3 py-2">
-          <p style={{ fontSize: 'var(--text-xs)' }}>Also add: {suggestion.join(', ')}?</p>
-          <button type="button" onClick={addBoth} className="text-primary" style={{ fontSize: 'var(--text-xs)' }}>
+          <p className="text-xs">Also add: {suggestion.join(', ')}?</p>
+          <button type="button" onClick={addBoth} className="text-primary text-xs">
             Add both
           </button>
-          <button type="button" onClick={() => setSuggestion(null)} className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+          <button type="button" onClick={() => setSuggestion(null)} className="text-muted-foreground text-xs">
             Dismiss
           </button>
         </div>
       )}
       {values.length === 0 && (
         <span className="flex items-center gap-1.5">
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+          <p className="text-muted-foreground text-xs">
             No words added.
           </p>
           <InfoTooltip text="The agent has no specific words it has been told to avoid." />
@@ -580,7 +573,7 @@ function TopicsToAvoidField({
         <InfoTooltip text="Broader than a specific word. The agent reads each topic and uses its judgement about what counts, so it is not exact the way words above are." />
       </span>
       {values.length === 0 ? (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        <p className="text-muted-foreground text-xs">
           No topics added.
         </p>
       ) : (

@@ -20,10 +20,10 @@ export function SegmentedControl<T extends string>({
           disabled={disabled}
           onClick={() => onChange(option.id)}
           className={cn(
+            'text-sm',
             'rounded-md px-3 py-1.5 transition-colors',
             value === option.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
           )}
-          style={{ fontSize: 'var(--text-sm)' }}
         >
           {option.label}
         </button>

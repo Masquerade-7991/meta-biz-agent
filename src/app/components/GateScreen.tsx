@@ -41,7 +41,7 @@ const INELIGIBLE_REASONS: Record<string, string> = {
 function statusBadge(status: (typeof MOCK_WABAS)[number]['status']) {
   if (status === 'eligible') return <Badge className="bg-success text-success-foreground">Eligible</Badge>
   if (status === 'ineligible') return <Badge variant="destructive">Ineligible</Badge>
-  return <Badge className="bg-warning text-warning-foreground">Needs registration</Badge>
+  return <Badge className="bg-warning/15 text-warning-foreground">Needs registration</Badge>
 }
 
 export function GateScreen({ onBack }: { onBack?: () => void }) {
@@ -108,8 +108,7 @@ export function GateScreen({ onBack }: { onBack?: () => void }) {
           <button
             type="button"
             onClick={onBack}
-            className="mb-6 flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
-            style={{ fontSize: 'var(--text-sm)' }}
+            className="mb-6 flex items-center gap-1.5 text-muted-foreground hover:text-foreground text-sm"
           >
             <ArrowLeft className="size-4" />
             Back to Helo
@@ -159,10 +158,10 @@ export function GateScreen({ onBack }: { onBack?: () => void }) {
                         className="flex items-center justify-between gap-2"
                       >
                         <span className="flex min-w-0 flex-col">
-                          <span className="truncate" style={{ fontWeight: 'var(--font-weight-medium)' }}>
+                          <span className="truncate font-medium">
                             {waba.displayName}
                           </span>
-                          <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                          <span className="text-muted-foreground text-xs">
                             {waba.phoneNumber}
                           </span>
                         </span>
@@ -187,11 +186,11 @@ export function GateScreen({ onBack }: { onBack?: () => void }) {
                   <XCircle className="mt-0.5 size-5 shrink-0 text-destructive" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p style={{ fontWeight: 'var(--font-weight-medium)' }}>
+                  <p className="font-medium">
                     Eligibility: {eligible ? 'Eligible' : 'Not eligible'}
                   </p>
                   {!eligible && (
-                    <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                    <p className="mt-1 text-muted-foreground text-sm">
                       This number is not eligible. Based on your account details, this is most
                       likely because of {INELIGIBLE_REASONS[selected.vertical] ?? 'a conflicting messaging product already running on this number'}.{' '}
                       <span className="caption">Estimate, not confirmed by Meta.</span> Contact Helo
@@ -211,7 +210,7 @@ export function GateScreen({ onBack }: { onBack?: () => void }) {
                   <AlertTriangle className="mt-0.5 size-5 shrink-0 text-warning" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p style={{ fontWeight: 'var(--font-weight-medium)' }}>
+                  <p className="font-medium">
                     Registration: {registered ? 'Registered' : 'Needs registration'}
                   </p>
                   {!registered && eligible && (
@@ -238,7 +237,7 @@ export function GateScreen({ onBack }: { onBack?: () => void }) {
                     </div>
                   )}
                   {state.gate.pinAttempted && state.gate.pinError && (
-                    <p className="mt-1 text-destructive" style={{ fontSize: 'var(--text-sm)' }}>
+                    <p className="mt-1 text-destructive text-sm">
                       {state.gate.pinError}
                     </p>
                   )}
@@ -255,12 +254,12 @@ export function GateScreen({ onBack }: { onBack?: () => void }) {
                   <CreditCard className="mt-0.5 size-5 shrink-0 text-warning" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p style={{ fontWeight: 'var(--font-weight-medium)' }}>
+                  <p className="font-medium">
                     Billing: {resolvedBilling ? 'Payment method attached' : 'No payment method'}
                   </p>
                   {!resolvedBilling && (
                     <>
-                      <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                      <p className="mt-1 text-muted-foreground text-sm">
                         A payment method must be attached in Meta&rsquo;s Billing Hub before this
                         agent can send a single message.
                       </p>
@@ -288,7 +287,7 @@ export function GateScreen({ onBack }: { onBack?: () => void }) {
             Start configuring
           </Button>
           {selected && !canStart && (
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            <p className="text-muted-foreground text-sm">
               Resolve the checks above to continue.
             </p>
           )}

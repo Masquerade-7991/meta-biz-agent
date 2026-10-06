@@ -1,75 +1,144 @@
+/* Helo.ai design tokens. Calm and neutral: warm greys, hairline borders, the Helo blue for actions
+   and focus, and Helo red only as a brand touch (logo, active nav, progress), never on buttons or
+   status. Text colours meet WCAG AA (4.5:1) on both the page and muted surfaces.
+   Light is :root; dark is .dark on <html> (src/app/lib/theme.ts). */
 :root {
-  /* Primary & secondary */
-  --primary: rgba(49, 134, 223, 1);
-  --primary-foreground: rgba(255, 255, 255, 1);
-  --secondary: rgba(255, 255, 255, 1);
-  --secondary-foreground: rgba(20, 24, 27, 1);
+  /* Brand */
+  --brand: #ec1c24;
+
+  /* Actions: the Helo blue, one step deeper than before so white text on it and blue text on white
+     both pass AA. */
+  --primary: #2270d0;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f2;
+  --secondary-foreground: #1c1b19;
 
   /* Surfaces */
-  --background: rgba(255, 255, 255, 1);
-  --foreground: rgba(20, 24, 27, 1);
-  --card: rgba(255, 255, 255, 1);
-  --card-foreground: rgba(20, 24, 27, 1);
-  --popover: rgba(255, 255, 255, 1);
-  --popover-foreground: rgba(20, 24, 27, 1);
+  --background: #ffffff;
+  --foreground: #1c1b19;
+  /* The page canvas behind cards (studio, settings). */
+  --canvas: #fafaf9;
+  --card: #ffffff;
+  --card-foreground: #1c1b19;
+  --popover: #ffffff;
+  --popover-foreground: #1c1b19;
 
   /* State */
-  --muted: rgba(242, 243, 243, 1);
-  --muted-foreground: rgba(103, 110, 115, 1);
-  --accent: rgba(240, 248, 254, 1);
-  --accent-foreground: rgba(49, 134, 223, 1);
-  --destructive: rgba(237, 28, 52, 1);
-  --destructive-foreground: rgba(255, 255, 255, 1);
+  --muted: #f4f4f2;
+  --muted-foreground: #62625f;
+  --accent: #eef4fc;
+  --accent-foreground: #1d64bd;
+  --destructive: #d42033;
+  --destructive-foreground: #ffffff;
 
-  /* Success (extends the documented palette for status pills; sourced from chart-2) */
-  --success: rgba(32, 176, 56, 1);
-  --success-foreground: rgba(255, 255, 255, 1);
-  --warning: rgba(255, 193, 7, 1);
-  --warning-foreground: rgba(20, 24, 27, 1);
+  /* Status. `-foreground` is the AA-safe text colour on a light tint of the same hue. */
+  --success: #137337;
+  --success-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #92400e;
+  --info: #1d64bd;
 
-  /* UI elements */
-  --border: rgba(206, 209, 211, 1);
-  /* Border color for form controls (Input/Textarea/Select/Checkbox/etc via border-input) and the
-     Switch's unchecked track (bg-input). Kept distinct from --input-background (always white) —
-     this must stay a visible grey or every control's outline disappears against a white page. */
-  --input: rgba(206, 209, 211, 1);
-  --input-background: rgba(255, 255, 255, 1);
-  --ring: rgba(49, 134, 223, 1);
+  /* Lines: hairlines for structure, stronger on hover and for form controls. */
+  --border: #e7e6e3;
+  --border-strong: #d3d2ce;
+  /* Form controls (Input/Textarea/Select/Checkbox via border-input) and the Switch's unchecked
+     track. Must stay visible against the page, or control outlines disappear. */
+  --input: #d3d2ce;
+  --input-background: #ffffff;
+  --ring: #2270d0;
+
+  /* Floating layers only (popover, menu, sheet, command palette). */
+  --shadow-float: 0 1px 2px rgb(28 27 25 / 0.06), 0 8px 24px rgb(28 27 25 / 0.08);
 
   /* Charts */
-  --chart-1: rgba(49, 134, 223, 1);
-  --chart-2: rgba(32, 176, 56, 1);
-  --chart-3: rgba(237, 28, 52, 1);
-  --chart-4: rgba(214, 90, 9, 1);
-  --chart-5: rgba(130, 137, 142, 1);
+  --chart-1: #2270d0;
+  --chart-2: #137337;
+  --chart-3: #d42033;
+  --chart-4: #d97706;
+  --chart-5: #8a8a85;
 
   /* Sidebar */
-  --sidebar: rgba(255, 255, 255, 1);
-  --sidebar-foreground: rgba(75, 79, 83, 1);
-  --sidebar-primary: rgba(49, 134, 223, 1);
-  --sidebar-primary-foreground: rgba(255, 255, 255, 1);
-  --sidebar-accent: rgba(240, 248, 254, 1);
-  --sidebar-accent-foreground: rgba(49, 134, 223, 1);
-  --sidebar-border: rgba(229, 231, 232, 1);
-  --sidebar-ring: rgba(49, 134, 223, 1);
+  --sidebar: #fafaf9;
+  --sidebar-foreground: #4a4945;
+  --sidebar-primary: #2270d0;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #efefec;
+  --sidebar-accent-foreground: #1c1b19;
+  --sidebar-border: #e7e6e3;
+  --sidebar-ring: #2270d0;
 
-  /* Radius */
-  --radius: 8px;
+  /* Radius: 6px controls, 10px cards and panels. */
+  --radius: 10px;
 
-  /* Typography scale */
+  /* Typography. Body text is 14px; these stay for the inline styles still being migrated to the
+     text-* classes (tailwind.css @theme). Tailwind's own text-lg/xl/2xl keep their normal sizes. */
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-base: 1rem;
-  --text-h4: 2rem;
-  --text-lg: 2.5rem;
-  --text-xl: 3rem;
-  --text-2xl: 3.5rem;
   --text-caption: 0.75rem;
-  --text-badge: 0.875rem;
+  --text-badge: 0.75rem;
 
-  /* Font weights */
+  /* Font weights: 400 body, 500 interface, 600 headings. */
+  --font-weight-regular: 400;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semi-bold: 600;
-  --font-weight-bold: 700;
+  --font-weight-bold: 600;
+
+  color-scheme: light;
+}
+
+.dark {
+  --brand: #f0434a;
+
+  --primary: #4c93ea;
+  --primary-foreground: #0b1220;
+  --secondary: #232427;
+  --secondary-foreground: #ececea;
+
+  --background: #121315;
+  --foreground: #ececea;
+  --canvas: #0e0f10;
+  --card: #17181b;
+  --card-foreground: #ececea;
+  --popover: #1b1c1f;
+  --popover-foreground: #ececea;
+
+  --muted: #1f2023;
+  --muted-foreground: #a3a39e;
+  --accent: #1a2a40;
+  --accent-foreground: #8fbcf5;
+  --destructive: #f05561;
+  --destructive-foreground: #1a0507;
+
+  --success: #3fbf6f;
+  --success-foreground: #04160b;
+  --warning: #f0a53a;
+  --warning-foreground: #f6c27a;
+  --info: #8fbcf5;
+
+  --border: #2a2b2f;
+  --border-strong: #3a3b40;
+  --input: #3a3b40;
+  --input-background: #17181b;
+  --ring: #4c93ea;
+
+  --shadow-float: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.45);
+
+  --chart-1: #4c93ea;
+  --chart-2: #3fbf6f;
+  --chart-3: #f05561;
+  --chart-4: #f0a53a;
+  --chart-5: #8a8a85;
+
+  --sidebar: #0e0f10;
+  --sidebar-foreground: #b4b4af;
+  --sidebar-primary: #4c93ea;
+  --sidebar-primary-foreground: #0b1220;
+  --sidebar-accent: #1f2023;
+  --sidebar-accent-foreground: #ececea;
+  --sidebar-border: #232427;
+  --sidebar-ring: #4c93ea;
+
+  color-scheme: dark;
 }

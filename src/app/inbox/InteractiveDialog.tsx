@@ -9,7 +9,6 @@ import { PillTabs } from '@/app/components/Filters'
 import { FormError } from '@/app/auth/AuthLayout'
 import { errorDetail } from '@/app/api/meta'
 import { sendInteractiveReply, type ChatDetail } from '@/app/api/inbox'
-import { TEXT_XS } from '@/app/lib/text'
 import { interactiveError, LIMITS, type InteractiveReply } from './interactive'
 
 const KINDS = [
@@ -62,7 +61,7 @@ export function InteractiveDialog({ phone, initialText, onClose, onSent }: { pho
             {buttons.map((b, i) => (
               <div key={i} className="flex items-center gap-2">
                 <Input value={b} onChange={(e) => setButtons(buttons.map((x, j) => (j === i ? e.target.value : x)))} placeholder={['Morning', 'Evening', 'Call me'][i]} aria-label={`Button ${i + 1}`} />
-                <span style={TEXT_XS}>{count(b.length, LIMITS.buttonTitle)}</span>
+                <span className="text-xs">{count(b.length, LIMITS.buttonTitle)}</span>
                 {buttons.length > 1 && (
                   <Button type="button" size="icon" variant="ghost" aria-label={`Remove button ${i + 1}`} onClick={() => setButtons(buttons.filter((_, j) => j !== i))}>
                     <X className="size-4" />

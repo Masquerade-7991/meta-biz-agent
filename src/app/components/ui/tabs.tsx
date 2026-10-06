@@ -81,8 +81,8 @@ function TabsTrigger({
         "focus-visible:ring-[3px] focus-visible:ring-ring/50",
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         variant === "segmented"
-          ? "rounded px-2.5 py-1 text-xs data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-          : "rounded-t-sm border-b-2 border-transparent px-0.5 pt-1 pb-2.5 data-[state=active]:border-primary data-[state=active]:text-foreground",
+          ? "rounded px-2.5 py-1 text-xs data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+          : "rounded-t-sm border-b-2 border-transparent px-0.5 pt-1 pb-2.5 data-[state=active]:border-foreground data-[state=active]:text-foreground",
         className
       )}
       {...props}

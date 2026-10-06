@@ -27,6 +27,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Customer tokens and PINs are stored only sealed (`server/crypto.ts`, AES-256-GCM).
 - **There is no test suite.** Verify with `npm run build` (type-checks `src/` and `server/`) and `npm run lint`. Lint is clean; keep it that way. Context hooks are allowed by name in `.oxlintrc.json`; other shared helpers go in a `.ts` file, not next to a component.
 
+## UI conventions
+
+- **Tokens** live in `src/styles/theme.css` (light on `:root`, dark on `.dark`, switched by `src/app/lib/theme.ts`). Neutral greys, the Helo blue (`primary`) for actions, Helo red (`brand`) only for the logo and the active-nav bar. Text colours meet WCAG AA; keep it that way (status text uses the `-foreground` shades on `/10`–`/15` tints).
+- **Type** is classes, not inline styles: `text-title` (page), `text-section`, `text-sm` (body), `text-xs`/`text-meta` (metadata), `text-display` (Home greeting only). Base h1–h4 are 24/20/16/14px.
+- **Page pieces** in `src/app/components/ui/page.tsx` (PageContainer, PageHeader, EmptyState, SaveBar), `sheet.tsx` for side panels, `status.tsx` StatusPill with the words in `src/app/lib/status.ts` (agent: Draft · Testing · Live · Paused).
+- **Addresses:** every page has a URL (`src/app/nav.ts` `pathFor`); the studio is `/agents/studio/<section>` (`src/app/wizard/studioPaths.ts`) and follows the wizard's `currentSection` both ways (`StudioUrlSync` in `App.tsx`). Real IDs never go in URLs.
+- **Demo controls** render only in dummy mode or dev (`App.tsx`).
+
 ## Support platform (Home, Inbox, Tickets, Contacts, Broadcasts, Analytics)
 
 - **Server modules:** `inbox.ts` (chats, replies, thread control, canned responses, webhook, AI assist), `tickets.ts` (tickets, SLA, routing, CSAT, support settings, notifications, analytics), `contacts.ts` (contacts, fields, segments, CSV import), `broadcasts.ts` (templates, broadcasts, send worker). All workspace-scoped; sending needs `ownsMetaAssets()`.

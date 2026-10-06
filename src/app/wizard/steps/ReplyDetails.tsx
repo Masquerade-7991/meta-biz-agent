@@ -3,7 +3,6 @@ import { AlertTriangle, CheckCircle2, ChevronRight, Clock, Loader2, MessageSquar
 import { cn } from '@/app/lib/utils'
 import { readable, type ToolCall, type ToolCallsState } from '@/app/wizard/testTools'
 
-const XS = { fontSize: 'var(--text-xs)' } as const
 const SM = { fontSize: 'var(--text-sm)' } as const
 
 /** What happened behind one reply in a Test & Eval chat. */
@@ -43,14 +42,14 @@ export function BehindTheScenes({
     <section className="flex min-h-0 flex-col rounded-xl border border-border bg-card" aria-label="Behind the scenes">
       <div className="border-b border-border px-4 py-3">
         <h3 style={{ ...SM, fontWeight: 'var(--font-weight-semi-bold)' }}>Behind the scenes</h3>
-        <p className="text-muted-foreground" style={XS}>
+        <p className="text-muted-foreground text-xs">
           What your agent did for each reply. Customers never see this.
         </p>
       </div>
       {replies.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-12 text-center text-muted-foreground">
           <Wrench className="size-5" />
-          <p style={SM}>Send a message to see what your agent did behind each reply: tools, handoffs and timing.</p>
+          <p className="text-sm">Send a message to see what your agent did behind each reply: tools, handoffs and timing.</p>
         </div>
       ) : (
         <ol className="min-h-0 flex-1 divide-y divide-border overflow-y-auto">
@@ -81,11 +80,11 @@ function Row({ info, selected, onSelect, hasTools, onOpenConnections }: { info: 
   return (
     <li ref={ref} className={cn('space-y-2 px-4 py-3 transition-colors', selected ? 'bg-accent/60' : 'hover:bg-accent/30')}>
       <button type="button" onClick={onSelect} className="w-full space-y-1 text-left">
-        <p className="line-clamp-2 text-muted-foreground" style={XS}>
+        <p className="line-clamp-2 text-muted-foreground text-xs">
           &ldquo;{info.asked}&rdquo;
         </p>
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1" style={XS}>
-          <span className={cn('flex items-center gap-1', outcome.tone)} style={{ fontWeight: 'var(--font-weight-medium)' }}>
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+          <span className={cn('flex items-center gap-1 font-medium', outcome.tone)}>
             <Icon className="size-3.5" /> {outcome.text}
           </span>
           <span className="flex items-center gap-1 text-muted-foreground">
@@ -93,23 +92,23 @@ function Row({ info, selected, onSelect, hasTools, onOpenConnections }: { info: 
           </span>
         </p>
         {info.outcome === 'failed' && (
-          <p className="text-muted-foreground" style={XS}>
+          <p className="text-muted-foreground text-xs">
             Meta&rsquo;s agent gave its fallback reply instead of an answer. Send it again; if it keeps happening, the problem is on Meta&rsquo;s side.
           </p>
         )}
         {info.reason && (
-          <p className="text-muted-foreground" style={XS}>
+          <p className="text-muted-foreground text-xs">
             {info.reason.replace(/_/g, ' ')}
           </p>
         )}
       </button>
       {t?.state === 'checking' && (
-        <p className="flex items-center gap-1.5 text-muted-foreground" style={XS}>
+        <p className="flex items-center gap-1.5 text-muted-foreground text-xs">
           <Loader2 className="size-3 animate-spin" /> Checking which tools it used…
         </p>
       )}
       {t?.state === 'unknown' && hasTools && (
-        <p className="text-muted-foreground" style={XS}>
+        <p className="text-muted-foreground text-xs">
           Couldn&rsquo;t check which tools it used.
         </p>
       )}
@@ -122,7 +121,7 @@ function Row({ info, selected, onSelect, hasTools, onOpenConnections }: { info: 
           </div>
         ) : (
           hasTools && (
-            <p className="text-muted-foreground" style={XS}>
+            <p className="text-muted-foreground text-xs">
               No tools used. If it should have, make that tool&rsquo;s &ldquo;When should the agent use it?&rdquo; more specific.
             </p>
           )
@@ -141,8 +140,7 @@ function Call({ call: c, onOpenConnections }: { call: ToolCall; onOpenConnection
         type="button"
         onClick={() => details && setOpen((o) => !o)}
         aria-expanded={details ? open : undefined}
-        className={cn('flex w-full items-center gap-1.5 px-2 py-1.5 text-left', !details && 'cursor-default')}
-        style={XS}
+        className={cn('flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs', !details && 'cursor-default')}
       >
         <Wrench className="size-3 shrink-0 text-muted-foreground" />
         <span className="min-w-0 truncate">
@@ -163,7 +161,7 @@ function Call({ call: c, onOpenConnections }: { call: ToolCall; onOpenConnection
         </div>
       )}
       {!ok && (
-        <p className="px-2 pb-1.5 text-muted-foreground" style={XS}>
+        <p className="px-2 pb-1.5 text-muted-foreground text-xs">
           The agent couldn&rsquo;t use this tool.{' '}
           <button type="button" onClick={onOpenConnections} className="text-primary hover:underline">
             Test it in Connections
@@ -177,7 +175,7 @@ function Call({ call: c, onOpenConnections }: { call: ToolCall; onOpenConnection
 function Block({ label, text }: { label: string; text: string }) {
   return (
     <div>
-      <p className="text-muted-foreground" style={XS}>
+      <p className="text-muted-foreground text-xs">
         {label}
       </p>
       <pre className="max-h-48 min-w-0 overflow-auto rounded bg-muted/60 p-1.5 break-all whitespace-pre-wrap" style={{ fontSize: 11, lineHeight: 1.5 }}>

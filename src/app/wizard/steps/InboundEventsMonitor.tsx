@@ -47,9 +47,9 @@ function StatusCounts({ rows }: { rows: AgentEventRow[] }) {
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
       {counts.map(({ status, count }) => (
-        <span key={status} style={{ fontSize: 'var(--text-sm)' }}>
+        <span key={status} className="text-sm">
           <span className="text-muted-foreground">{AGENT_EVENT_STATUS_META[status].label}: </span>
-          <span style={{ fontWeight: 'var(--font-weight-medium)' }}>{count}</span>
+          <span className="font-medium">{count}</span>
         </span>
       ))}
     </div>
@@ -66,31 +66,31 @@ function EventDetailDialog({ row, onClose }: { row: AgentEventRow; onClose: () =
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between gap-3 pr-6">
-            <code style={{ fontWeight: 'var(--font-weight-regular)' }}>{row.eventType}</code>
+            <code className="font-normal">{row.eventType}</code>
             <StatusBadge status={row.status} />
           </DialogTitle>
         </DialogHeader>
 
-        <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1" style={{ fontSize: 'var(--text-sm)' }}>
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1 text-sm">
           <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
             <span className="text-muted-foreground">Received</span>
             <span>{formatEventTimestampPrecise(row.createdAt)}</span>
             <span className="text-muted-foreground">Last updated</span>
             <span>{formatEventTimestampPrecise(row.updatedAt)}</span>
           </div>
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+          <p className="text-muted-foreground text-xs">
             Took {formatDuration(row.updatedAt - row.createdAt)}
           </p>
 
           <div>
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            <p className="text-muted-foreground text-xs">
               Sent to
             </p>
             <p>{row.to}</p>
           </div>
 
           <div>
-            <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Description</p>
+            <p className="font-medium">Description</p>
             <p className="text-muted-foreground">{row.description}</p>
           </div>
 
@@ -103,17 +103,17 @@ function EventDetailDialog({ row, onClose }: { row: AgentEventRow; onClose: () =
 
           <div>
             <div className="flex items-center justify-between gap-3">
-              <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Payload</p>
-              <button type="button" onClick={() => setShowRaw((v) => !v)} className="shrink-0 text-primary" style={{ fontSize: 'var(--text-xs)' }}>
+              <p className="font-medium">Payload</p>
+              <button type="button" onClick={() => setShowRaw((v) => !v)} className="shrink-0 text-primary text-xs">
                 {showRaw ? 'Hide raw JSON' : 'Show raw JSON'}
               </button>
             </div>
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            <p className="text-muted-foreground text-xs">
               A technical field passed through as-is from the system that sent this event. Not normally needed unless
               you&rsquo;re troubleshooting with a developer.
             </p>
             {showRaw && (
-              <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-muted p-2" style={{ fontSize: 'var(--text-xs)' }}>
+              <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-muted p-2 text-xs">
                 {prettyPayload(row.payload)}
               </pre>
             )}
@@ -217,8 +217,8 @@ export function InboundEventsMonitor({ events }: { events: AgentEventRow[] }) {
   if (events.length === 0) {
     return (
       <div className="space-y-1 rounded-lg border border-border bg-muted p-4">
-        <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>No events received yet.</p>
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="font-semibold">No events received yet.</p>
+        <p className="text-muted-foreground text-sm">
           Once your systems start sending events here, they&rsquo;ll show up in this list.
         </p>
       </div>
@@ -255,7 +255,7 @@ export function InboundEventsMonitor({ events }: { events: AgentEventRow[] }) {
 
       {filteredRows.length === 0 ? (
         <div className="space-y-2 rounded-lg border border-border p-6 text-center">
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="text-muted-foreground text-sm">
             No events match these filters.
           </p>
           <Button variant="outline" size="sm" onClick={clearFilters}>
@@ -311,7 +311,7 @@ export function InboundEventsMonitor({ events }: { events: AgentEventRow[] }) {
       )}
 
       {!filtersActive && filteredRows.length > 0 && (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        <p className="text-muted-foreground text-xs">
           Showing {pagedRows.length} of {filteredRows.length} events
         </p>
       )}

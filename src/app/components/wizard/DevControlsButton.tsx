@@ -8,7 +8,7 @@ import { isDummyMode, setDummyMode } from '@/app/api/dummy'
 import { DemoControlsGroup } from './DemoControlsGroup'
 
 /** The single, app-wide demo-controls panel. Rendered once at the app root, fixed to the true
- *  bottom-right of the viewport (toasts use bottom-left, see components/ui/sonner.tsx, so the two
+ *  bottom-right of the viewport (toasts sit above it, see components/ui/sonner.tsx, so the two
  *  floating layers never overlap). Always visible, collapsed by default; its contents swap
  *  silently to match whichever screen is currently registering controls. Hidden below a reasonable
  *  desktop width, since this is prototype-only tooling that never needs to work on a narrow screen.
@@ -30,7 +30,7 @@ export function DevControlsButton() {
   const [open, setOpen] = useState(false)
 
   return (
-    <div data-demo-panel className="pointer-events-auto fixed right-6 bottom-6 z-60 hidden lg:block">
+    <div data-demo-panel className="pointer-events-auto fixed right-4 bottom-4 z-60 hidden lg:block">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button variant="outline" size="icon" aria-label="Demo controls" className="relative rounded-full shadow-md">
@@ -48,13 +48,13 @@ export function DevControlsButton() {
           className="pointer-events-auto z-60 w-96 space-y-4"
         >
           <DemoControlsGroup label="Dummy mode">
-            <label className="flex w-full items-center justify-between gap-3" style={{ fontSize: 'var(--text-xs)' }}>
+            <label className="flex w-full items-center justify-between gap-3 text-xs">
               <span className="text-muted-foreground">Uses sample data in this browser. No calls to Meta. The page reloads.</span>
               <Switch checked={isDummyMode()} onCheckedChange={setDummyMode} aria-label="Dummy mode" />
             </label>
           </DemoControlsGroup>
           {rendered.length === 0 ? (
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            <p className="text-muted-foreground text-xs">
               No demo controls for this step
             </p>
           ) : (

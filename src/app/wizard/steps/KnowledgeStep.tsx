@@ -21,7 +21,7 @@ export function KnowledgeStep() {
   const category = state.demo.businessCategory
 
   const [activeTab, setActiveTab] = useState<TabId>('business')
-  const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'failed'>('loading')
+  const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'failed'>(() => (state.demo.forceNextFailure ? 'loading' : 'loaded'))
 
   // Arriving here via a "Compiled configuration" link on Test & publish — jump to the tab it named.
   useEffect(() => {
@@ -34,10 +34,11 @@ export function KnowledgeStep() {
 
   // Governs FAQ, Documents and Website only — Business details manages its own load/save
   // lifecycle internally (see BusinessProfileStep), unchanged from the Business Profile spec.
+  // The agent is already loaded; only a forced failure (Demo controls) shows the load-failed state.
   useEffect(() => {
-    const willFail = state.demo.forceNextFailure
-    if (willFail) patch('demo', { forceNextFailure: false })
-    const timer = setTimeout(() => setLoadStatus(willFail ? 'failed' : 'loaded'), 600)
+    if (!state.demo.forceNextFailure) return
+    patch('demo', { forceNextFailure: false })
+    const timer = setTimeout(() => setLoadStatus('failed'), 600)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -121,14 +122,14 @@ export function KnowledgeStep() {
         <LoadingIndicator label="Loading your knowledge base" />
       ) : allEmpty ? (
         <div className="space-y-1 rounded-lg border border-border bg-muted p-4">
-          <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>Your agent has no knowledge yet.</p>
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="font-semibold">Your agent has no knowledge yet.</p>
+          <p className="text-muted-foreground text-sm">
             It can still chat, but it will not be able to answer specific questions about your business. The
             fastest way to start: add your website, or add 5 to 10 common questions.
           </p>
         </div>
       ) : (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="text-muted-foreground text-sm">
           <span style={{ fontWeight: 'var(--font-weight-medium)', color: 'var(--foreground)' }}>
             Your agent&rsquo;s knowledge:
           </span>{' '}

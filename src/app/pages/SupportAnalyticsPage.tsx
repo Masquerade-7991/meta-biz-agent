@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { errorDetail } from '@/app/api/meta'
 import { getSupportAnalytics, type SupportAnalytics } from '@/app/api/tickets'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { PillTabs } from '@/app/components/Filters'
 
 const RANGES = [7, 30, 90] as const
@@ -12,14 +11,14 @@ const pct = (x: number | null) => (x === null ? '–' : `${Math.round(x * 100)}%
 function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-lg border border-border p-4">
-      <p className="text-muted-foreground" style={TEXT_XS}>
+      <p className="text-muted-foreground text-xs">
         {label}
       </p>
       <p className="mt-1" style={{ fontSize: '1.75rem', fontWeight: 'var(--font-weight-semi-bold)', lineHeight: 1.1 }}>
         {value}
       </p>
       {hint && (
-        <p className="mt-1 text-muted-foreground" style={TEXT_XS}>
+        <p className="mt-1 text-muted-foreground text-xs">
           {hint}
         </p>
       )}
@@ -57,7 +56,7 @@ function VolumeChart({ series }: { series: SupportAnalytics['series'] }) {
           )
         })}
       </svg>
-      <figcaption className="flex gap-4 text-muted-foreground" style={TEXT_XS}>
+      <figcaption className="flex gap-4 text-muted-foreground text-xs">
         <span className="flex items-center gap-1.5">
           <span className="size-2.5 rounded-sm bg-primary" /> Opened
         </span>
@@ -91,11 +90,11 @@ export function SupportAnalyticsPage() {
         <PillTabs label="Date range" options={RANGES.map((r) => ({ id: r, label: `Last ${r} days` }))} value={days} onChange={setDays} />
       </div>
       {error ? (
-        <p className="mt-6 text-destructive" style={TEXT_SM}>
+        <p className="mt-6 text-destructive text-sm">
           {error}
         </p>
       ) : !d ? (
-        <p className="mt-6 flex items-center gap-2 text-muted-foreground" style={TEXT_SM}>
+        <p className="mt-6 flex items-center gap-2 text-muted-foreground text-sm">
           <Loader2 className="size-4 animate-spin" /> Crunching the numbers&hellip;
         </p>
       ) : (
@@ -121,12 +120,12 @@ export function SupportAnalyticsPage() {
                     <div className="bg-primary" style={{ width: `${(d.chats.aiOnly / d.chats.total) * 100}%` }} />
                     <div className="bg-warning" style={{ width: `${(d.chats.withTeam / d.chats.total) * 100}%` }} />
                   </div>
-                  <p style={TEXT_SM}>
+                  <p className="text-sm">
                     The AI agent handled <strong>{pct(d.chats.aiOnly / d.chats.total)}</strong> of {d.chats.total} chats on its own; your team stepped into {d.chats.withTeam}.
                   </p>
                 </>
               ) : (
-                <p className="text-muted-foreground" style={TEXT_SM}>
+                <p className="text-muted-foreground text-sm">
                   No chats in this period.
                 </p>
               )}
@@ -143,8 +142,8 @@ export function SupportAnalyticsPage() {
           <section className="rounded-lg border border-border p-5">
             <h2 style={{ fontSize: '1.125rem', fontWeight: 'var(--font-weight-semi-bold)' }}>By person</h2>
             {d.people.length ? (
-              <table className="mt-3 w-full" style={TEXT_SM}>
-                <thead className="text-left text-muted-foreground" style={TEXT_XS}>
+              <table className="mt-3 w-full text-sm">
+                <thead className="text-left text-muted-foreground text-xs">
                   <tr>
                     <th className="py-2 font-normal">Person</th>
                     <th className="py-2 text-right font-normal">Resolved</th>
@@ -164,7 +163,7 @@ export function SupportAnalyticsPage() {
                 </tbody>
               </table>
             ) : (
-              <p className="mt-2 text-muted-foreground" style={TEXT_SM}>
+              <p className="mt-2 text-muted-foreground text-sm">
                 No tickets in this period.
               </p>
             )}

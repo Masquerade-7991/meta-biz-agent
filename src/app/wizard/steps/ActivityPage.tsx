@@ -71,12 +71,12 @@ function QualityCheckItemRow({ item }: { item: QualityCheckItem }) {
           ) : (
             <AlertTriangle className="size-4 shrink-0 text-warning" />
           )}
-          <span className="truncate" style={{ fontSize: 'var(--text-sm)' }}>
+          <span className="truncate text-sm">
             {item.situation}
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-2">
-          <span className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <span className="text-muted-foreground text-sm">
             {item.status === 'normal' ? 'Responded normally' : 'Check this'}
           </span>
           <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', expanded && 'rotate-180')} />
@@ -84,11 +84,11 @@ function QualityCheckItemRow({ item }: { item: QualityCheckItem }) {
       </button>
       {expanded && (
         <div className="mt-2 space-y-1.5 border-t border-border pt-2">
-          <p style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="text-sm">
             <span className="text-muted-foreground">Customer: </span>
             {item.sent}
           </p>
-          <p style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="text-sm">
             <span className="text-muted-foreground">Agent: </span>
             {item.reply}
           </p>
@@ -110,7 +110,7 @@ function QualityChecksSection({ runs, onGoToTestPublish }: { runs: QualityCheckR
       </span>
 
       {sorted.length === 0 ? (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="text-muted-foreground text-sm">
           No checks run yet. Run the standard checks from{' '}
           <button type="button" onClick={onGoToTestPublish} className="text-primary underline underline-offset-2">
             Test &amp; Eval
@@ -125,8 +125,8 @@ function QualityChecksSection({ runs, onGoToTestPublish }: { runs: QualityCheckR
             return (
               <div key={run.id} className="rounded-lg border border-border">
                 <div className="flex items-center justify-between gap-3 px-4 py-3">
-                  <span style={{ fontSize: 'var(--text-sm)' }}>{formatFullTimestamp(run.timestamp)}</span>
-                  <span className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                  <span className="text-sm">{formatFullTimestamp(run.timestamp)}</span>
+                  <span className="text-muted-foreground text-sm">
                     {passed} of {run.items.length} passed
                   </span>
                   <Button size="sm" variant="outline" onClick={() => setViewedRunId(viewed ? null : run.id)}>
@@ -176,7 +176,7 @@ function ConnectorActivitySection({
       </span>
 
       {connections.length === 0 ? (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="text-muted-foreground text-sm">
           This agent has no connections set up.{' '}
           <button type="button" onClick={onGoToConnections} className="text-primary underline underline-offset-2">
             Set one up
@@ -201,19 +201,19 @@ function ConnectorActivitySection({
           )}
 
           {rows.length === 0 ? (
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            <p className="text-muted-foreground text-sm">
               No connector activity yet.
             </p>
           ) : (
             <div className="space-y-2">
               <div className="flex items-center gap-5">
-                <span style={{ fontSize: 'var(--text-sm)' }}>
+                <span className="text-sm">
                   <span className="text-muted-foreground">Worked: </span>
-                  <span style={{ fontWeight: 'var(--font-weight-medium)' }}>{rows.filter((r) => r.outcome === 'worked').length}</span>
+                  <span className="font-medium">{rows.filter((r) => r.outcome === 'worked').length}</span>
                 </span>
-                <span style={{ fontSize: 'var(--text-sm)' }}>
+                <span className="text-sm">
                   <span className="text-muted-foreground">Failed: </span>
-                  <span style={{ fontWeight: 'var(--font-weight-medium)' }}>{rows.filter((r) => r.outcome === 'failed').length}</span>
+                  <span className="font-medium">{rows.filter((r) => r.outcome === 'failed').length}</span>
                 </span>
               </div>
               {rows.map((row) => {
@@ -226,20 +226,19 @@ function ConnectorActivitySection({
                       onClick={() => row.outcome === 'failed' && setExpandedId(expanded ? null : row.id)}
                       className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left"
                     >
-                      <span className="flex min-w-0 items-center gap-3" style={{ fontSize: 'var(--text-sm)' }}>
+                      <span className="flex min-w-0 items-center gap-3 text-sm">
                         <span className="shrink-0 text-muted-foreground">{formatFullTimestamp(row.timestamp)}</span>
                         <span className="shrink-0">{connection?.name ?? 'Unknown connection'}</span>
                         <span className="truncate text-muted-foreground">{row.actionName}</span>
                       </span>
                       <span
-                        className={cn('shrink-0', row.outcome === 'worked' ? 'text-success' : 'text-warning-foreground')}
-                        style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-medium)' }}
+                        className={cn('shrink-0 text-sm font-medium', row.outcome === 'worked' ? 'text-success' : 'text-warning-foreground')}
                       >
                         {row.outcome === 'worked' ? 'Worked' : 'Failed'}
                       </span>
                     </button>
                     {row.outcome === 'failed' && expanded && (
-                      <pre className="mx-3 mb-2 max-h-32 overflow-auto rounded-md bg-muted p-2" style={{ fontSize: 'var(--text-xs)' }}>
+                      <pre className="mx-3 mb-2 max-h-32 overflow-auto rounded-md bg-muted p-2 text-xs">
                         {row.errorText}
                       </pre>
                     )}
@@ -310,11 +309,11 @@ function InboundEventsSetupDialog({
           </DialogHeader>
           <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
             <div className="flex items-start justify-between gap-3 rounded-lg bg-muted p-3">
-              <p style={{ fontSize: 'var(--text-sm)' }}>
+              <p className="text-sm">
                 This part is technical. If that is not you, you can copy the setup details to send
                 to your developer.
               </p>
-              <button type="button" onClick={copyChecklist} className="shrink-0 text-primary" style={{ fontSize: 'var(--text-xs)' }}>
+              <button type="button" onClick={copyChecklist} className="shrink-0 text-primary text-xs">
                 {copied ? 'Copied' : 'Copy setup details for my developer'}
               </button>
             </div>
@@ -327,14 +326,14 @@ function InboundEventsSetupDialog({
             <div className="space-y-1.5">
               <Label>Secret key</Label>
               <div className="flex items-center justify-between gap-3 rounded-md border border-input px-3 py-2">
-                <span className="truncate" style={{ fontSize: 'var(--text-sm)' }}>
+                <span className="truncate text-sm">
                   {revealed ? secretKey : '•'.repeat(24)}
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
-                  <button type="button" onClick={() => setRevealed((v) => !v)} className="text-primary" style={{ fontSize: 'var(--text-xs)' }}>
+                  <button type="button" onClick={() => setRevealed((v) => !v)} className="text-primary text-xs">
                     {revealed ? 'Hide' : 'Reveal'}
                   </button>
-                  <button type="button" onClick={() => setRegenerateOpen(true)} className="text-primary" style={{ fontSize: 'var(--text-xs)' }}>
+                  <button type="button" onClick={() => setRegenerateOpen(true)} className="text-primary text-xs">
                     Regenerate
                   </button>
                 </span>
@@ -351,8 +350,8 @@ function InboundEventsSetupDialog({
                   {eventTypes.map((t) => (
                     <div key={t.id} className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2">
                       <div className="min-w-0">
-                        <code style={{ fontSize: 'var(--text-xs)' }}>{t.name}</code>
-                        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                        <code className="text-xs">{t.name}</code>
+                        <p className="text-muted-foreground text-xs">
                           {t.description}
                         </p>
                       </div>
@@ -439,7 +438,7 @@ function InboundEventsSection({
     <section className="space-y-4">
       <div>
         <h3>Inbound business events</h3>
-        <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="mt-1 text-muted-foreground text-sm">
           Let your other systems tell this agent when something happens, like a payment or a
           delivery update, so it can act on it in the conversation. Optional and technical: you may
           want your developer for this part.
@@ -453,8 +452,8 @@ function InboundEventsSection({
       ) : (
         <div className="flex items-center justify-between rounded-lg border border-border p-3">
           <div>
-            <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Inbound events set up</p>
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            <p className="font-medium">Inbound events set up</p>
+            <p className="text-muted-foreground text-xs">
               {agentEvents.eventTypes.length} event type{agentEvents.eventTypes.length === 1 ? '' : 's'} expected
             </p>
           </div>
@@ -464,7 +463,7 @@ function InboundEventsSection({
         </div>
       )}
 
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+      <p className="text-muted-foreground text-sm">
         To control what your agent says or does when an event arrives, add a custom skill on the
         Skills page.{' '}
         <button type="button" onClick={onAddSkillForEvent} className="text-primary underline underline-offset-2">
@@ -475,7 +474,7 @@ function InboundEventsSection({
       {/* A real Agent Event: Meta queues it, then the agent acts on it in that customer's conversation. */}
       <div className="space-y-2 rounded-lg border border-border p-3">
         <span className="flex items-center gap-1.5">
-          <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Send a test event</p>
+          <p className="font-medium">Send a test event</p>
           <InfoTooltip text="The customer must already have a conversation with this number. Their status updates below as Meta processes it." />
         </span>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -484,7 +483,7 @@ function InboundEventsSection({
         </div>
         <Input aria-label="Event description" placeholder="e.g. Payment confirmed for order 1042" maxLength={1024} value={eventDraft.description} onChange={(e) => setEventDraft({ ...eventDraft, description: e.target.value })} />
         <Textarea aria-label="Event payload (JSON)" rows={2} maxLength={4096} value={eventDraft.payload} onChange={(e) => setEventDraft({ ...eventDraft, payload: e.target.value })} className="font-mono" />
-        {!payloadValid && <p className="text-destructive" style={{ fontSize: 'var(--text-xs)' }}>The payload must be valid JSON.</p>}
+        {!payloadValid && <p className="text-destructive text-xs">The payload must be valid JSON.</p>}
         {eventError && <InlineError message={eventError} />}
         <Button size="sm" onClick={() => void sendEvent()} disabled={!canSendEvent || eventSending}>
           {eventSending ? <Loader2 className="size-3.5 animate-spin" /> : 'Send event'}
@@ -532,7 +531,7 @@ function ConversationTurnRow({ turn, displayTime }: { turn: ConversationTurn; di
   return (
     <div className="space-y-0.5">
       {displayTime && (
-        <p style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="text-sm">
           <span className="text-muted-foreground">{displayTime}</span>
           {turn.e2eLatencyMs !== undefined && (
             <span className="text-muted-foreground"> &middot; Responded in {formatLatencySeconds(turn.e2eLatencyMs)}</span>
@@ -540,7 +539,7 @@ function ConversationTurnRow({ turn, displayTime }: { turn: ConversationTurn; di
         </p>
       )}
       {turn.tool && (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="text-muted-foreground text-sm">
           Used: {turn.tool}
           {turn.toolWorked === true && ' — worked'}
           {turn.toolWorked === false && " — this didn't work"}
@@ -592,7 +591,7 @@ function ConversationsSection({
     <section className="space-y-3">
       <div>
         <h3>Conversations</h3>
-        <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="mt-1 text-muted-foreground text-sm">
           Look up a customer&rsquo;s real conversation with your agent.
         </p>
       </div>
@@ -600,16 +599,16 @@ function ConversationsSection({
       {insights && (
         <div className="grid max-w-md grid-cols-2 gap-2">
           <div className="rounded-lg bg-muted p-3">
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            <p className="text-muted-foreground text-xs">
               AI conversations, last 30 days
             </p>
-            <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{insights.aiThreads}</p>
+            <p className="font-semibold">{insights.aiThreads}</p>
           </div>
           <div className="rounded-lg bg-muted p-3">
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            <p className="text-muted-foreground text-xs">
               Handed to a person right now
             </p>
-            <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{insights.aiHandoffs}</p>
+            <p className="font-semibold">{insights.aiHandoffs}</p>
           </div>
         </div>
       )}
@@ -634,7 +633,7 @@ function ConversationsSection({
       </div>
 
       {status === 'not_found' && (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="text-muted-foreground text-sm">
           No conversation found for this number.
         </p>
       )}
@@ -654,7 +653,7 @@ function ConversationsSection({
             {controlBusy && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
           </div>
           {controlNote && (
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            <p className="text-muted-foreground text-xs">
               {controlNote}
             </p>
           )}
@@ -667,12 +666,12 @@ function ConversationsSection({
       {/* Earlier conversations the server recorded, newest first (only when it has a database). */}
       {past.length > 0 && (
         <div className="space-y-2">
-          <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Earlier conversations</p>
+          <p className="font-medium">Earlier conversations</p>
           {past.map((c) => {
             const times = turnDisplayTimes(c.turns)
             return (
               <details key={c.id} className="rounded-lg border border-border p-3">
-                <summary className="cursor-pointer" style={{ fontSize: 'var(--text-sm)' }}>
+                <summary className="cursor-pointer text-sm">
                   {formatFullTimestamp(c.startedAt)} &middot; {c.turns.length} turn{c.turns.length === 1 ? '' : 's'}
                 </summary>
                 <div className="mt-2 space-y-3">
@@ -716,18 +715,18 @@ function ChangeHistorySection({ rows }: { rows: AuditRow[] }) {
     <section className="space-y-3">
       <div>
         <h3>Change history</h3>
-        <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="mt-1 text-muted-foreground text-sm">
           Every change this console sent to Meta for this agent, newest first.
         </p>
       </div>
       {rows.length === 0 ? (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="text-muted-foreground text-sm">
           No changes recorded yet.
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-left" style={{ fontSize: 'var(--text-sm)' }}>
-            <thead className="bg-muted text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-muted text-muted-foreground text-xs">
               <tr>
                 <th className="px-3 py-2 font-medium">When</th>
                 <th className="px-3 py-2 font-medium">Action</th>

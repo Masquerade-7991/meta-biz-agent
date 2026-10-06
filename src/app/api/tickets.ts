@@ -108,7 +108,7 @@ export const getSupportAnalytics = (days: 7 | 30 | 90) => call<SupportAnalytics>
 export const PRIORITY_LABEL: Record<Priority, string> = { urgent: 'Urgent', high: 'High', normal: 'Normal', low: 'Low' }
 export const PRIORITY_CLASS: Record<Priority, string> = {
   urgent: 'bg-destructive text-destructive-foreground',
-  high: 'bg-warning text-warning-foreground',
+  high: 'bg-warning/15 text-warning-foreground',
   normal: 'bg-muted text-foreground',
   low: 'bg-muted text-muted-foreground',
 }

@@ -137,7 +137,7 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
   useRegisterDevControls(
     'identity',
     <DemoControlsGroup label="Identity">
-      <label htmlFor="demo-business-category" className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+      <label htmlFor="demo-business-category" className="text-muted-foreground text-xs">
         Business category
       </label>
       <select
@@ -147,8 +147,7 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
           patch('demo', { businessCategory: e.target.value })
           setShowOtherExamples(false)
         }}
-        className="rounded border border-border bg-background"
-        style={{ fontSize: 'var(--text-xs)' }}
+        className="rounded border border-border bg-background text-xs"
       >
         {BUSINESS_CATEGORY_OPTIONS.map((option) => (
           <option key={option} value={option}>
@@ -159,7 +158,7 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
       <Button variant="outline" size="sm" onClick={section.simulateLoadFailure}>
         Force load failure
       </Button>
-      <label className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+      <label className="flex items-center gap-1.5 text-muted-foreground text-xs">
         <input
           type="checkbox"
           checked={section.forceSaveFailure}
@@ -263,7 +262,7 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
             <InfoTooltip text="This is only for you. Customers never see it." />
           </span>
           {identity.agentName.length > 50 && (
-            <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            <span className="text-muted-foreground text-xs">
               {identity.agentName.length}/{MAX_NAME}
             </span>
           )}
@@ -277,7 +276,7 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
           placeholder="e.g. Aria"
         />
         {nameError && (
-          <p className="flex items-center gap-1 text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+          <p className="flex items-center gap-1 text-destructive text-xs">
             <AlertCircle className="size-3.5" /> {nameError}
           </p>
         )}
@@ -321,11 +320,11 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
               Draft from a document
             </Button>
             {docStatus === 'reading' ? (
-              <span className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
                 <Loader2 className="size-3.5 animate-spin" /> Reading your document&hellip;
               </span>
             ) : (
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              <p className="text-muted-foreground text-xs">
                 Reads a document and suggests a starting point below
               </p>
             )}
@@ -357,7 +356,7 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
         />
 
         {docNotice && (
-          <p className="flex items-start gap-1.5 rounded-md border border-warning bg-warning/10 p-2.5 text-warning-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="flex items-start gap-1.5 rounded-md border border-warning bg-warning/10 p-2.5 text-warning-foreground text-sm">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             {docNotice}
           </p>
@@ -365,7 +364,7 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
 
         <div className="space-y-1.5">
           {isDraftFromDocument && (
-            <p className="text-primary" style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-medium)' }}>
+            <p className="text-primary text-xs font-medium">
               Suggested from your document, please review and edit
             </p>
           )}
@@ -382,14 +381,14 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
           />
           <div className="flex items-center justify-between">
             {roleError ? (
-              <p className="flex items-center gap-1 text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+              <p className="flex items-center gap-1 text-destructive text-xs">
                 <AlertCircle className="size-3.5" /> {roleError}
               </p>
             ) : (
               <span />
             )}
             {identity.agentRole.length > 200 && (
-              <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              <span className="text-muted-foreground text-xs">
                 {identity.agentRole.length}/{MAX_ROLE}
               </span>
             )}

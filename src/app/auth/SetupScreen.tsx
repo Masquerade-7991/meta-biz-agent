@@ -162,7 +162,7 @@ export function AccountSetupScreen() {
           </Button>
         </div>
       </form>
-      <p className="mt-8 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+      <p className="mt-8 text-muted-foreground text-sm">
         Not you? <TextButton onClick={() => void logout()}>Log out</TextButton>
       </p>
     </AuthLayout>

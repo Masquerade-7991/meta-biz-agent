@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useWizard } from './WizardContext'
-import { useRegisterNavGuard, type NavIntent } from './NavigationGuardContext'
+import { useRegisterNavGuard, useReportSaveStatus, type NavIntent } from './NavigationGuardContext'
 import type { SliceKey, WizardState } from './types'
 import { toast } from 'sonner'
 import { pushSlice } from '../api/meta'
@@ -29,18 +29,9 @@ export function useSaveOnNextSection<K extends SliceKey>(slice: K, options: Save
     dataRef.current = data
   }, [data])
 
-  const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'failed'>('loading')
-  const [savedSnapshot, setSavedSnapshot] = useState<WizardState[K] | null>(null)
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoadStatus('loaded')
-      setSavedSnapshot(dataRef.current)
-    }, 600)
-    return () => clearTimeout(timer)
-    // Mount-only: simulates the fetch that happens when this section first opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // The studio loads the agent from Meta before any section opens, so the data is already here.
+  const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'failed'>('loaded')
+  const [savedSnapshot, setSavedSnapshot] = useState<WizardState[K] | null>(data)
 
   function retryLoad() {
     setLoadStatus('loading')
@@ -116,6 +107,8 @@ export function useSaveOnNextSection<K extends SliceKey>(slice: K, options: Save
   const dirty =
     savedSnapshot !== null &&
     (options.isDirty ? options.isDirty(savedSnapshot, data) : JSON.stringify(savedSnapshot) !== JSON.stringify(data))
+
+  useReportSaveStatus(dirty, saveStatus === 'saving')
 
   return {
     data,

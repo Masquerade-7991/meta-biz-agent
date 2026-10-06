@@ -11,8 +11,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme="light"
-      // Demo controls now own bottom-right (see DevControlsButton) — keep toasts on the other side.
-      position="bottom-left"
+      // Colours come from the theme tokens below, so they follow light and dark.
+      position="bottom-right"
+      // Clear of the demo-controls button in the same corner (demo mode only).
+      offset={{ bottom: 72, right: 16 }}
+      mobileOffset={{ bottom: 16 }}
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,

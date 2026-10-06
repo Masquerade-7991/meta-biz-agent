@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { errorDetail } from '@/app/api/meta'
 import { createTicket, listTickets, PRIORITIES, PRIORITY_LABEL, resolveTicket, updateTicket, type Priority, type Ticket } from '@/app/api/tickets'
 import { SlaCell } from './TicketsPage'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
+import { TEXT_SM } from '@/app/lib/text'
 
 
 function ResolveDialog({ t, windowOpen, onClose, onDone }: { t: Ticket; windowOpen: boolean; onClose: () => void; onDone: () => void }) {
@@ -42,20 +42,20 @@ function ResolveDialog({ t, windowOpen, onClose, onDone }: { t: Ticket; windowOp
             <Label htmlFor="resolution">What fixed it (optional)</Label>
             <Textarea id="resolution" rows={3} value={resolution} onChange={(e) => setResolution(e.target.value)} placeholder="Refunded the duplicate charge." />
           </div>
-          <label className="flex items-start gap-2.5" style={TEXT_SM}>
+          <label className="flex items-start gap-2.5 text-sm">
             <Checkbox checked={askFeedback} onCheckedChange={(v) => setAskFeedback(v === true)} disabled={!windowOpen} className="mt-0.5" />
             <span>
               Ask the customer how we did
-              <span className="block text-muted-foreground" style={TEXT_XS}>
+              <span className="block text-muted-foreground text-xs">
                 {windowOpen ? 'Sends Good / Okay / Bad buttons on WhatsApp.' : 'Not possible: the 24-hour reply window is closed.'}
               </span>
             </span>
           </label>
-          <label className="flex items-start gap-2.5" style={TEXT_SM}>
+          <label className="flex items-start gap-2.5 text-sm">
             <Checkbox checked={handBack} onCheckedChange={(v) => setHandBack(v === true)} className="mt-0.5" />
             <span>
               Hand the chat back to the AI agent
-              <span className="block text-muted-foreground" style={TEXT_XS}>
+              <span className="block text-muted-foreground text-xs">
                 The agent answers this customer&rsquo;s next message.
               </span>
             </span>
@@ -103,7 +103,7 @@ export function TicketPanel({ phone, windowOpen, version, onChanged }: { phone: 
 
   return (
     <div className="space-y-3">
-      <p className="text-muted-foreground" style={TEXT_XS}>
+      <p className="text-muted-foreground text-xs">
         Ticket
       </p>
       {!rows ? (
@@ -161,7 +161,7 @@ export function TicketPanel({ phone, windowOpen, version, onChanged }: { phone: 
         </Button>
       )}
       {past.length > 0 && (
-        <ul className="space-y-1.5" style={TEXT_XS}>
+        <ul className="space-y-1.5 text-xs">
           {past.slice(0, 5).map((t) => (
             <li key={t.number} className="flex items-center justify-between gap-2 text-muted-foreground">
               <span className="truncate">

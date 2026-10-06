@@ -8,7 +8,6 @@ import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
 import { blockUser, listBlocked, unblockUser } from '@/app/api/numbers'
 import { can } from '@/app/lib/permissions'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { SearchInput } from '@/app/components/Filters'
 import { useForcedFailure } from './useForcedFailure'
 import type { TabProps } from './NumberPage'
@@ -35,7 +34,7 @@ export function BlockedTab({ detail }: TabProps) {
 
   if (!canEdit)
     return (
-      <p className="text-muted-foreground" style={TEXT_SM}>
+      <p className="text-muted-foreground text-sm">
         Owners and admins manage who&rsquo;s blocked.
       </p>
     )
@@ -66,7 +65,7 @@ export function BlockedTab({ detail }: TabProps) {
             Block
           </Button>
         </div>
-        <p className="text-muted-foreground" style={TEXT_XS}>
+        <p className="text-muted-foreground text-xs">
           WhatsApp only lets you block someone who messaged this number in the last 24 hours. You can also block from a chat in the Inbox.
         </p>
         {error && <FormError>{error}</FormError>}
@@ -81,7 +80,7 @@ export function BlockedTab({ detail }: TabProps) {
       ) : !rows ? (
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
       ) : rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground" style={TEXT_SM}>
+        <p className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground text-sm">
           Nobody is blocked on this number.
         </p>
       ) : (
@@ -89,7 +88,7 @@ export function BlockedTab({ detail }: TabProps) {
           {rows.length > 8 && <SearchInput value={q} onChange={setQ} placeholder="Search blocked numbers" label="Search blocked numbers" />}
           <ul className="divide-y divide-border rounded-lg border border-border">
             {shown.map((r) => (
-              <li key={r.user} className="flex items-center justify-between px-4 py-2" style={TEXT_SM}>
+              <li key={r.user} className="flex items-center justify-between px-4 py-2 text-sm">
                 +{r.user}
                 <Button
                   size="sm"

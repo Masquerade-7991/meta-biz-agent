@@ -69,7 +69,7 @@ function ScreenPersona({ onSelect }: { onSelect: (id: PersonaId) => void }) {
     <div className="space-y-5">
       <div>
         <h2>Quick question before we start</h2>
-        <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="mt-1 text-muted-foreground text-sm">
           This just helps us show you the right things first. You can explore everything either way.
         </p>
       </div>
@@ -106,7 +106,7 @@ function ScreenBusiness({
     <div className="space-y-5">
       <div>
         <h2>Tell us about your business</h2>
-        <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="mt-1 text-muted-foreground text-sm">
           We&rsquo;ll use this to suggest a starting point. Nothing here is final.
         </p>
       </div>
@@ -121,7 +121,7 @@ function ScreenBusiness({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="fd-website">
-          Website <span className="text-muted-foreground" style={{ fontWeight: 'var(--font-weight-regular)' }}>(optional)</span>
+          Website <span className="text-muted-foreground font-normal">(optional)</span>
         </Label>
         <Input
           id="fd-website"
@@ -129,7 +129,7 @@ function ScreenBusiness({
           onChange={(e) => onWebsiteChange(e.target.value)}
           placeholder="https://yourbusiness.com"
         />
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        <p className="text-muted-foreground text-xs">
           If you have one, we&rsquo;ll use it to suggest what your agent should know and do.
         </p>
       </div>
@@ -161,17 +161,17 @@ function ScreenFound({
       <div className="space-y-5">
         <h2>Here&rsquo;s what we&rsquo;re starting with</h2>
         <div className="space-y-1.5 rounded-lg border border-border p-4">
-          <div className="flex items-center justify-between" style={{ fontSize: 'var(--text-sm)' }}>
+          <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Business:</span>
             <span>{businessName.trim() || 'Not provided'}</span>
           </div>
-          <div className="flex items-center justify-between" style={{ fontSize: 'var(--text-sm)' }}>
+          <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Category:</span>
             <span>{displayCategory}</span>
           </div>
         </div>
         <div className="space-y-2">
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+          <p className="text-muted-foreground text-xs">
             This comes from your account. Not what you expected?{' '}
             <button type="button" onClick={() => setChangingCategory(true)} className="text-primary underline">
               Change category
@@ -188,7 +188,7 @@ function ScreenFound({
           )}
         </div>
         {hasWebsite && (
-          <p style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="text-sm">
             We&rsquo;ll suggest adding {getHostname(website)} as a knowledge source in step 2, once you confirm at
             the end.
           </p>
@@ -202,7 +202,7 @@ function ScreenFound({
 
   return (
     <div className="space-y-5">
-      <p style={{ fontSize: 'var(--text-sm)' }}>
+      <p className="text-sm">
         We don&rsquo;t have enough to suggest a category yet. That&rsquo;s fine, pick what fits best:
       </p>
       <CategorySelect value={null} onChange={onCategoryChange} />
@@ -228,7 +228,7 @@ function ScreenCapabilities({
     <div className="space-y-5">
       <div>
         <h2>What should your agent handle?</h2>
-        <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="mt-1 text-muted-foreground text-sm">
           Pick what applies. This sets your starting point in step 1 and step 2, you can add or remove anything
           later.
         </p>
@@ -246,7 +246,7 @@ function ScreenCapabilities({
         ))}
       </div>
       {selectedIds.length === 0 && (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        <p className="text-muted-foreground text-xs">
           That&rsquo;s fine, you can start from scratch in the wizard.
         </p>
       )}
@@ -275,13 +275,13 @@ function ScreenSummary({
     <div className="space-y-5">
       <div>
         <h2>Here&rsquo;s your starting point</h2>
-        <p className="mt-1 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="mt-1 text-muted-foreground text-sm">
           Review what we&rsquo;ll set up. Everything here can be changed once you&rsquo;re in the wizard.
         </p>
       </div>
       <div className="space-y-3 rounded-lg border border-border p-4">
         {rows.map((row) => (
-          <div key={row.label} className="grid grid-cols-[minmax(0,140px)_1fr] gap-3" style={{ fontSize: 'var(--text-sm)' }}>
+          <div key={row.label} className="grid grid-cols-[minmax(0,140px)_1fr] gap-3 text-sm">
             <span className="text-muted-foreground">{row.label}</span>
             <div>
               {row.lines.map((line, i) => (
@@ -291,7 +291,7 @@ function ScreenSummary({
           </div>
         ))}
       </div>
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+      <p className="text-muted-foreground text-sm">
         This is a starting point, not a finished agent. Review and adjust anything in the steps ahead.
       </p>
       <div className="flex gap-3">
@@ -435,7 +435,7 @@ export function SetupFrontDoor({ onFinish }: { onFinish: () => void }) {
               <span key={i} className={cn('size-1.5 rounded-full', i <= screenIndex ? 'bg-primary' : 'bg-border')} />
             ))}
           </div>
-          <button type="button" onClick={onFinish} className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <button type="button" onClick={onFinish} className="text-muted-foreground text-sm">
             Skip, I&rsquo;ll set it up myself
           </button>
         </div>

@@ -8,7 +8,7 @@ import type { ToolRunResult } from '@/app/wizard/toolRun'
 import type { Connection, ConnectionAction } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
 import { Field, PlaceBadge, RequestPreviewBlock } from './parts'
-import { DIALOG_TITLE } from './places'
+
 
 const XS = { fontSize: 'var(--text-xs)' } as const
 const SM = { fontSize: 'var(--text-sm)' } as const
@@ -68,10 +68,10 @@ export function ToolTestDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex max-h-[92dvh] flex-col gap-0 p-0 sm:max-w-2xl">
         <div className="space-y-1 border-b border-border px-6 pt-5 pb-4 pr-12">
-          <DialogTitle style={DIALOG_TITLE}>
+          <DialogTitle>
             Test <span className="font-mono">{tool.name}</span>
           </DialogTitle>
-          <DialogDescription style={XS}>Runs the real request through Meta with your saved key. It doesn&rsquo;t message any customer.</DialogDescription>
+          <DialogDescription className="text-xs">Runs the real request through Meta with your saved key. It doesn&rsquo;t message any customer.</DialogDescription>
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
@@ -127,7 +127,7 @@ export function ToolTestDialog({
                       {result.body}
                     </pre>
                   )}
-                  <button type="button" onClick={() => setShowFull((s) => !s)} aria-expanded={showFull} className="flex items-center gap-1 text-primary hover:underline" style={XS}>
+                  <button type="button" onClick={() => setShowFull((s) => !s)} aria-expanded={showFull} className="flex items-center gap-1 text-primary hover:underline text-xs">
                     <ChevronRight className={cn('size-3.5 transition-transform', showFull && 'rotate-90')} /> Full response from Meta
                   </button>
                   {showFull && (
@@ -163,12 +163,12 @@ function Banner({ ok, title, detail, action }: { ok: boolean; title: string; det
       <div className="min-w-0 space-y-0.5">
         <p style={{ ...SM, fontWeight: 'var(--font-weight-semi-bold)' }}>{title}</p>
         {detail && (
-          <p className="break-words text-muted-foreground" style={XS}>
+          <p className="break-words text-muted-foreground text-xs">
             {detail}
           </p>
         )}
         {action && (
-          <button type="button" onClick={action.onClick} className="text-primary hover:underline" style={XS}>
+          <button type="button" onClick={action.onClick} className="text-primary hover:underline text-xs">
             {action.label}
           </button>
         )}

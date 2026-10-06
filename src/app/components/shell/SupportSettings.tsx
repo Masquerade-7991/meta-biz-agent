@@ -13,7 +13,6 @@ import { FormError } from '@/app/auth/AuthLayout'
 import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
 import { getSupportSettings, PRIORITIES, PRIORITY_LABEL, saveSupportSettings, type Day, type SupportSettings } from '@/app/api/tickets'
-import { TEXT_SM_OPEN, TEXT_XS } from '@/app/lib/text'
 import { useMembers } from '@/app/auth/useMembers'
 import { SettingsSection } from './SettingsSection'
 import { can } from '@/app/lib/permissions'
@@ -47,7 +46,7 @@ export function SupportSettingsTab() {
     return error ? (
       <FormError>{error}</FormError>
     ) : (
-      <p className="flex items-center gap-2 py-6 text-muted-foreground" style={TEXT_SM_OPEN}>
+      <p className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
         <Loader2 className="size-4 animate-spin" /> Loading&hellip;
       </p>
     )
@@ -74,7 +73,7 @@ export function SupportSettingsTab() {
   return (
     <fieldset disabled={!canEdit} className="min-w-0">
       {!canEdit && (
-        <p className="mb-2 rounded-md bg-muted px-3 py-2 text-muted-foreground" style={TEXT_SM_OPEN}>
+        <p className="mb-2 rounded-md bg-muted px-3 py-2 text-muted-foreground text-sm">
           Only owners and admins can change these settings.
         </p>
       )}
@@ -100,17 +99,17 @@ export function SupportSettingsTab() {
             return (
               <li key={id} className="flex flex-wrap items-center gap-3 px-3 py-2">
                 <Switch checked={!!w} onCheckedChange={(on) => setDay(id, on ? { open: '09:30', close: '18:30' } : null)} aria-label={`Open on ${label}`} />
-                <span className="w-24" style={TEXT_SM_OPEN}>
+                <span className="w-24 text-sm">
                   {label}
                 </span>
                 {w ? (
-                  <span className="flex items-center gap-2" style={TEXT_SM_OPEN}>
+                  <span className="flex items-center gap-2 text-sm">
                     <Input type="time" className="h-8 w-34" value={w.open} onChange={(e) => setDay(id, { ...w, open: e.target.value })} aria-label={`${label} opens`} />
                     to
                     <Input type="time" className="h-8 w-34" value={w.close} onChange={(e) => setDay(id, { ...w, close: e.target.value })} aria-label={`${label} closes`} />
                   </span>
                 ) : (
-                  <span className="text-muted-foreground" style={TEXT_SM_OPEN}>
+                  <span className="text-muted-foreground text-sm">
                     Closed
                   </span>
                 )}
@@ -138,7 +137,7 @@ export function SupportSettingsTab() {
           {s.hours.holidays.length > 0 && (
             <ul className="flex flex-wrap gap-2">
               {s.hours.holidays.map((d) => (
-                <li key={d} className="flex items-center gap-1 rounded-full bg-muted py-0.5 pr-1 pl-3" style={TEXT_XS}>
+                <li key={d} className="flex items-center gap-1 rounded-full bg-muted py-0.5 pr-1 pl-3 text-xs">
                   {new Date(d + 'T00:00').toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
                   <button type="button" aria-label={`Remove ${d}`} onClick={() => set({ hours: { ...s.hours, holidays: s.hours.holidays.filter((x) => x !== d) } })} className="rounded-full p-0.5 hover:bg-background">
                     <Trash2 className="size-3" />
@@ -151,7 +150,7 @@ export function SupportSettingsTab() {
         <div className="space-y-1.5">
           <Label htmlFor="away">Away message</Label>
           <Textarea id="away" rows={3} value={s.awayMessage} onChange={(e) => set({ awayMessage: e.target.value })} placeholder="Leave empty to send nothing" />
-          <p className="text-muted-foreground" style={TEXT_XS}>
+          <p className="text-muted-foreground text-xs">
             Sent at most once every 12 hours when a customer writes to your team outside business hours. The AI agent keeps answering chats it holds.
           </p>
         </div>
@@ -159,8 +158,8 @@ export function SupportSettingsTab() {
 
       <SettingsSection wide title="Response targets" description="How quickly a ticket gets its first reply and gets resolved, in business-time minutes. Tickets show a countdown and the bell warns before they run out.">
         <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full" style={TEXT_SM_OPEN}>
-            <thead className="bg-muted/50 text-left text-muted-foreground" style={TEXT_XS}>
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-left text-muted-foreground text-xs">
               <tr>
                 <th className="px-3 py-2 font-normal">Priority</th>
                 <th className="px-3 py-2 font-normal">First reply within</th>
@@ -175,7 +174,7 @@ export function SupportSettingsTab() {
                     <td key={k} className="px-3 py-2">
                       <span className="flex items-center gap-2">
                         <Input type="number" min={1} className="h-8 w-24" value={s.sla[p][k]} onChange={(e) => setSla(p, k, Number(e.target.value))} aria-label={`${PRIORITY_LABEL[p]} ${k === 'resolve' ? 'resolve' : 'first reply'} minutes`} />
-                        <span className="text-muted-foreground" style={TEXT_XS}>
+                        <span className="text-muted-foreground text-xs">
                           min ({hours(s.sla[p][k] || 0)})
                         </span>
                       </span>
@@ -190,11 +189,11 @@ export function SupportSettingsTab() {
 
       <SettingsSection wide title="Teams and routing" description="Who gets a new ticket when the AI agent hands a chat over. Teams group people for round-robin.">
         <RadioGroup value={s.routing.mode} onValueChange={(v) => set({ routing: { ...s.routing, mode: v as SupportSettings['routing']['mode'] } })} className="space-y-2">
-          <label className="flex items-start gap-2.5" style={TEXT_SM_OPEN}>
+          <label className="flex items-start gap-2.5 text-sm">
             <RadioGroupItem value="round_robin" className="mt-0.5" />
             <span className="space-y-2">
               Take turns
-              <span className="block text-muted-foreground" style={TEXT_XS}>
+              <span className="block text-muted-foreground text-xs">
                 New tickets go to each person in turn.
               </span>
               {s.routing.mode === 'round_robin' && (
@@ -214,7 +213,7 @@ export function SupportSettingsTab() {
               )}
             </span>
           </label>
-          <label className="flex items-start gap-2.5" style={TEXT_SM_OPEN}>
+          <label className="flex items-start gap-2.5 text-sm">
             <RadioGroupItem value="fixed" className="mt-0.5" />
             <span className="space-y-2">
               Always the same person
@@ -234,11 +233,11 @@ export function SupportSettingsTab() {
               )}
             </span>
           </label>
-          <label className="flex items-start gap-2.5" style={TEXT_SM_OPEN}>
+          <label className="flex items-start gap-2.5 text-sm">
             <RadioGroupItem value="unassigned" className="mt-0.5" />
             <span>
               Leave unassigned
-              <span className="block text-muted-foreground" style={TEXT_XS}>
+              <span className="block text-muted-foreground text-xs">
                 Anyone can pick them up from Tickets.
               </span>
             </span>
@@ -255,7 +254,7 @@ export function SupportSettingsTab() {
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-2">
                 {members.map((m) => (
-                  <label key={m.userId} className="flex items-center gap-2" style={TEXT_SM_OPEN}>
+                  <label key={m.userId} className="flex items-center gap-2 text-sm">
                     <Checkbox
                       checked={t.memberIds.includes(m.userId)}
                       onCheckedChange={(on) => setTeam(i, { memberIds: on ? [...t.memberIds, m.userId] : t.memberIds.filter((id) => id !== m.userId) })}
@@ -274,24 +273,24 @@ export function SupportSettingsTab() {
       </SettingsSection>
 
       <SettingsSection wide title="Customer feedback" description="After a ticket is resolved, ask the customer how it went with three WhatsApp buttons. Answers show on the ticket.">
-        <label className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5" style={TEXT_SM_OPEN}>
+        <label className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5 text-sm">
           Ask for feedback when resolving
           <Switch checked={s.csat.enabled} onCheckedChange={(v) => set({ csat: { ...s.csat, enabled: v } })} />
         </label>
         <div className="space-y-1.5">
           <Label htmlFor="csatq">Question</Label>
           <Input id="csatq" value={s.csat.question} onChange={(e) => set({ csat: { ...s.csat, question: e.target.value } })} maxLength={200} />
-          <p className="text-muted-foreground" style={TEXT_XS}>
+          <p className="text-muted-foreground text-xs">
             Buttons: Good · Okay · Bad
           </p>
         </div>
       </SettingsSection>
 
       <SettingsSection wide title="Who sees which chats" description="Supervisors, admins and owners always see every chat. Agents see everything too, unless you limit them here.">
-        <label className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5" style={TEXT_SM_OPEN}>
+        <label className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5 text-sm">
           <span>
             Agents see only chats and tickets assigned to them, plus unassigned ones
-            <span className="block text-muted-foreground" style={TEXT_XS}>
+            <span className="block text-muted-foreground text-xs">
               Useful when agents shouldn&rsquo;t read each other&rsquo;s customers. They can still pick up unassigned work.
             </span>
           </span>

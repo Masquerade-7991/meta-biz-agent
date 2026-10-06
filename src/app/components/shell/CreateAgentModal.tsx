@@ -90,7 +90,7 @@ function TwoLineOption({ primary, secondary }: { primary: string; secondary: str
   return (
     <span className="flex flex-col items-start">
       <span className="text-foreground">{primary}</span>
-      <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+      <span className="text-muted-foreground text-xs">
         {secondary}
       </span>
     </span>
@@ -130,9 +130,7 @@ function mockEligibilityCheck(outcome: ForcedOutcome): Promise<MockApiResult> {
   })
 }
 
-function openHelpPlaceholder() {
-  toast('This would open a support ticket in the real product.')
-}
+const HELP_URL = 'https://helo.ai/contact-us'
 
 export function CreateAgentModal({
   open,
@@ -157,15 +155,14 @@ export function CreateAgentModal({
     'create-agent-modal',
     open ? (
       <DemoControlsGroup label="Create agent">
-        <label htmlFor="demo-force-result" className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        <label htmlFor="demo-force-result" className="text-muted-foreground text-xs">
           Demo: force result
         </label>
         <select
           id="demo-force-result"
           value={forcedOutcome}
           onChange={(e) => setForcedOutcome(e.target.value as ForcedOutcome)}
-          className="rounded border border-border bg-background"
-          style={{ fontSize: 'var(--text-xs)' }}
+          className="rounded border border-border bg-background text-xs"
         >
           <option value="ready">Ready</option>
           <option value="not_available">Not available</option>
@@ -405,7 +402,7 @@ export function CreateAgentModal({
               placeholder="Support agent"
             />
             {nameError && (
-              <p className="text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+              <p className="text-destructive text-xs">
                 {nameError}
               </p>
             )}
@@ -414,16 +411,16 @@ export function CreateAgentModal({
           <div className="space-y-1.5">
             <Label>WhatsApp Business Account</Label>
             {!wabas ? (
-              <div className="flex items-center gap-2 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
                 <Loader2 className="size-4 animate-spin" />
                 Loading your accounts&hellip;
               </div>
             ) : wabas.length === 0 ? (
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              <p className="text-muted-foreground text-sm">
                 No WhatsApp Business Account is connected to this workspace. An owner can connect one from Home or Settings → WhatsApp.
               </p>
             ) : wabas.length === 1 ? (
-              <div className="rounded-md border border-border px-3 py-2" style={{ fontSize: 'var(--text-sm)' }}>
+              <div className="rounded-md border border-border px-3 py-2 text-sm">
                 <TwoLineOption primary={wabas[0].name} secondary={wabas[0].id} />
               </div>
             ) : (
@@ -441,7 +438,7 @@ export function CreateAgentModal({
               </Select>
             )}
             {source === 'env' && (
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              <p className="text-muted-foreground text-xs">
                 Couldn&rsquo;t load your accounts from Meta; showing the number from settings.
               </p>
             )}
@@ -477,7 +474,7 @@ export function CreateAgentModal({
             </Select>
             {numbersFailed && (
               <div className="flex items-center gap-2">
-                <p className="text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+                <p className="text-destructive text-xs">
                   Couldn&rsquo;t load this account&rsquo;s numbers from Meta.
                 </p>
                 <Button variant="ghost" size="sm" onClick={() => setNumbersAttempt((n) => n + 1)}>
@@ -495,14 +492,14 @@ export function CreateAgentModal({
               {checkStatus === 'checking' && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
-                  <span style={{ fontSize: 'var(--text-sm)' }}>Checking with Meta&hellip;</span>
+                  <span className="text-sm">Checking with Meta&hellip;</span>
                 </div>
               )}
 
               {checkStatus === 'ready' && (
                 <div className="flex items-center gap-2 rounded-md bg-success/10 p-2 text-success">
                   <CheckCircle2 className="size-4 shrink-0" />
-                  <span style={{ fontSize: 'var(--text-sm)' }}>Number is eligible.</span>
+                  <span className="text-sm">Number is eligible.</span>
                 </div>
               )}
 
@@ -510,7 +507,7 @@ export function CreateAgentModal({
                 <div className="space-y-2">
                   <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-2 text-destructive">
                     <XCircle className="mt-0.5 size-4 shrink-0" />
-                    <span style={{ fontSize: 'var(--text-sm)' }}>
+                    <span className="text-sm">
                       Number not eligible, please try another number or WABA profile.
                     </span>
                   </div>
@@ -543,7 +540,7 @@ export function CreateAgentModal({
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
                     <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <span style={{ fontSize: 'var(--text-sm)' }}>
+                    <span className="text-sm">
                       Something went wrong on our end. Please try again.
                     </span>
                   </div>
@@ -551,8 +548,10 @@ export function CreateAgentModal({
                     <Button variant="outline" size="sm" onClick={runCheck}>
                       Try again
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={openHelpPlaceholder}>
-                      Get help
+                    <Button variant="ghost" size="sm" asChild>
+                      <a href={HELP_URL} target="_blank" rel="noopener noreferrer">
+                        Contact Helo.ai support
+                      </a>
                     </Button>
                   </div>
                 </div>
@@ -562,7 +561,7 @@ export function CreateAgentModal({
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
                     <Clock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <span style={{ fontSize: 'var(--text-sm)' }}>
+                    <span className="text-sm">
                       Meta isn&rsquo;t responding right now. Try again shortly.
                     </span>
                   </div>
@@ -574,7 +573,7 @@ export function CreateAgentModal({
             </div>
           )}
 
-          <div className="rounded-md bg-muted p-3" style={{ fontSize: 'var(--text-sm)' }}>
+          <div className="rounded-md bg-muted p-3 text-sm">
             Once you switch this agent on, it becomes the main responder on this number. Meta
             charges for each message the AI sends. Nothing is charged until you switch it on.
           </div>

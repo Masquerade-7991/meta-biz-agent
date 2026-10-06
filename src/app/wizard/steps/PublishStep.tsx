@@ -151,7 +151,7 @@ export function PublishStep() {
                   placeholder="+15551234567"
                 />
                 {numberError && (
-                  <p className="mt-1 text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+                  <p className="mt-1 text-destructive text-xs">
                     {numberError}
                   </p>
                 )}
@@ -162,7 +162,7 @@ export function PublishStep() {
               </Button>
             </div>
             {publish.allowlistNumbers.length >= MAX_ALLOWLIST && (
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              <p className="text-muted-foreground text-xs">
                 You've reached the limit of 20 numbers. Remove one to add another.
               </p>
             )}
@@ -180,7 +180,7 @@ export function PublishStep() {
             )}
           </div>
         ) : (
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="text-muted-foreground text-sm">
             Any customer who messages this number will reach your agent immediately once you
             activate.
           </p>
@@ -193,7 +193,7 @@ export function PublishStep() {
           <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/10 p-4">
             <span className="flex items-center gap-3">
               <Square className="size-5 text-destructive" />
-              <p style={{ fontWeight: 'var(--font-weight-medium)' }}>This agent is stopped.</p>
+              <p className="font-medium">This agent is stopped.</p>
             </span>
             <Button size="sm" onClick={resumeAgent}>
               <Play className="size-3.5" />
@@ -204,7 +204,7 @@ export function PublishStep() {
           <div className="flex items-center justify-between rounded-lg border border-success bg-success/10 p-4">
             <span className="flex items-center gap-3">
               <CheckCircle2 className="size-5 text-success" />
-              <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Your agent is live.</p>
+              <p className="font-medium">Your agent is live.</p>
             </span>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => setStopConfirmOpen(true)}>
@@ -220,9 +220,9 @@ export function PublishStep() {
           <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
             <span className="flex items-center gap-2">
               <AlertTriangle className="size-4 text-destructive" />
-              <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>Couldn&rsquo;t activate</p>
+              <p className="font-semibold">Couldn&rsquo;t activate</p>
             </span>
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            <p className="text-muted-foreground text-sm">
               Something went wrong switching this agent on. Nothing has changed.
             </p>
             <Button size="sm" onClick={confirmActivate}>

@@ -312,7 +312,7 @@ export function FaqTab({
             {faqs.length} {faqs.length === 1 ? 'ENTRY' : 'ENTRIES'}
           </span>
           {isOverThreshold && (
-            <p className="mt-1 max-w-md text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            <p className="mt-1 max-w-md text-warning-foreground text-xs">
               You have a lot of entries. Past a few hundred, the agent gets worse at finding the right answer.
               Keep only the questions customers actually ask.
             </p>
@@ -332,8 +332,8 @@ export function FaqTab({
 
       {lastImport && (
         <div className="flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2">
-          <span style={{ fontSize: 'var(--text-sm)' }}>{lastImport.count} entries imported.</span>
-          <button type="button" onClick={() => setPendingUndoImport(true)} className="text-primary" style={{ fontSize: 'var(--text-sm)' }}>
+          <span className="text-sm">{lastImport.count} entries imported.</span>
+          <button type="button" onClick={() => setPendingUndoImport(true)} className="text-primary text-sm">
             Undo this import
           </button>
         </div>
@@ -351,7 +351,7 @@ export function FaqTab({
       {showEmptyState ? (
         <div className="space-y-3 rounded-lg border border-border bg-accent p-4">
           <span className="flex items-center gap-1.5">
-            <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Start with the questions customers ask most</p>
+            <p className="font-medium">Start with the questions customers ask most</p>
             <InfoTooltip text="Tip: if you filled in Business details on the first tab, you do not need to repeat them here." />
           </span>
           <div className="flex flex-wrap gap-2">
@@ -464,7 +464,7 @@ export function FaqTab({
                         <TableCell colSpan={3} className="border-t-0 bg-warning/10 py-2">
                           <div className="space-y-1">
                             {warnings.map((w, i) => (
-                              <p key={i} className="flex items-center gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                              <p key={i} className="flex items-center gap-1.5 text-warning-foreground text-xs">
                                 <AlertTriangle className="size-3.5 shrink-0" />
                                 {w.text}
                                 {w.viewExistingId && (
@@ -672,8 +672,7 @@ function FaqImportPanel({
                     '"Do you deliver to my area?","We deliver across India, 2 to 7 days depending on location."',
                   ])
                 }
-                className="text-primary"
-                style={{ fontSize: 'var(--text-sm)' }}
+                className="text-primary text-sm"
               >
                 Download the template
               </button>
@@ -741,18 +740,18 @@ function FaqImportPanel({
 
         {stage === 'review' && review && (
           <div className="space-y-3">
-            <p style={{ fontSize: 'var(--text-sm)' }}>{dataRows.length} rows found</p>
-            <p style={{ fontSize: 'var(--text-sm)' }}>{review.toImport.length} will be imported</p>
+            <p className="text-sm">{dataRows.length} rows found</p>
+            <p className="text-sm">{review.toImport.length} will be imported</p>
             {review.skipped.length > 0 && (
               <div>
-                <p className="flex items-center gap-2 text-warning-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                <p className="flex items-center gap-2 text-warning-foreground text-sm">
                   {review.skipped.length} have problems and will be skipped
                   <button type="button" onClick={() => setProblemsOpen((v) => !v)} className="text-primary underline">
                     View problems
                   </button>
                 </p>
                 {problemsOpen && (
-                  <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-muted p-3" style={{ fontSize: 'var(--text-xs)' }}>
+                  <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-muted p-3 text-xs">
                     {review.skipped.map((s) => (
                       <li key={s.rowNumber}>
                         Row {s.rowNumber}: {s.reason}
@@ -776,13 +775,13 @@ function FaqImportPanel({
         {stage === 'saving' && (
           <div className="flex items-center gap-2 py-4 text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            <span style={{ fontSize: 'var(--text-sm)' }}>Importing&hellip;</span>
+            <span className="text-sm">Importing&hellip;</span>
           </div>
         )}
 
         {stage === 'done' && saveResult && saveResult.failed.length > 0 && (
           <div className="space-y-3">
-            <p style={{ fontSize: 'var(--text-sm)' }}>
+            <p className="text-sm">
               {saveResult.imported} imported, {saveResult.failed.length} could not be saved.{' '}
               <button type="button" onClick={retryFailed} className="text-primary underline">
                 Retry failed rows
@@ -952,8 +951,8 @@ export function DocumentsTab({
         )}
       >
         <Upload className="size-6 text-muted-foreground" />
-        <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Drop files here, or click to browse</p>
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        <p className="font-medium">Drop files here, or click to browse</p>
+        <p className="text-muted-foreground text-xs">
           .pdf, .doc, .docx, .png, .jpg, .jpeg, .csv, .xlsx &middot; up to 100 MB per file
         </p>
         <input ref={docInputRef} type="file" multiple className="hidden" onChange={(e) => processFiles(e.target.files)} />
@@ -977,7 +976,7 @@ export function DocumentsTab({
       {showEmptyState ? (
         <div className="rounded-lg bg-accent p-4">
           <span className="flex items-center gap-1.5">
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            <p className="text-muted-foreground text-sm">
               No documents yet.
             </p>
             <InfoTooltip text="Good things to upload: your product catalogue, a price list, or your terms and conditions." />
@@ -989,7 +988,7 @@ export function DocumentsTab({
             <div key={u.id} className="space-y-1.5 rounded-lg border border-border px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <FileIcon className="size-4 shrink-0 text-muted-foreground" />
-                <span className="truncate" style={{ fontSize: 'var(--text-sm)' }}>
+                <span className="truncate text-sm">
                   {u.fileName}
                 </span>
               </div>
@@ -1008,10 +1007,10 @@ export function DocumentsTab({
               <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
                 <div className="flex min-w-0 items-center gap-2">
                   <FileIcon className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate" style={{ fontSize: 'var(--text-sm)' }}>
+                  <span className="truncate text-sm">
                     {doc.fileName}
                   </span>
-                  <span className="shrink-0 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  <span className="shrink-0 text-muted-foreground text-xs">
                     Uploaded {formatRelativeDate(doc.uploadedAt)}
                   </span>
                 </div>
@@ -1032,7 +1031,7 @@ export function DocumentsTab({
                 </div>
               </div>
               {justSettledIds[doc.id] && (
-                <p className="px-1 text-muted-foreground transition-opacity" style={{ fontSize: 'var(--text-xs)' }}>
+                <p className="px-1 text-muted-foreground transition-opacity text-xs">
                   Uploaded. The document is being prepared in the background, which can take a little while.
                 </p>
               )}
@@ -1242,15 +1241,15 @@ export function WebsiteTab({
           </Button>
         </div>
         {inputError ? (
-          <p className="flex items-center gap-1.5 text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+          <p className="flex items-center gap-1.5 text-destructive text-xs">
             <AlertTriangle className="size-3.5 shrink-0" /> {inputError}
           </p>
         ) : inputCovered ? (
-          <p className="flex items-center gap-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+          <p className="flex items-center gap-1.5 text-warning-foreground text-xs">
             <Info className="size-3.5 shrink-0" /> Already covered by {inputCovered.url}: Meta reads the whole site from there. Add it only to make sure this page is read.
           </p>
         ) : (
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+          <p className="text-muted-foreground text-xs">
             Meta reads the whole site from the address you add, re-reads it now and then, and your agent answers from it.
           </p>
         )}
@@ -1259,16 +1258,16 @@ export function WebsiteTab({
       {websites.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border px-6 py-10 text-center">
           <Globe className="mx-auto size-6 text-muted-foreground" />
-          <p className="mt-2" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-medium)' }}>
+          <p className="mt-2 text-sm font-medium">
             No websites yet
           </p>
-          <p className="mx-auto mt-1 max-w-sm text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="mx-auto mt-1 max-w-sm text-muted-foreground text-sm">
             Your main website or help centre is usually the fastest way to give your agent real knowledge.
           </p>
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="text-muted-foreground text-sm">
             {websites.length} website{websites.length === 1 ? '' : 's'} · {ready} ready{working ? ` · ${working} in progress` : ''}
           </p>
           <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
@@ -1278,7 +1277,7 @@ export function WebsiteTab({
                 view.tone === 'success'
                   ? 'bg-success/10 text-success'
                   : view.tone === 'info'
-                    ? 'bg-primary/10 text-primary'
+                    ? 'bg-accent text-accent-foreground'
                     : view.tone === 'warning'
                       ? 'bg-warning/15 text-warning-foreground'
                       : view.tone === 'danger'
@@ -1289,11 +1288,11 @@ export function WebsiteTab({
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2">
                       <Globe className="size-4 shrink-0 text-muted-foreground" />
-                      <a href={site.url} target="_blank" rel="noreferrer" title={site.url} className="truncate hover:underline" style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-weight-medium)' }}>
+                      <a href={site.url} target="_blank" rel="noreferrer" title={site.url} className="truncate hover:underline text-sm font-medium">
                         {site.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
                       </a>
                     </div>
-                    <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5', tone)} style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-weight-medium)' }}>
+                    <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium', tone)}>
                       <Icon className={cn('size-3.5', view.stage === 'reading' && 'animate-spin')} />
                       {view.label}
                     </span>
@@ -1302,7 +1301,7 @@ export function WebsiteTab({
                   {view.step !== null && (
                     <ol className="flex items-center gap-2" aria-label="Progress">
                       {['Queued', 'Reading', 'Ready'].map((label, i) => (
-                        <li key={label} className="flex items-center gap-2" style={{ fontSize: 'var(--text-xs)' }}>
+                        <li key={label} className="flex items-center gap-2 text-xs">
                           <span className={cn('size-2 rounded-full', i < view.step! ? 'bg-success' : i === view.step ? 'bg-primary ring-4 ring-primary/15' : 'bg-border')} />
                           <span className={i === view.step ? 'text-foreground' : 'text-muted-foreground'} aria-current={i === view.step ? 'step' : undefined}>
                             {label}
@@ -1313,12 +1312,12 @@ export function WebsiteTab({
                     </ol>
                   )}
 
-                  <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                  <p className="text-muted-foreground text-xs">
                     {view.line}
                     {view.stage === 'ready' && site.lastCrawledAt ? ` Last read ${formatRelativeDate(site.lastCrawledAt)}.` : ''}
                   </p>
                   {covered && (
-                    <p className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                    <p className="flex items-center gap-1.5 text-muted-foreground text-xs">
                       <Info className="size-3.5 shrink-0" /> Also covered by {covered.url.replace(/^https?:\/\//, '')}, which Meta reads as a whole site.
                     </p>
                   )}
@@ -1338,18 +1337,18 @@ export function WebsiteTab({
                   {site.status === 'done' && site.subpages.length > 0 && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button type="button" className="flex items-center gap-1 text-primary" style={{ fontSize: 'var(--text-xs)' }}>
+                        <button type="button" className="flex items-center gap-1 text-primary text-xs">
                           <ChevronDown className="size-3.5" />
                           View pages ({site.subpages.length})
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="max-h-80 w-96 overflow-y-auto">
-                        <DropdownMenuLabel className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                        <DropdownMenuLabel className="text-muted-foreground text-xs">
                           Sub-pages found under this site
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         {site.subpages.map((path) => (
-                          <div key={path} className="truncate px-2 py-1 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                          <div key={path} className="truncate px-2 py-1 text-muted-foreground text-xs">
                             {path}
                           </div>
                         ))}
@@ -1362,15 +1361,14 @@ export function WebsiteTab({
                       <button
                         type="button"
                         onClick={() => setWhyOpen((prev) => ({ ...prev, [site.id]: !prev[site.id] }))}
-                        className="flex items-center gap-1 text-primary"
-                        style={{ fontSize: 'var(--text-xs)' }}
+                        className="flex items-center gap-1 text-primary text-xs"
                         aria-expanded={!!whyOpen[site.id]}
                       >
                         <ChevronDown className={cn('size-3.5 transition-transform', whyOpen[site.id] && 'rotate-180')} />
                         Why might this happen?
                       </button>
                       {whyOpen[site.id] && (
-                        <div className="mt-2 space-y-2 rounded-lg bg-muted p-3 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                        <div className="mt-2 space-y-2 rounded-lg bg-muted p-3 text-muted-foreground text-xs">
                           <p>The most common causes:</p>
                           <ul className="list-disc space-y-1 pl-4">
                             <li>The site blocks automatic readers</li>
@@ -1385,9 +1383,9 @@ export function WebsiteTab({
 
                   {rowErrors[site.id] && <InlineError message={rowErrors[site.id]} onRetry={() => setRowErrors((prev) => ({ ...prev, [site.id]: '' }))} />}
 
-                  <div className="flex items-center gap-4" style={{ fontSize: 'var(--text-xs)' }}>
+                  <div className="flex items-center gap-4 text-xs">
                     {(isCrawlDone(site.status) || site.stalled) && (
-                      <button type="button" onClick={() => void recrawl(site)} disabled={busy.has(site.id)} className="flex items-center gap-1 text-primary hover:underline disabled:opacity-50" style={{ fontSize: 'var(--text-xs)' }}>
+                      <button type="button" onClick={() => void recrawl(site)} disabled={busy.has(site.id)} className="flex items-center gap-1 text-primary hover:underline disabled:opacity-50 text-xs">
                         <RefreshCw className="size-3.5" /> Read again
                       </button>
                     )}
@@ -1397,12 +1395,11 @@ export function WebsiteTab({
                         setEditingId(site.id)
                         setEditUrl(site.url)
                       }}
-                      className="text-muted-foreground hover:text-foreground"
-                      style={{ fontSize: 'var(--text-xs)' }}
+                      className="text-muted-foreground hover:text-foreground text-xs"
                     >
                       Edit address
                     </button>
-                    <button type="button" onClick={() => setPendingRemoveId(site.id)} className="text-muted-foreground hover:text-destructive" style={{ fontSize: 'var(--text-xs)' }}>
+                    <button type="button" onClick={() => setPendingRemoveId(site.id)} className="text-muted-foreground hover:text-destructive text-xs">
                       Remove
                     </button>
                   </div>
@@ -1548,17 +1545,17 @@ function WebsiteBulkImportDialog({
           </div>
         ) : (
           <div className="space-y-3">
-            <p style={{ fontSize: 'var(--text-sm)' }}>{review.toImport.length} will be added</p>
+            <p className="text-sm">{review.toImport.length} will be added</p>
             {review.skipped.length > 0 && (
               <div>
-                <p className="flex items-center gap-2 text-warning-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                <p className="flex items-center gap-2 text-warning-foreground text-sm">
                   {review.skipped.length} have problems and will be skipped
                   <button type="button" onClick={() => setProblemsOpen((v) => !v)} className="text-primary underline">
                     View problems
                   </button>
                 </p>
                 {problemsOpen && (
-                  <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-muted p-3" style={{ fontSize: 'var(--text-xs)' }}>
+                  <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-muted p-3 text-xs">
                     {review.skipped.map((s) => (
                       <li key={s.lineNumber}>
                         Line {s.lineNumber}: {s.reason}

@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -40,13 +41,39 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-brand: var(--brand);
+  --color-canvas: var(--canvas);
+  --color-border-strong: var(--border-strong);
+  --color-info: var(--info);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  /* 6px controls, 10px cards and panels. */
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 2px);
 
-  --font-sans: 'Inter', sans-serif;
+  --shadow-float: var(--shadow-float);
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+}
+
+/* The type scale, as classes (text-title, text-section …). One size per role. */
+@theme {
+  --text-display: 2rem;
+  --text-display--line-height: 2.5rem;
+  --text-display--letter-spacing: -0.02em;
+  --text-title: 1.5rem;
+  --text-title--line-height: 2rem;
+  --text-title--letter-spacing: -0.015em;
+  --text-section: 1rem;
+  --text-section--line-height: 1.5rem;
+  --text-ui: 0.875rem;
+  --text-ui--line-height: 1.25rem;
+  --text-dense: 0.8125rem;
+  --text-dense--line-height: 1.25rem;
+  --text-meta: 0.75rem;
+  --text-meta--line-height: 1rem;
 }
 
 @layer base {
@@ -57,69 +84,88 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-normal);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    font-weight: 400;
+    font-feature-settings: 'cv11', 'ss01';
   }
 
+  /* Page title */
   h1 {
-    font-size: var(--text-2xl);
-    font-weight: var(--font-weight-bold);
-    line-height: 1.15;
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 2rem;
+    letter-spacing: -0.015em;
   }
 
+  /* Studio section title and large card titles */
   h2 {
-    font-size: var(--text-xl);
-    font-weight: var(--font-weight-bold);
-    line-height: 1.2;
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.75rem;
+    letter-spacing: -0.01em;
   }
 
-  /* Section headings (h3) sit a clear step down from the page heading (h2): smaller AND lighter,
-     not just smaller — h2 and h3 read too close in weight when both are bold. */
+  /* Section heading inside a page */
   h3 {
-    font-size: var(--text-h4);
-    font-weight: var(--font-weight-semi-bold);
-    line-height: 1.25;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.5rem;
   }
 
   h4 {
-    font-size: 1.5rem;
-    font-weight: var(--font-weight-semi-bold);
-    line-height: 1.3;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
   }
 
   p {
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-normal);
+    font-size: 0.875rem;
     line-height: 1.5;
   }
 
   label {
-    font-size: var(--text-sm);
-    font-weight: var(--font-weight-semi-bold);
+    font-size: 0.875rem;
+    font-weight: 500;
   }
 
   button {
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-medium);
+    font-size: 0.875rem;
+    font-weight: 500;
   }
 
   input,
   textarea,
   select {
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-normal);
+    font-size: 0.875rem;
+    font-weight: 400;
+  }
+
+  /* Figures line up in tables, metrics and timers. */
+  table,
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 
   .caption {
-    font-size: var(--text-caption);
-    font-weight: var(--font-weight-normal);
+    font-size: 0.75rem;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
 
   .badge {
-    font-size: var(--text-badge);
-    font-weight: var(--font-weight-semi-bold);
+    font-size: 0.75rem;
+    font-weight: 500;
   }
 }
 

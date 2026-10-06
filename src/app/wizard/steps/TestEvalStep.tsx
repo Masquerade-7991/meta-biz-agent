@@ -372,7 +372,7 @@ export function TestEvalStep() {
         <TabsTrigger value="chat">Chat</TabsTrigger>
         <TabsTrigger value="checks">
           Standard checks
-          {checksDone.length > 0 && toReview > 0 && <span className="rounded-full bg-warning/20 px-1.5 text-warning-foreground" style={{ fontSize: 'var(--text-xs)' }}>{toReview}</span>}
+          {checksDone.length > 0 && toReview > 0 && <span className="rounded-full bg-warning/20 px-1.5 text-warning-foreground text-xs">{toReview}</span>}
         </TabsTrigger>
         <TabsTrigger value="eval">Evaluation</TabsTrigger>
       </TabsList>
@@ -385,7 +385,7 @@ export function TestEvalStep() {
           <InlineError message={limitMessage} onRetry={() => setLimitMessage(null)} />
         ) : (
           !hasAnyConfig && (
-            <p className="flex items-center gap-2 rounded-lg bg-warning/10 px-3 py-2 text-warning-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            <p className="flex items-center gap-2 rounded-lg bg-warning/10 px-3 py-2 text-warning-foreground text-sm">
               <AlertTriangle className="size-4 shrink-0" />
               Your agent has nothing to go on yet. Add knowledge or a skill first, then test it here.
             </p>
@@ -393,7 +393,7 @@ export function TestEvalStep() {
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="text-muted-foreground text-sm">
             Chat with your agent as a customer would. Free, up to 500 messages an hour.
           </p>
           <div className="flex items-center gap-2">
@@ -404,10 +404,10 @@ export function TestEvalStep() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="max-h-80 w-80 overflow-y-auto">
-                <DropdownMenuLabel style={{ fontSize: 'var(--text-xs)' }}>Past test conversations</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-xs">Past test conversations</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {history.length === 0 ? (
-                  <p className="px-2 py-3 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                  <p className="px-2 py-3 text-muted-foreground text-sm">
                     None yet.
                   </p>
                 ) : (
@@ -417,10 +417,10 @@ export function TestEvalStep() {
                       onClick={() => showConversation(h)}
                       className="flex flex-col items-start gap-0.5"
                     >
-                      <span className="line-clamp-1" style={{ fontSize: 'var(--text-sm)' }}>
+                      <span className="line-clamp-1 text-sm">
                         {h.messages[0]?.text ?? '(empty)'}
                       </span>
-                      <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                      <span className="text-muted-foreground text-xs">
                         {new Date(h.startedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · {h.messages.length} messages
                       </span>
                     </DropdownMenuItem>
@@ -435,7 +435,7 @@ export function TestEvalStep() {
         </div>
 
         {viewing && (
-          <div className="flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2" style={{ fontSize: 'var(--text-sm)' }}>
+          <div className="flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-sm">
             <span className="text-muted-foreground">Viewing a past test from {new Date(viewing.startedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
             <button type="button" className="text-primary hover:underline" onClick={() => showConversation(null)}>
               Back to testing
@@ -457,7 +457,7 @@ export function TestEvalStep() {
             />
             {!viewing && !sending && !blocked && (
               <div className="space-y-1.5">
-                <p className="flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                <p className="flex items-center gap-1.5 text-muted-foreground text-xs">
                   <Sparkles className="size-3.5" /> Try asking
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -466,8 +466,7 @@ export function TestEvalStep() {
                       key={q}
                       type="button"
                       onClick={() => void sendQuickTest(q)}
-                      className="rounded-full border border-border bg-card px-3 py-1 text-left hover:border-primary hover:text-primary"
-                      style={{ fontSize: 'var(--text-xs)' }}
+                      className="rounded-full border border-border bg-card px-3 py-1 text-left hover:border-primary hover:text-primary text-xs"
                     >
                       {q}
                     </button>
@@ -485,14 +484,14 @@ export function TestEvalStep() {
       <TabsContent value="checks" className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
           <div className="space-y-0.5">
-            <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>
+            <p className="font-semibold">
               {!checkRows
                 ? 'Common situations, checked for you'
                 : checksDone.length < checkRows.length
                   ? `Checking ${checksDone.length + 1} of ${checkRows.length}…`
                   : `${checkRows.length} situations · ${checkRows.length - toReview} replied normally${toReview ? ` · ${toReview} to check` : ''}`}
             </p>
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+            <p className="text-muted-foreground text-sm">
               Each one is sent to your real agent as a new conversation, so you don&rsquo;t have to think of them.
             </p>
           </div>
@@ -523,21 +522,21 @@ export function TestEvalStep() {
                       ) : (
                         <AlertTriangle className="size-4 shrink-0 text-warning" />
                       )}
-                      <span className="truncate" style={{ fontSize: 'var(--text-sm)' }}>
+                      <span className="truncate text-sm">
                         {row.situation}
                       </span>
                     </span>
-                    <span className="flex shrink-0 items-center gap-2 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                    <span className="flex shrink-0 items-center gap-2 text-muted-foreground text-sm">
                       {row.status === 'pending' ? 'Checking…' : row.status === 'normal' ? 'Replied normally' : 'Check this'}
                       {row.status !== 'pending' && <ChevronDown className={cn('size-4 transition-transform', expanded && 'rotate-180')} />}
                     </span>
                   </button>
                   {expanded && row.status !== 'pending' && (
                     <div className="space-y-2 bg-muted/30 px-4 py-3">
-                      <p className="ml-auto w-fit max-w-[80%] rounded-lg rounded-br-sm bg-primary px-3 py-1.5 text-primary-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                      <p className="ml-auto w-fit max-w-[80%] rounded-lg rounded-br-sm bg-primary px-3 py-1.5 text-primary-foreground text-sm">
                         {row.sent}
                       </p>
-                      <p className="w-fit max-w-[80%] rounded-lg rounded-bl-sm border border-border bg-card px-3 py-1.5 whitespace-pre-wrap" style={{ fontSize: 'var(--text-sm)' }}>
+                      <p className="w-fit max-w-[80%] rounded-lg rounded-bl-sm border border-border bg-card px-3 py-1.5 whitespace-pre-wrap text-sm">
                         {row.reply || '(no reply)'}
                       </p>
                     </div>

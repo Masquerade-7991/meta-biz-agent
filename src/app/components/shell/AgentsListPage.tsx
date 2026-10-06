@@ -1,23 +1,10 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import {
-  Activity,
-  Archive,
-  Bot,
-  Copy,
-  FileCode2,
-  History,
-  Loader2,
-  MoreHorizontal,
-  Play,
-  PlayCircle,
-  Plus,
-  Square,
-  SquarePen,
-  Users,
-} from 'lucide-react'
+import { Bot, FlaskConical, Loader2, MoreHorizontal, Pause, Play, Plus, SquarePen, Trash2 } from 'lucide-react'
+import { PageContainer, PageHeader, EmptyState } from '@/app/components/ui/page'
+import { StatusPill } from '@/app/components/ui/status'
+import { AGENT_STATUS, type AgentStatus } from '@/app/lib/status'
 import { Button } from '@/app/components/ui/button'
-import { Badge } from '@/app/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/app/components/ui/avatar'
 import {
   Table,
@@ -48,7 +35,7 @@ import {
 import { listStoredAgents, ms, putStoredAgent, putStoredAgents } from '@/app/api/store'
 import { storageKey } from '@/app/api/dummy'
 import { useWizard } from '@/app/wizard/WizardContext'
-import type { AgentInstanceSummary, AgentRolloutStatus, BusinessState } from '@/app/wizard/types'
+import type { AgentInstanceSummary, BusinessState } from '@/app/wizard/types'
 import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
 
@@ -179,17 +166,15 @@ async function loadMetaRows(): Promise<AgentRow[]> {
 
 // Collapsed to the three states the listing surfaces: green while live, red once stopped, blue
 // for everything still being built or verified before it can go live.
-function statusBadge(status: AgentRolloutStatus) {
-  switch (status) {
-    case 'live':
-      return <Badge className="bg-success text-success-foreground">Active</Badge>
-    case 'paused':
-      return <Badge className="bg-destructive text-destructive-foreground">Stopped</Badge>
-    case 'needs_testing':
-    case 'draft':
-    default:
-      return <Badge className="bg-primary text-primary-foreground">In progress</Badge>
-  }
+/** The list's status in the console-wide words (src/app/lib/status.ts). */
+function rowStatus(agent: AgentInstanceSummary): AgentStatus {
+  if (agent.status === 'paused') return 'paused'
+  if (agent.status === 'live') return agent.audienceMode === 'Everyone' ? 'live' : 'testing'
+  return 'draft'
+}
+function statusBadge(agent: AgentInstanceSummary) {
+  const s = AGENT_STATUS[rowStatus(agent)]
+  return <StatusPill tone={s.tone}>{s.label}</StatusPill>
 }
 
 const READ_ONLY = 'Only owners and admins change AI agents. You can open them and see their activity.'
@@ -369,7 +354,7 @@ export function AgentsListPage({
       return
     }
     // Every other action works on the open agent, so a Meta row becomes it first.
-    if (action !== 'duplicate') selectAgent(agent)
+    selectAgent(agent)
     switch (action) {
       case 'activity':
         setSection('activity')
@@ -405,170 +390,131 @@ export function AgentsListPage({
       case 'archive':
         setPendingDelete(agent)
         break
-      case 'duplicate':
-        // One agent per number, and this proof of concept is connected to a single number (.env).
-        toast('Duplicating needs a second WhatsApp number. This setup is connected to one number, so there is nowhere to put the copy yet.')
-        break
-      default:
-        toast(`"${action}" isn’t wired to real state in this prototype yet.`)
     }
   }
 
   return (
     <>
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
           Loading your agents&hellip;
         </div>
-      ) : loadFailed && rows.length === 0 ? (
-        <div className="mx-auto w-full max-w-3xl px-6 py-10">
-          <h1>AI Agents</h1>
-          <p className="mt-4 text-destructive">Failed to load the list. Please try again after some time.</p>
-          {/* PRD 5.1 AC5: never a dead end — retry, or create an agent on the number from settings. */}
-          <div className="mt-4 flex gap-2">
-            <Button variant="outline" onClick={retryLoad}>
-              Try again
-            </Button>
-            <Button onClick={() => setModalOpen(true)}>
-              <Plus className="size-4" />
-              Create agent
-            </Button>
-          </div>
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 px-6 text-center">
-          <h1>Get started with AI agents</h1>
-          <Button onClick={() => setModalOpen(true)} size="lg">
-            <Plus className="size-4" />
-            Create agent
-          </Button>
-        </div>
       ) : (
-        <div className="mx-auto w-full max-w-6xl px-6 py-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1>AI Agents</h1>
-              <p className="mt-1 text-muted-foreground">
-                Every Meta Business Agent configured across your WhatsApp numbers.
-              </p>
-            </div>
-            <Button onClick={() => setModalOpen(true)} size="lg">
-              <Plus className="size-4" />
-              Create agent
-            </Button>
-          </div>
+        <PageContainer>
+          <PageHeader
+            title="AI Agents"
+            description="Each AI agent answers customers on one WhatsApp number, from your knowledge and systems."
+            actions={
+              rows.length > 0 && (
+                <Button onClick={() => setModalOpen(true)}>
+                  <Plus className="size-4" />
+                  Create agent
+                </Button>
+              )
+            }
+          />
           {loadFailed && (
-            <p className="mt-4 flex items-center gap-2 text-destructive" style={{ fontSize: 'var(--text-sm)' }}>
-              Failed to load the list. Please try again after some time.
-              <button type="button" onClick={retryLoad} className="text-primary underline underline-offset-2">
+            <p className="mb-4 flex items-center gap-2 text-destructive">
+              Couldn&rsquo;t load your agents from Meta.
+              <Button variant="link" onClick={retryLoad}>
                 Try again
-              </button>
+              </Button>
             </p>
           )}
-
-          <div className="mt-6 overflow-hidden rounded-lg border border-border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Agent name</TableHead>
-                  <TableHead>WABA ID</TableHead>
-                  <TableHead>Phone number</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last updated</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((agent) => (
-                  <TableRow key={agent.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          {agent.isCurrent && state.identity.avatarDataUrl ? (
-                            <AvatarImage src={state.identity.avatarDataUrl} alt={agent.name} />
-                          ) : null}
-                          <AvatarFallback className="bg-muted text-muted-foreground">
-                            <Bot className="size-4" />
-                          </AvatarFallback>
-                        </Avatar>
-                        <p className="truncate" style={{ fontWeight: 'var(--font-weight-medium)' }}>
-                          {agent.name}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span style={{ fontSize: 'var(--text-sm)' }}>{agent.wabaId ?? '—'}</span>
-                    </TableCell>
-                    <TableCell>
-                      <span style={{ fontSize: 'var(--text-sm)' }}>{agent.phoneNumber}</span>
-                    </TableCell>
-                    <TableCell>{statusBadge(agent.status)}</TableCell>
-                    <TableCell>
-                      <span className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
-                        {agent.updatedAt}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${agent.name}`}>
-                            <MoreHorizontal className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleAction(agent, 'open')}>
-                            <SquarePen /> Open configuration
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleAction(agent, 'activity')}>
-                            <Activity /> View activity
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleAction(agent, 'compiled')}>
-                            <FileCode2 /> View compiled configuration
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleAction(agent, 'test')}>
-                            <PlayCircle /> Run test conversations
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleAction(agent, 'history')}>
-                            <History /> View version history
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleAction(agent, 'allowlist')}>
-                            <Users /> Manage allowlist
-                          </DropdownMenuItem>
-                          {(agent.status === 'live' || agent.status === 'paused') && (
-                            <DropdownMenuItem onClick={() => handleAction(agent, agent.status === 'paused' ? 'resume' : 'stop')}>
-                              {agent.status === 'paused' ? <Play /> : <Square />}
-                              {agent.status === 'paused' ? 'Resume rollout' : 'Stop agent'}
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleAction(agent, 'duplicate')}>
-                            <Copy /> Duplicate agent
-                          </DropdownMenuItem>
-                          <DropdownMenuItem variant="destructive" onClick={() => handleAction(agent, 'archive')}>
-                            <Archive /> Delete agent
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+          {rows.length === 0 ? (
+            <EmptyState
+              icon={Bot}
+              title="Create your first AI agent"
+              description="It answers customers on WhatsApp around the clock, using your website, FAQs and documents, and hands over to your team when needed."
+              action={
+                <Button onClick={() => setModalOpen(true)}>
+                  <Plus className="size-4" />
+                  Create agent
+                </Button>
+              }
+            />
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-border bg-card">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Agent</TableHead>
+                    <TableHead>WhatsApp number</TableHead>
+                    <TableHead className="hidden lg:table-cell">Account</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="hidden md:table-cell">Answers</TableHead>
+                    <TableHead className="hidden md:table-cell">Updated</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((agent) => (
+                    <TableRow key={agent.id} onClick={() => handleAction(agent, 'open')} className="cursor-pointer">
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="size-8">
+                            {agent.isCurrent && state.identity.avatarDataUrl ? <AvatarImage src={state.identity.avatarDataUrl} alt="" /> : null}
+                            <AvatarFallback className="bg-muted text-muted-foreground">
+                              <Bot className="size-4" />
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="truncate font-medium">{agent.name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-dense">{agent.phoneNumber}</TableCell>
+                      <TableCell className="hidden text-muted-foreground lg:table-cell">{agent.companyName || '—'}</TableCell>
+                      <TableCell>{statusBadge(agent)}</TableCell>
+                      <TableCell className="hidden text-muted-foreground md:table-cell">
+                        {agent.audienceMode === 'Everyone' ? 'Everyone' : 'Test numbers only'}
+                      </TableCell>
+                      <TableCell className="hidden text-muted-foreground md:table-cell">{agent.updatedAt}</TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${agent.name}`}>
+                              <MoreHorizontal className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleAction(agent, 'open')}>
+                              <SquarePen /> Open
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleAction(agent, 'test')}>
+                              <FlaskConical /> Test
+                            </DropdownMenuItem>
+                            {(agent.status === 'live' || agent.status === 'paused') && (
+                              <DropdownMenuItem onClick={() => handleAction(agent, agent.status === 'paused' ? 'resume' : 'stop')}>
+                                {agent.status === 'paused' ? <Play /> : <Pause />}
+                                {agent.status === 'paused' ? 'Resume' : 'Pause'}
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem variant="destructive" onClick={() => handleAction(agent, 'archive')}>
+                              <Trash2 /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </PageContainer>
       )}
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Delete agent?"
+        title={`Delete ${pendingDelete?.name ?? 'this agent'}?`}
         description={
           rows.length === 1
-            ? 'This is your last agent. Deleting it disconnects your WhatsApp Business integration entirely, not just this agent. Are you sure you want to delete it?'
-            : 'Are you sure you want to delete this agent?'
+            ? 'This removes its setup on Meta: knowledge, skills, connections and settings. It is your last agent, so Meta also disconnects the AI agent from your WhatsApp account. Your number keeps working for your team.'
+            : 'This removes its setup on Meta: knowledge, skills, connections and settings. The WhatsApp number keeps working for your team.'
         }
-        confirmLabel="Proceed"
+        confirmText={pendingDelete?.name}
+        confirmLabel="Delete agent"
         onConfirm={() => void confirmDeleteAgent()}
         onCancel={() => setPendingDelete(null)}
       />

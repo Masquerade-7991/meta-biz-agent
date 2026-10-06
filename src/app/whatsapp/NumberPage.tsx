@@ -8,7 +8,6 @@ import { FormError } from '@/app/auth/AuthLayout'
 import { errorDetail } from '@/app/api/meta'
 import { getNumber, type NumberDetail } from '@/app/api/numbers'
 import { cn } from '@/app/lib/utils'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { MANAGER_URL, statusHelp } from './profileRules'
 import { ProfileTab } from './ProfileTab'
 import { AutomationTab, DisplayNameTab } from './NumberSettingsTabs'
@@ -50,7 +49,7 @@ export function NumberAvatar({ photo, name, size = 'md' }: { photo: string | nul
   return photo ? (
     <img src={photo} alt="" className={cn(px, 'shrink-0 rounded-full object-cover')} />
   ) : (
-    <span className={cn(px, 'flex shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary')} style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>
+    <span className={cn(px, 'flex shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground')} style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>
       {name.trim().slice(0, 1).toUpperCase() || '#'}
     </span>
   )
@@ -96,7 +95,7 @@ export function NumberPage({ id, showBack, onBack, backLabel = 'All numbers', in
     )
   if (!d)
     return (
-      <p className="flex items-center gap-2 text-muted-foreground" style={TEXT_SM}>
+      <p className="flex items-center gap-2 text-muted-foreground text-sm">
         <Loader2 className="size-4 animate-spin" /> Loading the number from WhatsApp&hellip;
       </p>
     )
@@ -109,7 +108,7 @@ export function NumberPage({ id, showBack, onBack, backLabel = 'All numbers', in
   return (
     <div className="space-y-6">
       {showBack && (
-        <button type="button" className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground" style={TEXT_SM} onClick={() => guard(onBack)}>
+        <button type="button" className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground text-sm" onClick={() => guard(onBack)}>
           <ArrowLeft className="size-4" /> {backLabel}
         </button>
       )}
@@ -120,10 +119,10 @@ export function NumberPage({ id, showBack, onBack, backLabel = 'All numbers', in
             {n.verifiedName || n.display}
             {d.official && <Badge className="bg-success text-success-foreground">Official business</Badge>}
           </h1>
-          <p className="text-muted-foreground" style={TEXT_SM}>
+          <p className="text-muted-foreground text-sm">
             {n.display} &middot; {n.wabaName}
           </p>
-          <p className="flex flex-wrap items-center gap-x-4 gap-y-1" style={TEXT_XS}>
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
             <span className="flex items-center gap-1.5">
               <span className={cn('size-2 rounded-full', st.tone === 'ok' ? 'bg-success' : st.tone === 'warn' ? 'bg-amber-500' : 'bg-destructive')} />
               {st.label}
@@ -143,7 +142,7 @@ export function NumberPage({ id, showBack, onBack, backLabel = 'All numbers', in
       </div>
 
       {st.tone !== 'ok' && (
-        <div className={cn('flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3', st.tone === 'bad' ? 'border-destructive/40 bg-destructive/5' : 'border-amber-500/40 bg-amber-500/5')} style={TEXT_SM}>
+        <div className={cn('flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm', st.tone === 'bad' ? 'border-destructive/40 bg-destructive/5' : 'border-amber-500/40 bg-amber-500/5')}>
           <span className="min-w-60 flex-1">
             <strong>{st.label}.</strong> {st.help}
           </span>
@@ -188,19 +187,19 @@ export function NumberPage({ id, showBack, onBack, backLabel = 'All numbers', in
         </TabsContent>
         <TabsContent value="activity">
           {d.activity.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground" style={TEXT_SM}>
+            <p className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground text-sm">
               No changes from this console yet. Changes made here, and WhatsApp&rsquo;s reviews, show up in this list.
             </p>
           ) : (
             <ul className="divide-y divide-border rounded-lg border border-border">
               {d.activity.map((a, i) => (
-                <li key={i} className="flex flex-wrap justify-between gap-2 px-4 py-2.5" style={TEXT_SM}>
+                <li key={i} className="flex flex-wrap justify-between gap-2 px-4 py-2.5 text-sm">
                   <span>
                     {ACTIVITY[a.kind] ?? a.kind}
                     {typeof a.data.name === 'string' && <span className="text-muted-foreground"> &ldquo;{a.data.name}&rdquo;</span>}
                     {typeof a.data.decision === 'string' && <span className="text-muted-foreground"> ({a.data.decision.toLowerCase()})</span>}
                   </span>
-                  <span className="text-muted-foreground" style={TEXT_XS}>
+                  <span className="text-muted-foreground text-xs">
                     {a.by} &middot; {new Date(a.at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </li>

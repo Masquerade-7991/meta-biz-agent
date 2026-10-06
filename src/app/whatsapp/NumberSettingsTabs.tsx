@@ -66,7 +66,7 @@ export function DisplayNameTab({ detail, onSaved, onDirty, onRegister }: TabProp
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="min-w-0 space-y-6">
         <div className="space-y-1">
-          <p className="text-muted-foreground" style={TEXT_XS}>
+          <p className="text-muted-foreground text-xs">
             Current name
           </p>
           <p className="flex flex-wrap items-center gap-2" style={{ fontSize: '1.125rem', fontWeight: 'var(--font-weight-semi-bold)' }}>
@@ -75,17 +75,17 @@ export function DisplayNameTab({ detail, onSaved, onDirty, onRegister }: TabProp
           </p>
         </div>
         {pending && (
-          <p className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3" style={TEXT_SM}>
+          <p className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm">
             <strong>&ldquo;{n.newName}&rdquo; is in review.</strong> Your current name stays until WhatsApp approves it. We update this page when the review finishes.
           </p>
         )}
         {n.newNameStatus === 'DECLINED' && (
-          <p className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3" style={TEXT_SM}>
+          <p className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm">
             <strong>WhatsApp declined &ldquo;{n.newName}&rdquo;.</strong> Check it against the guidelines and try a different name.
           </p>
         )}
         {approvedNotLive && (
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-success/40 bg-success/5 px-4 py-3" style={TEXT_SM}>
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-success/40 bg-success/5 px-4 py-3 text-sm">
             <span className="min-w-60 flex-1">
               <strong>&ldquo;{n.newName}&rdquo; was approved.</strong> Register the number again within 14 days so customers see it.
             </span>
@@ -105,8 +105,8 @@ export function DisplayNameTab({ detail, onSaved, onDirty, onRegister }: TabProp
             <div className="space-y-1.5">
               <Label htmlFor="dn">New display name</Label>
               <Input id="dn" value={name} onChange={(e) => setName(e.target.value)} placeholder={n.verifiedName} disabled={busy || pending} />
-              {problem && <p className="text-destructive" style={TEXT_XS}>{problem}</p>}
-              <p className="text-muted-foreground" style={TEXT_XS}>
+              {problem && <p className="text-destructive text-xs">{problem}</p>}
+              <p className="text-muted-foreground text-xs">
                 You can change it up to 10 times in 30 days.
               </p>
             </div>
@@ -117,14 +117,14 @@ export function DisplayNameTab({ detail, onSaved, onDirty, onRegister }: TabProp
             </Button>
           </form>
         ) : (
-          <p className="text-muted-foreground" style={TEXT_SM}>
+          <p className="text-muted-foreground text-sm">
             Owners and admins request name changes.
           </p>
         )}
       </div>
       <div className="space-y-2 rounded-lg border border-border p-4">
         <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>What WhatsApp approves</p>
-        <ul className="space-y-1.5" style={TEXT_XS}>
+        <ul className="space-y-1.5 text-xs">
           {GUIDELINES.map((g) => (
             <li key={g} className="flex gap-2">
               <Check className="mt-0.5 size-3.5 shrink-0 text-success" /> {g}
@@ -170,7 +170,7 @@ export function AutomationTab({ detail, onSaved, onDirty }: TabProps) {
       <fieldset disabled={!canEdit || busy} className="min-w-0 space-y-6">
         <div className="space-y-2">
           <Label>Ice breakers (up to {AUTOMATION_LIMITS.prompts})</Label>
-          <p className="text-muted-foreground" style={TEXT_XS}>
+          <p className="text-muted-foreground text-xs">
             Questions a customer can tap to start a chat. Your AI agent answers them like any message.
           </p>
           {a.prompts.map((p, i) => (
@@ -192,7 +192,7 @@ export function AutomationTab({ detail, onSaved, onDirty }: TabProps) {
         </div>
         <div className="space-y-2">
           <Label>Commands</Label>
-          <p className="text-muted-foreground" style={TEXT_XS}>
+          <p className="text-muted-foreground text-xs">
             Shortcuts a customer sees after typing / in your chat.
           </p>
           {a.commands.map((c, i) => (
@@ -229,7 +229,7 @@ export function AutomationTab({ detail, onSaved, onDirty }: TabProps) {
         )}
       </fieldset>
       <div className="space-y-2">
-        <p className="text-muted-foreground" style={TEXT_XS}>
+        <p className="text-muted-foreground text-xs">
           A new chat
         </p>
         <div className="space-y-2 rounded-2xl p-4" style={{ background: WA.wallpaper, fontFamily: WA.font, fontSize: 14 }}>

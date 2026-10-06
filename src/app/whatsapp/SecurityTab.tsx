@@ -10,7 +10,6 @@ import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
 import { changePin, deregisterNumber, registerNumber, requestCode, showPin, verifyCode } from '@/app/api/numbers'
 import { can } from '@/app/lib/permissions'
-import { SECTION_TITLE, TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { useForcedFailure } from './useForcedFailure'
 import type { TabProps } from './NumberPage'
 
@@ -18,8 +17,8 @@ function Section({ title, description, children, danger }: { title: string; desc
   return (
     <section className={danger ? 'space-y-3 rounded-lg border border-destructive/40 p-4' : 'space-y-3 border-b border-border pb-6'}>
       <div className="space-y-1">
-        <h2 style={SECTION_TITLE}>{title}</h2>
-        <p className="text-muted-foreground" style={TEXT_SM}>
+        <h2 className="text-section font-semibold">{title}</h2>
+        <p className="text-muted-foreground text-sm">
           {description}
         </p>
       </div>
@@ -77,7 +76,7 @@ export function SecurityTab({ detail, onSaved }: TabProps) {
       {!verified && (
         <Section title="Verify you own this number" description="WhatsApp sends a 6-digit code by text message or phone call to this number. Enter it here.">
           {!canEdit ? (
-            <p className="text-muted-foreground" style={TEXT_SM}>
+            <p className="text-muted-foreground text-sm">
               Owners and admins verify numbers.
             </p>
           ) : (
@@ -90,7 +89,7 @@ export function SecurityTab({ detail, onSaved }: TabProps) {
                   </Button>
                 ))}
                 {wait > 0 && (
-                  <span className="self-center text-muted-foreground" style={TEXT_XS}>
+                  <span className="self-center text-muted-foreground text-xs">
                     You can ask again in {wait}s
                   </span>
                 )}
@@ -121,11 +120,11 @@ export function SecurityTab({ detail, onSaved }: TabProps) {
 
       <Section title="Messaging" description={live ? 'This number is registered and can send and receive messages.' : 'Registering turns messaging on for this number. It needs the two-step PIN.'}>
         {!isOwner ? (
-          <p className="text-muted-foreground" style={TEXT_SM}>
+          <p className="text-muted-foreground text-sm">
             Owners register and deregister numbers.
           </p>
         ) : !verified ? (
-          <p className="text-muted-foreground" style={TEXT_SM}>
+          <p className="text-muted-foreground text-sm">
             Verify the number first.
           </p>
         ) : (
@@ -146,7 +145,7 @@ export function SecurityTab({ detail, onSaved }: TabProps) {
               {spin('register')} {live ? 'Register again' : 'Register the number'}
             </Button>
             {live && (
-              <span className="w-full text-muted-foreground" style={TEXT_XS}>
+              <span className="w-full text-muted-foreground text-xs">
                 Register again after WhatsApp approves a new display name, so customers see it.
               </span>
             )}
@@ -158,14 +157,14 @@ export function SecurityTab({ detail, onSaved }: TabProps) {
       {isOwner && (
         <Section title="Two-step verification PIN" description="WhatsApp asks for this 6-digit PIN whenever the number is registered again. It can’t be turned off.">
           {!detail.pinStorage && (
-            <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground" style={TEXT_XS}>
+            <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground text-xs">
               This server can&rsquo;t remember PINs yet (TOKEN_ENCRYPTION_KEY isn&rsquo;t set), so keep yours somewhere safe. You&rsquo;ll type it when registering.
             </p>
           )}
           {n.pinKnown && (
             <div className="flex items-center gap-2">
               {shown ? (
-                <span className="rounded-md bg-muted px-2 py-1 font-mono tracking-widest" style={TEXT_SM}>
+                <span className="rounded-md bg-muted px-2 py-1 font-mono tracking-widest text-sm">
                   {shown}
                 </span>
               ) : (
@@ -194,7 +193,7 @@ export function SecurityTab({ detail, onSaved }: TabProps) {
               {spin('pin')} Change PIN
             </Button>
             {pin.b.length === 6 && pin.a !== pin.b && (
-              <span className="w-full text-destructive" style={TEXT_XS}>
+              <span className="w-full text-destructive text-xs">
                 The two PINs don&rsquo;t match.
               </span>
             )}

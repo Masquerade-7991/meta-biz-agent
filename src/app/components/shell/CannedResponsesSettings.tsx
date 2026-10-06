@@ -12,7 +12,7 @@ import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
 import { FormError } from '@/app/auth/AuthLayout'
 import { deleteCanned, listCanned, saveCanned, type CannedResponse } from '@/app/api/inbox'
 import { errorDetail } from '@/app/api/meta'
-import { SECTION_TITLE, TEXT_SM_OPEN } from '@/app/lib/text'
+import { TEXT_SM_OPEN } from '@/app/lib/text'
 import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
 import { cn } from '@/app/lib/utils'
@@ -66,14 +66,14 @@ function Editor({ initial, onClose, onSaved }: { initial: CannedResponse | null;
           <div className="space-y-1.5">
             <Label htmlFor="cr-body">Message</Label>
             <Textarea id="cr-body" value={d.body} onChange={(e) => set({ body: e.target.value })} rows={5} placeholder="Hi {{name}}, refunds reach your account in 3 to 5 working days." />
-            <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+            <p className="text-muted-foreground text-xs">
               {'{{name}}'} becomes the customer&rsquo;s first name and {'{{phone}}'} their number. WhatsApp formatting works: *bold*, _italic_.
             </p>
           </div>
-          <label className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5" style={TEXT_SM_OPEN}>
+          <label className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5 text-sm">
             <span>
               Share with the whole team
-              <span className="block text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              <span className="block text-muted-foreground text-xs">
                 {admin ? 'Off: only you see it.' : 'Owners and admins share responses with the team. Yours are only for you.'}
               </span>
             </span>
@@ -111,8 +111,8 @@ export function CannedResponsesSettings() {
     <div className="space-y-6 py-2">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-xl space-y-1">
-          <h2 style={SECTION_TITLE}>Canned responses</h2>
-          <p className="text-muted-foreground" style={TEXT_SM_OPEN}>
+          <h2 className="text-section font-semibold">Canned responses</h2>
+          <p className="text-muted-foreground text-sm">
             Answers your team sends often. In the inbox, type / and the shortcut to drop one in, then edit it before sending.
           </p>
         </div>
@@ -122,15 +122,15 @@ export function CannedResponsesSettings() {
         </Button>
       </div>
       {error ? (
-        <p className="text-destructive" style={TEXT_SM_OPEN}>
+        <p className="text-destructive text-sm">
           {error}
         </p>
       ) : !rows ? (
-        <p className="flex items-center gap-2 text-muted-foreground" style={TEXT_SM_OPEN}>
+        <p className="flex items-center gap-2 text-muted-foreground text-sm">
           <Loader2 className="size-4 animate-spin" /> Loading&hellip;
         </p>
       ) : rows.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border p-8 text-center text-muted-foreground" style={TEXT_SM_OPEN}>
+        <div className="rounded-lg border border-dashed border-border p-8 text-center text-muted-foreground text-sm">
           No canned responses yet. Create one for the answer you type most.
         </div>
       ) : (
@@ -140,12 +140,12 @@ export function CannedResponsesSettings() {
               <div className="min-w-0 flex-1 space-y-1">
                 <p className="flex flex-wrap items-center gap-2">
                   <span style={{ ...TEXT_SM_OPEN, fontWeight: 'var(--font-weight-semi-bold)' }}>{c.shortcut}</span>
-                  <span className="text-muted-foreground" style={TEXT_SM_OPEN}>
+                  <span className="text-muted-foreground text-sm">
                     {c.title}
                   </span>
                   {!c.shared && <Badge variant="secondary">Only you</Badge>}
                 </p>
-                <p className="line-clamp-2 text-muted-foreground" style={{ fontSize: 'var(--text-xs)', lineHeight: 1.5 }}>
+                <p className="line-clamp-2 text-muted-foreground text-xs">
                   {c.body}
                 </p>
               </div>

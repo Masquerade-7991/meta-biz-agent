@@ -9,7 +9,7 @@ import { errorDetail } from '@/app/api/meta'
 import { connectAccount, PAYMENT_URL, retryAccount, setBilling, STEP_LABEL, type Billing, type Flow, type SignupConfig, type StepName, type WaAccount } from '@/app/api/whatsapp'
 import { startSignup } from './embeddedSignup'
 import { SignupWindow } from './SignupWindow'
-import { TEXT_SM, TEXT_SM_OPEN, TEXT_XS } from '@/app/lib/text'
+import { TEXT_SM } from '@/app/lib/text'
 import { cn } from '@/app/lib/utils'
 
 const ORDER: StepName[] = ['exchange', 'subscribe', 'register', 'sync', 'details', 'billing']
@@ -31,7 +31,7 @@ export function AccountSteps({ account, canEdit, onChange }: { account: WaAccoun
   const ownBillingPending = account.billing.mode === 'own' && account.billing.state !== 'confirmed'
   return (
     <div className="space-y-3">
-      <ul className="space-y-1.5" style={TEXT_SM}>
+      <ul className="space-y-1.5 text-sm">
         {ORDER.filter((s) => account.steps[s] && account.steps[s]!.state !== 'skipped').map((s) => {
           const st = account.steps[s]!
           const waitingOnBusiness = s === 'billing' && ownBillingPending
@@ -47,7 +47,7 @@ export function AccountSteps({ account, canEdit, onChange }: { account: WaAccoun
               <span>
                 {s === 'billing' ? (account.billing.mode === 'partner_credit' ? 'Billing through Helo.ai' : 'Your own payment method in Meta') : STEP_LABEL[s]}
                 {st.state === 'failed' && !waitingOnBusiness && st.error && (
-                  <span className="block text-destructive" style={TEXT_XS}>
+                  <span className="block text-destructive text-xs">
                     {st.error}
                   </span>
                 )}
@@ -63,7 +63,7 @@ export function AccountSteps({ account, canEdit, onChange }: { account: WaAccoun
         </Button>
       )}
       {canEdit && ownBillingPending && (
-        <div className="space-y-2 rounded-md bg-muted px-3 py-2.5" style={TEXT_SM}>
+        <div className="space-y-2 rounded-md bg-muted px-3 py-2.5 text-sm">
           <p>Conversations are billed by Meta to this business. Add a payment method in WhatsApp Manager so the number can message customers.</p>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" asChild>
@@ -124,7 +124,7 @@ export function ConnectWhatsApp({ config, isOwner, workspaceName, variant, onCon
 
   if (!isOwner)
     return (
-      <p className="rounded-md bg-muted px-3 py-2.5 text-muted-foreground" style={TEXT_SM_OPEN}>
+      <p className="rounded-md bg-muted px-3 py-2.5 text-muted-foreground text-sm">
         Ask an owner of {workspaceName} to connect a WhatsApp number. Only owners can connect accounts.
       </p>
     )
@@ -144,7 +144,7 @@ export function ConnectWhatsApp({ config, isOwner, workspaceName, variant, onCon
                   {phase !== 'idle' && flow === f ? <Loader2 className="size-4 animate-spin" /> : <Smartphone className="size-4" />}
                   {phase === 'meta' && flow === f ? 'Waiting for Facebook…' : phase === 'finishing' && flow === f ? 'Finishing setup…' : label}
                 </Button>
-                <p className="text-muted-foreground" style={TEXT_XS}>
+                <p className="text-muted-foreground text-xs">
                   {hint}
                 </p>
               </div>
@@ -156,20 +156,20 @@ export function ConnectWhatsApp({ config, isOwner, workspaceName, variant, onCon
                 Who pays Meta for conversations
               </legend>
               <RadioGroup value={billing} onValueChange={(v) => setBillingChoice(v as Billing)} className="gap-2">
-                <label className="flex items-start gap-2.5" style={TEXT_SM}>
+                <label className="flex items-start gap-2.5 text-sm">
                   <RadioGroupItem value="partner_credit" className="mt-0.5" />
                   <span>
                     Through Helo.ai
-                    <span className="block text-muted-foreground" style={TEXT_XS}>
+                    <span className="block text-muted-foreground text-xs">
                       Helo.ai pays Meta and includes it in your Helo.ai invoice. Nothing to set up.
                     </span>
                   </span>
                 </label>
-                <label className="flex items-start gap-2.5" style={TEXT_SM}>
+                <label className="flex items-start gap-2.5 text-sm">
                   <RadioGroupItem value="own" className="mt-0.5" />
                   <span>
                     I&rsquo;ll pay Meta myself
-                    <span className="block text-muted-foreground" style={TEXT_XS}>
+                    <span className="block text-muted-foreground text-xs">
                       After connecting, you add a payment method in WhatsApp Manager.
                     </span>
                   </span>
@@ -177,26 +177,26 @@ export function ConnectWhatsApp({ config, isOwner, workspaceName, variant, onCon
               </RadioGroup>
             </fieldset>
           ) : (
-            <p className="text-muted-foreground" style={TEXT_XS}>
+            <p className="text-muted-foreground text-xs">
               After connecting, you&rsquo;ll add a payment method in WhatsApp Manager so Meta can bill your conversations.
             </p>
           )}
           {hero && (
-            <div className="rounded-md bg-muted/60 px-3 py-2.5" style={TEXT_SM_OPEN}>
-              <p style={{ fontWeight: 'var(--font-weight-medium)' }}>You&rsquo;ll need</p>
+            <div className="rounded-md bg-muted/60 px-3 py-2.5 text-sm">
+              <p className="font-medium">You&rsquo;ll need</p>
               <ul className="mt-1 list-disc space-y-0.5 pl-5 text-muted-foreground">
                 <li>A Facebook login with admin access to your business on Meta (you can create the business during signup)</li>
                 <li>A phone number that can get an SMS or call, or your phone with the WhatsApp Business app</li>
                 <li>Your business name, website and a display name customers will see</li>
               </ul>
-              <p className="mt-1 text-muted-foreground" style={TEXT_XS}>
+              <p className="mt-1 text-muted-foreground text-xs">
                 It takes about 5 minutes in a Facebook window. Allow pop-ups for this site.
               </p>
             </div>
           )}
       </>
       {error && (
-        <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-destructive" style={TEXT_SM}>
+        <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-destructive text-sm">
           {error}
         </p>
       )}
@@ -235,8 +235,8 @@ export function ConnectWhatsApp({ config, isOwner, workspaceName, variant, onCon
               onChange={(a) => setResult({ ...result, account: a })}
             />
             {result.pin && (
-              <div className="space-y-1 rounded-md border border-border px-3 py-2.5" style={TEXT_SM}>
-                <p style={{ fontWeight: 'var(--font-weight-medium)' }}>Your number&rsquo;s two-step PIN</p>
+              <div className="space-y-1 rounded-md border border-border px-3 py-2.5 text-sm">
+                <p className="font-medium">Your number&rsquo;s two-step PIN</p>
                 <p className="flex items-center gap-2">
                   <span className="font-mono tracking-widest" style={{ fontSize: '1.25rem' }}>
                     {result.pin}
@@ -245,7 +245,7 @@ export function ConnectWhatsApp({ config, isOwner, workspaceName, variant, onCon
                     <Copy className="size-4" />
                   </Button>
                 </p>
-                <p className="text-muted-foreground" style={TEXT_XS}>
+                <p className="text-muted-foreground text-xs">
                   Keep it safe: Meta asks for it if the number is ever moved. Owners can see it again in Settings → WhatsApp.
                 </p>
               </div>

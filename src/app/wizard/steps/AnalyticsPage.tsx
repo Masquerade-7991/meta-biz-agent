@@ -114,7 +114,7 @@ export function AnalyticsPage() {
             </span>
           )}
         </div>
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        <p className="text-muted-foreground text-xs">
           Days follow your local time zone, and today&rsquo;s numbers may still be coming in. No message text is shown here.
         </p>
       </header>
@@ -227,7 +227,7 @@ function Section({ title, info, children }: { title: string; info: string; child
 
 function Empty({ children }: { children: ReactNode }) {
   return (
-    <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+    <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-muted-foreground text-sm">
       {children}
     </p>
   )
@@ -289,7 +289,7 @@ function Kpi({
         <p style={{ fontSize: '1.5rem', fontWeight: 'var(--font-weight-medium)' }}>{format(value)}</p>
       )}
       {note && (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        <p className="text-muted-foreground text-xs">
           {note}
         </p>
       )}
@@ -412,7 +412,7 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
         )}
       </div>
       {points.some((p) => p.partial) && (
-        <p className="mt-2 flex items-center gap-1.5 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        <p className="mt-2 flex items-center gap-1.5 text-muted-foreground text-xs">
           <svg width="12" height="12" aria-hidden="true">
             <rect width="12" height="12" rx="2" fill="url(#analytics-hatch)" />
           </svg>
@@ -528,7 +528,7 @@ type ToolRow = Awaited<ReturnType<typeof getToolBreakdown>>[number]
 
 function Legend({ items }: { items: { label: string; className: string }[] }) {
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+    <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground text-xs">
       {items.map((it) => (
         <span key={it.label} className="flex items-center gap-1.5">
           <span className={cn('size-2.5 rounded-sm', it.className)} aria-hidden="true" />
@@ -675,11 +675,11 @@ function ConnectorCard({ row, onViewLogs }: { row: HealthRow; onViewLogs: () => 
     <div className="flex flex-col gap-3 rounded-lg border border-border p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate" style={{ fontWeight: 'var(--font-weight-medium)' }}>
+          <p className="truncate font-medium">
             {row.name}
           </p>
           {s && s.executions > 0 && s.successRate != null && (
-            <p className={cn('flex items-center gap-1', healthy ? 'text-success' : 'text-warning-foreground')} style={{ fontSize: 'var(--text-xs)' }}>
+            <p className={cn('flex items-center gap-1 text-xs', healthy ? 'text-success' : 'text-warning-foreground')}>
               {healthy ? <CheckCircle2 className="size-3.5" /> : <AlertTriangle className="size-3.5 text-warning" />}
               {healthy ? 'Working normally' : 'Some calls are failing'}
             </p>
@@ -698,19 +698,19 @@ function ConnectorCard({ row, onViewLogs }: { row: HealthRow; onViewLogs: () => 
         </dl>
       )}
       {s && s.executions === 0 && (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="text-muted-foreground text-sm">
           No calls in the last 7 days.
         </p>
       )}
 
       {row.topFailures.length > 0 && (
         <div className="space-y-1 border-t border-border pt-3">
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+          <p className="text-muted-foreground text-xs">
             Most common failures
           </p>
           <ul className="space-y-1">
             {row.topFailures.map((f) => (
-              <li key={f.code} className="flex items-baseline gap-2" style={{ fontSize: 'var(--text-sm)' }}>
+              <li key={f.code} className="flex items-baseline gap-2 text-sm">
                 <span className="shrink-0" style={{ fontWeight: 'var(--font-weight-medium)', ...TNUM }}>
                   {f.code}
                 </span>
@@ -734,10 +734,10 @@ function ConnectorCard({ row, onViewLogs }: { row: HealthRow; onViewLogs: () => 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+      <dt className="text-muted-foreground text-xs">
         {label}
       </dt>
-      <dd style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-weight-medium)' }}>{value}</dd>
+      <dd className="text-base font-medium">{value}</dd>
     </div>
   )
 }

@@ -15,7 +15,7 @@ export interface Alert {
   target: AlertTarget
 }
 const alerts = () => col('alerts')
-const PATH: Record<AlertTarget, string> = { billing: '/?settings=billing', whatsapp: '/?page=whatsapp', broadcasts: '/?page=broadcasts' }
+const PATH: Record<AlertTarget, string> = { billing: '/settings/billing', whatsapp: '/whatsapp', broadcasts: '/broadcasts' }
 
 /** Raises an alert once per key. Returns true when it was new (and owners were emailed). */
 export async function raiseAlert(a: Alert): Promise<boolean> {

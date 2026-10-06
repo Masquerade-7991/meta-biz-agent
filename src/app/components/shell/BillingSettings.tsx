@@ -9,7 +9,6 @@ import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
 import { getBilling, setBudget, syncBilling, type Billing } from '@/app/api/billing'
 import { formatMoney } from '@/app/lib/money'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { SettingsSection } from './SettingsSection'
 import { can } from '@/app/lib/permissions'
 
@@ -23,7 +22,7 @@ const ago = (iso: string) => {
 /** Last 30 days of spend as bars; hover shows the day's figures. */
 function SpendBars({ days, currency }: { days: Billing['days']; currency: string | null }) {
   const max = Math.max(...days.map((d) => d.cost), 0)
-  if (!days.length || max === 0) return <p className="text-muted-foreground" style={TEXT_SM}>No paid messages in the last 30 days.</p>
+  if (!days.length || max === 0) return <p className="text-muted-foreground text-sm">No paid messages in the last 30 days.</p>
   return (
     <div className="flex h-24 items-end gap-0.5" role="img" aria-label="WhatsApp spend per day, last 30 days">
       {days.map((d) => (
@@ -68,7 +67,7 @@ export function BillingSettingsTab() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <p style={{ fontSize: '1.75rem', fontWeight: 'var(--font-weight-semi-bold)', lineHeight: 1.1 }}>{formatMoney(b.month.total, b.currency)}</p>
-            <div className="flex items-center gap-2 text-muted-foreground" style={TEXT_XS}>
+            <div className="flex items-center gap-2 text-muted-foreground text-xs">
               {b.lastSyncError ? <span className="text-destructive">Last update failed: {b.lastSyncError}</span> : b.lastSyncAt ? <span>Updated {ago(b.lastSyncAt)}</span> : <span>Not updated yet</span>}
               <Button
                 size="sm"
@@ -91,13 +90,13 @@ export function BillingSettingsTab() {
               <div className="h-2 overflow-hidden rounded-full bg-muted">
                 <div className={used >= 1 ? 'h-full bg-destructive' : used >= 0.8 ? 'h-full bg-amber-500' : 'h-full bg-primary'} style={{ width: `${used * 100}%` }} />
               </div>
-              <p className="text-muted-foreground" style={TEXT_XS}>
+              <p className="text-muted-foreground text-xs">
                 {Math.round(used * 100)}% of your {formatMoney(b.budget, b.currency, 0)} budget
               </p>
             </div>
           ) : null}
           {b.month.byCategory.length > 0 && (
-            <ul className="divide-y divide-border rounded-lg border border-border" style={TEXT_SM}>
+            <ul className="divide-y divide-border rounded-lg border border-border text-sm">
               {b.month.byCategory.map((c) => (
                 <li key={c.category} className="flex justify-between px-3 py-2">
                   <span>{CATEGORY[c.category] ?? c.category}</span>
@@ -107,7 +106,7 @@ export function BillingSettingsTab() {
             </ul>
           )}
           <div className="space-y-1">
-            <p className="text-muted-foreground" style={TEXT_XS}>
+            <p className="text-muted-foreground text-xs">
               Last 30 days
             </p>
             <SpendBars days={b.days} currency={b.currency} />
@@ -115,7 +114,7 @@ export function BillingSettingsTab() {
         </div>
       </SettingsSection>
       <SettingsSection title="AI usage" description="This month so far. Meta bills the AI agent’s own conversations; Helo.ai features like chat summaries use Claude and are counted in tokens here.">
-        <dl className="space-y-3" style={TEXT_SM}>
+        <dl className="space-y-3 text-sm">
           <div className="flex justify-between gap-4">
             <dt className="text-muted-foreground">AI agent conversations (Meta)</dt>
             <dd>{b.ai.agentConversations === null ? 'Not collected yet' : b.ai.agentConversations.toLocaleString()}</dd>
@@ -131,7 +130,7 @@ export function BillingSettingsTab() {
                 <dt className="text-muted-foreground">{FEATURE[u.feature] ?? u.feature}</dt>
                 <dd className="text-right">
                   {(u.input + u.output).toLocaleString()} tokens
-                  <span className="block text-muted-foreground" style={TEXT_XS}>
+                  <span className="block text-muted-foreground text-xs">
                     {u.calls} uses &middot; {u.input.toLocaleString()} in, {u.output.toLocaleString()} out
                   </span>
                 </dd>
@@ -164,7 +163,7 @@ export function BillingSettingsTab() {
               Save budget
             </Button>
           ) : (
-            <p className="text-muted-foreground" style={TEXT_XS}>
+            <p className="text-muted-foreground text-xs">
               Only owners can change the budget.
             </p>
           )}

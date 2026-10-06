@@ -8,7 +8,6 @@ import { FormError } from '@/app/auth/AuthLayout'
 import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
 import { listFields, saveFields, type FieldDef } from '@/app/api/contacts'
-import { SECTION_TITLE, TEXT_SM_OPEN } from '@/app/lib/text'
 import { can } from '@/app/lib/permissions'
 
 type Row = { key: string; label: string; type: FieldDef['type']; options: string }
@@ -45,8 +44,8 @@ export function ContactFieldsSettings() {
   return (
     <div className="max-w-3xl space-y-6 py-2">
       <div className="space-y-1">
-        <h2 style={SECTION_TITLE}>Contact fields</h2>
-        <p className="text-muted-foreground" style={TEXT_SM_OPEN}>
+        <h2 className="text-section font-semibold">Contact fields</h2>
+        <p className="text-muted-foreground text-sm">
           Extra details you keep on every contact, like city or plan. They show in Contacts, can be filled from a CSV column with the same name, and can fill broadcast variables.
         </p>
       </div>
@@ -55,12 +54,12 @@ export function ContactFieldsSettings() {
       ) : (
         <fieldset disabled={!canEdit} className="space-y-3">
           {!canEdit && (
-            <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground" style={TEXT_SM_OPEN}>
+            <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground text-sm">
               Only owners and admins can change contact fields.
             </p>
           )}
           {rows.length === 0 && (
-            <p className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground" style={TEXT_SM_OPEN}>
+            <p className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground text-sm">
               No custom fields yet.
             </p>
           )}

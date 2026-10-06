@@ -35,7 +35,7 @@ import {
 } from '@/app/api/broadcasts'
 import { renderTemplate, slotsOf } from '@/app/broadcasts/templates'
 import { cn } from '@/app/lib/utils'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
+import { TEXT_SM } from '@/app/lib/text'
 import { usePolling } from '@/app/lib/usePolling'
 import { customerLabel } from '@/app/lib/customer'
 import { FAILURE_HELP, FAILURE_LABEL } from '@/app/broadcasts/sendErrors'
@@ -50,7 +50,7 @@ const STATUS: Record<Broadcast['status'], { label: string; cls: string }> = {
   completed: { label: 'Sent', cls: 'bg-success text-success-foreground' },
   cancelled: { label: 'Cancelled', cls: 'bg-muted text-muted-foreground' },
 }
-const TPL_STATUS: Record<string, string> = { APPROVED: 'bg-success text-success-foreground', REJECTED: 'bg-destructive text-destructive-foreground', PENDING: 'bg-warning text-warning-foreground' }
+const TPL_STATUS: Record<string, string> = { APPROVED: 'bg-success text-success-foreground', REJECTED: 'bg-destructive text-destructive-foreground', PENDING: 'bg-warning/15 text-warning-foreground' }
 const when = (iso: string) => new Date(iso).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const pct = (n: number, of: number) => (of ? `${Math.round((n / of) * 100)}%` : '–')
 
@@ -67,12 +67,12 @@ export function TemplatePreview({ text }: { text: string }) {
 
 /** Before sending: reach, people WhatsApp may hold back today, and the estimated cost. */
 function SendCheck({ check, error, category }: { check: Preflight | null; error: string | null; category: string }) {
-  if (error) return <p className="text-destructive" style={TEXT_XS}>Couldn&rsquo;t check the audience: {error}</p>
+  if (error) return <p className="text-destructive text-xs">Couldn&rsquo;t check the audience: {error}</p>
   if (!check) return <Loader2 className="size-4 animate-spin text-muted-foreground" />
   const e = check.estimate
   const real = check.audience - check.sample
   return (
-    <div className="space-y-2 rounded-lg border border-border p-3" style={TEXT_XS}>
+    <div className="space-y-2 rounded-lg border border-border p-3 text-xs">
       <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
         Reaches {check.audience} {check.audience === 1 ? 'person' : 'people'}
       </p>
@@ -193,7 +193,7 @@ function NewBroadcastDialog({ templates, segments, fields, onClose, onCreated }:
                   ))}
                 </SelectContent>
               </Select>
-              {segmentId === 'all' && <p className="text-muted-foreground" style={TEXT_XS}>Every contact who hasn&rsquo;t opted out. Make a segment in Contacts to narrow it.</p>}
+              {segmentId === 'all' && <p className="text-muted-foreground text-xs">Every contact who hasn&rsquo;t opted out. Make a segment in Contacts to narrow it.</p>}
             </div>
             {slots.length > 0 && (
               <div className="space-y-3">
@@ -203,7 +203,7 @@ function NewBroadcastDialog({ templates, segments, fields, onClose, onCreated }:
                   const set = (patch: Partial<SlotMapping>) => setMapping({ ...mapping, [s.id]: { ...m, ...patch } as SlotMapping })
                   return (
                     <div key={s.id} className="grid gap-2 sm:grid-cols-[7rem_minmax(0,1fr)_minmax(0,1fr)] sm:items-center">
-                      <span style={TEXT_SM}>{s.label}</span>
+                      <span className="text-sm">{s.label}</span>
                       <Select value={m.source} onValueChange={(v) => set({ source: v })}>
                         <SelectTrigger className="h-9">
                           <SelectValue placeholder="Comes from…" />
@@ -227,20 +227,20 @@ function NewBroadcastDialog({ templates, segments, fields, onClose, onCreated }:
               </div>
             )}
             <RadioGroup value={later ? 'later' : 'now'} onValueChange={(v) => setLater(v === 'later')} className="space-y-2">
-              <label className="flex items-center gap-2.5" style={TEXT_SM}>
+              <label className="flex items-center gap-2.5 text-sm">
                 <RadioGroupItem value="now" /> Send now
               </label>
-              <label className="flex flex-wrap items-center gap-2.5" style={TEXT_SM}>
+              <label className="flex flex-wrap items-center gap-2.5 text-sm">
                 <RadioGroupItem value="later" /> Schedule for
                 {later && <Input type="datetime-local" className="h-9 w-56" value={at} onChange={(e) => setAt(e.target.value)} />}
               </label>
             </RadioGroup>
           </div>
           <div className="space-y-2">
-            <p className="text-muted-foreground" style={TEXT_XS}>
+            <p className="text-muted-foreground text-xs">
               Preview
             </p>
-            {tpl ? <TemplatePreview text={renderTemplate(tpl, sample)} /> : <p className="text-muted-foreground" style={TEXT_SM}>Pick a template to see it.</p>}
+            {tpl ? <TemplatePreview text={renderTemplate(tpl, sample)} /> : <p className="text-muted-foreground text-sm">Pick a template to see it.</p>}
             {tpl && <SendCheck check={check} error={checkError} category={tpl.category} />}
           </div>
         </div>
@@ -291,15 +291,15 @@ function BroadcastDetailDialog({ id, onClose, onChanged }: { id: string; onClose
                 ] as const
               ).map(([label, n]) => (
                 <div key={label} className="rounded-lg border border-border p-2.5">
-                  <p className="text-muted-foreground" style={TEXT_XS}>
+                  <p className="text-muted-foreground text-xs">
                     {label}
                   </p>
                   <p style={{ fontSize: '1.25rem', fontWeight: 'var(--font-weight-semi-bold)' }}>{n}</p>
-                  {label !== 'Audience' && label !== 'Sent' && <p className="text-muted-foreground" style={TEXT_XS}>{pct(n, done || 1)}</p>}
+                  {label !== 'Audience' && label !== 'Sent' && <p className="text-muted-foreground text-xs">{pct(n, done || 1)}</p>}
                 </div>
               ))}
             </div>
-            <p className="text-muted-foreground" style={TEXT_XS}>
+            <p className="text-muted-foreground text-xs">
               Delivered and read ticks arrive once WhatsApp webhooks are connected to this app.
             </p>
             {b.failures.length > 0 && (
@@ -309,8 +309,8 @@ function BroadcastDetailDialog({ id, onClose, onChanged }: { id: string; onClose
                   {b.failures.map((f) => (
                     <li key={`${f.reason}:${f.retrying}`} className="flex items-start justify-between gap-4 px-3 py-2.5">
                       <div className="min-w-0">
-                        <p style={TEXT_SM}>{FAILURE_LABEL[f.reason]}</p>
-                        <p className="text-muted-foreground" style={TEXT_XS}>
+                        <p className="text-sm">{FAILURE_LABEL[f.reason]}</p>
+                        <p className="text-muted-foreground text-xs">
                           {f.retrying && f.nextAt ? `Trying again ${when(f.nextAt)}. ` : ''}
                           {FAILURE_HELP[f.reason] ?? ''}
                         </p>
@@ -335,12 +335,12 @@ function BroadcastDetailDialog({ id, onClose, onChanged }: { id: string; onClose
                 <TableBody>
                   {b.recipients.map((r) => (
                     <TableRow key={r.phone}>
-                      <TableCell style={TEXT_SM}>{r.name || customerLabel(r.phone)}</TableCell>
+                      <TableCell className="text-sm">{r.name || customerLabel(r.phone)}</TableCell>
                       <TableCell style={TEXT_SM} className={cn(r.status === 'failed' && 'text-destructive')}>
                         {r.status === 'queued' && r.retryAt ? 'retrying' : r.status}
                         {r.repliedAt ? ' · replied' : ''}
                       </TableCell>
-                      <TableCell className="text-muted-foreground" style={TEXT_XS} title={r.error}>
+                      <TableCell className="text-muted-foreground text-xs" title={r.error}>
                         {r.reason ? FAILURE_LABEL[r.reason] : (r.error ?? '')}
                         {r.retryAt ? ` · again ${when(r.retryAt)}` : ''}
                       </TableCell>
@@ -457,7 +457,7 @@ function NewTemplateDialog({ onClose, onCreated }: { onClose: () => void; onCrea
                 <Label>Examples for review</Label>
                 {slots.map((s) => (
                   <div key={s.id} className="flex items-center gap-2">
-                    <span className="w-24 shrink-0" style={TEXT_SM}>
+                    <span className="w-24 shrink-0 text-sm">
                       {s.label}
                     </span>
                     <Input className="h-9" value={t.examples[s.id] ?? ''} onChange={(e) => set({ examples: { ...t.examples, [s.id]: e.target.value } })} placeholder="Priya" />
@@ -494,7 +494,7 @@ function NewTemplateDialog({ onClose, onCreated }: { onClose: () => void; onCrea
             </div>
           </div>
           <div className="space-y-2">
-            <p className="text-muted-foreground" style={TEXT_XS}>
+            <p className="text-muted-foreground text-xs">
               Preview
             </p>
             <TemplatePreview text={renderTemplate(draft, t.examples) || 'Your message'} />
@@ -558,7 +558,7 @@ export function BroadcastsPage() {
               New broadcast
             </Button>
           ) : (
-            <p className="text-muted-foreground" style={TEXT_SM}>
+            <p className="text-muted-foreground text-sm">
               Supervisors, admins and owners send broadcasts.
             </p>
           )
@@ -584,11 +584,11 @@ export function BroadcastsPage() {
         <TabsContent value="broadcasts">
           <div className="overflow-x-auto rounded-lg border border-border">
             {!rows ? (
-              <p className="flex items-center gap-2 p-6 text-muted-foreground" style={TEXT_SM}>
+              <p className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
                 <Loader2 className="size-4 animate-spin" /> Loading&hellip;
               </p>
             ) : rows.length === 0 ? (
-              <p className="p-10 text-center text-muted-foreground" style={TEXT_SM}>
+              <p className="p-10 text-center text-muted-foreground text-sm">
                 No broadcasts yet. Pick a template and a segment to send your first one.
               </p>
             ) : (
@@ -612,31 +612,31 @@ export function BroadcastsPage() {
                       <TableRow key={b.id} className="cursor-pointer" onClick={() => setOpen(b.id)}>
                         <TableCell>
                           <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>{b.name}</p>
-                          <p className="text-muted-foreground" style={TEXT_XS}>
+                          <p className="text-muted-foreground text-xs">
                             {b.template.name}
                           </p>
                         </TableCell>
-                        <TableCell style={TEXT_SM}>
+                        <TableCell className="text-sm">
                           {b.segmentName} ({b.audienceCount})
                         </TableCell>
                         <TableCell>
-                          <span className={cn('rounded px-2 py-0.5', STATUS[b.status].cls)} style={TEXT_XS}>
+                          <span className={cn('rounded px-2 py-0.5 text-xs', STATUS[b.status].cls)}>
                             {STATUS[b.status].label}
                           </span>
                         </TableCell>
-                        <TableCell className="text-right" style={TEXT_SM}>
+                        <TableCell className="text-right text-sm">
                           {sent}
                         </TableCell>
-                        <TableCell className="text-right" style={TEXT_SM}>
+                        <TableCell className="text-right text-sm">
                           {pct(b.stats.read, sent)}
                         </TableCell>
-                        <TableCell className="text-right" style={TEXT_SM}>
+                        <TableCell className="text-right text-sm">
                           {pct(b.stats.replied, sent)}
                         </TableCell>
-                        <TableCell className="text-right" style={TEXT_SM}>
+                        <TableCell className="text-right text-sm">
                           {b.stats.failed + b.stats.skipped}
                         </TableCell>
-                        <TableCell className="text-muted-foreground" style={TEXT_SM}>
+                        <TableCell className="text-muted-foreground text-sm">
                           {when(b.status === 'scheduled' ? b.scheduledAt : (b.startedAt ?? b.createdAt))}
                         </TableCell>
                       </TableRow>
@@ -649,7 +649,7 @@ export function BroadcastsPage() {
         </TabsContent>
         <TabsContent value="templates">
           {!templates ? (
-            <p className="flex items-center gap-2 p-6 text-muted-foreground" style={TEXT_SM}>
+            <p className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
               <Loader2 className="size-4 animate-spin" /> Loading templates from WhatsApp&hellip;
             </p>
           ) : (
@@ -661,7 +661,7 @@ export function BroadcastsPage() {
                       <p className="truncate" style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
                         {t.name}
                       </p>
-                      <p className="text-muted-foreground" style={TEXT_XS}>
+                      <p className="text-muted-foreground text-xs">
                         {t.category.toLowerCase()} &middot; {t.language}
                       </p>
                     </div>
@@ -674,11 +674,11 @@ export function BroadcastsPage() {
                       )}
                     </span>
                   </div>
-                  <p className="line-clamp-4 whitespace-pre-wrap text-muted-foreground" style={TEXT_XS}>
+                  <p className="line-clamp-4 whitespace-pre-wrap text-muted-foreground text-xs">
                     {renderTemplate(t, {})}
                   </p>
                   {t.rejectedReason && (
-                    <p className="text-destructive" style={TEXT_XS}>
+                    <p className="text-destructive text-xs">
                       Rejected: {t.rejectedReason.toLowerCase().replace(/_/g, ' ')}
                     </p>
                   )}

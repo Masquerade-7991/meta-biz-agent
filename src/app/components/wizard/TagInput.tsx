@@ -49,8 +49,7 @@ export function TagInput({ values, onChange, placeholder = 'Type and press Enter
         onBlur={commit}
         placeholder={values.length === 0 ? placeholder : ''}
         aria-label={ariaLabel}
-        className="min-w-24 flex-1 bg-transparent outline-none"
-        style={{ fontSize: 'var(--text-sm)' }}
+        className="min-w-24 flex-1 bg-transparent outline-none text-sm"
       />
     </div>
   )

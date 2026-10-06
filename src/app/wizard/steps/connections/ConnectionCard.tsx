@@ -8,7 +8,6 @@ import { cn } from '@/app/lib/utils'
 import { domainFromUrl } from './helpers'
 import { MethodBadge } from './parts'
 
-const XS = { fontSize: 'var(--text-xs)' } as const
 const SM = { fontSize: 'var(--text-sm)' } as const
 const MANY_TOOLS = 6
 
@@ -80,23 +79,22 @@ export function ConnectionCard({
         <Plug className="mt-1 size-4 shrink-0 text-muted-foreground" />
         <button type="button" onClick={onToggle} aria-expanded={expanded} aria-controls={panelId} className="min-w-0 flex-1 text-left">
           <span className="flex flex-wrap items-center gap-2">
-            <span className="font-mono" style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>
+            <span className="font-mono font-semibold">
               {c.name}
             </span>
             <span
-              className={cn('inline-flex items-center gap-1.5 rounded-full px-2 py-0.5', status.dot === 'success' ? 'bg-success/10 text-success' : status.dot === 'warning' ? 'bg-warning/15 text-warning-foreground' : 'bg-muted text-muted-foreground')}
-              style={XS}
+              className={cn('inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs', status.dot === 'success' ? 'bg-success/10 text-success' : status.dot === 'warning' ? 'bg-warning/15 text-warning-foreground' : 'bg-muted text-muted-foreground')}
             >
               <span className={cn('size-1.5 rounded-full', status.dot === 'success' ? 'bg-success' : status.dot === 'warning' ? 'bg-warning' : 'bg-muted-foreground/50')} />
               {status.label}
             </span>
             {isMcp && (
-              <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground" style={XS}>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground text-xs">
                 MCP{c.mcpSync?.status === 'ERROR' ? ' · couldn’t list tools' : c.mcpSync?.status === 'PENDING' ? ' · listing tools…' : ''}
               </span>
             )}
           </span>
-          <span className="mt-0.5 block text-muted-foreground" style={XS}>
+          <span className="mt-0.5 block text-muted-foreground text-xs">
             {domainFromUrl(c.baseUrl)} · {tools.length} tool{tools.length === 1 ? '' : 's'}
           </span>
         </button>
@@ -139,7 +137,7 @@ export function ConnectionCard({
       </div>
 
       {line && (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 pb-3 pl-11 text-muted-foreground" style={XS}>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 pb-3 pl-11 text-muted-foreground text-xs">
           {line.action && <AlertTriangle className="size-3.5 shrink-0 text-warning-foreground" />}
           <span>{line.text}</span>
           {line.action === 'key' && canEdit && (
@@ -164,7 +162,7 @@ export function ConnectionCard({
       {expanded && (
         <div id={panelId} className="border-t border-border px-2 py-2">
           {tools.length === 0 ? (
-            <p className="px-3 py-3 text-muted-foreground" style={SM}>
+            <p className="px-3 py-3 text-muted-foreground text-sm">
               {isMcp ? 'No tools yet. Refresh tools to ask the server for its list.' : 'No tools yet. A tool is one request the agent can make, like “look up an order”.'}
             </p>
           ) : (
@@ -176,7 +174,7 @@ export function ConnectionCard({
                       <p className="truncate font-mono" style={{ ...SM, fontWeight: 'var(--font-weight-medium)' }}>
                         {t.name}
                       </p>
-                      <p className="flex min-w-0 items-center gap-1.5 text-muted-foreground" style={XS}>
+                      <p className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
                         <MethodBadge method={t.method} />
                         <span className="truncate font-mono">{t.path || '/'}</span>
                       </p>
@@ -203,12 +201,12 @@ export function ConnectionCard({
             </ul>
           )}
           {testBlocked && tools.length > 0 && (
-            <p className="px-3 pt-1 pb-2 text-muted-foreground" style={XS}>
+            <p className="px-3 pt-1 pb-2 text-muted-foreground text-xs">
               {testBlocked}
             </p>
           )}
           {tools.length > MANY_TOOLS && (
-            <p className="flex items-center gap-1.5 px-3 pt-1 pb-2 text-warning-foreground" style={XS}>
+            <p className="flex items-center gap-1.5 px-3 pt-1 pb-2 text-warning-foreground text-xs">
               <AlertTriangle className="size-3.5 shrink-0" />
               Many similar tools make it harder for the agent to pick the right one. Fewer, clearly described tools work better.
             </p>

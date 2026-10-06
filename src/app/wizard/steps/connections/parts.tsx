@@ -20,9 +20,9 @@ export function FormSection({ n, title, help, children }: { n: number; title: st
           {n}
         </span>
         <div className="min-w-0">
-          <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-weight-semi-bold)' }}>{title}</h3>
+          <h3 className="text-base font-semibold">{title}</h3>
           {help && (
-            <p className="text-muted-foreground" style={XS}>
+            <p className="text-muted-foreground text-xs">
               {help}
             </p>
           )}
@@ -42,12 +42,12 @@ export function Field({ label, htmlFor, help, error, children }: { label: ReactN
       </label>
       {children}
       {error ? (
-        <p className="text-destructive" style={XS} role="alert">
+        <p className="text-destructive text-xs" role="alert">
           {error}
         </p>
       ) : (
         help && (
-          <p className="text-muted-foreground" style={XS}>
+          <p className="text-muted-foreground text-xs">
             {help}
           </p>
         )
@@ -93,7 +93,7 @@ export function Segmented<T extends string>({
               {on && <Check className="size-4 shrink-0 text-primary" />}
             </span>
             {o.hint && (
-              <span className="text-muted-foreground" style={XS}>
+              <span className="text-muted-foreground text-xs">
                 {o.hint}
               </span>
             )}
@@ -133,10 +133,10 @@ export function SecretInput({
   if (savedHint !== undefined && !replacing)
     return (
       <div className="flex items-center justify-between gap-3 rounded-md border border-input bg-muted/40 px-3 py-2">
-        <span className="font-mono text-muted-foreground" style={SM}>
+        <span className="font-mono text-muted-foreground text-sm">
           {savedHint ? `Saved · ends in ${savedHint}` : 'Saved'}
         </span>
-        <button type="button" onClick={onReplace} className="text-primary hover:underline" style={XS}>
+        <button type="button" onClick={onReplace} className="text-primary hover:underline text-xs">
           Replace
         </button>
       </div>
@@ -145,7 +145,7 @@ export function SecretInput({
     <div className="flex items-center gap-2">
       <Input id={id} type="password" autoComplete="off" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-invalid={invalid} className="font-mono" />
       {savedHint !== undefined && onKeep && (
-        <button type="button" onClick={onKeep} className="shrink-0 text-muted-foreground hover:underline" style={XS}>
+        <button type="button" onClick={onKeep} className="shrink-0 text-muted-foreground hover:underline text-xs">
           Keep saved
         </button>
       )}
@@ -179,7 +179,7 @@ export function RequestPreviewBlock({ preview }: { preview: RequestPreview }) {
   const mark = (s: string) =>
     s.split(/(‹[^›]*›)/).map((part, i) =>
       part.startsWith('‹') ? (
-        <span key={i} className="rounded bg-primary/10 text-primary">
+        <span key={i} className="rounded bg-accent text-accent-foreground">
           {part}
         </span>
       ) : (
@@ -188,7 +188,7 @@ export function RequestPreviewBlock({ preview }: { preview: RequestPreview }) {
     )
   return (
     <pre className="min-w-0 overflow-x-auto rounded-lg border border-border bg-muted/50 p-3 break-all whitespace-pre-wrap" style={{ ...XS, lineHeight: 1.6 }}>
-      <span style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{preview.method}</span> {mark(preview.url)}
+      <span className="font-semibold">{preview.method}</span> {mark(preview.url)}
       {preview.headers.map(([k, v]) => (
         <span key={k}>
           {'\n'}

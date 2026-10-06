@@ -13,7 +13,7 @@ import { NumberAvatar, NumberPage } from '@/app/whatsapp/NumberPage'
 import { statusHelp } from '@/app/whatsapp/profileRules'
 import { can } from '@/app/lib/permissions'
 import { cn } from '@/app/lib/utils'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
+import { TEXT_SM } from '@/app/lib/text'
 
 const QUALITY: Record<string, string> = { GREEN: 'bg-success', YELLOW: 'bg-amber-500', RED: 'bg-destructive' }
 const limitText = (l: string | null) => (l ? l.replace('TIER_', '').replace('UNLIMITED', 'Unlimited') : '—')
@@ -85,7 +85,7 @@ export function WhatsAppPage({ onOpenSettings }: { onOpenSettings: () => void })
               <p className="mt-1 text-muted-foreground">Your numbers, their profiles, names and settings, as customers see them on WhatsApp.</p>
               {account && (
                 <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <span className="text-muted-foreground" style={TEXT_SM}>
+                  <span className="text-muted-foreground text-sm">
                     WhatsApp Business account
                   </span>
                   {accounts.length > 1 ? (
@@ -129,7 +129,7 @@ export function WhatsAppPage({ onOpenSettings }: { onOpenSettings: () => void })
               </Button>
             </div>
           ) : !rows ? (
-            <p className="flex items-center gap-2 text-muted-foreground" style={TEXT_SM}>
+            <p className="flex items-center gap-2 text-muted-foreground text-sm">
               <Loader2 className="size-4 animate-spin" /> Reading your numbers from WhatsApp&hellip;
             </p>
           ) : rows.length === 0 ? (
@@ -138,7 +138,7 @@ export function WhatsAppPage({ onOpenSettings }: { onOpenSettings: () => void })
             </div>
           ) : (
             <div className="space-y-2">
-              <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-weight-semi-bold)' }}>
+              <h2 className="text-base font-semibold">
                 Phone numbers in {account?.name} ({shown.length})
               </h2>
               <div className="rounded-lg border border-border">
@@ -161,10 +161,10 @@ export function WhatsAppPage({ onOpenSettings }: { onOpenSettings: () => void })
                             <button type="button" className="flex items-center gap-3 text-left" onClick={(e) => (e.stopPropagation(), setOpen(n.id))} aria-label={`Open ${n.verifiedName || n.display}`}>
                               <NumberAvatar photo={n.photo} name={n.verifiedName} size="sm" />
                               <span>
-                                <span className="block" style={{ fontWeight: 'var(--font-weight-medium)' }}>
+                                <span className="block font-medium">
                                   {n.verifiedName || n.display}
                                 </span>
-                                <span className="block text-muted-foreground" style={TEXT_XS}>
+                                <span className="block text-muted-foreground text-xs">
                                   {n.display}
                                   {n.newNameStatus === 'PENDING_REVIEW' && ` · "${n.newName}" in review`}
                                 </span>
@@ -172,18 +172,18 @@ export function WhatsAppPage({ onOpenSettings }: { onOpenSettings: () => void })
                             </button>
                           </TableCell>
                           <TableCell>
-                            <span className="flex items-center gap-1.5" style={TEXT_SM} title={st.help}>
+                            <span className="flex items-center gap-1.5 text-sm" title={st.help}>
                               <span className={cn('size-2 rounded-full', st.tone === 'ok' ? 'bg-success' : st.tone === 'warn' ? 'bg-amber-500' : 'bg-destructive')} />
                               {st.label}
                             </span>
                           </TableCell>
                           <TableCell>
-                            <span className="flex items-center gap-1.5" style={TEXT_SM}>
+                            <span className="flex items-center gap-1.5 text-sm">
                               <span className={cn('inline-block size-2 rounded-full', QUALITY[n.quality] ?? 'bg-muted-foreground')} />
                               {n.quality === 'GREEN' ? 'High' : n.quality === 'YELLOW' ? 'Medium' : n.quality === 'RED' ? 'Low' : '—'}
                             </span>
                           </TableCell>
-                          <TableCell style={TEXT_SM}>{limitText(n.limit)}</TableCell>
+                          <TableCell className="text-sm">{limitText(n.limit)}</TableCell>
                           <TableCell className="text-muted-foreground">
                             <ChevronRight className="size-4" />
                           </TableCell>

@@ -16,7 +16,6 @@ import { ContactFieldsSettings } from './ContactFieldsSettings'
 import { authApi, type Invite, type Member } from '@/app/auth/api'
 import { Label } from '@/app/components/ui/label'
 import { errorDetail } from '@/app/api/meta'
-import { SECTION_TITLE } from '@/app/lib/text'
 import { SettingsSection } from './SettingsSection'
 import { WhatsAppSettings } from './WhatsAppSettings'
 import { assignableRoles, can, canSetRole, roleLabel, ROLES, type Role } from '@/app/lib/permissions'
@@ -149,7 +148,7 @@ function RolePicker({ id, label, value, roles, compact, onChange }: { id: string
           {roles.map((r) => (
             <SelectItem key={r.id} value={r.id}>
               <span className="block">{r.label}</span>
-              <span className="block whitespace-normal text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+              <span className="block whitespace-normal text-muted-foreground text-xs">
                 {r.description}
               </span>
             </SelectItem>
@@ -219,8 +218,8 @@ function Members() {
 
       <section className="space-y-3 py-8">
         <div className="space-y-1">
-          <h2 style={SECTION_TITLE}>Members of {me?.workspace?.name}</h2>
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <h2 className="text-section font-semibold">Members of {me?.workspace?.name}</h2>
+          <p className="text-muted-foreground text-sm">
             {manage
               ? `${me?.role === 'owner' ? 'Owners' : 'Admins'} invite people, change roles and remove members${me?.role === 'owner' ? '' : ', except owners'}. Every workspace needs at least one owner.`
               : 'Owners and admins invite people, change roles and remove members.'}
@@ -228,7 +227,7 @@ function Members() {
         </div>
         {loadError && <FormError>{loadError}</FormError>}
         {!data && !loadError && (
-          <p className="flex items-center gap-2 text-muted-foreground" role="status" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="flex items-center gap-2 text-muted-foreground text-sm" role="status">
             <Loader2 className="size-4 animate-spin" /> Loading members…
           </p>
         )}
@@ -251,11 +250,11 @@ function Members() {
                   return (
                     <TableRow key={m.userId}>
                       <TableCell>
-                        <div style={{ fontWeight: 'var(--font-weight-medium)' }}>
+                        <div className="font-medium">
                           {m.name}
                           {self && <span className="text-muted-foreground"> (you)</span>}
                         </div>
-                        <div className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                        <div className="text-muted-foreground text-sm">
                           {m.email}
                         </div>
                       </TableCell>
@@ -294,15 +293,15 @@ function Members() {
 
       {manage && data && (data.invites.length > 0 || data.joining.length > 0) && (
         <section className="space-y-3 border-t border-border py-8">
-          <h2 style={SECTION_TITLE}>Pending invites</h2>
+          <h2 className="text-section font-semibold">Pending invites</h2>
           <div className="rounded-lg border border-border">
             <Table>
               <TableBody>
                 {data.joining.map((j) => (
                   <TableRow key={j.email}>
                     <TableCell colSpan={2}>
-                      <div style={{ fontWeight: 'var(--font-weight-medium)' }}>{j.email}</div>
-                      <div className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                      <div className="font-medium">{j.email}</div>
+                      <div className="text-muted-foreground text-sm">
                         Email verified {ago(j.verifiedAt)}, finishing account setup
                       </div>
                     </TableCell>
@@ -313,8 +312,8 @@ function Members() {
                   return (
                     <TableRow key={i.id}>
                       <TableCell>
-                        <div style={{ fontWeight: 'var(--font-weight-medium)' }}>{i.email}</div>
-                        <div className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+                        <div className="font-medium">{i.email}</div>
+                        <div className="text-muted-foreground text-sm">
                           {roleLabel(i.role)} &middot; sent {ago(i.invitedAt)}, expires {left <= 1 ? 'within a day' : `in ${left} days`}
                         </div>
                       </TableCell>

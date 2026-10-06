@@ -6,7 +6,19 @@ import { ContactsPage } from '@/app/pages/ContactsPage'
 import { BroadcastsPage } from '@/app/pages/BroadcastsPage'
 import { SupportAnalyticsPage } from '@/app/pages/SupportAnalyticsPage'
 import { WhatsAppPage } from '@/app/pages/WhatsAppPage'
+import { CircleHelp, ExternalLink, Menu } from 'lucide-react'
 import { NotificationsBell } from './NotificationsBell'
+import { Sheet, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/app/components/ui/dropdown-menu'
+import { HELP_GROUPS } from '@/app/home/helpLinks'
+import mark from '@/assets/helo-mark.svg'
 import { AppSidebar } from './AppSidebar'
 import { AgentsListPage } from './AgentsListPage'
 import { navFor, type NavId } from '@/app/nav'
@@ -20,22 +32,30 @@ import { SettingsPage, type SettingsTab } from './SettingsPage'
 
 export function ProductShell({
   active,
-  initialSettingsTab = 'profile',
-  onNavigate: setActive,
+  settingsTab,
+  onNavigate,
   onOpenAgentBuilder,
   onAgentCreated,
   onOpenAgentActivity,
 }: {
-  /** Kept by the caller, so leaving the agent builder returns to the same page. */
+  /** The page in the address bar (App.tsx). */
   active: NavId
-  /** The Settings tab to show first, e.g. from a link in an alert email. */
-  initialSettingsTab?: SettingsTab
-  onNavigate: (id: NavId) => void
+  /** The Settings tab in the address bar (/settings/<tab>). */
+  settingsTab: SettingsTab
+  onNavigate: (id: NavId, settingsTab?: SettingsTab) => void
   onOpenAgentBuilder: () => void
   onAgentCreated: () => void
   onOpenAgentActivity: () => void
 }) {
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>(initialSettingsTab)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const setActive = (id: NavId) => {
+    setDrawerOpen(false)
+    onNavigate(id)
+  }
+  const openSettings = (tab: SettingsTab) => {
+    setDrawerOpen(false)
+    onNavigate('settings', tab)
+  }
   // A chat to open when switching to the inbox (from a ticket or a notification).
   const [chatPhone, setChatPhone] = useState<string | null>(null)
   const openChat = (phone: string) => {
@@ -71,10 +91,7 @@ export function ProductShell({
         return (
           <HomePage
             onNavigate={setActive}
-            onOpenSettings={(tab) => {
-              setSettingsTab(tab)
-              setActive('settings')
-            }}
+            onOpenSettings={openSettings}
           />
         )
       case 'inbox':
@@ -88,10 +105,7 @@ export function ProductShell({
       case 'whatsapp':
         return (
           <WhatsAppPage
-            onOpenSettings={() => {
-              setSettingsTab('whatsapp')
-              setActive('settings')
-            }}
+            onOpenSettings={() => openSettings('whatsapp')}
           />
         )
       case 'analytics':
@@ -105,35 +119,80 @@ export function ProductShell({
           />
         )
       case 'settings':
-        return <SettingsPage tab={settingsTab} onTabChange={setSettingsTab} onManageNumbers={() => setActive('whatsapp')} />
+        return <SettingsPage tab={settingsTab} onTabChange={openSettings} onManageNumbers={() => setActive('whatsapp')} />
     }
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      <AppSidebar
-        active={active}
-        onNavigate={setActive}
-        onOpenSettings={(tab) => {
-          setSettingsTab(tab)
-          setActive('settings')
-        }}
-      />
+    <div className="flex h-dvh bg-background">
+      <div className="hidden md:flex">
+        <AppSidebar active={active} onNavigate={setActive} onOpenSettings={openSettings} />
+      </div>
+      {/* Phones: the same navigation in a drawer. */}
+      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <SheetContent side="left" className="w-72 p-0 sm:max-w-72">
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <AppSidebar drawer active={active} onNavigate={setActive} onOpenSettings={openSettings} />
+        </SheetContent>
+      </Sheet>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-6">
-          <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>{activeItem.label}</p>
-          <NotificationsBell
-            onOpenChat={openChat}
-            onOpenTarget={(target) => {
-              // Number alerts (quality, names) open the WhatsApp page; billing opens Settings.
-              if (target === 'broadcasts' || target === 'whatsapp') return setActive(target)
-              setSettingsTab(target)
-              setActive('settings')
-            }}
-          />
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 sm:px-6">
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open navigation"
+            className="-ml-1 rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
+          >
+            <Menu className="size-5" />
+          </button>
+          <img src={mark} alt="Helo.ai" className="size-6 md:hidden" />
+          <span className="truncate text-sm font-medium md:hidden">{activeItem.label}</span>
+          <div className="ml-auto flex items-center gap-1">
+            <HelpMenu />
+            <NotificationsBell
+              onOpenChat={openChat}
+              onOpenTarget={(target) => {
+                // Number alerts (quality, names) open the WhatsApp page; billing opens Settings.
+                if (target === 'broadcasts' || target === 'whatsapp') return setActive(target)
+                openSettings(target)
+              }}
+            />
+          </div>
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto">{renderContent()}</main>
       </div>
     </div>
+  )
+}
+
+/** Product guides and support, one click away from any page. */
+function HelpMenu() {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" aria-label="Help and guides" className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+          <CircleHelp className="size-5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="max-h-[70vh] w-80 overflow-y-auto">
+        {HELP_GROUPS.map((g, i) => (
+          <div key={g.title}>
+            {i > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuLabel className="text-meta font-medium text-muted-foreground">{g.title}</DropdownMenuLabel>
+            {g.links.map((l) => (
+              <DropdownMenuItem key={l.href} asChild>
+                <a href={l.href} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{l.title}</span>
+                    <span className="block text-meta text-muted-foreground">{l.description}</span>
+                  </span>
+                  <ExternalLink className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                </a>
+              </DropdownMenuItem>
+            ))}
+          </div>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

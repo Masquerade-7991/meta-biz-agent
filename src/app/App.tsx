@@ -1,15 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { BrowserRouter, Navigate, useLocation, useNavigate } from 'react-router'
 import { Toaster } from '@/app/components/ui/sonner'
 import { TooltipProvider } from '@/app/components/ui/tooltip'
 import { WizardProvider, useWizard } from '@/app/wizard/WizardContext'
-import { NavigationGuardProvider } from '@/app/wizard/NavigationGuardContext'
+import { NavigationGuardProvider, useNavigationGuard } from '@/app/wizard/NavigationGuardContext'
 import { DevControlsProvider } from '@/app/wizard/DevControlsContext'
 import { ExitProvider } from '@/app/wizard/ExitContext'
 import { AgentStudioShell } from '@/app/components/shell/AgentStudioShell'
 import { DevControlsButton } from '@/app/components/wizard/DevControlsButton'
 import { GateScreen } from '@/app/components/GateScreen'
 import { SetupFrontDoor } from '@/app/components/SetupFrontDoor'
-import { NAV_ITEMS, type NavId } from '@/app/nav'
+import { navFromPath, NAV_ITEMS, pathFor, type NavId } from '@/app/nav'
+import { sectionFromSlug, STUDIO_BASE, studioPath } from '@/app/wizard/studioPaths'
 import type { SettingsTab } from '@/app/components/shell/SettingsPage'
 import { ProductShell } from '@/app/components/shell/ProductShell'
 import { isDummyMode } from '@/app/api/dummy'
@@ -27,10 +29,48 @@ function AgentBuilderFlow({ onExitToShell }: { onExitToShell: (page?: NavId) => 
   return (
     <ExitProvider onExit={onExitToShell}>
       <NavigationGuardProvider>
-        <AgentStudioShell onExit={() => onExitToShell()} />
+        <StudioUrlSync />
+        <AgentStudioShell onExit={() => onExitToShell('ai-agents')} />
       </NavigationGuardProvider>
     </ExitProvider>
   )
+}
+
+/** Keeps /agents/studio/<section> and the open section in step. The section is the wizard's state
+ *  (every in-app jump goes through setSection); the address follows it, and the browser's back and
+ *  forward buttons move the section, through the same unsaved-changes check as the studio nav. */
+function StudioUrlSync() {
+  const { state, setSection } = useWizard()
+  const { runGuard } = useNavigationGuard()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const slug = location.pathname.split('/')[3]
+  const current = state.currentSection
+  // A section the address asked for that the studio hasn't switched to yet. While it is pending the
+  // address is left alone, so a link straight to a section (or Back) isn't overwritten on the way.
+  const target = useRef(sectionFromSlug(slug))
+
+  // Section → address.
+  useEffect(() => {
+    if (target.current && target.current !== current) return
+    target.current = null
+    if (sectionFromSlug(slug) !== current) navigate(studioPath(current), { replace: !sectionFromSlug(slug) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current])
+
+  // Address → section (back / forward, or a link straight to a section).
+  useEffect(() => {
+    const wanted = sectionFromSlug(slug)
+    if (!wanted || wanted === current) return
+    target.current = wanted
+    void runGuard('save').then((ok) => {
+      if (ok) return setSection(wanted)
+      target.current = null
+      navigate(studioPath(current), { replace: true })
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug])
+  return null
 }
 
 /** Who sees what: an emailed link verifies the email; signed out → log in or sign up; a verified
@@ -38,16 +78,8 @@ function AgentBuilderFlow({ onExitToShell }: { onExitToShell: (page?: NavId) => 
  *  without a workspace → create one; otherwise the console. */
 function Gate() {
   const { me, setMe } = useAuth()
-  const [view, setView] = useState<'shell' | 'setup' | 'agent-flow'>('shell')
-  // Links in emails open a page or a Settings tab: /?page=broadcasts, /?settings=billing.
-  const [start] = useState(() => {
-    const q = new URLSearchParams(window.location.search)
-    const tab = q.get('settings') as SettingsTab | null
-    const page = q.get('page') as NavId | null
-    if (tab || page) window.history.replaceState(null, '', '/')
-    return { nav: tab ? ('settings' as NavId) : page && NAV_ITEMS.some((i) => i.id === page) ? page : ('home' as NavId), tab: tab ?? undefined }
-  })
-  const [nav, setNav] = useState<NavId>(start.nav)
+  const location = useLocation()
+  const navigate = useNavigate()
   const [linkToken, setLinkToken] = useState(() =>
     window.location.pathname === '/auth/verify' ? new URLSearchParams(window.location.search).get('token') : null,
   )
@@ -69,44 +101,48 @@ function Gate() {
   if (me.setup === 'password') return <NewPasswordScreen />
   if (!me.workspace) return <CreateWorkspaceScreen />
 
+  // Older links in emails open a page or a Settings tab by query: /?page=broadcasts, /?settings=billing.
+  const q = new URLSearchParams(location.search)
+  const legacyTab = q.get('settings')
+  const legacyPage = q.get('page') as NavId | null
+  if (legacyTab) return <Navigate to={pathFor('settings', legacyTab)} replace />
+  if (legacyPage && NAV_ITEMS.some((i) => i.id === legacyPage)) return <Navigate to={pathFor(legacyPage)} replace />
+
+  const path = location.pathname
+  if (path === '/agents/setup') return <SetupFrontDoor onFinish={() => navigate(STUDIO_BASE)} />
+  if (path === STUDIO_BASE || path.startsWith(STUDIO_BASE + '/'))
+    return <AgentBuilderFlow onExitToShell={(page) => navigate(pathFor(page ?? 'ai-agents'))} />
+
+  const nav = navFromPath(path)
+  if (!nav) return <Navigate to="/" replace />
+  const tab = nav === 'settings' ? (path.split('/')[2] as SettingsTab | undefined) : undefined
   return (
-    <>
-      {view === 'shell' && (
-        <ProductShell
-          active={nav}
-          initialSettingsTab={start.tab}
-          onNavigate={setNav}
-          onOpenAgentBuilder={() => setView('agent-flow')}
-          // Dummy demos fill every field by hand, so the guided setup is skipped.
-          onAgentCreated={() => setView(isDummyMode() ? 'agent-flow' : 'setup')}
-          onOpenAgentActivity={() => setView('agent-flow')}
-        />
-      )}
-      {view === 'setup' && <SetupFrontDoor onFinish={() => setView('agent-flow')} />}
-      {view === 'agent-flow' && (
-        <AgentBuilderFlow
-          onExitToShell={(page) => {
-            if (page) setNav(page)
-            setView('shell')
-          }}
-        />
-      )}
-    </>
+    <ProductShell
+      active={nav}
+      settingsTab={tab ?? 'profile'}
+      onNavigate={(id, settingsTab) => navigate(pathFor(id, settingsTab))}
+      onOpenAgentBuilder={() => navigate(STUDIO_BASE)}
+      // Dummy demos fill every field by hand, so the guided setup is skipped.
+      onAgentCreated={() => navigate(isDummyMode() ? STUDIO_BASE : '/agents/setup')}
+      onOpenAgentActivity={() => navigate(STUDIO_BASE)}
+    />
   )
 }
 
 export default function App() {
   return (
+    <BrowserRouter>
     <AuthProvider>
       <WizardProvider>
         <TooltipProvider>
           <DevControlsProvider>
             <Gate />
-            <DevControlsButton />
+            {(isDummyMode() || import.meta.env.DEV) && <DevControlsButton />}
           </DevControlsProvider>
           <Toaster />
         </TooltipProvider>
       </WizardProvider>
     </AuthProvider>
+    </BrowserRouter>
   )
 }

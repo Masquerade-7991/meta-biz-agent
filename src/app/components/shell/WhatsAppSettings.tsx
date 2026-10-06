@@ -12,7 +12,7 @@ import { AccountSteps, ConnectWhatsApp } from '@/app/whatsapp/ConnectWhatsApp'
 import { SettingsSection } from './SettingsSection'
 import { NumberHealthCard } from '@/app/whatsapp/NumberHealthCard'
 import { WebhookStatusCard } from '@/app/whatsapp/WebhookStatusCard'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
+import { TEXT_SM } from '@/app/lib/text'
 import { can } from '@/app/lib/permissions'
 
 const SOURCE: Record<WaAccount['source'], string> = { env: 'Set up by Helo.ai', signup: 'Connected with Embedded Signup', coexistence: 'WhatsApp Business app number' }
@@ -24,16 +24,16 @@ function AccountCard({ a, isOwner, onChange, onRemove }: { a: WaAccount; isOwner
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>{a.wabaName}</p>
-          <p className="text-muted-foreground" style={TEXT_XS}>
+          <p className="text-muted-foreground text-xs">
             {SOURCE[a.source]} &middot; WABA {a.wabaId}
           </p>
         </div>
         <span className="flex flex-wrap gap-1">
-          {a.needsAttention ? <Badge className="bg-warning text-warning-foreground">Needs attention</Badge> : <Badge className="bg-success text-success-foreground">Connected</Badge>}
+          {a.needsAttention ? <Badge className="bg-warning/15 text-warning-foreground">Needs attention</Badge> : <Badge className="bg-success text-success-foreground">Connected</Badge>}
           <Badge variant="secondary">{a.billing.mode === 'partner_credit' ? 'Billed through Helo.ai' : 'Pays Meta directly'}</Badge>
         </span>
       </div>
-      <ul className="space-y-1" style={TEXT_SM}>
+      <ul className="space-y-1 text-sm">
         {a.phoneNumbers.map((n) => (
           <li key={n.id}>
             {n.display || n.id}
@@ -46,7 +46,7 @@ function AccountCard({ a, isOwner, onChange, onRemove }: { a: WaAccount; isOwner
         <div className="flex flex-wrap items-center gap-2">
           {a.hasPin &&
             (pin ? (
-              <span className="rounded-md bg-muted px-2 py-1 font-mono tracking-widest" style={TEXT_SM}>
+              <span className="rounded-md bg-muted px-2 py-1 font-mono tracking-widest text-sm">
                 PIN {pin}
               </span>
             ) : (
@@ -94,7 +94,7 @@ export function WhatsAppSettings({ onManageNumbers }: { onManageNumbers?: () => 
         ) : !rows ? (
           <Loader2 className="size-4 animate-spin text-muted-foreground" />
         ) : rows.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground" style={TEXT_SM}>
+          <p className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground text-sm">
             No WhatsApp number connected yet.
           </p>
         ) : (

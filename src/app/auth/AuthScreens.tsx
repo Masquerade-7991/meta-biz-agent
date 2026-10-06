@@ -37,7 +37,7 @@ function ServerDown() {
         </Button>
         <Button onClick={() => setDummyMode(true)}>Explore the demo</Button>
       </div>
-      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+      <p className="text-muted-foreground text-xs">
         The demo runs in your browser with sample data. Nothing reaches WhatsApp.
       </p>
     </div>
@@ -100,7 +100,7 @@ function Login({ email, setEmail, go }: ModeProps) {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           aside={
-            <span style={{ fontSize: 'var(--text-sm)' }}>
+            <span className="text-sm">
               <TextButton onClick={() => go('forgot')}>Forgot password?</TextButton>
             </span>
           }
@@ -111,7 +111,7 @@ function Login({ email, setEmail, go }: ModeProps) {
           Log in
         </Button>
       </form>
-      <p className="mt-8 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+      <p className="mt-8 text-muted-foreground text-sm">
         New to Helo.ai? <TextButton onClick={() => go('signup')}>Create an account</TextButton>
       </p>
     </>
@@ -177,11 +177,11 @@ function SendLink({ kind, email, setEmail, go }: ModeProps & { kind: 'signup' | 
             {busy && <Loader2 className="size-4 animate-spin" />}
             {wait > 0 ? `Resend link in ${wait}s` : 'Resend link'}
           </Button>
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="text-muted-foreground text-sm">
             Wrong address? <TextButton onClick={() => setSent(false)}>Use a different email</TextButton>
           </p>
         </div>
-        <p className="mt-8 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="mt-8 text-muted-foreground text-sm">
           <TextButton onClick={() => go('login')}>Back to log in</TextButton>
         </p>
       </>
@@ -202,7 +202,7 @@ function SendLink({ kind, email, setEmail, go }: ModeProps & { kind: 'signup' | 
           {c.button}
         </Button>
       </form>
-      <p className="mt-8 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+      <p className="mt-8 text-muted-foreground text-sm">
         {kind === 'signup' ? 'Already have an account? ' : 'Remembered it? '}
         <TextButton onClick={() => go('login')}>Log in</TextButton>
       </p>
@@ -243,7 +243,7 @@ export function CreateWorkspaceScreen() {
           Create workspace
         </Button>
       </form>
-      <p className="mt-8 text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+      <p className="mt-8 text-muted-foreground text-sm">
         Not you? <TextButton onClick={() => void logout()}>Log out</TextButton>
       </p>
     </AuthLayout>

@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { SECTION_TITLE, TEXT_SM_OPEN } from '@/app/lib/text'
 import { cn } from '@/app/lib/utils'
 
 /** One titled settings section: heading and explanation on the left, the form on the right.
@@ -13,9 +12,9 @@ export function SettingsSection({ title, description, wide, children }: { title:
       )}
     >
       <div className="space-y-1">
-        <h2 style={SECTION_TITLE}>{title}</h2>
+        <h2 className="text-section font-semibold">{title}</h2>
         {description && (
-          <p className="text-muted-foreground" style={TEXT_SM_OPEN}>
+          <p className="text-muted-foreground text-sm">
             {description}
           </p>
         )}

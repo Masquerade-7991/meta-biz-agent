@@ -29,7 +29,7 @@ import {
   type Segment,
 } from '@/app/api/contacts'
 import { parseCsv, toCsv, toImportRows, type ImportRow } from '@/app/contacts/csv'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
+import { TEXT_SM } from '@/app/lib/text'
 import { SearchInput } from '@/app/components/Filters'
 import { customerLabel, isBsuid } from '@/app/lib/customer'
 import { can } from '@/app/lib/permissions'
@@ -116,7 +116,7 @@ function ContactDialog({
           <div className="space-y-1.5">
             <Label htmlFor="c-tags">Tags</Label>
             <Input id="c-tags" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="vip, billing" />
-            <p className="text-muted-foreground" style={TEXT_XS}>
+            <p className="text-muted-foreground text-xs">
               Separate tags with commas.
             </p>
           </div>
@@ -147,10 +147,10 @@ function ContactDialog({
               )}
             </div>
           ))}
-          <label className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5" style={TEXT_SM}>
+          <label className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5 text-sm">
             <span>
               Opted out of broadcasts
-              <span className="block text-muted-foreground" style={TEXT_XS}>
+              <span className="block text-muted-foreground text-xs">
                 Set automatically when the customer replies STOP. Chats still work.
               </span>
             </span>
@@ -235,13 +235,13 @@ function ImportDialog({ fields, onClose, onDone }: { fields: FieldDef[]; onClose
           <DialogDescription>A CSV with a phone column. Name, email, tags and your custom fields are picked up by their column names. Existing numbers are updated, not duplicated.</DialogDescription>
         </DialogHeader>
         {result ? (
-          <div className="space-y-3" style={TEXT_SM}>
+          <div className="space-y-3 text-sm">
             <p>
               Added {result.added}, updated {result.updated}
               {result.skippedCount ? `, skipped ${result.skippedCount}` : ''}.
             </p>
             {result.skipped.length > 0 && (
-              <ul className="max-h-40 space-y-1 overflow-y-auto rounded-md bg-muted p-3 text-muted-foreground" style={TEXT_XS}>
+              <ul className="max-h-40 space-y-1 overflow-y-auto rounded-md bg-muted p-3 text-muted-foreground text-xs">
                 {result.skipped.map((s) => (
                   <li key={s.row}>
                     Row {s.row}: {s.reason}
@@ -263,7 +263,7 @@ function ImportDialog({ fields, onClose, onDone }: { fields: FieldDef[]; onClose
             {parsed && (
               <>
                 <div className="overflow-x-auto rounded-md border border-border">
-                  <table className="w-full" style={TEXT_XS}>
+                  <table className="w-full text-xs">
                     <thead className="bg-muted/50">
                       <tr>
                         {parsed.header.map((h, i) => (
@@ -276,7 +276,7 @@ function ImportDialog({ fields, onClose, onDone }: { fields: FieldDef[]; onClose
                     </thead>
                   </table>
                 </div>
-                <p className="text-muted-foreground" style={TEXT_SM}>
+                <p className="text-muted-foreground text-sm">
                   {parsed.rows.length} row{parsed.rows.length === 1 ? '' : 's'} ready
                   {parsed.rows[0] ? `, starting with ${parsed.rows[0].name || parsed.rows[0].phone}` : ''}.
                 </p>
@@ -340,7 +340,7 @@ function SegmentDialog({ tag, onClose, onSaved }: { tag: string; onClose: () => 
               </SelectContent>
             </Select>
           </div>
-          <label className="flex items-center gap-2.5" style={TEXT_SM}>
+          <label className="flex items-center gap-2.5 text-sm">
             <Checkbox checked={optedOut} onCheckedChange={(v) => setOptedOut(v === true)} />
             Include people who opted out
           </label>
@@ -483,22 +483,22 @@ export function ContactsPage({ onOpenChat }: { onOpenChat: (phone: string) => vo
             Delete “{currentSegment.name}”
           </Button>
         )}
-        <span className="ml-auto text-muted-foreground" style={TEXT_XS}>
+        <span className="ml-auto text-muted-foreground text-xs">
           {rows ? `${rows.length} contact${rows.length === 1 ? '' : 's'}` : ''}
         </span>
       </div>
 
       <div className="mt-4 overflow-x-auto rounded-lg border border-border">
         {error ? (
-          <p className="p-6 text-destructive" style={TEXT_SM}>
+          <p className="p-6 text-destructive text-sm">
             {error}
           </p>
         ) : !rows ? (
-          <p className="flex items-center gap-2 p-6 text-muted-foreground" style={TEXT_SM}>
+          <p className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
             <Loader2 className="size-4 animate-spin" /> Loading contacts&hellip;
           </p>
         ) : rows.length === 0 ? (
-          <p className="p-10 text-center text-muted-foreground" style={TEXT_SM}>
+          <p className="p-10 text-center text-muted-foreground text-sm">
             {q || tag !== 'all' || segment !== 'all' ? 'No contacts match.' : 'No contacts yet. They appear as customers chat with your agent, or import a CSV.'}
           </p>
         ) : (
@@ -519,7 +519,7 @@ export function ContactsPage({ onOpenChat }: { onOpenChat: (phone: string) => vo
               {rows.map((c) => (
                 <TableRow key={c.phone} className="cursor-pointer" onClick={() => setEditing(c)}>
                   <TableCell style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-medium)' }}>{c.name || <span className="text-muted-foreground">No name</span>}</TableCell>
-                  <TableCell style={TEXT_SM}>{customerLabel(c.phone, c.username)}</TableCell>
+                  <TableCell className="text-sm">{customerLabel(c.phone, c.username)}</TableCell>
                   <TableCell>
                     <span className="flex flex-wrap gap-1">
                       {c.tags.map((t) => (
@@ -530,16 +530,16 @@ export function ContactsPage({ onOpenChat }: { onOpenChat: (phone: string) => vo
                     </span>
                   </TableCell>
                   {shownFields.map((f) => (
-                    <TableCell key={f.key} style={TEXT_SM}>
+                    <TableCell key={f.key} className="text-sm">
                       {c.fields[f.key] ?? ''}
                     </TableCell>
                   ))}
-                  <TableCell className="text-muted-foreground" style={TEXT_SM}>
+                  <TableCell className="text-muted-foreground text-sm">
                     {ago(c.lastSeenAt)}
                   </TableCell>
                   <TableCell>
                     <span className="flex gap-1">
-                      {c.openTicket && <Badge className="bg-warning text-warning-foreground">Open ticket</Badge>}
+                      {c.openTicket && <Badge className="bg-warning/15 text-warning-foreground">Open ticket</Badge>}
                       {c.optedOut && <Badge variant="outline">Opted out</Badge>}
                       {c.source === 'sample' && <Badge variant="secondary">Sample</Badge>}
                     </span>

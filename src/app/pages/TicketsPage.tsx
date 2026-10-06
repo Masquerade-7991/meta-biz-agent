@@ -122,7 +122,7 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
       </div>
 
       {picked.size > 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2" style={TEXT_SM}>
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm">
           <span className="mr-2">{picked.size} selected</span>
           <Select onValueChange={(v) => void bulk({ patch: { assigneeId: v === 'none' ? null : v } }, 'Tickets reassigned.')} disabled={busy}>
             <SelectTrigger className="h-8 w-40" aria-label="Assign selected">
@@ -162,17 +162,17 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
 
       <div className="mt-4 overflow-x-auto rounded-lg border border-border">
         {error ? (
-          <p className="p-6 text-destructive" style={TEXT_SM}>
+          <p className="p-6 text-destructive text-sm">
             {error}
           </p>
         ) : !rows ? (
-          <p className="flex items-center gap-2 p-6 text-muted-foreground" style={TEXT_SM}>
+          <p className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
             <Loader2 className="size-4 animate-spin" /> Loading tickets&hellip;
           </p>
         ) : rows.length === 0 ? (
-          <div className="space-y-1 p-10 text-center text-muted-foreground" style={TEXT_SM}>
+          <div className="space-y-1 p-10 text-center text-muted-foreground text-sm">
             <p>{view === 'open' && assignee === 'any' && priority === 'any' && !q ? 'No open tickets. The AI agent has everything covered.' : 'No tickets match.'}</p>
-            <p style={TEXT_XS}>A ticket opens when the AI agent hands a chat to your team, or when someone takes over or replies in the inbox.</p>
+            <p className="text-xs">A ticket opens when the AI agent hands a chat to your team, or when someone takes over or replies in the inbox.</p>
           </div>
         ) : (
           <Table>
@@ -215,12 +215,12 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
                       #{t.number} {t.subject}
                     </p>
                     {t.tags.length > 0 && (
-                      <p className="text-muted-foreground" style={TEXT_XS}>
+                      <p className="text-muted-foreground text-xs">
                         {t.tags.join(', ')}
                       </p>
                     )}
                   </TableCell>
-                  <TableCell style={TEXT_SM}>
+                  <TableCell className="text-sm">
                     {t.name || customerLabel(t.phone)}
                     {t.sample && (
                       <span className="ml-1.5 rounded bg-muted px-1.5 text-muted-foreground" style={{ fontSize: '0.6875rem' }}>
@@ -229,19 +229,19 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
                     )}
                   </TableCell>
                   <TableCell>
-                    <span className={cn('rounded px-2 py-0.5', PRIORITY_CLASS[t.priority])} style={TEXT_XS}>
+                    <span className={cn('rounded px-2 py-0.5 text-xs', PRIORITY_CLASS[t.priority])}>
                       {PRIORITY_LABEL[t.priority]}
                     </span>
                   </TableCell>
-                  <TableCell style={TEXT_SM}>
+                  <TableCell className="text-sm">
                     {STATUS_LABEL[t.status]}
                     {t.csat && (
-                      <span className="ml-2 inline-flex items-center gap-0.5 text-muted-foreground" style={TEXT_XS} title={`Customer said: ${t.csat.label}`}>
+                      <span className="ml-2 inline-flex items-center gap-0.5 text-muted-foreground text-xs" title={`Customer said: ${t.csat.label}`}>
                         <Star className="size-3" /> {t.csat.label}
                       </span>
                     )}
                   </TableCell>
-                  <TableCell style={TEXT_SM}>{nameOf(t.assigneeId)}</TableCell>
+                  <TableCell className="text-sm">{nameOf(t.assigneeId)}</TableCell>
                   <TableCell>
                     <SlaCell t={t} />
                   </TableCell>

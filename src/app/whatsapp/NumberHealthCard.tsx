@@ -5,7 +5,7 @@ import { Button } from '@/app/components/ui/button'
 import { errorDetail } from '@/app/api/meta'
 import { getNumberHealth, refreshNumberHealth, type NumberHealth } from '@/app/api/whatsapp'
 import { cn } from '@/app/lib/utils'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
+import { TEXT_SM } from '@/app/lib/text'
 
 const QUALITY: Record<string, { label: string; dot: string; help: string }> = {
   GREEN: { label: 'High quality', dot: 'bg-success', help: 'Customers are happy with your messages.' },
@@ -22,7 +22,7 @@ export function NumberHealthCard({ compact }: { compact?: boolean }) {
   useEffect(() => {
     getNumberHealth().then(setRows, (err) => setError(errorDetail(err)))
   }, [])
-  if (error) return <p className="text-muted-foreground" style={TEXT_XS}>Couldn&rsquo;t read number health: {error}</p>
+  if (error) return <p className="text-muted-foreground text-xs">Couldn&rsquo;t read number health: {error}</p>
   if (!rows) return <Loader2 className="size-4 animate-spin text-muted-foreground" />
   if (!rows.length) return null
   return (
@@ -34,13 +34,13 @@ export function NumberHealthCard({ compact }: { compact?: boolean }) {
             <li key={r.phoneNumberId} className="rounded-lg border border-border p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>{r.display}</p>
-                <span className="flex items-center gap-1.5" style={TEXT_XS}>
+                <span className="flex items-center gap-1.5 text-xs">
                   <span className={cn('size-2 rounded-full', q?.dot ?? 'bg-muted-foreground')} />
                   {q?.label ?? 'Quality not rated yet'}
                 </span>
               </div>
-              {!compact && q && q.help && r.quality !== 'GREEN' && <p className="mt-1 text-muted-foreground" style={TEXT_XS}>{q.help}</p>}
-              <p className="mt-1 text-muted-foreground" style={TEXT_XS}>
+              {!compact && q && q.help && r.quality !== 'GREEN' && <p className="mt-1 text-muted-foreground text-xs">{q.help}</p>}
+              <p className="mt-1 text-muted-foreground text-xs">
                 {r.limitLabel ? `Can start ${r.limitLabel} new conversations a day` : 'Daily limit not available'}
                 {r.nameStatus && NAME[r.nameStatus] ? ` · ${NAME[r.nameStatus]}` : ''}
               </p>

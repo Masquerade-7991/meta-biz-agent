@@ -4,7 +4,6 @@ import { Copy, Loader2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { getWebhookStatus, type WebhookStatus } from '@/app/api/whatsapp'
 import { cn } from '@/app/lib/utils'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 
 const ago = (iso: string) => {
   const m = Math.round((Date.now() - Date.parse(iso)) / 60_000)
@@ -18,11 +17,11 @@ export function WebhookStatusCard() {
   useEffect(() => {
     getWebhookStatus().then(setS, (err: Error) => setError(err.message))
   }, [])
-  if (error) return <p className="text-muted-foreground" style={TEXT_XS}>Couldn&rsquo;t check webhooks: {error}</p>
+  if (error) return <p className="text-muted-foreground text-xs">Couldn&rsquo;t check webhooks: {error}</p>
   if (!s) return <Loader2 className="size-4 animate-spin text-muted-foreground" />
   const live = !!s.lastAt && Date.now() - Date.parse(s.lastAt) < 7 * 86_400_000
   return (
-    <div className="space-y-3" style={TEXT_SM}>
+    <div className="space-y-3 text-sm">
       <p className="flex items-center gap-2">
         <span className={cn('size-2 rounded-full', live ? 'bg-success' : 'bg-amber-500')} />
         {s.lastAt ? `Last event from WhatsApp ${ago(s.lastAt)}` : 'No events from WhatsApp yet'}
@@ -33,18 +32,18 @@ export function WebhookStatusCard() {
         </p>
       )}
       <div className="space-y-1.5 rounded-lg border border-border p-3">
-        <p className="text-muted-foreground" style={TEXT_XS}>
+        <p className="text-muted-foreground text-xs">
           In your Meta app, open WhatsApp &rarr; Configuration and set the callback URL to:
         </p>
         <div className="flex items-center gap-2">
-          <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1" style={TEXT_XS}>
+          <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 text-xs">
             {s.callbackUrl}
           </code>
           <Button size="sm" variant="ghost" aria-label="Copy callback URL" onClick={() => void navigator.clipboard.writeText(s.callbackUrl).then(() => toast.success('Copied.'))}>
             <Copy className="size-4" />
           </Button>
         </div>
-        <p className="text-muted-foreground" style={TEXT_XS}>
+        <p className="text-muted-foreground text-xs">
           Then subscribe to <strong>messages</strong>, <strong>message_template_status_update</strong> and <strong>phone_number_quality_update</strong>.
           {s.verifyTokenSet ? ' Use the verify token set on the server (WEBHOOK_VERIFY_TOKEN).' : ' The server has no verify token yet: set WEBHOOK_VERIFY_TOKEN first.'}
           {!s.signatureChecked && ' Set APP_SECRET on the server too, so only Meta can post events.'}

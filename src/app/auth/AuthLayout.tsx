@@ -21,7 +21,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         </div>
         <div className="space-y-3">
           <img src={metaPartner} alt="Meta Partner" className="h-8 w-auto" />
-          <p className="opacity-70" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="opacity-70 text-sm">
             Built by Helo.ai, an official Meta Business Solution Provider.
           </p>
         </div>
@@ -41,9 +41,9 @@ export function AuthHeading({ title, children }: { title: string; children?: Rea
   return (
     <div className="mb-8 space-y-2">
       {/* The page-level h1 size (3.5rem) is too heavy for a 400px form column. */}
-      <h1 style={{ fontSize: 'var(--text-h4)', letterSpacing: '-0.01em' }}>{title}</h1>
+      <h1 className="text-display">{title}</h1>
       {children && (
-        <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)', lineHeight: 1.5 }}>
+        <p className="text-muted-foreground text-sm">
           {children}
         </p>
       )}
@@ -67,7 +67,7 @@ export function Field({
       </div>
       <Input id={id} aria-describedby={hint ? `${id}-hint` : undefined} {...input} />
       {hint && (
-        <p id={`${id}-hint`} className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+        <p id={`${id}-hint`} className="text-muted-foreground text-xs">
           {hint}
         </p>
       )}
@@ -78,7 +78,7 @@ export function Field({
 /** A form-level error, announced when it appears. */
 export function FormError({ children }: { children: ReactNode }) {
   return (
-    <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-destructive" style={{ fontSize: 'var(--text-sm)' }}>
+    <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-destructive text-sm">
       {children}
     </p>
   )

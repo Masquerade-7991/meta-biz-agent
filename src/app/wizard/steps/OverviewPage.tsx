@@ -95,11 +95,11 @@ export function OverviewPage() {
           value={String(connectionCount)}
           hoverContent={
             connectionCount === 0 ? (
-              <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+              <p className="text-muted-foreground text-sm">
                 No connections yet.
               </p>
             ) : (
-              <ul className="space-y-1" style={{ fontSize: 'var(--text-sm)' }}>
+              <ul className="space-y-1 text-sm">
                 {state.connections.connections.map((conn) => (
                   <li key={conn.id}>{conn.name}</li>
                 ))}
@@ -111,7 +111,7 @@ export function OverviewPage() {
           label="Knowledge"
           value={String(faqCount + docCount + siteCount)}
           hoverContent={
-            <ul className="space-y-1" style={{ fontSize: 'var(--text-sm)' }}>
+            <ul className="space-y-1 text-sm">
               <li>
                 {faqCount} FAQ{faqCount === 1 ? '' : 's'}
               </li>
@@ -138,8 +138,8 @@ export function OverviewPage() {
                   <div className="flex items-start gap-3">
                     <Icon className="size-5 shrink-0 text-muted-foreground" />
                     <div className="min-w-0">
-                      <p style={{ fontWeight: 'var(--font-weight-medium)' }}>{item.label}</p>
-                      <p className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)' }}>
+                      <p className="font-medium">{item.label}</p>
+                      <p className="text-muted-foreground text-xs">
                         {SECTION_BLURB[item.id]}
                       </p>
                     </div>
@@ -216,7 +216,7 @@ function LiveOnWhatsApp({ phoneId }: { phoneId: string | null }) {
 
   if (error)
     return (
-      <section className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card p-5" style={{ fontSize: 'var(--text-sm)' }}>
+      <section className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card p-5 text-sm">
         <p className="text-destructive">Couldn&rsquo;t load how your agent is doing on WhatsApp. {error}</p>
         <Button size="sm" variant="outline" onClick={load}>
           Try again
@@ -229,14 +229,14 @@ function LiveOnWhatsApp({ phoneId }: { phoneId: string | null }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <h3>Live on WhatsApp</h3>
-          <p className="text-muted-foreground" style={{ fontSize: 'var(--text-sm)' }}>
+          <p className="text-muted-foreground text-sm">
             {live ? (live.number ? `${live.number.name} · ${live.number.display}` : 'No WhatsApp number linked yet') : 'Loading…'}
           </p>
         </div>
         {live && <Badge className={a?.enabled ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'}>{a?.enabled ? 'Active' : 'Off'}</Badge>}
       </div>
       {live && (
-        <p className="max-w-2xl" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="max-w-2xl text-sm">
           {a?.enabled
             ? a.audience === 'EVERYONE'
               ? 'Your agent answers every customer who messages this number.'
@@ -249,7 +249,7 @@ function LiveOnWhatsApp({ phoneId }: { phoneId: string | null }) {
         <MetricCard label="Unread messages" value={live ? String(live.team.unread) : '—'} />
       </div>
       {!!live?.team.overdue && (
-        <p className="text-destructive" style={{ fontSize: 'var(--text-sm)' }}>
+        <p className="text-destructive text-sm">
           {live.team.overdue} ticket{live.team.overdue === 1 ? ' is' : 's are'} past the response time.
         </p>
       )}
