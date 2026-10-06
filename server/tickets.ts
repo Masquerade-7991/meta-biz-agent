@@ -233,7 +233,12 @@ async function update(number: number, b: Obj, me: Actor) {
   if (b.status !== undefined) {
     if (!['open', 'pending'].includes(String(b.status))) throw new HttpError(400, 'Use Resolve to close a ticket.')
     set.status = b.status
-    if (t.status === 'resolved') Object.assign(set, { resolvedAt: null, resolution: null })
+    if (t.status === 'resolved') {
+      // One open ticket per chat: a newer one (e.g. a later handoff) already carries the conversation.
+      const other = await tickets().findOne({ workspaceId: ws(), phone: t.phone, status: OPEN, _id: { $ne: t._id } })
+      if (other) throw new HttpError(409, `This chat already has an open ticket (#${other.number}). Continue there.`)
+      Object.assign(set, { resolvedAt: null, resolution: null })
+    }
   }
   if (b.priority !== undefined) {
     if (!PRIORITIES.includes(b.priority as Priority)) throw new HttpError(400, 'Priority must be urgent, high, normal or low.')
@@ -265,6 +270,7 @@ async function resolve(number: number, b: Obj, me: Actor) {
   const t = await tickets().findOne({ workspaceId: ws(), number })
   if (!t) throw new HttpError(404, `Ticket #${number} doesn’t exist.`)
   if (t.status === 'resolved') throw new HttpError(400, `Ticket #${number} is already resolved.`)
+  await needInScope(me, t.assigneeId)
   const now = new Date()
   const s = await getSettings()
   const conv = await conversations().findOne({ workspaceId: ws(), phone: t.phone })

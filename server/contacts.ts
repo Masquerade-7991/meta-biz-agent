@@ -88,7 +88,7 @@ async function list(u: URL) {
   const p = (k: string) => u.searchParams.get(k) ?? ''
   let filter: SegmentFilter = { includeOptedOut: true }
   if (p('segment')) {
-    const seg = await col('segments').findOne({ workspaceId: ws(), _id: new ObjectId(p('segment')) })
+    const seg = ObjectId.isValid(p('segment')) && (await col('segments').findOne({ workspaceId: ws(), _id: new ObjectId(p('segment')) }))
     if (!seg) throw new HttpError(404, 'That segment no longer exists.')
     filter = seg.filter as SegmentFilter
   }
