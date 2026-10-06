@@ -189,7 +189,7 @@ export function RichRepliesSection() {
   function startRebuildAsForm(reply: RichReply) {
     setPendingRebuildId(null)
     const fresh = emptyBlanksForType(reply.type)
-    setEditor({ ...fresh, mode: 'edit', replyId: reply.id } as RichReplyEditorState)
+    setEditor({ ...fresh, name: reply.name, mode: 'edit', replyId: reply.id } as RichReplyEditorState)
     setEditorError(null)
   }
 
@@ -333,7 +333,7 @@ export function RichRepliesSection() {
                 <div className="flex items-center justify-end gap-1 border-t border-border px-3 py-1.5">
                   {isRaw ? (
                     <Button size="sm" variant="ghost" onClick={() => setPendingRebuildId(reply.id)}>
-                      Rebuild as a form
+                      Edit
                     </Button>
                   ) : (
                     <Button size="sm" variant="ghost" onClick={() => startEdit(reply)}>
@@ -394,8 +394,9 @@ export function RichRepliesSection() {
 
       <ConfirmDialog
         open={pendingRebuildId !== null}
-        title="This will replace the existing setup for this rich reply. Continue?"
-        confirmLabel="Continue"
+        title="Edit this rich reply?"
+        description="It was set up outside Helo.ai, so the form starts empty. Saving replaces its current setup."
+        confirmLabel="Edit"
         onConfirm={() => {
           const reply = richReplies.find((r) => r.id === pendingRebuildId)
           if (reply) startRebuildAsForm(reply)

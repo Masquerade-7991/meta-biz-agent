@@ -467,7 +467,8 @@ export function assertValidRichReply(reply: RichReply) {
 export const createUiSkill = async (r: RichReply) => {
   assertValidRichReply(r)
   return metaFetch<MetaUiSkill>(`${agent()}/agent-ui-skills`, 'POST', {
-    title: r.name,
+    // Same title rule as skills (checked live): "Order status" goes to Meta as "order-status".
+    title: skillTitle(r.name),
     component_type: r.type,
     status: r.enabled ? 'enabled' : 'disabled',
     instruction: r.instructionSentence,
@@ -481,7 +482,7 @@ export const updateUiSkill = async (
   reply?: RichReply,
 ) => {
   if (reply) assertValidRichReply(reply)
-  return metaFetch<MetaUiSkill>(`${agent()}/agent-ui-skills/${id}`, 'PUT', patch)
+  return metaFetch<MetaUiSkill>(`${agent()}/agent-ui-skills/${id}`, 'PUT', patch.title === undefined ? patch : { ...patch, title: skillTitle(patch.title) })
 }
 export const deleteUiSkill = (id: string) => metaFetch(`${agent()}/agent-ui-skills/${id}`, 'DELETE')
 
@@ -944,11 +945,13 @@ export async function hydrateFromMeta(state: WizardState): Promise<{ patch: Patc
       : k.websites,
   }
   if (uiSkills) {
+    const names = new Map(state.richReplies.richReplies.map((r) => [r.metaId, r.name]))
     patch.richReplies = {
       richReplies: reconcile<RichReply, MetaUiSkill>(
         state.richReplies.richReplies,
         uiSkills,
-        (r) => ({ name: r.title, enabled: r.status === 'enabled', instructionSentence: r.instruction }),
+        // Meta holds the slug of the name; keep the readable name when it still matches.
+        (r) => ({ ...(skillTitle(names.get(r.id) ?? '') !== r.title && { name: r.title }), enabled: r.status === 'enabled', instructionSentence: r.instruction }),
         (r) =>
           ({
             id: `rr-${r.id}`,
@@ -959,7 +962,7 @@ export async function hydrateFromMeta(state: WizardState): Promise<{ patch: Patc
             instructionSentence: r.instruction,
             createdAt: toMs(r.created_at) ?? now,
             type: r.component_type,
-            blanks: null, // created elsewhere: shown as raw text with "Rebuild as a form"
+            blanks: null, // created elsewhere: shown as raw text with "Edit" (opens an empty form)
           }) as RichReply,
       ),
     }

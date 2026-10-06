@@ -48,6 +48,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Thread control has its own path and uses `X-API-Version: 1.0.0`.
   - Several response fields are JSON-encoded strings.
   - Connector and tool names allow only letters, numbers and underscores (Meta answers a bare 400 otherwise, though its docs show names with spaces). Body params take no per-param `required` flag; use `body.required`.
+  - Skill and rich reply (UI skill) titles allow only lowercase letters, numbers and hyphens (`skillTitle`); the console keeps the readable name.
   - Tool value names may be anything but must be unique across path, query, headers and body together.
   - A connector `PUT` without `auth_config` keeps the saved keys; `upsertApiKey` replaces all keys. Keys are never kept in the browser (`stripConnectionSecrets`).
   - A tool run can answer `status: "success"` with the failure inside `output` (`{status:{code}, body}`; code 1 = finished). Read it with `readToolRun` (`src/app/wizard/toolRun.ts`).

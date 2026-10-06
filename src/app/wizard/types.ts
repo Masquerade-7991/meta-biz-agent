@@ -312,8 +312,8 @@ interface RichReplyBase {
 }
 
 /** `blanks` is null only for a row the system has with no structured record on our side (created
- *  elsewhere) — the row then shows `instructionSentence` as raw text and offers "Rebuild as a
- *  form" instead of "Edit". */
+ *  elsewhere) — the row then shows `instructionSentence` as raw text, and "Edit" opens an empty form
+ *  (after a confirmation) instead of the filled one. */
 export type RichReply =
   | (RichReplyBase & { type: 'cta_url'; blanks: CtaUrlBlanks | null })
   | (RichReplyBase & { type: 'image'; blanks: ImageBlanks | null })
