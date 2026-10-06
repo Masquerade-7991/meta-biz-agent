@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Bot, Check, ChevronRight, Inbox, Loader2, Smartphone, Ticket } from 'lucide-react'
+import { Bot, Check, ChevronRight, Inbox, Smartphone, Ticket } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { listChats } from '@/app/api/inbox'
 import { listTickets } from '@/app/api/tickets'
@@ -19,6 +19,7 @@ import { isDummyMode } from '@/app/api/dummy'
 import { resetDummyWhatsApp } from '@/app/api/supportDummy'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 
 interface Snapshot {
   number: { id: string; display: string; name: string } | null
@@ -316,10 +317,7 @@ export function HomePage({ onNavigate, onOpenSettings }: { onNavigate: (id: NavI
           </Button>
         </div>
       ) : !snap ? (
-        <div className="flex items-center gap-2 py-10 text-muted-foreground text-sm">
-          <Loader2 className="size-4 animate-spin" />
-          Checking your WhatsApp setup&hellip;
-        </div>
+        <PageLoader context="home" />
       ) : (
         <>
           {snap.agent && accounts[0] && billingDone(accounts[0]) && <AtAGlance agent={snap.agent} onNavigate={onNavigate} />}

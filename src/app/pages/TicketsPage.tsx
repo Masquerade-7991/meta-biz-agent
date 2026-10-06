@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, Star } from 'lucide-react'
+import { Star } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Checkbox } from '@/app/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
@@ -15,6 +15,7 @@ import { PillTabs, SearchInput } from '@/app/components/Filters'
 import { customerLabel } from '@/app/lib/customer'
 import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 
 const LIVE_TICKETS = ['ticket.']
 
@@ -166,9 +167,7 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
             {error}
           </p>
         ) : !rows ? (
-          <p className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
-            <Loader2 className="size-4 animate-spin" /> Loading tickets&hellip;
-          </p>
+          <PageLoader context="tickets" className="min-h-[40vh]" />
         ) : rows.length === 0 ? (
           <div className="space-y-1 p-10 text-center text-muted-foreground text-sm">
             <p>{view === 'open' && assignee === 'any' && priority === 'any' && !q ? 'No open tickets. The AI agent has everything covered.' : 'No tickets match.'}</p>

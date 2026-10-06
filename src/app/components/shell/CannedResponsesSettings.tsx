@@ -16,6 +16,7 @@ import { TEXT_SM_OPEN } from '@/app/lib/text'
 import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
 import { cn } from '@/app/lib/utils'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 
 type Draft = Omit<CannedResponse, 'id'>
 const EMPTY: Draft = { title: '', shortcut: '', body: '', shared: true }
@@ -126,9 +127,7 @@ export function CannedResponsesSettings() {
           {error}
         </p>
       ) : !rows ? (
-        <p className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Loader2 className="size-4 animate-spin" /> Loading&hellip;
-        </p>
+        <PageLoader context="settings" className="min-h-[30vh] py-10" />
       ) : rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-8 text-center text-muted-foreground text-sm">
           No canned responses yet. Create one for the answer you type most.

@@ -16,6 +16,7 @@ import { getSupportSettings, PRIORITIES, PRIORITY_LABEL, saveSupportSettings, ty
 import { useMembers } from '@/app/auth/useMembers'
 import { SettingsSection } from './SettingsSection'
 import { can } from '@/app/lib/permissions'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 
 const DAYS: { id: Day; label: string }[] = [
   { id: 'mon', label: 'Monday' },
@@ -46,9 +47,7 @@ export function SupportSettingsTab() {
     return error ? (
       <FormError>{error}</FormError>
     ) : (
-      <p className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
-        <Loader2 className="size-4 animate-spin" /> Loading&hellip;
-      </p>
+      <PageLoader context="settings" className="min-h-[30vh] py-10" />
     )
 
   const set = (patch: Partial<SupportSettings>) => setS({ ...s, ...patch })

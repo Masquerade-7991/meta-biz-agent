@@ -20,6 +20,7 @@ import { errorDetail } from '@/app/api/meta'
 import { SettingsSection } from './SettingsSection'
 import { WhatsAppSettings } from './WhatsAppSettings'
 import { assignableRoles, can, canSetRole, roleLabel, ROLES, type Role } from '@/app/lib/permissions'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 
 export type SettingsTab = 'profile' | 'whatsapp' | 'billing' | 'members' | 'canned' | 'support' | 'fields'
 
@@ -228,9 +229,7 @@ function Members() {
         </div>
         {loadError && <FormError>{loadError}</FormError>}
         {!data && !loadError && (
-          <p className="flex items-center gap-2 text-muted-foreground text-sm" role="status">
-            <Loader2 className="size-4 animate-spin" /> Loading members…
-          </p>
+          <PageLoader context="settings" className="min-h-[30vh] py-10" />
         )}
         {data && (
           <div className="rounded-lg border border-border">

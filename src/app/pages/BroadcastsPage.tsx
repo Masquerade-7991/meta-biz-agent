@@ -42,6 +42,7 @@ import { customerLabel } from '@/app/lib/customer'
 import { FAILURE_HELP, FAILURE_LABEL } from '@/app/broadcasts/sendErrors'
 import { formatMoney } from '@/app/lib/money'
 import { can } from '@/app/lib/permissions'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 
 const LIVE_BROADCASTS = ['broadcast.']
 
@@ -594,9 +595,7 @@ export function BroadcastsPage() {
         <TabsContent value="broadcasts">
           <div className="overflow-x-auto rounded-lg border border-border">
             {!rows ? (
-              <p className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
-                <Loader2 className="size-4 animate-spin" /> Loading&hellip;
-              </p>
+              <PageLoader context="broadcasts" className="min-h-[40vh]" />
             ) : rows.length === 0 ? (
               <p className="p-10 text-center text-muted-foreground text-sm">
                 No broadcasts yet. Pick a template and a segment to send your first one.
@@ -659,9 +658,7 @@ export function BroadcastsPage() {
         </TabsContent>
         <TabsContent value="templates">
           {!templates ? (
-            <p className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
-              <Loader2 className="size-4 animate-spin" /> Loading templates from WhatsApp&hellip;
-            </p>
+            <PageLoader context="broadcasts" className="min-h-[40vh]" />
           ) : (
             <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {templates.map((t) => (

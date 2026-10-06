@@ -34,6 +34,7 @@ import { SearchInput } from '@/app/components/Filters'
 import { customerLabel, isBsuid } from '@/app/lib/customer'
 import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 
 const tagList = (s: string) => [...new Set(s.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean))]
 const ago = (iso?: string) => {
@@ -494,9 +495,7 @@ export function ContactsPage({ onOpenChat }: { onOpenChat: (phone: string) => vo
             {error}
           </p>
         ) : !rows ? (
-          <p className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
-            <Loader2 className="size-4 animate-spin" /> Loading contacts&hellip;
-          </p>
+          <PageLoader context="contacts" className="min-h-[40vh]" />
         ) : rows.length === 0 ? (
           <p className="p-10 text-center text-muted-foreground text-sm">
             {q || tag !== 'all' || segment !== 'all' ? 'No contacts match.' : 'No contacts yet. They appear as customers chat with your agent, or import a CSV.'}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { toast } from 'sonner'
-import { Bot, FlaskConical, Loader2, MoreHorizontal, Pause, Play, Plus, SquarePen, Trash2 } from 'lucide-react'
+import { Bot, FlaskConical, MoreHorizontal, Pause, Play, Plus, SquarePen, Trash2 } from 'lucide-react'
 import { PageContainer, PageHeader, EmptyState } from '@/app/components/ui/page'
 import { StatusPill } from '@/app/components/ui/status'
 import { AGENT_STATUS, type AgentStatus } from '@/app/lib/status'
@@ -39,6 +39,7 @@ import { useWizard } from '@/app/wizard/WizardContext'
 import type { AgentInstanceSummary, BusinessState } from '@/app/wizard/types'
 import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 
 const CREATED_AGENTS_KEY = storageKey('meta-agent-wizard-created-agents-v1')
 
@@ -405,10 +406,7 @@ export function AgentsListPage({
   return (
     <>
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-          Loading your agents&hellip;
-        </div>
+        <PageLoader context="agents" />
       ) : (
         <PageContainer>
           <PageHeader

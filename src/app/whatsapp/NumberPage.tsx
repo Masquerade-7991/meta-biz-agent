@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
+import { ArrowLeft, ExternalLink, RefreshCw } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
@@ -13,6 +13,7 @@ import { ProfileTab } from './ProfileTab'
 import { AutomationTab, DisplayNameTab } from './NumberSettingsTabs'
 import { SecurityTab } from './SecurityTab'
 import { BlockedTab } from './BlockedTab'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 
 export type NumberTab = 'profile' | 'name' | 'automation' | 'security' | 'blocked' | 'activity'
 /** What every tab gets: the number, a way to show what Meta now says, and the dirty flag for the guard. */
@@ -95,9 +96,7 @@ export function NumberPage({ id, showBack, onBack, backLabel = 'All numbers', in
     )
   if (!d)
     return (
-      <p className="flex items-center gap-2 text-muted-foreground text-sm">
-        <Loader2 className="size-4 animate-spin" /> Loading the number from WhatsApp&hellip;
-      </p>
+      <PageLoader context="whatsapp" />
     )
 
   const n = d.number

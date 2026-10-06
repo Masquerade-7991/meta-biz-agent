@@ -60,6 +60,7 @@ import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 
 // Live events that change the chat list, and the open chat.
 const LIVE_INBOX = ['message.', 'conversation.', 'ticket.']
@@ -871,9 +872,7 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
               {listError}
             </p>
           ) : !chats ? (
-            <p className="flex items-center gap-2 p-4 text-muted-foreground text-sm">
-              <Loader2 className="size-4 animate-spin" /> Loading chats&hellip;
-            </p>
+            <PageLoader context="inbox" className="min-h-[40vh]" />
           ) : chats.length === 0 ? (
             <div className="space-y-2 p-6 text-center text-muted-foreground text-sm">
               <p>{q || filter !== 'all' ? 'No chats match.' : 'No customer chats yet.'}</p>
@@ -925,9 +924,7 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
             <p className="text-sm">Pick a chat to read it, reply, or take over from the AI agent.</p>
           </div>
         ) : !chat ? (
-          <div className="flex flex-1 items-center justify-center gap-2 text-muted-foreground text-sm">
-            <Loader2 className="size-4 animate-spin" /> Loading the chat&hellip;
-          </div>
+          <PageLoader context="inbox" className="flex-1" />
         ) : (
           <>
             <div className="border-b border-border px-4 py-2 md:hidden">

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Loader2 } from 'lucide-react'
 import { errorDetail } from '@/app/api/meta'
 import { getSupportAnalytics, type SupportAnalytics } from '@/app/api/tickets'
 import { PillTabs } from '@/app/components/Filters'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 
 const RANGES = [7, 30, 90] as const
 const dur = (m: number | null) => (m === null ? '–' : m < 60 ? `${Math.round(m)}m` : m < 60 * 48 ? `${(m / 60).toFixed(m < 600 ? 1 : 0)}h` : `${Math.round(m / 1440)}d`)
@@ -94,9 +94,7 @@ export function SupportAnalyticsPage() {
           {error}
         </p>
       ) : !d ? (
-        <p className="mt-6 flex items-center gap-2 text-muted-foreground text-sm">
-          <Loader2 className="size-4 animate-spin" /> Crunching the numbers&hellip;
-        </p>
+        <PageLoader context="analytics" />
       ) : (
         <div className="mt-6 space-y-8">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

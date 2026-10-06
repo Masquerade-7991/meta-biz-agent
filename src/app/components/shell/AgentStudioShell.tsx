@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Eye, Loader2, Menu, MessageCircle, Rocket } from 'lucide-react'
+import { ArrowLeft, Eye, Menu, MessageCircle, Rocket } from 'lucide-react'
 import { TryItPanel } from '@/app/wizard/steps/TryItPanel'
 import { StatusPill } from '@/app/components/ui/status'
 import { Sheet, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
@@ -27,6 +27,7 @@ import { AnalyticsPage } from '@/app/wizard/steps/AnalyticsPage'
 import { cn } from '@/app/lib/utils'
 import { useAuth } from '@/app/auth/AuthContext'
 import { can } from '@/app/lib/permissions'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 
 // Slices a stored draft may restore. Gate (which number is open) and demo controls stay local.
 const DRAFT_SLICES = [
@@ -232,9 +233,7 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
               </p>
             )}
             {!hydrated ? (
-              <p className="flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" /> Loading your agent…
-              </p>
+              <PageLoader context="agent" />
             ) : state.currentSection === 'overview' || state.currentSection === 'publish' ? (
               <ActiveComponent />
             ) : (

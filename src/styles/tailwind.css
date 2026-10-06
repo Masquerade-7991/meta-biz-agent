@@ -169,3 +169,49 @@
   }
 }
 
+
+/* Wavy loader (src/app/components/ui/wavy-loader.tsx): the arc grows and shrinks while it turns,
+   like Material 3's indeterminate indicator; the status line fades in each time it changes. */
+@keyframes wavy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes wavy-arc {
+  0% {
+    stroke-dasharray: 12 88;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 68 32;
+    stroke-dashoffset: -18;
+  }
+  100% {
+    stroke-dasharray: 12 88;
+    stroke-dashoffset: -100;
+  }
+}
+@keyframes wavy-line {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.wavy-loader-spin {
+  transform-origin: 24px 24px;
+  animation: wavy-spin 1.6s linear infinite;
+}
+.wavy-loader-arc {
+  animation: wavy-arc 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.wavy-loader-line {
+  animation: wavy-line 0.35s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wavy-loader-spin,
+  .wavy-loader-arc,
+  .wavy-loader-line {
+    animation: none;
+    stroke-dasharray: 30 70;
+  }
+}

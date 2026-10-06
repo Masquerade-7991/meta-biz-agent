@@ -8,6 +8,7 @@ import { DevControlsProvider } from '@/app/wizard/DevControlsContext'
 import { ExitProvider } from '@/app/wizard/ExitContext'
 import { AgentStudioShell } from '@/app/components/shell/AgentStudioShell'
 import { DevControlsButton } from '@/app/components/wizard/DevControlsButton'
+import { LoaderPreview } from '@/app/components/wizard/LoaderPreview'
 import { GateScreen } from '@/app/components/GateScreen'
 import { SetupFrontDoor } from '@/app/components/SetupFrontDoor'
 import { navFromPath, NAV_ITEMS, pathFor, type NavId } from '@/app/nav'
@@ -139,7 +140,12 @@ export default function App() {
           <DevControlsProvider>
             <Gate />
             <CommandPalette />
-            {(isDummyMode() || import.meta.env.DEV) && <DevControlsButton />}
+            {(isDummyMode() || import.meta.env.DEV) && (
+              <>
+                <DevControlsButton />
+                <LoaderPreview />
+              </>
+            )}
           </DevControlsProvider>
           <Toaster />
         </TooltipProvider>
