@@ -25,7 +25,7 @@ export function PillTabs<T extends string | number>({
           role="tab"
           aria-selected={value === o.id}
           onClick={() => onChange(o.id)}
-          className={cn('rounded-full px-3 text-xs', compact ? 'py-1' : 'py-1.5', value === o.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}
+          className={cn('rounded-full px-3 text-xs', compact ? 'py-1' : 'py-1.5', value === o.id ? 'bg-foreground font-medium text-background' : 'bg-muted text-muted-foreground hover:text-foreground')}
         >
           {o.label}
         </button>

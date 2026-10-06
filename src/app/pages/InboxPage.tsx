@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { Ban, Bot, Check, CheckCheck, Clock, FileText, Hand, ListChecks, Loader2, MessageSquareText, MoreHorizontal, Paperclip, Send, Sparkles, StickyNote, Undo2, Wrench, X } from 'lucide-react'
+import { Ban, Bot, Check, CheckCheck, Clock, FileText, Hand, ListChecks, Loader2, MessageSquareText, MoreHorizontal, PanelRight, Paperclip, Send, Sparkles, StickyNote, Undo2, Wrench, X } from 'lucide-react'
+import { Sheet, SheetBody, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
 import { Textarea } from '@/app/components/ui/textarea'
@@ -556,7 +557,7 @@ function BlockMenu({ chat, onChange }: { chat: ChatDetail; onChange: (d: ChatDet
   )
 }
 
-function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Member[]; onChange: (d: ChatDetail) => void }) {
+function ChatHeader({ chat, members, onChange, onDetails }: { chat: ChatDetail; members: Member[]; onChange: (d: ChatDetail) => void; onDetails: () => void }) {
   const [busy, setBusy] = useState(false)
   const { me } = useAuth()
   const { conversation: conv, contact } = chat
@@ -601,10 +602,8 @@ function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Me
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <FollowUpMenu chat={chat} onChange={onChange} />
-        {can(me?.role, 'numbers.edit') && <BlockMenu chat={chat} onChange={onChange} />}
         <Select value={conv.assigneeId ?? 'none'} onValueChange={(v) => void run(() => assignChat(conv.phone, v === 'none' ? null : v))} disabled={busy || lockedAssign}>
-          <SelectTrigger className="h-9 w-44" aria-label="Assign to" title={lockedAssign ? 'Assigned to someone else. A supervisor can reassign it.' : undefined}>
+          <SelectTrigger className="h-9 w-40" aria-label="Assign to" title={lockedAssign ? 'Assigned to someone else. A supervisor can reassign it.' : undefined}>
             <SelectValue>{assignee?.name ?? (conv.assigneeId ? 'Assigned' : 'Unassigned')}</SelectValue>
           </SelectTrigger>
           <SelectContent>
@@ -616,16 +615,12 @@ function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Me
             ))}
           </SelectContent>
         </Select>
+        <FollowUpMenu chat={chat} onChange={onChange} />
         {isBsuid(conv.phone) ? (
           // Thread control needs a phone number, so this chat can't change hands yet.
-          <span title={NO_CONTROL_HIDDEN}>
-            <Button variant="outline" size="sm" disabled>
-              {conv.owner === 'ai' ? <Hand className="size-4" /> : <Undo2 className="size-4" />}
-              {conv.owner === 'ai' ? 'Take over' : 'Hand back to AI'}
-            </Button>
-          </span>
+          <span className="max-w-56 text-xs text-muted-foreground">{NO_CONTROL_HIDDEN}</span>
         ) : conv.owner === 'ai' ? (
-          <Button variant="outline" size="sm" disabled={busy} onClick={() => void run(() => setChatControl(conv.phone, 'take'), 'You took over. The AI agent stays quiet in this chat.')}>
+          <Button size="sm" disabled={busy} onClick={() => void run(() => setChatControl(conv.phone, 'take'), 'You took over. The AI agent stays quiet in this chat.')}>
             <Hand className="size-4" />
             Take over
           </Button>
@@ -635,16 +630,37 @@ function ChatHeader({ chat, members, onChange }: { chat: ChatDetail; members: Me
             Hand back to AI
           </Button>
         )}
+        <Button variant="outline" size="sm" className="xl:hidden" onClick={onDetails}>
+          <PanelRight className="size-4" />
+          Details
+        </Button>
+        {can(me?.role, 'numbers.edit') && <BlockMenu chat={chat} onChange={onChange} />}
       </div>
     </div>
   )
 }
 
-function CustomerPanel({ chat, version, onChanged }: { chat: ChatDetail; version: number; onChanged: () => void }) {
+/** The customer beside the chat on wide screens; on narrower ones the same panel opens from "Details". */
+function CustomerPanel({ chat, version, onChanged, sheetOpen, onSheetOpenChange }: { chat: ChatDetail; version: number; onChanged: () => void; sheetOpen: boolean; onSheetOpenChange: (o: boolean) => void }) {
+  const body = <CustomerDetails chat={chat} version={version} onChanged={onChanged} />
+  return (
+    <>
+      <aside className="hidden w-72 shrink-0 overflow-y-auto border-l border-border p-5 xl:block">{body}</aside>
+      <Sheet open={sheetOpen} onOpenChange={onSheetOpenChange}>
+        <SheetContent className="w-80 sm:max-w-80">
+          <SheetTitle className="sr-only">Customer details</SheetTitle>
+          <SheetBody>{body}</SheetBody>
+        </SheetContent>
+      </Sheet>
+    </>
+  )
+}
+
+function CustomerDetails({ chat, version, onChanged }: { chat: ChatDetail; version: number; onChanged: () => void }) {
   const { conversation: conv, contact } = chat
   const closes = conv.lastInboundAt ? new Date(Date.parse(conv.lastInboundAt) + 86_400_000) : null
   return (
-    <aside className="hidden w-72 shrink-0 space-y-6 overflow-y-auto border-l border-border p-5 xl:block">
+    <div className="space-y-6">
       <div className="flex flex-col items-center gap-2 text-center">
         <span className="flex size-16 items-center justify-center rounded-full bg-accent text-accent-foreground" style={{ fontSize: '1.25rem', fontWeight: 'var(--font-weight-semi-bold)' }}>
           {initials({ name: contact?.name, phone: conv.phone })}
@@ -671,7 +687,7 @@ function CustomerPanel({ chat, version, onChanged }: { chat: ChatDetail; version
           </dd>
         </div>
       </dl>
-    </aside>
+    </div>
   )
 }
 
@@ -743,6 +759,7 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
   const [aiSummary, setAiSummary] = useState(false)
   const [summary, setSummary] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const [filter, setFilter] = useState<ChatFilter>('all')
   const [q, setQ] = useState('')
   const [chats, setChats] = useState<ChatSummary[] | null>(null)
@@ -921,6 +938,7 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
             <ChatHeader
               chat={chat}
               members={members}
+              onDetails={() => setDetailsOpen(true)}
               onChange={(d) => {
                 setChat(d)
                 setVersion((v) => v + 1)
@@ -963,6 +981,8 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
         <CustomerPanel
           chat={chat}
           version={version}
+          sheetOpen={detailsOpen}
+          onSheetOpenChange={setDetailsOpen}
           onChanged={() => {
             void getChat(open).then(setChat, () => {})
             refreshList()

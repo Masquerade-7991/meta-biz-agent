@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { Bot, FlaskConical, Loader2, MoreHorizontal, Pause, Play, Plus, SquarePen, Trash2 } from 'lucide-react'
 import { PageContainer, PageHeader, EmptyState } from '@/app/components/ui/page'
@@ -194,6 +195,14 @@ export function AgentsListPage({
   const canEdit = can(me?.role, 'agent.edit')
   const [modalOpen, setModalOpenRaw] = useState(false)
   const setModalOpen = (open: boolean) => (open && !canEdit ? toast(READ_ONLY) : setModalOpenRaw(open))
+  // /agents?new opens Create agent straight away (Home's "Build agent").
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    if (!searchParams.has('new')) return
+    setSearchParams({}, { replace: true })
+    setModalOpen(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
   const [createdAgents, setCreatedAgents] = useState<AgentInstanceSummary[]>(loadCreatedAgents)
 
   // Meta is the source of truth for which agents exist. If it can't be reached, the list falls back

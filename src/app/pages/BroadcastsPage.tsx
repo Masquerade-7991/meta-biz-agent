@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2, Plus, Send, Trash2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/app/components/ui/tooltip'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { Textarea } from '@/app/components/ui/textarea'
@@ -412,7 +413,8 @@ function NewTemplateDialog({ onClose, onCreated }: { onClose: () => void; onCrea
             <div className="grid gap-3 sm:grid-cols-[1fr_8rem_6rem]">
               <div className="space-y-1.5">
                 <Label htmlFor="t-name">Name</Label>
-                <Input id="t-name" value={t.name} onChange={(e) => set({ name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })} placeholder="diwali_offer" />
+                <Input id="t-name" aria-describedby="t-name-hint" value={t.name} onChange={(e) => set({ name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })} placeholder="diwali_offer" />
+                <p id="t-name-hint" className="text-xs text-muted-foreground">Lowercase letters, numbers and _ (WhatsApp&rsquo;s rule)</p>
               </div>
               <div className="space-y-1.5">
                 <Label>Category</Label>
@@ -545,7 +547,7 @@ export function BroadcastsPage() {
   usePolling(load, 5000, [], !!sending, LIVE_BROADCASTS)
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-6 py-8">
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1>Broadcasts</h1>
@@ -553,14 +555,22 @@ export function BroadcastsPage() {
         </div>
         {tab === 'broadcasts' ? (
           can(me?.role, 'broadcasts.send') ? (
-            <Button onClick={() => setCreating(true)} disabled={!templates}>
+            <Button onClick={() => setCreating(true)} disabled={!templates} title={!templates ? 'Loading your templates…' : undefined}>
               <Plus className="size-4" />
-              New broadcast
+              {templates ? 'New broadcast' : 'Loading templates…'}
             </Button>
           ) : (
-            <p className="text-muted-foreground text-sm">
-              Supervisors, admins and owners send broadcasts.
-            </p>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span tabIndex={0}>
+                  <Button disabled>
+                    <Plus className="size-4" />
+                    New broadcast
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Supervisors, admins and owners send broadcasts.</TooltipContent>
+            </Tooltip>
           )
         ) : (
           can(me?.role, 'templates.create') && (

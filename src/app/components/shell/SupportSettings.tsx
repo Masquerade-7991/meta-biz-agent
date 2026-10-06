@@ -77,7 +77,7 @@ export function SupportSettingsTab() {
           Only owners and admins can change these settings.
         </p>
       )}
-      <SettingsSection wide title="Business hours" description="SLA clocks only run while your team is working. Outside these hours, customers can get an away message.">
+      <SettingsSection wide title="Business hours" description="Response-time targets only count while your team is working. Outside these hours, customers can get an away message.">
         <div className="max-w-xs space-y-1.5">
           <Label>Time zone</Label>
           <Select value={s.hours.timezone} onValueChange={(v) => set({ hours: { ...s.hours, timezone: v } })}>

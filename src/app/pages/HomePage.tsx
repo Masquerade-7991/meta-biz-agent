@@ -1,11 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowUpRight, Bot, Check, Loader2 } from 'lucide-react'
+import { Bot, Check, ChevronRight, Inbox, Loader2, Smartphone, Ticket } from 'lucide-react'
+import { useNavigate } from 'react-router'
+import { listChats } from '@/app/api/inbox'
+import { listTickets } from '@/app/api/tickets'
+import { getNumberHealth } from '@/app/api/whatsapp'
+import { StatusPill } from '@/app/components/ui/status'
+import { AGENT_STATUS, agentStatusOf, type Tone } from '@/app/lib/status'
+import { cn } from '@/app/lib/utils'
 import { Button } from '@/app/components/ui/button'
-import { Badge } from '@/app/components/ui/badge'
 import { useAuth } from '@/app/auth/AuthContext'
 import { errorText, getAgentOnNumber, type AgentOnNumber } from '@/app/api/meta'
 import { can } from '@/app/lib/permissions'
-import { HELP_GROUPS } from '@/app/home/helpLinks'
 import type { NavId } from '@/app/nav'
 import type { SettingsTab } from '@/app/components/shell/SettingsPage'
 import { getSignupConfig, listAccounts, type SignupConfig, type WaAccount } from '@/app/api/whatsapp'
@@ -14,7 +19,6 @@ import { isDummyMode } from '@/app/api/dummy'
 import { resetDummyWhatsApp } from '@/app/api/supportDummy'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
-import { TEXT_SM_OPEN } from '@/app/lib/text'
 
 interface Snapshot {
   number: { id: string; display: string; name: string } | null
@@ -96,7 +100,9 @@ function GetStarted({
   onNavigate,
   onOpenSettings,
   onAccountChange,
+  onCreateAgent,
 }: {
+  onCreateAgent: () => void
   snap: Snapshot
   accounts: WaAccount[]
   config: SignupConfig | null
@@ -160,7 +166,7 @@ function GetStarted({
           note={
             agent && (
               <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                <Badge className={agent.enabled ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'}>{agent.enabled ? 'Active' : 'Off'}</Badge>
+                <AgentPill agent={agent} />
                 <span>
                   On {snap.number?.name} · {snap.number?.display}
                 </span>
@@ -171,7 +177,7 @@ function GetStarted({
             )
           }
           action={
-            <Button size="sm" onClick={() => onNavigate('ai-agents')}>
+            <Button size="sm" onClick={onCreateAgent}>
               <Bot className="size-4" />
               Build agent
             </Button>
@@ -184,39 +190,77 @@ function GetStarted({
   )
 }
 
-function HelpGuides() {
+/** The agent's status in the console's words, from what Meta reports. */
+function AgentPill({ agent }: { agent: AgentOnNumber }) {
+  const s = AGENT_STATUS[agentStatusOf({ activated: agent.enabled, stopped: false, audienceMode: agent.audience === 'EVERYONE' ? 'everyone' : 'allowlisted' })]
+  return <StatusPill tone={s.tone}>{s.label}</StatusPill>
+}
+
+const QUALITY: Record<string, { label: string; tone: Tone }> = {
+  GREEN: { label: 'High quality', tone: 'success' },
+  YELLOW: { label: 'Medium quality', tone: 'warning' },
+  RED: { label: 'Low quality', tone: 'danger' },
+}
+
+/** Once set up, Home is what needs attention today: open chats and tickets, the agent, the number. */
+function AtAGlance({ agent, onNavigate }: { agent: AgentOnNumber; onNavigate: (id: NavId) => void }) {
+  const [data, setData] = useState<{ unread: number; chats: number; tickets: number; overdue: number; quality: string | null } | null>(null)
+  useEffect(() => {
+    Promise.all([listChats().catch(() => []), listTickets().catch(() => []), getNumberHealth().catch(() => [])]).then(([chats, tickets, health]) =>
+      setData({
+        unread: chats.reduce((n, c) => n + c.unread, 0),
+        chats: chats.filter((c) => c.unread > 0).length,
+        tickets: tickets.length,
+        overdue: tickets.filter((t) => t.sla.breached).length,
+        quality: health[0]?.quality ?? null,
+      }),
+    )
+  }, [])
+  const q = data?.quality ? QUALITY[data.quality] : undefined
+  const tiles: { id: NavId; icon: typeof Inbox; label: string; value: ReactNode; note?: ReactNode; urgent?: boolean }[] = [
+    { id: 'inbox', icon: Inbox, label: 'Unread messages', value: data?.unread ?? '—', note: data ? `${data.chats} chat${data.chats === 1 ? '' : 's'} waiting` : undefined, urgent: !!data?.unread },
+    {
+      id: 'tickets',
+      icon: Ticket,
+      label: 'Open tickets',
+      value: data?.tickets ?? '—',
+      note: data?.overdue ? <span className="text-destructive">{data.overdue} past the response time</span> : data ? 'All within response time' : undefined,
+      urgent: !!data?.overdue,
+    },
+    { id: 'ai-agents', icon: Bot, label: 'AI agent', value: <AgentPill agent={agent} />, note: agent.enabled ? 'Answering customers' : 'Not answering yet' },
+    { id: 'whatsapp', icon: Smartphone, label: 'WhatsApp number', value: q ? <StatusPill tone={q.tone}>{q.label}</StatusPill> : '—', note: 'Quality rating from Meta' },
+  ]
   return (
-    <section className="space-y-6">
-      <h2 className="text-section font-semibold">Product guides</h2>
-      {HELP_GROUPS.map((g) => (
-        <div key={g.title} className="space-y-2">
-          <h3 className="text-muted-foreground text-sm font-semibold">
-            {g.title}
-          </h3>
-          <ul className="grid gap-x-8 sm:grid-cols-2 lg:grid-cols-3">
-            {g.links.map((l) => (
-              <li key={l.href} className="border-t border-border">
-                <a href={l.href} target="_blank" rel="noreferrer" className="group block rounded-sm py-3 focus-visible:outline-2 focus-visible:outline-ring">
-                  <span className="flex items-center gap-1 text-primary group-hover:underline" style={{ ...TEXT_SM_OPEN, fontWeight: 'var(--font-weight-semi-bold)' }}>
-                    {l.title}
-                    <ArrowUpRight className="size-3.5 shrink-0" />
-                  </span>
-                  <span className="text-muted-foreground text-xs">
-                    {l.description}
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
+    <section className="space-y-3">
+      <h2 className="text-section font-semibold">At a glance</h2>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {tiles.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => onNavigate(t.id)}
+            className={cn('group flex flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:border-border-strong', t.urgent ? 'border-warning/50' : 'border-border')}
+          >
+            <span className="flex items-center justify-between text-sm text-muted-foreground">
+              <span className="flex items-center gap-2">
+                <t.icon className="size-4" />
+                {t.label}
+              </span>
+              <ChevronRight className="size-4 opacity-0 transition-opacity group-hover:opacity-100" />
+            </span>
+            <span className="text-title font-semibold tabular-nums">{t.value}</span>
+            {t.note && <span className="text-xs text-muted-foreground">{t.note}</span>}
+          </button>
+        ))}
+      </div>
     </section>
   )
 }
 
-/** Home: connect WhatsApp and build the agent, then product guides. The agent's live state is on its Overview. */
+/** Home: connect WhatsApp and build the agent; once that's done, what needs attention today. */
 export function HomePage({ onNavigate, onOpenSettings }: { onNavigate: (id: NavId) => void; onOpenSettings: (tab: SettingsTab) => void }) {
   const { me } = useAuth()
+  const navigate = useNavigate()
   const [snap, setSnap] = useState<Snapshot | null>(null)
   const [accounts, setAccounts] = useState<WaAccount[]>([])
   const [config, setConfig] = useState<SignupConfig | null>(null)
@@ -259,7 +303,7 @@ export function HomePage({ onNavigate, onOpenSettings }: { onNavigate: (id: NavI
   }, [attempt])
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-10 px-6 py-8">
+    <div className="mx-auto w-full max-w-5xl space-y-8 px-4 py-6 sm:px-8 sm:py-8">
       <div>
         <h1 className="text-display">{greeting(me?.user.name)}</h1>
         <p className="mt-1 text-muted-foreground">{me?.workspace?.name}</p>
@@ -277,7 +321,11 @@ export function HomePage({ onNavigate, onOpenSettings }: { onNavigate: (id: NavI
           Checking your WhatsApp setup&hellip;
         </div>
       ) : (
+        <>
+          {snap.agent && accounts[0] && billingDone(accounts[0]) && <AtAGlance agent={snap.agent} onNavigate={onNavigate} />}
+          {!(snap.agent && accounts[0] && billingDone(accounts[0])) && (
         <GetStarted
+          onCreateAgent={() => navigate('/agents?new')}
           snap={snap}
           accounts={accounts}
           config={config}
@@ -289,8 +337,9 @@ export function HomePage({ onNavigate, onOpenSettings }: { onNavigate: (id: NavI
             if (!accounts.some((x) => x.wabaId === a.wabaId)) setAttempt((n) => n + 1)
           }}
         />
+          )}
+        </>
       )}
-      <HelpGuides />
     </div>
   )
 }

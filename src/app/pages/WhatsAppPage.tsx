@@ -13,7 +13,6 @@ import { NumberAvatar, NumberPage } from '@/app/whatsapp/NumberPage'
 import { statusHelp } from '@/app/whatsapp/profileRules'
 import { can } from '@/app/lib/permissions'
 import { cn } from '@/app/lib/utils'
-import { TEXT_SM } from '@/app/lib/text'
 
 const QUALITY: Record<string, string> = { GREEN: 'bg-success', YELLOW: 'bg-amber-500', RED: 'bg-destructive' }
 const limitText = (l: string | null) => (l ? l.replace('TIER_', '').replace('UNLIMITED', 'Unlimited') : '—')
@@ -74,7 +73,7 @@ export function WhatsAppPage({ onOpenSettings }: { onOpenSettings: () => void })
   }, [rows])
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-8">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
       {open ? (
         <NumberPage key={open} id={open} showBack backLabel={account ? `All numbers in ${account.name}` : 'All numbers'} onBack={() => (setOpen(null), load())} />
       ) : (
@@ -86,7 +85,7 @@ export function WhatsAppPage({ onOpenSettings }: { onOpenSettings: () => void })
               {account && (
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <span className="text-muted-foreground text-sm">
-                    WhatsApp Business account
+                    WhatsApp account
                   </span>
                   {accounts.length > 1 ? (
                     <Select value={account.id} onValueChange={choose}>
@@ -102,9 +101,7 @@ export function WhatsAppPage({ onOpenSettings }: { onOpenSettings: () => void })
                       </SelectContent>
                     </Select>
                   ) : (
-                    <span className="rounded-md border border-border px-3 py-1.5" style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-medium)' }}>
-                      {account.name}
-                    </span>
+                    <span className="text-sm font-medium">{account.name}</span>
                   )}
                 </div>
               )}

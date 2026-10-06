@@ -5,7 +5,8 @@ import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
+import { Tabs, TabsContent } from '@/app/components/ui/tabs'
+import { cn } from '@/app/lib/utils'
 import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
 import { useAuth } from '@/app/auth/AuthContext'
 import { Field, FormError } from '@/app/auth/AuthLayout'
@@ -355,24 +356,65 @@ function Members() {
   )
 }
 
+const SETTINGS_GROUPS: { label: string; items: { id: SettingsTab; label: string }[] }[] = [
+  {
+    label: 'Workspace',
+    items: [
+      { id: 'members', label: 'Members' },
+      { id: 'billing', label: 'Billing' },
+      { id: 'whatsapp', label: 'WhatsApp' },
+    ],
+  },
+  {
+    label: 'Support desk',
+    items: [
+      { id: 'support', label: 'Hours & response targets' },
+      { id: 'canned', label: 'Canned responses' },
+      { id: 'fields', label: 'Contact fields' },
+    ],
+  },
+  { label: 'You', items: [{ id: 'profile', label: 'Profile' }] },
+]
+
 export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: SettingsTab; onTabChange: (t: SettingsTab) => void; onManageNumbers?: () => void }) {
   const { me } = useAuth()
   const billing = can(me?.role, 'billing.view')
   // A link (email, notification) can name a tab this role can't open; show Profile instead.
   const shown = tab === 'billing' && !billing ? 'profile' : tab
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-8">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
       <h1 className="mb-6">Settings</h1>
-      <Tabs value={shown} onValueChange={(v) => onTabChange(v as SettingsTab)}>
-        <TabsList>
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
-          {billing && <TabsTrigger value="billing">Billing</TabsTrigger>}
-          <TabsTrigger value="members">Members</TabsTrigger>
-          <TabsTrigger value="canned">Canned responses</TabsTrigger>
-          <TabsTrigger value="support">Support rules</TabsTrigger>
-          <TabsTrigger value="fields">Contact fields</TabsTrigger>
-        </TabsList>
+      <Tabs value={shown} onValueChange={(v) => onTabChange(v as SettingsTab)} className="gap-6 md:flex-row md:items-start">
+        {/* Grouped by whose settings they are: the workspace, the support desk, and you. */}
+        <nav aria-label="Settings sections" className="shrink-0 md:w-52">
+          <ul className="flex gap-1 overflow-x-auto pb-1 md:flex-col md:gap-4 md:overflow-visible md:pb-0">
+            {SETTINGS_GROUPS.map((g) => (
+              <li key={g.label} className="contents md:block">
+                <p className="hidden px-2.5 pb-1.5 text-xs font-medium text-muted-foreground md:block">{g.label}</p>
+                <ul className="contents md:block md:space-y-0.5">
+                  {g.items
+                    .filter((i) => i.id !== 'billing' || billing)
+                    .map((i) => (
+                      <li key={i.id} className="shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => onTabChange(i.id)}
+                          aria-current={shown === i.id ? 'page' : undefined}
+                          className={cn(
+                            'w-full rounded-md px-2.5 py-1.5 text-left text-sm whitespace-nowrap transition-colors',
+                            shown === i.id ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                          )}
+                        >
+                          {i.label}
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <div className="min-w-0 flex-1 [&>[data-slot=tabs-content]]:pt-0">
         <TabsContent value="profile">
           <Profile />
         </TabsContent>
@@ -396,6 +438,7 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
         <TabsContent value="fields">
           <ContactFieldsSettings />
         </TabsContent>
+        </div>
       </Tabs>
     </div>
   )

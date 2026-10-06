@@ -83,7 +83,7 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-6 py-8">
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1>Tickets</h1>
@@ -190,7 +190,7 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
                 <TableHead>Priority</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Assignee</TableHead>
-                <TableHead>SLA</TableHead>
+                <TableHead>Due</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -210,7 +210,7 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
                       aria-label={`Select ticket ${t.number}`}
                     />
                   </TableCell>
-                  <TableCell className="max-w-md">
+                  <TableCell className="max-w-[60vw] sm:max-w-md">
                     <p className="truncate" style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
                       #{t.number} {t.subject}
                     </p>
