@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Eye, Loader2, Unplug } from 'lucide-react'
+import { Eye, Unplug } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
 import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
 import { FormError } from '@/app/auth/AuthLayout'
 import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
-import { disconnectAccount, getSignupConfig, listAccounts, revealPin, type SignupConfig, type WaAccount } from '@/app/api/whatsapp'
-import { AccountSteps, ConnectWhatsApp } from '@/app/whatsapp/ConnectWhatsApp'
+import { disconnectAccount, listAccounts, revealPin, type WaAccount } from '@/app/api/whatsapp'
+import { AccountSteps } from '@/app/whatsapp/ConnectWhatsApp'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 import { SettingsSection } from './SettingsSection'
-import { NumberHealthCard } from '@/app/whatsapp/NumberHealthCard'
 import { WebhookStatusCard } from '@/app/whatsapp/WebhookStatusCard'
 import { TEXT_SM } from '@/app/lib/text'
 import { can } from '@/app/lib/permissions'
@@ -25,7 +25,7 @@ function AccountCard({ a, isOwner, onChange, onRemove }: { a: WaAccount; isOwner
         <div className="min-w-0">
           <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>{a.wabaName}</p>
           <p className="text-muted-foreground text-xs">
-            {SOURCE[a.source]} &middot; WABA {a.wabaId}
+            {SOURCE[a.source]}
           </p>
         </div>
         <span className="flex flex-wrap gap-1">
@@ -67,32 +67,30 @@ function AccountCard({ a, isOwner, onChange, onRemove }: { a: WaAccount; isOwner
   )
 }
 
-/** Settings → WhatsApp: the numbers this workspace works with, and connecting more. */
+/** Settings → WhatsApp: each account's billing, PIN and disconnect; numbers live on the WhatsApp page. */
 export function WhatsAppSettings({ onManageNumbers }: { onManageNumbers?: () => void }) {
   const { me } = useAuth()
   const isOwner = can(me?.role, 'whatsapp.manage')
   const [rows, setRows] = useState<WaAccount[] | null>(null)
-  const [config, setConfig] = useState<SignupConfig | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [removing, setRemoving] = useState<WaAccount | null>(null)
   useEffect(() => {
     listAccounts().then(setRows, (err) => setError(errorDetail(err)))
-    getSignupConfig().then(setConfig, () => {})
   }, [])
   const upsert = (a: WaAccount) => setRows((prev) => [...(prev ?? []).filter((x) => x.wabaId !== a.wabaId), a])
 
   return (
     <div>
-      <SettingsSection wide title="WhatsApp accounts" description="The WhatsApp Business numbers this workspace uses for its AI agent, inbox and broadcasts.">
-        {!!rows?.length && onManageNumbers && can(me?.role, 'numbers.view') && (
+      <SettingsSection wide title="WhatsApp accounts" description="Billing, PIN and disconnecting, per WhatsApp account. Numbers, their profiles and connecting a new one are on the WhatsApp page.">
+        {onManageNumbers && can(me?.role, 'numbers.view') && (
           <Button variant="outline" size="sm" className="mb-3" onClick={onManageNumbers}>
-            Manage numbers, profiles and names &rarr;
+            {rows?.length ? 'Manage numbers on the WhatsApp page' : 'Connect a number on the WhatsApp page'} &rarr;
           </Button>
         )}
         {error ? (
           <FormError>{error}</FormError>
         ) : !rows ? (
-          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          <PageLoader context="whatsapp" className="min-h-[30vh] py-10" />
         ) : rows.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground text-sm">
             No WhatsApp number connected yet.
@@ -106,18 +104,10 @@ export function WhatsAppSettings({ onManageNumbers }: { onManageNumbers?: () => 
         )}
       </SettingsSection>
       {!!rows?.length && (
-        <SettingsSection wide title="Number health" description="WhatsApp rates each number on how customers react to your messages, and limits how many new conversations it can start a day. Checked every hour.">
-          <NumberHealthCard />
-        </SettingsSection>
-      )}
-      {!!rows?.length && (
         <SettingsSection wide title="Customer messages" description="WhatsApp delivers customers’ messages, photos and delivery ticks to this app by webhook.">
           <WebhookStatusCard />
         </SettingsSection>
       )}
-      <SettingsSection wide title={rows?.length ? 'Connect another number' : 'Connect a number'} description="Log in with Facebook and pick your business, WhatsApp account and number. About 5 minutes.">
-        <ConnectWhatsApp config={config} isOwner={isOwner} workspaceName={me?.workspace?.name ?? 'this workspace'} variant="compact" onConnected={upsert} />
-      </SettingsSection>
       <ConfirmDialog
         open={removing !== null}
         title={`Disconnect ${removing?.wabaName}?`}

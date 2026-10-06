@@ -99,7 +99,6 @@ function GetStarted({
   accounts,
   config,
   onNavigate,
-  onOpenSettings,
   onAccountChange,
   onCreateAgent,
 }: {
@@ -108,7 +107,6 @@ function GetStarted({
   accounts: WaAccount[]
   config: SignupConfig | null
   onNavigate: (id: NavId) => void
-  onOpenSettings: (tab: SettingsTab) => void
   onAccountChange: (a: WaAccount) => void
 }) {
   const { me } = useAuth()
@@ -138,7 +136,7 @@ function GetStarted({
                   </button>
                 )}
                 {manage && (
-                  <button type="button" className={link} onClick={() => onOpenSettings('whatsapp')}>
+                  <button type="button" className={link} onClick={() => onNavigate('whatsapp')}>
                     Add another number
                   </button>
                 )}
@@ -522,7 +520,6 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
           accounts={accounts}
           config={config}
           onNavigate={onNavigate}
-          onOpenSettings={onOpenSettings}
           onAccountChange={(a) => {
             setAccounts((prev) => [...prev.filter((x) => x.wabaId !== a.wabaId), a])
             // A newly connected number changes what the rest of Home shows (its agent).

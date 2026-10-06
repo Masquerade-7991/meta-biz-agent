@@ -106,9 +106,7 @@ export function ProductShell({
         return <BroadcastsPage />
       case 'whatsapp':
         return (
-          <WhatsAppPage
-            onOpenSettings={() => openSettings('whatsapp')}
-          />
+          <WhatsAppPage />
         )
       case 'analytics':
         return <SupportAnalyticsPage />

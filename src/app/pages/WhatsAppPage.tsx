@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronRight, Loader2, RefreshCw } from 'lucide-react'
+import { ChevronRight, Loader2, Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table'
 import { FormError } from '@/app/auth/AuthLayout'
@@ -28,13 +30,14 @@ const readAccount = () => {
 
 /** The workspace's numbers the way WhatsApp Manager shows them: pick the WhatsApp Business account,
  *  see its phone numbers, open one for its profile, name and settings. None shows how to connect one. */
-export function WhatsAppPage({ onOpenSettings }: { onOpenSettings: () => void }) {
+export function WhatsAppPage() {
   const { me } = useAuth()
   const [rows, setRows] = useState<WaNumber[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
   const [config, setConfig] = useState<SignupConfig | null>(null)
+  const [connecting, setConnecting] = useState(false)
 
   const load = useCallback((refresh = false) => {
     setRefreshing(refresh)
@@ -69,8 +72,8 @@ export function WhatsAppPage({ onOpenSettings }: { onOpenSettings: () => void })
   }
   const shown = account ? (rows ?? []).filter((n) => n.wabaId === account.id) : []
   useEffect(() => {
-    if (rows?.length === 0) getSignupConfig().then(setConfig, () => {})
-  }, [rows])
+    if (rows?.length === 0 || connecting) getSignupConfig().then(setConfig, () => {})
+  }, [rows, connecting])
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
@@ -112,7 +115,8 @@ export function WhatsAppPage({ onOpenSettings }: { onOpenSettings: () => void })
                 Refresh from WhatsApp
               </Button>
               {can(me?.role, 'whatsapp.manage') && (
-                <Button variant="outline" onClick={onOpenSettings}>
+                <Button onClick={() => setConnecting(true)}>
+                  <Plus className="size-4" />
                   Connect a number
                 </Button>
               )}
@@ -126,9 +130,7 @@ export function WhatsAppPage({ onOpenSettings }: { onOpenSettings: () => void })
               </Button>
             </div>
           ) : !rows ? (
-            <p className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2 className="size-4 animate-spin" /> Reading your numbers from WhatsApp&hellip;
-            </p>
+            <PageLoader context="whatsapp" />
           ) : rows.length === 0 ? (
             <div className="rounded-xl border border-border p-6">
               <ConnectWhatsApp config={config} isOwner={can(me?.role, 'whatsapp.manage')} workspaceName={me?.workspace?.name ?? 'this workspace'} variant="compact" onConnected={() => load(true)} />
@@ -194,6 +196,25 @@ export function WhatsAppPage({ onOpenSettings }: { onOpenSettings: () => void })
           )}
         </div>
       )}
+      {/* Connecting happens here, not in Settings: this page is the one place for numbers. */}
+      <Dialog open={connecting} onOpenChange={setConnecting}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Connect a WhatsApp number</DialogTitle>
+            <DialogDescription>Log in with Facebook and pick your business, WhatsApp account and number. About 5 minutes.</DialogDescription>
+          </DialogHeader>
+          <ConnectWhatsApp
+            config={config}
+            isOwner={can(me?.role, 'whatsapp.manage')}
+            workspaceName={me?.workspace?.name ?? 'this workspace'}
+            variant="compact"
+            onConnected={() => {
+              setConnecting(false)
+              load(true)
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
