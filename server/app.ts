@@ -8,7 +8,8 @@ import { getSession, handleAuth } from './auth.ts'
 import { db, dbOffReason, initDb, NO_META_ASSETS, withWorkspace } from './db.ts'
 import { logApiCall, record, resourceOf, splitPhone } from './record.ts'
 import { handleStore } from './store.ts'
-import { sendError } from './http.ts'
+import { send, sendError } from './http.ts'
+import { docsPage, openapi } from './openapi/index.ts'
 import { handleInbox, handleWebhook } from './inbox.ts'
 import { handleTickets } from './tickets.ts'
 import { handleContacts } from './contacts.ts'
@@ -160,9 +161,15 @@ export async function handle(req: http.IncomingMessage, res: http.ServerResponse
   // Everything else needs a signed-in workspace member, and runs inside that member's workspace.
   if (!db) return sendError(res, 503, dbOffReason, 'Accounts need the database. Set MONGODB_URI in .env and restart the server.')
   const s = await getSession(req)
+  const pathname = url.split('?')[0]
+  // The docs page is opened in a browser tab: without a session, go log in instead of a JSON 401.
+  if (!s && pathname === '/api/docs') return void res.writeHead(302, { location: '/' }).end()
   if (!s) return sendError(res, 401, 'Not logged in', 'Log in to continue.')
   if (s.setup !== 'complete') return sendError(res, 403, 'Setup not finished', 'Finish setting up your account first.')
   if (!s.workspace) return sendError(res, 403, 'No workspace', 'Create or join a workspace first.')
+  // API documentation (server/openapi): any member may read it.
+  if (pathname === '/api/openapi.json' && req.method === 'GET') return send(res, 200, openapi)
+  if (pathname === '/api/docs' && req.method === 'GET') return void res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(docsPage)
   const assets = await assetsFor(s.workspace._id)
   const metaRoute = url.match(/^\/api\/(meta|graph)(\/.*)$/)
   if (metaRoute && !assets) return sendError(res, 403, NO_META_ASSETS.title, NO_META_ASSETS.detail)

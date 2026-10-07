@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { FlaskConical, Monitor, Moon, Plus, Rows3, Rows4, Settings, Sun } from 'lucide-react'
+import { BookOpen, FlaskConical, Monitor, Moon, Plus, Rows3, Rows4, Settings, Sun } from 'lucide-react'
 import { setDensity } from '@/app/lib/density'
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/app/components/ui/command'
 import { OPEN_COMMAND_PALETTE } from '@/app/lib/commandPalette'
@@ -62,6 +62,18 @@ export function CommandPalette() {
             <CommandItem onSelect={() => go('/agents?new')}>
               <Plus />
               Create an AI agent
+            </CommandItem>
+          )}
+          {can(me.role, 'settings.manage') && (
+            <CommandItem
+              value="api docs documentation swagger"
+              onSelect={() => {
+                setOpen(false)
+                window.open('/api/docs', '_blank', 'noopener')
+              }}
+            >
+              <BookOpen />
+              API docs
             </CommandItem>
           )}
           {agentName && (

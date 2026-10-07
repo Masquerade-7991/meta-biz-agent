@@ -25,6 +25,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `/api/meta` and `/api/graph` reject real IDs that aren't the workspace's own.
   - New numbers come in through **Embedded Signup v4** (`server/whatsapp.ts`, `src/app/whatsapp/*`). It needs `META_APP_ID`, `META_ES_CONFIG_ID`, `META_APP_SECRET` and `TOKEN_ENCRYPTION_KEY`, plus optionally `WA_CREDIT_LINE_ID` / `WA_CREDIT_CURRENCY` for billing through Helo.ai. Without them, Home offers "Talk to Helo.ai"; Dummy mode simulates the signup.
   - Customer tokens and PINs are stored only sealed (`server/crypto.ts`, AES-256-GCM).
+- **API docs:** every `/api` route is described in `server/openapi/*` (OpenAPI 3.1), served at `/api/docs` (Swagger UI, members only) and `/api/openapi.json`, and committed as `docs/openapi.json`. A new or changed route goes in the spec: `server/openapi.test.ts` fails otherwise; then run `npm run docs:openapi`.
 - **There is no test suite.** Verify with `npm run build` (type-checks `src/` and `server/`) and `npm run lint`. Lint is clean; keep it that way. Context hooks are allowed by name in `.oxlintrc.json`; other shared helpers go in a `.ts` file, not next to a component.
 
 ## UI conventions
