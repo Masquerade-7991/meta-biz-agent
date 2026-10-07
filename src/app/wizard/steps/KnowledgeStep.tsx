@@ -10,6 +10,7 @@ import { SAMPLE_DOCUMENTS, SAMPLE_FAQS, SAMPLE_WEBSITES, newId } from '@/app/wiz
 import { BusinessProfileStep } from './BusinessProfileStep'
 import { hasAnyBusinessDetails } from '@/app/wizard/validation'
 import { DocumentsTab, FaqTab, WebsiteTab } from './KnowledgeBaseStep'
+import { KnowledgeGaps } from './KnowledgeGaps'
 import { generateFakeSubpages } from '@/app/wizard/mockData'
 import type { FaqRow } from '@/app/wizard/types'
 
@@ -22,6 +23,7 @@ export function KnowledgeStep() {
 
   // Adding the website is the quickest way to give the agent knowledge, so it comes first.
   const [activeTab, setActiveTab] = useState<TabId>('website')
+  const [gapQuestion, setGapQuestion] = useState<string | null>(null)
   const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'failed'>(() => (state.demo.forceNextFailure ? 'loading' : 'loaded'))
 
   // Arriving here via a "Compiled configuration" link on Test & publish — jump to the tab it named.
@@ -138,6 +140,12 @@ export function KnowledgeStep() {
         </p>
       )}
 
+      <KnowledgeGaps
+        onAddFaq={(q) => {
+          setActiveTab('faq')
+          setGapQuestion(q)
+        }}
+      />
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
         <TabsList>
           <TabsTrigger value="website" className="gap-1.5">
@@ -179,6 +187,8 @@ export function KnowledgeStep() {
               loading={loadStatus === 'loading'}
               patchKnowledge={(fn) => patch('knowledge', fn)}
               consumeForcedFailure={consumeForcedFailure}
+              prefillQuestion={gapQuestion}
+              onPrefillUsed={() => setGapQuestion(null)}
             />
           )}
         </TabsContent>

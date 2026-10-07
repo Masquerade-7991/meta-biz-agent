@@ -133,6 +133,8 @@ export function FaqTab({
   loading,
   patchKnowledge,
   consumeForcedFailure,
+  prefillQuestion,
+  onPrefillUsed,
 }: {
   faqs: FaqRow[]
   lastImport: KnowledgeState['lastFaqImport']
@@ -140,6 +142,9 @@ export function FaqTab({
   loading: boolean
   patchKnowledge: KnowledgePatcher
   consumeForcedFailure: () => boolean
+  /** Opens a new FAQ with this question filled in (from "Questions your agent couldn't answer"). */
+  prefillQuestion?: string | null
+  onPrefillUsed?: () => void
 }) {
   const [newRow, setNewRow] = useState<{ question: string; answer: string } | null>(null)
   const [newRowError, setNewRowError] = useState<string | null>(null)
@@ -166,6 +171,12 @@ export function FaqTab({
     setNewRow({ question: prefillQuestion ?? '', answer: '' })
     setNewRowError(null)
   }
+  useEffect(() => {
+    if (!prefillQuestion) return
+    startAddRow(prefillQuestion)
+    onPrefillUsed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillQuestion])
 
   async function saveNewRow() {
     if (!newRow || !newRow.question.trim() || !newRow.answer.trim()) return

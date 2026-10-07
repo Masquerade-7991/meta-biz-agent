@@ -1,7 +1,9 @@
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { AlertCircle, AlertTriangle, ChevronDown, FileText, Loader2, Sparkles } from 'lucide-react'
+import { AlertCircle, AlertTriangle, ChevronDown, FileText, Loader2, Sparkles, Wand2 } from 'lucide-react'
+import { assistWrite } from '@/app/api/assist'
+import { errorDetail } from '@/app/api/meta'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -205,6 +207,24 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
     setIsDraftFromDocument(false)
   }
 
+  const [aiBusy, setAiBusy] = useState(false)
+  /** Claude drafts the description from the business details, or tidies what's there. */
+  async function writeWithAi(task: 'draft_role' | 'improve') {
+    setAiBusy(true)
+    try {
+      const { text } = await assistWrite(task, identity.agentRole, {
+        agentName: identity.agentName,
+        business: state.business.businessDescription,
+        category: category ?? undefined,
+      })
+      requestApplyText(text)
+    } catch (err) {
+      toast.error('Couldn’t write that', { description: errorDetail(err) })
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
   function handleCategorySuggestion() {
     if (!category) return
     requestApplyText(composeSentence(CATEGORY_SUGGESTIONS[category]))
@@ -317,6 +337,15 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-72">
+              <DropdownMenuItem onSelect={() => void writeWithAi('draft_role')}>
+                <Wand2 className="size-4" />
+                Write it for me
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void writeWithAi('improve')} disabled={!identity.agentRole.trim()}>
+                <Sparkles className="size-4" />
+                Improve my wording
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               {category && (
                 <>
                   <DropdownMenuItem onSelect={handleCategorySuggestion}>Suggest for {category.toLowerCase()} businesses</DropdownMenuItem>
@@ -336,6 +365,11 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {aiBusy && (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" /> Writing&hellip;
+            </span>
+          )}
           {docStatus === 'reading' && (
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Loader2 className="size-3.5 animate-spin" /> Reading your document&hellip;

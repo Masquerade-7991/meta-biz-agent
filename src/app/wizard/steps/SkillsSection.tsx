@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, ChevronRight, Loader2, MessageSquare, Plus, Upload } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Loader2, MessageSquare, Plus, Sparkles, Upload, Wand2 } from 'lucide-react'
 import { Label } from '@/app/components/ui/label'
 import { Input } from '@/app/components/ui/input'
 import { Textarea } from '@/app/components/ui/textarea'
+import { assistWrite, type WriteContext, type WriteTask } from '@/app/api/assist'
 import { Button } from '@/app/components/ui/button'
 import {
   Dialog,
@@ -23,7 +24,8 @@ import { kebabCase, uniqueTitle } from '@/app/wizard/format'
 import { downloadCsv, normalizeForCompare, parseCsv } from '@/app/wizard/csv'
 import type { CustomSkill } from '@/app/wizard/types'
 import { cn } from '@/app/lib/utils'
-import { deleteSkill, errorText, listSkills, saveCustomSkill } from '@/app/api/meta'
+import { deleteSkill, errorDetail, errorText, listSkills, saveCustomSkill } from '@/app/api/meta'
+import { toast } from 'sonner'
 
 const MAX_SKILL_NAME = 60
 const MAX_SKILL_INSTRUCTION = 2000
@@ -523,10 +525,18 @@ function SkillEditorCard({
         />
       </div>
       <div className="space-y-1.5">
-        <span className="flex items-center gap-1.5">
-          <Label htmlFor="skill-instruction">Instruction</Label>
-          <InfoTooltip text="Write what the agent should do in plain language. One situation per skill works best." />
-        </span>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5">
+            <Label htmlFor="skill-instruction">Instruction</Label>
+            <InfoTooltip text="Write what the agent should do in plain language. One situation per skill works best." />
+          </span>
+          <AiWriteButtons
+            current={editor.instruction}
+            context={{ goal: [editor.name, editor.description].filter((x) => x.trim()).join(': ') }}
+            draftTask="draft_skill"
+            onText={(instruction) => onChange({ ...editor, instruction: instruction.slice(0, MAX_SKILL_INSTRUCTION) })}
+          />
+        </div>
         <Textarea
           id="skill-instruction"
           rows={5}
@@ -890,5 +900,32 @@ function SkillImportPanel({
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** "Write it for me" and "Improve" beside an instruction field (Claude, through server/assist.ts). */
+function AiWriteButtons({ current, context, draftTask, onText }: { current: string; context: WriteContext; draftTask: WriteTask; onText: (t: string) => void }) {
+  const [busy, setBusy] = useState<WriteTask | null>(null)
+  async function run(task: WriteTask) {
+    setBusy(task)
+    try {
+      onText((await assistWrite(task, current, context)).text)
+    } catch (err) {
+      toast.error('Couldn’t write that', { description: errorDetail(err) })
+    } finally {
+      setBusy(null)
+    }
+  }
+  return (
+    <span className="flex items-center gap-1">
+      <Button type="button" variant="ghost" size="xs" onClick={() => void run(draftTask)} disabled={!!busy || !context.goal?.trim()} title={!context.goal?.trim() ? 'Give the skill a name or description first' : undefined}>
+        {busy === draftTask ? <Loader2 className="animate-spin" /> : <Wand2 />}
+        Write it for me
+      </Button>
+      <Button type="button" variant="ghost" size="xs" onClick={() => void run('improve')} disabled={!!busy || !current.trim()}>
+        {busy === 'improve' ? <Loader2 className="animate-spin" /> : <Sparkles />}
+        Improve
+      </Button>
+    </span>
   )
 }

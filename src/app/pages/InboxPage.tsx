@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { Ban, Bot, Check, CheckCheck, Clock, FileText, Hand, ListChecks, Loader2, MessageSquareText, MoreHorizontal, PanelRight, Paperclip, Send, Sparkles, StickyNote, Undo2, Wrench, X } from 'lucide-react'
+import { Ban, Bot, Check, CheckCheck, Clock, FileText, GraduationCap, Hand, ListChecks, Loader2, MessageSquareText, MoreHorizontal, PanelRight, Paperclip, Send, Sparkles, StickyNote, Undo2, Wrench, X } from 'lucide-react'
 import { Sheet, SheetBody, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
@@ -10,7 +10,10 @@ import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { WA } from '@/app/wizard/steps/whatsappTheme'
 import type { Member } from '@/app/auth/api'
-import { errorDetail, errorText } from '@/app/api/meta'
+import { createFaq, errorDetail, errorText } from '@/app/api/meta'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog'
+import { Input } from '@/app/components/ui/input'
+import { Label } from '@/app/components/ui/label'
 import {
   addNote,
   assignChat,
@@ -155,7 +158,7 @@ function ChatRow({ c, active, onOpen }: { c: ChatSummary; active: boolean; onOpe
   )
 }
 
-function Bubble({ m, highlight }: { m: ChatMessage; highlight?: boolean }) {
+function Bubble({ m, highlight, onCoach }: { m: ChatMessage; highlight?: boolean; onCoach?: () => void }) {
   if (m.kind === 'event')
     return (
       <div className="flex justify-center py-1">
@@ -175,7 +178,7 @@ function Bubble({ m, highlight }: { m: ChatMessage; highlight?: boolean }) {
     )
   const out = m.direction === 'out'
   return (
-    <div id={`msg-${m.id}`} className={cn('flex rounded-lg transition-colors', out ? 'justify-end pl-16' : 'justify-start pr-16', highlight && 'bg-primary/15 ring-2 ring-primary/40')}>
+    <div id={`msg-${m.id}`} className={cn('group flex rounded-lg transition-colors', out ? 'justify-end pl-16' : 'justify-start pr-16', highlight && 'bg-primary/15 ring-2 ring-primary/40')}>
       <div className="max-w-136 rounded-lg px-2.5 pt-1.5 pb-1 shadow-sm" style={{ background: out ? WA.bubbleOut : WA.bubbleIn, color: WA.text, fontFamily: WA.font, fontSize: 14.2, lineHeight: '19px' }}>
         {out && (
           <p className="flex items-center gap-1" style={{ fontSize: 12, fontWeight: 600, color: m.author === 'ai' ? WA.green : WA.link }}>
@@ -213,12 +216,82 @@ function Bubble({ m, highlight }: { m: ChatMessage; highlight?: boolean }) {
           {m.author === 'agent' && m.status && (m.status === 'read' ? <CheckCheck className="size-3.5" style={{ color: WA.tick }} /> : m.status === 'delivered' ? <CheckCheck className="size-3.5" /> : <Check className="size-3.5" />)}
         </p>
       </div>
+      {onCoach && (
+        <button
+          type="button"
+          onClick={onCoach}
+          className="ml-1.5 self-end rounded-md bg-card/90 px-2 py-1 text-xs text-muted-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100"
+        >
+          <GraduationCap className="mr-1 inline size-3.5" />
+          Teach the agent
+        </button>
+      )}
     </div>
   )
 }
 
+/** The customer's words just before an AI reply, when WhatsApp has delivered them. */
+const lastQuestion = (messages: ChatMessage[], reply: ChatMessage) => {
+  const i = messages.indexOf(reply)
+  for (let j = i - 1; j >= 0; j--) if (messages[j].author === 'customer') return messages[j].body
+  return null
+}
+
+/** "Teach the agent": turn a reply into an FAQ the agent answers from next time. */
+function CoachDialog({ initial, onClose }: { initial: { question: string; reply: string } | null; onClose: () => void }) {
+  const [question, setQuestion] = useState('')
+  const [answer, setAnswer] = useState('')
+  const [saving, setSaving] = useState(false)
+  useEffect(() => {
+    if (!initial) return
+    setQuestion(initial.question)
+    setAnswer(initial.reply)
+  }, [initial])
+  async function save() {
+    setSaving(true)
+    try {
+      await createFaq(question.trim(), answer.trim())
+      toast.success('Added to your agent’s FAQs', { description: 'It answers this from the FAQ next time.' })
+      onClose()
+    } catch (err) {
+      toast.error('Couldn’t add the FAQ', { description: errorDetail(err) })
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <Dialog open={!!initial} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Teach the agent</DialogTitle>
+          <DialogDescription>Write the answer you&rsquo;d want, and the agent uses it whenever a customer asks this.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="coach-q">When a customer asks</Label>
+            <Input id="coach-q" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="e.g. Do you deliver on Sundays?" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="coach-a">The agent should answer</Label>
+            <Textarea id="coach-a" rows={5} value={answer} onChange={(e) => setAnswer(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={() => void save()} disabled={saving || !question.trim() || !answer.trim()}>
+            {saving && <Loader2 className="size-4 animate-spin" />}
+            Save as FAQ
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 /** The chat; `focusId` (a search hit) is scrolled to and highlighted instead of jumping to the end. */
-function Thread({ messages, focusId }: { messages: ChatMessage[]; focusId?: string | null }) {
+function Thread({ messages, focusId, onCoach }: { messages: ChatMessage[]; focusId?: string | null; onCoach?: (question: string, reply: string) => void }) {
   const end = useRef<HTMLDivElement>(null)
   const count = messages.length
   useEffect(() => {
@@ -242,7 +315,15 @@ function Thread({ messages, focusId }: { messages: ChatMessage[]; focusId?: stri
                 </span>
               </div>
             )}
-            <Bubble m={m} highlight={m.id === focusId} />
+            <Bubble
+              m={m}
+              highlight={m.id === focusId}
+              onCoach={
+                onCoach && m.author === 'ai' && m.body
+                  ? () => onCoach(lastQuestion(messages, m) ?? '', m.body ?? '')
+                  : undefined
+              }
+            />
           </div>
         )
       })}
@@ -759,10 +840,12 @@ function SavedViews({ views, current, onApply, onChange }: { views: SavedView[];
 
 /** One chat per customer who talks to the agent; people can step in, reply and hand back. */
 export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
+  const { me } = useAuth()
   const [aiSummary, setAiSummary] = useState(false)
   const [summary, setSummary] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [coach, setCoach] = useState<{ question: string; reply: string } | null>(null)
   const [filter, setFilter] = useState<ChatFilter>('all')
   const [q, setQ] = useState('')
   const [chats, setChats] = useState<ChatSummary[] | null>(null)
@@ -992,7 +1075,7 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
               </div>
             )}
             <div className="min-h-0 flex-1 overflow-y-auto" style={{ background: WA.wallpaper }}>
-              <Thread messages={chat.messages} focusId={focusId} />
+              <Thread messages={chat.messages} focusId={focusId} onCoach={can(me?.role, 'agent.edit') ? (question, reply) => setCoach({ question, reply }) : undefined} />
             </div>
             <Composer
               chat={chat}
@@ -1008,6 +1091,7 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
           </>
         )}
       </section>
+      <CoachDialog initial={coach} onClose={() => setCoach(null)} />
       {chat && open && (
         <CustomerPanel
           chat={chat}

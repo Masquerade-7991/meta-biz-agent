@@ -12,6 +12,7 @@ import { sendError } from './http.ts'
 import { handleInbox, handleWebhook } from './inbox.ts'
 import { handleTickets } from './tickets.ts'
 import { handleContacts } from './contacts.ts'
+import { handleAssist } from './assist.ts'
 import { handleBroadcasts } from './broadcasts.ts'
 import { handleBilling } from './billing.ts'
 import { handleHealth } from './health.ts'
@@ -162,6 +163,7 @@ export async function handle(req: http.IncomingMessage, res: http.ServerResponse
     else if (await handleInbox(req, res, me)) return
     else if (await handleTickets(req, res, me)) return
     else if (await handleContacts(req, res, me)) return
+    else if (await handleAssist(req, res, me)) return
     else if (await handleBroadcasts(req, res, me)) return
     else if (await handleBilling(req, res, me)) return
     else if (!(await handleStore(req, res))) res.writeHead(404).end()
