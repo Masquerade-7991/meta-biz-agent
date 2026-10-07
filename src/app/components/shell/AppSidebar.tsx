@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Check, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Rows4, Settings, Sun, UserPlus } from 'lucide-react'
 import { getDensity, setDensity, type Density } from '@/app/lib/density'
-import { Avatar, AvatarFallback, AvatarImage } from '@/app/components/ui/avatar'
-import avatar from '@/assets/helo-avatar.svg'
+import { Avatar, AvatarFallback } from '@/app/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,13 +13,13 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/app/components/ui/tooltip'
 import mark from '@/assets/helo-mark.svg'
 import { NAV_GROUPS, navFor, type NavId } from '@/app/nav'
-import { cn, initialsOf } from '@/app/lib/utils'
+import { cn } from '@/app/lib/utils'
 import { useAuth } from '@/app/auth/AuthContext'
 import type { SettingsTab } from './SettingsPage'
 import { can, roleLabel } from '@/app/lib/permissions'
 import { getTheme, setTheme, type ThemeChoice } from '@/app/lib/theme'
 
-const initials = (name: string) => initialsOf(name) || '?'
+const initial = (name?: string) => name?.trim()[0]?.toUpperCase() || '?'
 const COLLAPSE_KEY = 'helo-nav-collapsed'
 const readCollapsed = () => {
   try {
@@ -99,8 +98,8 @@ export function AppSidebar({
                         isActive ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent/70 hover:text-foreground',
                       )}
                     >
-                      {/* The Helo red marks where you are. */}
-                      {isActive && <span aria-hidden className="absolute top-2 bottom-2 -left-2.5 w-0.75 rounded-r-full bg-brand" />}
+                      {/* The blue bar marks where you are. */}
+                      {isActive && <span aria-hidden className="absolute top-2 bottom-2 -left-2.5 w-0.75 rounded-r-full bg-primary" />}
                       <Icon className={cn('size-4 shrink-0', isActive ? 'text-foreground' : 'text-muted-foreground')} />
                       {!collapsed && <span className="truncate">{item.label}</span>}
                     </button>
@@ -183,8 +182,7 @@ function AccountMenu({
           )}
         >
           <Avatar className="size-7">
-            <AvatarImage src={avatar} alt="" />
-            <AvatarFallback className="bg-primary text-meta text-primary-foreground">{initials(me?.user.name ?? '')}</AvatarFallback>
+            <AvatarFallback className="bg-primary text-meta font-semibold text-primary-foreground">{initial(me?.user.name)}</AvatarFallback>
           </Avatar>
           {!collapsed && (
             <span className="min-w-0 flex-1 leading-tight">

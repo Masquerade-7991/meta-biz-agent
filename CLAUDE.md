@@ -29,7 +29,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## UI conventions
 
-- **Tokens** live in `src/styles/theme.css` (light on `:root`, dark on `.dark`, switched by `src/app/lib/theme.ts`). Neutral greys, the Helo blue (`primary`) for actions, Helo red (`brand`) only for the logo and the active-nav bar. Text colours meet WCAG AA; keep it that way (status text uses the `-foreground` shades on `/10`–`/15` tints).
+- **Tokens** live in `src/styles/theme.css` (light on `:root`, dark on `.dark`, switched by `src/app/lib/theme.ts`). Neutral greys, the Helo blue (`primary`) for actions, Helo red (`brand`) only for the logo and progress bars; the active-nav bar is `primary` blue. Text colours meet WCAG AA; keep it that way (status text uses the `-foreground` shades on `/10`–`/15` tints).
 - **Type** is classes, not inline styles: `text-title` (page), `text-section`, `text-sm` (body), `text-xs`/`text-meta` (metadata), `text-display` (Home greeting only). Base h1–h4 are 24/20/16/14px.
 - **Page pieces** in `src/app/components/ui/page.tsx` (PageContainer, PageHeader, EmptyState, SaveBar), `sheet.tsx` for side panels, `status.tsx` StatusPill with the words in `src/app/lib/status.ts` (agent: Draft · Testing · Live · Paused).
 - **Addresses:** every page has a URL (`src/app/nav.ts` `pathFor`); the studio is `/agents/studio/<section>` (`src/app/wizard/studioPaths.ts`) and follows the wizard's `currentSection` both ways (`StudioUrlSync` in `App.tsx`). Real IDs never go in URLs.
