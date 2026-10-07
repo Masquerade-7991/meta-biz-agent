@@ -371,7 +371,7 @@ export function SetupFrontDoor({ onFinish }: { onFinish: () => void }) {
           if (shouldFail) throw new Error('Could not add this website.')
           const fields = websiteFields(await addWebsite(websiteUrl))
           setSite(fields)
-          trackCrawl(fields.metaId!, (fn) => patch('knowledge', fn))
+          trackCrawl(fields.metaId!, (fn, opts) => patch('knowledge', fn, opts))
         } catch (err) {
           setSite({ status: 'failed', crawlError: errorText(err) })
         }

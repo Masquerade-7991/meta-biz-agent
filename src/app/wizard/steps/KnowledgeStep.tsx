@@ -185,7 +185,7 @@ export function KnowledgeStep() {
               lastImport={knowledge.lastFaqImport}
               category={category}
               loading={loadStatus === 'loading'}
-              patchKnowledge={(fn) => patch('knowledge', fn)}
+              patchKnowledge={(fn, opts) => patch('knowledge', fn, opts)}
               consumeForcedFailure={consumeForcedFailure}
               prefillQuestion={gapQuestion}
               onPrefillUsed={() => setGapQuestion(null)}
@@ -200,7 +200,7 @@ export function KnowledgeStep() {
             <DocumentsTab
               documents={knowledge.documents}
               loading={loadStatus === 'loading'}
-              patchKnowledge={(fn) => patch('knowledge', fn)}
+              patchKnowledge={(fn, opts) => patch('knowledge', fn, opts)}
               consumeForcedFailure={consumeForcedFailure}
             />
           )}
@@ -213,7 +213,7 @@ export function KnowledgeStep() {
             <WebsiteTab
               websites={knowledge.websites}
               loading={loadStatus === 'loading'}
-              patchKnowledge={(fn) => patch('knowledge', fn)}
+              patchKnowledge={(fn, opts) => patch('knowledge', fn, opts)}
               consumeForcedFailure={consumeForcedFailure}
             />
           )}

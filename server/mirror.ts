@@ -108,16 +108,19 @@ const DRAFT_SECTIONS: [string, string, string[]][] = [
 ]
 export const DRAFT_COLLECTIONS = DRAFT_SECTIONS.map(([c]) => c)
 
+/** One write per section, all at once (they're separate collections, so nothing waits on another). */
 export async function mirrorDraft(phone: string, state: Obj) {
   const at = new Date()
-  for (const [coll, slice, drop] of DRAFT_SECTIONS) {
-    const data = { ...obj(state[slice]) }
-    for (const k of drop) delete data[k]
-    if (!Object.keys(data).length) continue
-    await col(coll).updateOne(
-      { workspaceId: ws(), phoneNumberId: phone },
-      { $set: { ...data, updatedAt: at }, $setOnInsert: { createdAt: at } },
-      { upsert: true },
-    )
-  }
+  await Promise.all(
+    DRAFT_SECTIONS.map(([coll, slice, drop]) => {
+      const data = { ...obj(state[slice]) }
+      for (const k of drop) delete data[k]
+      if (!Object.keys(data).length) return null
+      return col(coll).updateOne(
+        { workspaceId: ws(), phoneNumberId: phone },
+        { $set: { ...data, updatedAt: at }, $setOnInsert: { createdAt: at } },
+        { upsert: true },
+      )
+    }),
+  )
 }

@@ -160,14 +160,20 @@ export function SkillsSection() {
     return personalization.customSkills.filter((s) => s.id !== excludeId).map((s) => s.title)
   }
 
-  // Review status is Meta's (read-only, PRD V-b1a): refresh it whenever the tab opens.
+  // Review status is Meta's (read-only, PRD V-b1a). Opening the agent already loaded it; ask again
+  // only while a skill is still waiting for Meta's review, and record only what changed.
   useEffect(() => {
+    if (!personalization.customSkills.some((s) => s.metaId && s.reviewStatus === 'pending_review')) return
     listSkills()
       .then((remote) => {
         const byId = new Map(remote.map((r) => [r.id, r.status]))
-        patch('personalization', (prev) => ({
-          customSkills: prev.customSkills.map((s) => (s.metaId && byId.has(s.metaId) ? { ...s, reviewStatus: byId.get(s.metaId) } : s)),
-        }))
+        const changed = personalization.customSkills.some((s) => s.metaId && byId.has(s.metaId) && byId.get(s.metaId) !== s.reviewStatus)
+        if (!changed) return
+        patch(
+          'personalization',
+          (prev) => ({ customSkills: prev.customSkills.map((s) => (s.metaId && byId.has(s.metaId) ? { ...s, reviewStatus: byId.get(s.metaId) } : s)) }),
+          { background: true },
+        )
       })
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps

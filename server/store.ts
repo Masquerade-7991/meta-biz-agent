@@ -149,12 +149,11 @@ async function route(req: http.IncomingMessage, u: URL): Promise<unknown> {
       const body = (await readJson(req)) as Obj | null
       if (!body || typeof body.state !== 'object' || body.state === null || Array.isArray(body.state)) throw new HttpError(400, 'Expected {state: {...}}.')
       const updatedAt = new Date()
-      await col('agent_drafts').updateOne(
-        { workspaceId: ws(), phoneNumberId: phone },
-        { $set: { state: stripSecrets(body.state), updatedAt } },
-        { upsert: true },
-      )
-      await mirrorDraft(phone, stripSecrets(body.state) as Obj)
+      const state = stripSecrets(body.state)
+      await Promise.all([
+        col('agent_drafts').updateOne({ workspaceId: ws(), phoneNumberId: phone }, { $set: { state, updatedAt } }, { upsert: true }),
+        mirrorDraft(phone, state as Obj),
+      ])
       return { ok: true, updatedAt }
     }
   }

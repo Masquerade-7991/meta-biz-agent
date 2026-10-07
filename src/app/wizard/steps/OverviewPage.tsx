@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, ChevronRight, FileText, Inbox, Rocket, Ticket } from 'lucide-react'
-import { errorText, getAgentOnNumber, type AgentOnNumber } from '@/app/api/meta'
+import { errorText } from '@/app/api/meta'
 import { StatusPill } from '@/app/components/ui/status'
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/app/components/ui/sheet'
 import { AGENT_STATUS, agentStatusOf } from '@/app/lib/status'
@@ -110,7 +110,6 @@ export function OverviewPage() {
 
 interface Live {
   number: { name: string; display: string } | null
-  agent: AgentOnNumber | null
   team: { tickets: number; overdue: number; unread: number }
 }
 
@@ -122,17 +121,12 @@ function LiveOnWhatsApp({ phoneId, onGoLive }: { phoneId: string | null; onGoLiv
   const [error, setError] = useState<string | null>(null)
   const load = useCallback(() => {
     setError(null)
-    Promise.all([
-      listAccounts(),
-      phoneId ? getAgentOnNumber(phoneId) : Promise.resolve(null),
-      listTickets(),
-      listChats(),
-    ]).then(
-      ([accounts, agent, tickets, chats]) => {
+    // The agent's own status came from Meta when the studio opened (state.publish); no second ask.
+    Promise.all([listAccounts(), listTickets(), listChats()]).then(
+      ([accounts, tickets, chats]) => {
         const n = accounts.flatMap((a) => a.phoneNumbers).find((x) => x.id === phoneId)
         setLive({
           number: n ? { name: n.verifiedName, display: n.display || n.id } : null,
-          agent,
           team: { tickets: tickets.length, overdue: tickets.filter((t) => t.sla.breached).length, unread: chats.reduce((s, c) => s + c.unread, 0) },
         })
       },
@@ -150,11 +144,7 @@ function LiveOnWhatsApp({ phoneId, onGoLive }: { phoneId: string | null; onGoLiv
         </Button>
       </Card>
     )
-  const a = live?.agent
-  // What Meta says, when it has answered; the saved publish settings until then.
-  const status = a
-    ? agentStatusOf({ activated: a.enabled, stopped: !a.enabled && state.publish.stopped, audienceMode: a.audience === 'EVERYONE' ? 'everyone' : 'allowlisted' })
-    : agentStatusOf(state.publish)
+  const status = agentStatusOf(state.publish)
   const s = AGENT_STATUS[status]
   const t = live?.team
   return (

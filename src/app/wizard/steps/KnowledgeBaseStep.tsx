@@ -124,7 +124,7 @@ function computeRowWarnings(question: string, answer: string, faqs: FaqRow[], ex
 // FAQ TAB
 // ==================================================================================
 
-type KnowledgePatcher = (fn: (prev: KnowledgeState) => Partial<KnowledgeState>) => void
+type KnowledgePatcher = (fn: (prev: KnowledgeState) => Partial<KnowledgeState>, opts?: { background?: boolean }) => void
 
 export function FaqTab({
   faqs,

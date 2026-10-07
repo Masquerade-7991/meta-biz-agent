@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Navigate, useLocation, useNavigate } from 'react-router'
 import { Toaster } from '@/app/components/ui/sonner'
 import { TooltipProvider } from '@/app/components/ui/tooltip'
@@ -6,20 +6,26 @@ import { WizardProvider, useWizard } from '@/app/wizard/WizardContext'
 import { NavigationGuardProvider, useNavigationGuard } from '@/app/wizard/NavigationGuardContext'
 import { DevControlsProvider } from '@/app/wizard/DevControlsContext'
 import { ExitProvider } from '@/app/wizard/ExitContext'
-import { AgentStudioShell } from '@/app/components/shell/AgentStudioShell'
 import { DevControlsButton } from '@/app/components/wizard/DevControlsButton'
 import { LoaderPreview } from '@/app/components/wizard/LoaderPreview'
-import { GateScreen } from '@/app/components/GateScreen'
-import { SetupFrontDoor } from '@/app/components/SetupFrontDoor'
 import { navFromPath, NAV_ITEMS, pathFor, type NavId } from '@/app/nav'
 import { sectionFromSlug, STUDIO_BASE, studioPath } from '@/app/wizard/studioPaths'
 import type { SettingsTab } from '@/app/components/shell/SettingsPage'
-import { ProductShell } from '@/app/components/shell/ProductShell'
 import { CommandPalette } from '@/app/components/shell/CommandPalette'
 import { isDummyMode } from '@/app/api/dummy'
 import { AuthProvider, useAuth } from '@/app/auth/AuthContext'
-import { AuthScreen, CreateWorkspaceScreen } from '@/app/auth/AuthScreens'
-import { AccountSetupScreen, NewPasswordScreen, VerifyScreen } from '@/app/auth/SetupScreen'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
+
+// Only the screen someone is on downloads: the console, the agent studio, setup or sign-in.
+const ProductShell = lazy(() => import('@/app/components/shell/ProductShell').then((m) => ({ default: m.ProductShell })))
+const AgentStudioShell = lazy(() => import('@/app/components/shell/AgentStudioShell').then((m) => ({ default: m.AgentStudioShell })))
+const GateScreen = lazy(() => import('@/app/components/GateScreen').then((m) => ({ default: m.GateScreen })))
+const SetupFrontDoor = lazy(() => import('@/app/components/SetupFrontDoor').then((m) => ({ default: m.SetupFrontDoor })))
+const AuthScreen = lazy(() => import('@/app/auth/AuthScreens').then((m) => ({ default: m.AuthScreen })))
+const CreateWorkspaceScreen = lazy(() => import('@/app/auth/AuthScreens').then((m) => ({ default: m.CreateWorkspaceScreen })))
+const AccountSetupScreen = lazy(() => import('@/app/auth/SetupScreen').then((m) => ({ default: m.AccountSetupScreen })))
+const NewPasswordScreen = lazy(() => import('@/app/auth/SetupScreen').then((m) => ({ default: m.NewPasswordScreen })))
+const VerifyScreen = lazy(() => import('@/app/auth/SetupScreen').then((m) => ({ default: m.VerifyScreen })))
 
 function AgentBuilderFlow({ onExitToShell }: { onExitToShell: (page?: NavId) => void }) {
   const { state } = useWizard()
@@ -138,7 +144,9 @@ export default function App() {
       <WizardProvider>
         <TooltipProvider>
           <DevControlsProvider>
-            <Gate />
+            <Suspense fallback={<PageLoader fullscreen />}>
+              <Gate />
+            </Suspense>
             <CommandPalette />
             {(isDummyMode() || import.meta.env.DEV) && (
               <>

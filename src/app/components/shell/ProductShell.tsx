@@ -1,11 +1,5 @@
-import { useMemo, useState } from 'react'
-import { HomePage } from '@/app/pages/HomePage'
-import { InboxPage } from '@/app/pages/InboxPage'
-import { TicketsPage } from '@/app/pages/TicketsPage'
-import { ContactsPage } from '@/app/pages/ContactsPage'
-import { BroadcastsPage } from '@/app/pages/BroadcastsPage'
-import { SupportAnalyticsPage } from '@/app/pages/SupportAnalyticsPage'
-import { WhatsAppPage } from '@/app/pages/WhatsAppPage'
+import { lazy, Suspense, useMemo, useState } from 'react'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 import { CircleHelp, ExternalLink, Menu, Search } from 'lucide-react'
 import { openCommandPalette, PALETTE_SHORTCUT } from '@/app/lib/commandPalette'
 import { NotificationsBell } from './NotificationsBell'
@@ -21,7 +15,6 @@ import {
 import { HELP_GROUPS, SHORTCUTS } from '@/app/home/helpLinks'
 import mark from '@/assets/helo-mark.svg'
 import { AppSidebar } from './AppSidebar'
-import { AgentsListPage } from './AgentsListPage'
 import { navFor, type NavId } from '@/app/nav'
 import { useAuth } from '@/app/auth/AuthContext'
 import { isDummyMode } from '@/app/api/dummy'
@@ -29,7 +22,18 @@ import { Button } from '@/app/components/ui/button'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { ROLES } from '@/app/lib/permissions'
-import { SettingsPage, type SettingsTab } from './SettingsPage'
+import type { SettingsTab } from './SettingsPage'
+
+// Each page's code downloads when it's first opened, not all of them with the first screen.
+const HomePage = lazy(() => import('@/app/pages/HomePage').then((m) => ({ default: m.HomePage })))
+const InboxPage = lazy(() => import('@/app/pages/InboxPage').then((m) => ({ default: m.InboxPage })))
+const TicketsPage = lazy(() => import('@/app/pages/TicketsPage').then((m) => ({ default: m.TicketsPage })))
+const ContactsPage = lazy(() => import('@/app/pages/ContactsPage').then((m) => ({ default: m.ContactsPage })))
+const BroadcastsPage = lazy(() => import('@/app/pages/BroadcastsPage').then((m) => ({ default: m.BroadcastsPage })))
+const SupportAnalyticsPage = lazy(() => import('@/app/pages/SupportAnalyticsPage').then((m) => ({ default: m.SupportAnalyticsPage })))
+const WhatsAppPage = lazy(() => import('@/app/pages/WhatsAppPage').then((m) => ({ default: m.WhatsAppPage })))
+const AgentsListPage = lazy(() => import('./AgentsListPage').then((m) => ({ default: m.AgentsListPage })))
+const SettingsPage = lazy(() => import('./SettingsPage').then((m) => ({ default: m.SettingsPage })))
 
 export function ProductShell({
   active,
@@ -171,7 +175,9 @@ export function ProductShell({
             />
           </div>
         </header>
-        <main className="min-h-0 flex-1 overflow-y-auto">{renderContent()}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto">
+          <Suspense fallback={<PageLoader />}>{renderContent()}</Suspense>
+        </main>
       </div>
     </div>
   )

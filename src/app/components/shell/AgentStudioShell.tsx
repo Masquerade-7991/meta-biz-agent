@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { ArrowLeft, Eye, Menu, MessageCircle, Rocket } from 'lucide-react'
 import { TryItPanel } from '@/app/wizard/steps/TryItPanel'
 import { StatusPill } from '@/app/components/ui/status'
 import { Sheet, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
 import { AGENT_STATUS, agentStatusOf } from '@/app/lib/status'
 import { toast } from 'sonner'
-import { hydrateFromMeta, setActivePhoneNumberId } from '@/app/api/meta'
+import { hydrateFromMeta, setActivePhoneNumberId, stopCrawls } from '@/app/api/meta'
 import { getDraft, keepLocalSecrets, ms, putStoredAgent, setDraftSyncPhone } from '@/app/api/store'
 import { migrateRichReply } from '@/app/wizard/richReplies'
 import type { SliceKey, WizardState } from '@/app/wizard/types'
@@ -14,16 +14,6 @@ import { useWizard } from '@/app/wizard/WizardContext'
 import { useNavigationGuard } from '@/app/wizard/NavigationGuardContext'
 import { STUDIO_GROUP_LABEL, STUDIO_NAV_SECTIONS } from '@/app/wizard/studioNav'
 import type { StudioSectionId } from '@/app/wizard/types'
-import { OverviewPage } from '@/app/wizard/steps/OverviewPage'
-import { AgentIdentityStep } from '@/app/wizard/steps/AgentIdentityStep'
-import { AbilitiesStep } from '@/app/wizard/steps/AbilitiesStep'
-import { KnowledgeStep } from '@/app/wizard/steps/KnowledgeStep'
-import { ConnectionsStep } from '@/app/wizard/steps/ConnectionsStep'
-import { SafetyHandoffStep } from '@/app/wizard/steps/SafetyHandoffStep'
-import { TestEvalStep } from '@/app/wizard/steps/TestEvalStep'
-import { PublishStep } from '@/app/wizard/steps/PublishStep'
-import { ActivityPage } from '@/app/wizard/steps/ActivityPage'
-import { AnalyticsPage } from '@/app/wizard/steps/AnalyticsPage'
 import { cn } from '@/app/lib/utils'
 import { useAuth } from '@/app/auth/AuthContext'
 import { can } from '@/app/lib/permissions'
@@ -50,17 +40,18 @@ function draftPatch(local: WizardState, draft: Partial<WizardState>, updatedAt: 
   return kept
 }
 
-const SECTION_COMPONENTS: Record<StudioSectionId, () => React.ReactElement> = {
-  overview: OverviewPage,
-  identity: AgentIdentityStep,
-  abilities: AbilitiesStep,
-  knowledge: KnowledgeStep,
-  connections: ConnectionsStep,
-  safety: SafetyHandoffStep,
-  testEval: TestEvalStep,
-  publish: PublishStep,
-  analytics: AnalyticsPage,
-  activity: ActivityPage,
+// Each section's code downloads when it's first opened.
+const SECTION_COMPONENTS: Record<StudioSectionId, React.LazyExoticComponent<() => React.ReactElement>> = {
+  overview: lazy(() => import('@/app/wizard/steps/OverviewPage').then((m) => ({ default: m.OverviewPage }))),
+  identity: lazy(() => import('@/app/wizard/steps/AgentIdentityStep').then((m) => ({ default: m.AgentIdentityStep }))),
+  abilities: lazy(() => import('@/app/wizard/steps/AbilitiesStep').then((m) => ({ default: m.AbilitiesStep }))),
+  knowledge: lazy(() => import('@/app/wizard/steps/KnowledgeStep').then((m) => ({ default: m.KnowledgeStep }))),
+  connections: lazy(() => import('@/app/wizard/steps/ConnectionsStep').then((m) => ({ default: m.ConnectionsStep }))),
+  safety: lazy(() => import('@/app/wizard/steps/SafetyHandoffStep').then((m) => ({ default: m.SafetyHandoffStep }))),
+  testEval: lazy(() => import('@/app/wizard/steps/TestEvalStep').then((m) => ({ default: m.TestEvalStep }))),
+  publish: lazy(() => import('@/app/wizard/steps/PublishStep').then((m) => ({ default: m.PublishStep }))),
+  analytics: lazy(() => import('@/app/wizard/steps/AnalyticsPage').then((m) => ({ default: m.AnalyticsPage }))),
+  activity: lazy(() => import('@/app/wizard/steps/ActivityPage').then((m) => ({ default: m.ActivityPage }))),
 }
 
 const GROUPS = ['build', 'deploy', 'monitor'] as const
@@ -107,6 +98,8 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
     return () => {
       cancelled = true
       setDraftSyncPhone(null)
+      // Website checks belong to this agent's studio; they stop when it closes.
+      stopCrawls()
     }
     // Once per opening of the agent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -235,10 +228,14 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
             {!hydrated ? (
               <PageLoader context="agent" />
             ) : state.currentSection === 'overview' || state.currentSection === 'publish' ? (
-              <ActiveComponent />
+              <Suspense fallback={<PageLoader context="agent" />}>
+                <ActiveComponent />
+              </Suspense>
             ) : (
               <div className="rounded-lg border border-border bg-card p-5 sm:p-6">
-                <ActiveComponent />
+                <Suspense fallback={<PageLoader context="agent" />}>
+                  <ActiveComponent />
+                </Suspense>
               </div>
             )}
           </div>

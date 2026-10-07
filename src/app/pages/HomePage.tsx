@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Bot, Check, ChevronRight, Inbox, Megaphone, MessageCircle, Smartphone, Ticket, UserPlus, Users } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { listChats, type ChatSummary } from '@/app/api/inbox'
@@ -202,10 +202,10 @@ const QUALITY: Record<string, { label: string; tone: Tone }> = {
 }
 
 /** Once set up, Home is what needs attention today: open chats and tickets, the agent, the number. */
-function AtAGlance({ agent, onNavigate }: { agent: AgentOnNumber; onNavigate: (id: NavId) => void }) {
+function AtAGlance({ agent, chats: loadChats, onNavigate }: { agent: AgentOnNumber; chats: () => Promise<ChatSummary[]>; onNavigate: (id: NavId) => void }) {
   const [data, setData] = useState<{ unread: number; chats: number; tickets: number; overdue: number; quality: string | null } | null>(null)
   useEffect(() => {
-    Promise.all([listChats().catch(() => []), listTickets().catch(() => []), getNumberHealth().catch(() => [])]).then(([chats, tickets, health]) =>
+    Promise.all([loadChats(), listTickets().catch(() => []), getNumberHealth().catch(() => [])]).then(([chats, tickets, health]) =>
       setData({
         unread: chats.reduce((n, c) => n + c.unread, 0),
         chats: chats.filter((c) => c.unread > 0).length,
@@ -214,7 +214,7 @@ function AtAGlance({ agent, onNavigate }: { agent: AgentOnNumber; onNavigate: (i
         quality: health[0]?.quality ?? null,
       }),
     )
-  }, [])
+  }, [loadChats])
   const q = data?.quality ? QUALITY[data.quality] : undefined
   const tiles: { id: NavId; icon: typeof Inbox; label: string; value: ReactNode; note?: ReactNode; urgent?: boolean }[] = [
     { id: 'inbox', icon: Inbox, label: 'Unread messages', value: data?.unread ?? '—', note: data ? `${data.chats} chat${data.chats === 1 ? '' : 's'} waiting` : undefined, urgent: !!data?.unread },
@@ -267,11 +267,11 @@ const timeAgo = (iso: string | null) => {
 const initialsOf = (name: string | null, phone: string) => (name ? name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() : phone.slice(-2))
 
 /** The latest conversations, each one click from its chat. */
-function RecentChats({ onOpenChat, onNavigate }: { onOpenChat: (phone: string) => void; onNavigate: (id: NavId) => void }) {
+function RecentChats({ chats: loadChats, onOpenChat, onNavigate }: { chats: () => Promise<ChatSummary[]>; onOpenChat: (phone: string) => void; onNavigate: (id: NavId) => void }) {
   const [chats, setChats] = useState<ChatSummary[] | null>(null)
   useEffect(() => {
-    listChats().then((c) => setChats(c.slice(0, 6)), () => setChats([]))
-  }, [])
+    void loadChats().then((c) => setChats(c.slice(0, 6)))
+  }, [loadChats])
   return (
     <section className="rounded-lg border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
@@ -446,6 +446,9 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
   const [snap, setSnap] = useState<Snapshot | null>(null)
   const [accounts, setAccounts] = useState<WaAccount[]>([])
   const [config, setConfig] = useState<SignupConfig | null>(null)
+  // At a glance and Recent conversations both show chats: one request between them.
+  const chatsRequest = useRef<Promise<ChatSummary[]> | null>(null)
+  const loadChats = useCallback(() => (chatsRequest.current ??= listChats().catch(() => [])), [])
   useRegisterDevControls(
     'home-whatsapp',
     isDummyMode() ? (
@@ -503,10 +506,10 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
         <>
           {snap.agent && accounts[0] && billingDone(accounts[0]) && (
             <>
-              <AtAGlance agent={snap.agent} onNavigate={onNavigate} />
+              <AtAGlance agent={snap.agent} chats={loadChats} onNavigate={onNavigate} />
               <div className="grid items-start gap-6 lg:grid-cols-3">
                 <div className="lg:col-span-2">
-                  <RecentChats onOpenChat={onOpenChat} onNavigate={onNavigate} />
+                  <RecentChats chats={loadChats} onOpenChat={onOpenChat} onNavigate={onNavigate} />
                 </div>
                 <QuickActions hasAgent onNavigate={(id, tab) => (tab ? onOpenSettings(tab) : onNavigate(id))} />
               </div>

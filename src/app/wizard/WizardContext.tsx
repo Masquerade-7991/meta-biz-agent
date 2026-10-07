@@ -185,7 +185,7 @@ function createInitialState(): WizardState {
 type Updater<K extends SliceKey> = Partial<WizardState[K]> | ((prev: WizardState[K]) => Partial<WizardState[K]>)
 
 type Action =
-  | { type: 'PATCH_SLICE'; slice: SliceKey; patch: Updater<SliceKey> }
+  | { type: 'PATCH_SLICE'; slice: SliceKey; patch: Updater<SliceKey>; background?: boolean }
   | { type: 'SET_STEP'; step: StepId }
   | { type: 'SET_STEP_COMPLETE'; step: StepId; complete: boolean }
   | { type: 'SET_SECTION'; section: StudioSectionId }
@@ -220,7 +220,8 @@ function reducer(state: WizardState, action: Action): WizardState {
         ...state,
         [action.slice]: { ...state[action.slice], ...resolvedPatch },
       }
-      if (EDITABLE_SLICES.includes(action.slice)) {
+      // Background refreshes (a website's reading status, an event's delivery) aren't edits.
+      if (EDITABLE_SLICES.includes(action.slice) && !action.background) {
         next.lastEditedAt = { ...next.lastEditedAt, [action.slice]: Date.now() }
         if (next.publish.testResults.length > 0 && !next.publish.testsStaleSince) {
           next.publish = { ...next.publish, testsStaleSince: Date.now() }
@@ -284,7 +285,8 @@ function loadInitialState(): WizardState {
 
 interface WizardContextValue {
   state: WizardState
-  patch: <K extends SliceKey>(slice: K, patch: Updater<K>) => void
+  /** `background`: a status refresh from Meta, not the person's edit (no “edited”, tests stay current). */
+  patch: <K extends SliceKey>(slice: K, patch: Updater<K>, opts?: { background?: boolean }) => void
   setStep: (step: StepId) => void
   setStepComplete: (step: StepId, complete: boolean) => void
   setSection: (section: StudioSectionId) => void
@@ -302,7 +304,8 @@ export function WizardProvider({ children }: { children: ReactNode }) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stripConnectionSecrets(state)))
   }, [state])
 
-  // localStorage stays the fast cache; the stored draft (minus secrets) follows 2 s after the last edit.
+  // localStorage stays the fast cache; the stored draft (minus secrets) follows 2 s after the last
+  // change, and only when it differs from what was last saved (putDraft).
   useEffect(() => {
     const phone = getDraftSyncPhone()
     if (!phone || phone !== state.gate.selectedPhoneNumberId) return
@@ -313,8 +316,8 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   const value = useMemo<WizardContextValue>(
     () => ({
       state,
-      patch: (slice, patch) =>
-        dispatch({ type: 'PATCH_SLICE', slice, patch: patch as Updater<SliceKey> }),
+      patch: (slice, patch, opts) =>
+        dispatch({ type: 'PATCH_SLICE', slice, patch: patch as Updater<SliceKey>, background: opts?.background }),
       setStep: (step) => dispatch({ type: 'SET_STEP', step }),
       setStepComplete: (step, complete) => dispatch({ type: 'SET_STEP_COMPLETE', step, complete }),
       setSection: (section) => dispatch({ type: 'SET_SECTION', section }),

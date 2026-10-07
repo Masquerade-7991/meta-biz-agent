@@ -100,8 +100,16 @@ export function keepLocalSecrets<T>(stored: T, local: unknown): T {
 
 export const getDraft = (phoneNumberId: string) =>
   storeFetch<{ state: Partial<WizardState> | null; updatedAt: Stamp | null }>(`/api/store/drafts/${enc(phoneNumberId)}`)
-export const putDraft = (phoneNumberId: string, state: WizardState) =>
-  storeFetch(`/api/store/drafts/${enc(phoneNumberId)}`, 'PUT', { state: stripSecrets(state) })
+/** What each agent's draft looked like when last saved: a save that would change nothing isn't sent. */
+const lastSavedDraft = new Map<string, string>()
+export async function putDraft(phoneNumberId: string, state: WizardState) {
+  const body = { state: stripSecrets(state) }
+  const json = JSON.stringify(body)
+  if (lastSavedDraft.get(phoneNumberId) === json) return null
+  const r = await storeFetch(`/api/store/drafts/${enc(phoneNumberId)}`, 'PUT', body)
+  if (r) lastSavedDraft.set(phoneNumberId, json)
+  return r
+}
 
 // ---- Test conversations (recorded by the server on every agent_test call) ----
 interface StoredTestMessage {

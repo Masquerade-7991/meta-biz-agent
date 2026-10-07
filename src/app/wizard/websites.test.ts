@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { coveredBy, siteView } from './websites.ts'
+import { coveredBy, crawlStatus, siteView } from './websites.ts'
 
 test('completed with 0 pages is Ready, and never claims 0 pages', () => {
   const v = siteView({ status: 'done', pagesRead: 0 })
@@ -24,4 +24,14 @@ test('a page under a listed site on the same domain is already covered', () => {
   assert.equal(coveredBy('https://helo.ai/', sites), undefined)
   assert.equal(coveredBy('https://other.com/docsx', sites), undefined)
   assert.equal(coveredBy('https://other.com/docs/start', sites)?.url, 'https://other.com/docs')
+})
+
+test('an unfinished read that already reports an error is finished, so polling stops', () => {
+  const error = 'All discovered pages are business info pages with no product data.'
+  assert.equal(crawlStatus('pending', error), 'done_no_data')
+  assert.equal(crawlStatus('in_progress', error), 'done_no_data')
+  assert.equal(crawlStatus('pending'), 'waiting')
+  assert.equal(crawlStatus('failed', 'robots'), 'failed')
+  assert.equal(crawlStatus(undefined), 'waiting')
+  assert.match(siteView({ status: 'done_no_data', pagesRead: 0, crawlError: error }).line, /no product data/)
 })

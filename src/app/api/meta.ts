@@ -19,6 +19,7 @@ import type {
 import { compileConfig } from '../wizard/compiler'
 import { validateRichReply } from '../wizard/richReplies'
 import { skillTitle } from '../wizard/skillTitle'
+import { crawlStatus, type MetaCrawlStatus } from '../wizard/websites'
 export { skillTitle }
 import type { Profile } from '../whatsapp/profileRules'
 import type { EvalConversationResult, EvalScenario, TranscriptLine } from '../wizard/steps/evalData'
@@ -437,26 +438,18 @@ export const deleteFile = (id: string) => metaFetch(`${agent()}/agent_config/fil
 interface MetaWebsite {
   id: string
   url: string
-  crawl_status?: 'not_started' | 'pending' | 'in_progress' | 'completed' | 'completed_no_data' | 'failed'
+  crawl_status?: MetaCrawlStatus
   crawl_error?: string
   pages_crawled?: number
   last_crawled_at?: number
   created_at?: number
-}
-const CRAWL_STATUS: Record<NonNullable<MetaWebsite['crawl_status']>, WebsiteStatus> = {
-  not_started: 'not_started',
-  pending: 'waiting',
-  in_progress: 'reading',
-  completed: 'done',
-  completed_no_data: 'done_no_data',
-  failed: 'failed',
 }
 /** Meta timestamps may be seconds or ms. */
 export const toMs = (t?: number) => (t ? (t < 1e12 ? t * 1000 : t) : undefined)
 export const websiteFields = (w: MetaWebsite): Partial<WebsiteSource> => ({
   metaId: w.id,
   url: w.url,
-  status: CRAWL_STATUS[w.crawl_status ?? 'pending'],
+  status: crawlStatus(w.crawl_status, w.crawl_error),
   pagesRead: w.pages_crawled ?? 0,
   crawlError: w.crawl_error || undefined,
   lastCrawledAt: toMs(w.last_crawled_at),
@@ -470,16 +463,26 @@ export const addWebsite = (url: string) => metaFetch<MetaWebsite>(`${agent()}/ag
 export const updateWebsite = (id: string, url: string) => metaFetch<MetaWebsite>(`${agent()}/agent_config/websites/${id}`, 'PUT', { url })
 export const deleteWebsite = (id: string) => metaFetch(`${agent()}/agent_config/websites/${id}`, 'DELETE')
 
-/** Polls one website until its crawl finishes, reporting every change. Waits 5 s, then doubles up to
+/** Bumped when the agent studio closes (stopCrawls), so its website checks stop with it. */
+let crawlEpoch = 0
+export const stopCrawls = () => void crawlEpoch++
+const tabHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden'
+
+/** Polls one website until its crawl finishes, reporting every answer. Waits 5 s, then doubles up to
  *  60 s, so a long crawl costs ~70 checks over ~1 hour instead of eating Meta's 1000/hour website
- *  budget. Then it gives up and marks the row stalled (a page reload re-polls via hydrate). */
+ *  budget; then it marks the row stalled (opening the agent again re-polls via hydrate). It asks only
+ *  while the tab is visible, always about the agent it started for, and stops when the studio closes. */
 export async function pollWebsite(id: string, onUpdate: (fields: Partial<WebsiteSource>) => void) {
+  const epoch = crawlEpoch
+  const base = agent()
   let failures = 0
   for (let i = 0, wait = 5000; i < 70; i++, wait = Math.min(wait * 2, 60000)) {
     await sleep(wait)
+    while (tabHidden() && epoch === crawlEpoch) await sleep(5000)
+    if (epoch !== crawlEpoch) return
     let w: MetaWebsite
     try {
-      w = await metaFetch<MetaWebsite>(`${agent()}/agent_config/websites/${id}`)
+      w = await metaFetch<MetaWebsite>(`${base}/agent_config/websites/${id}`)
       failures = 0
     } catch (err) {
       if (err instanceof MetaError && err.status === 404) return // deleted meanwhile
@@ -491,21 +494,26 @@ export async function pollWebsite(id: string, onUpdate: (fields: Partial<Website
     onUpdate(fields)
     if (isCrawlDone(fields.status!)) return
   }
-  onUpdate({ stalled: true })
+  if (epoch === crawlEpoch) onUpdate({ stalled: true })
 }
 
-/** One poll per website across the whole app, patched straight into the knowledge slice, so
- *  leaving and re-opening the tab never starts a duplicate. */
+type PatchKnowledge = (fn: (prev: WizardState['knowledge']) => Partial<WizardState['knowledge']>, opts?: { background?: boolean }) => void
+
+/** One poll per agent and website across the whole app, patched straight into the knowledge slice,
+ *  so leaving and re-opening the tab never starts a duplicate. Only an answer that changes something
+ *  reaches the state, as a background update (not an edit), so an idle studio saves no drafts. */
 const crawlsInFlight = new Set<string>()
-export function trackCrawl(
-  metaId: string,
-  patchKnowledge: (fn: (prev: WizardState['knowledge']) => Partial<WizardState['knowledge']>) => void,
-) {
-  if (crawlsInFlight.has(metaId)) return
-  crawlsInFlight.add(metaId)
-  void pollWebsite(metaId, (fields) =>
-    patchKnowledge((prev) => ({ websites: prev.websites.map((w) => (w.metaId === metaId ? { ...w, ...fields } : w)) })),
-  ).finally(() => crawlsInFlight.delete(metaId))
+export function trackCrawl(metaId: string, patchKnowledge: PatchKnowledge) {
+  const key = `${agent()}|${metaId}`
+  if (crawlsInFlight.has(key)) return
+  crawlsInFlight.add(key)
+  let last = ''
+  void pollWebsite(metaId, (fields) => {
+    const seen = JSON.stringify([fields.status, fields.pagesRead, fields.crawlError, fields.lastCrawledAt, fields.stalled])
+    if (seen === last) return
+    last = seen
+    patchKnowledge((prev) => ({ websites: prev.websites.map((w) => (w.metaId === metaId ? { ...w, ...fields } : w)) }), { background: true })
+  }).finally(() => crawlsInFlight.delete(key))
 }
 
 // ---- Rich replies = Meta "UI skills" ----
