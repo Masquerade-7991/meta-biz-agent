@@ -273,7 +273,7 @@ export function SkillsSection() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         {skillCount > 0 ? (
           <div>
-            <span className={cn(skillCount >= SKILL_COUNT_WARNING_THRESHOLD ? 'text-warning-foreground' : 'text-muted-foreground')} style={{ fontSize: 'var(--text-sm)' }}>
+            <span className={cn('text-sm', skillCount >= SKILL_COUNT_WARNING_THRESHOLD ? 'text-warning-foreground' : 'text-muted-foreground')}>
               {skillCount} custom skill{skillCount === 1 ? '' : 's'}
             </span>
             {skillCount >= SKILL_COUNT_WARNING_THRESHOLD && (
@@ -591,7 +591,7 @@ function SkillTemplatesDialog({
             const alreadyAdded = existingTitles.includes(kebabCase(template.name))
             return (
               <div key={template.name} className="space-y-2 rounded-lg border border-border p-3">
-                <p className={cn(alreadyAdded && 'text-muted-foreground')} style={{ fontWeight: 'var(--font-weight-medium)' }}>
+                <p className={cn('font-medium', alreadyAdded && 'text-muted-foreground')}>
                   {template.name}
                 </p>
                 <p className="line-clamp-2 text-muted-foreground text-xs">

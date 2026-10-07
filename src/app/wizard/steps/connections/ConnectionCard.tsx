@@ -8,7 +8,6 @@ import { cn } from '@/app/lib/utils'
 import { domainFromUrl } from './helpers'
 import { MethodBadge } from './parts'
 
-const SM = { fontSize: 'var(--text-sm)' } as const
 const MANY_TOOLS = 6
 
 /** What the status means and the one thing to do about it. */
@@ -171,7 +170,7 @@ export function ConnectionCard({
                 <li key={t.id} className="rounded-md px-2 py-2 hover:bg-accent/40">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-mono" style={{ ...SM, fontWeight: 'var(--font-weight-medium)' }}>
+                      <p className="truncate font-mono text-sm font-medium">
                         {t.name}
                       </p>
                       <p className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">

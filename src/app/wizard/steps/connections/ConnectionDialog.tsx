@@ -26,7 +26,6 @@ interface KeyRow {
   replacing: boolean
 }
 
-const XS = { fontSize: 'var(--text-xs)' } as const
 
 const CHECKLIST = [
   'To connect our AI agent to your system, please share:',
@@ -233,7 +232,7 @@ export function ConnectionDialog({
                     <div key={r.id} className="space-y-3 rounded-lg border border-border p-3">
                       {rows.length > 1 && (
                         <div className="flex items-center justify-between">
-                          <p style={{ ...XS, fontWeight: 'var(--font-weight-semi-bold)' }}>Key {i + 1}</p>
+                          <p className="text-xs font-semibold">Key {i + 1}</p>
                           <button type="button" onClick={() => setRows((p) => p.filter((x) => x.id !== r.id))} className="flex items-center gap-1 text-muted-foreground hover:text-destructive text-xs">
                             <Trash2 className="size-3.5" /> Remove
                           </button>

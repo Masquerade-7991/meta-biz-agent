@@ -28,7 +28,7 @@
   --muted-foreground: #62625f;
   --accent: #eef4fc;
   --accent-foreground: #1d64bd;
-  --destructive: #d42033;
+  --destructive: #c81e32;
   --destructive-foreground: #ffffff;
 
   /* Status. `-foreground` is the AA-safe text colour on a light tint of the same hue. */
@@ -53,7 +53,7 @@
   /* Charts */
   --chart-1: #2270d0;
   --chart-2: #137337;
-  --chart-3: #d42033;
+  --chart-3: #c81e32;
   --chart-4: #d97706;
   --chart-5: #8a8a85;
 

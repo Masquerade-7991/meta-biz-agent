@@ -12,7 +12,6 @@ import { AccountSteps } from '@/app/whatsapp/ConnectWhatsApp'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
 import { SettingsSection } from './SettingsSection'
 import { WebhookStatusCard } from '@/app/whatsapp/WebhookStatusCard'
-import { TEXT_SM } from '@/app/lib/text'
 import { can } from '@/app/lib/permissions'
 
 const SOURCE: Record<WaAccount['source'], string> = { env: 'Set up by Helo.ai', signup: 'Connected with Embedded Signup', coexistence: 'WhatsApp Business app number' }
@@ -23,7 +22,7 @@ function AccountCard({ a, isOwner, onChange, onRemove }: { a: WaAccount; isOwner
     <li className="space-y-3 rounded-lg border border-border p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>{a.wabaName}</p>
+          <p className="text-sm font-semibold">{a.wabaName}</p>
           <p className="text-muted-foreground text-xs">
             {SOURCE[a.source]}
           </p>

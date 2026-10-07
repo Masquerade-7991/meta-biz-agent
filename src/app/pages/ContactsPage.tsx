@@ -29,7 +29,6 @@ import {
   type Segment,
 } from '@/app/api/contacts'
 import { parseCsv, toCsv, toImportRows, type ImportRow } from '@/app/contacts/csv'
-import { TEXT_SM } from '@/app/lib/text'
 import { SearchInput } from '@/app/components/Filters'
 import { customerLabel, isBsuid } from '@/app/lib/customer'
 import { can } from '@/app/lib/permissions'
@@ -517,7 +516,7 @@ export function ContactsPage({ onOpenChat }: { onOpenChat: (phone: string) => vo
             <TableBody>
               {rows.map((c) => (
                 <TableRow key={c.phone} className="cursor-pointer" onClick={() => setEditing(c)}>
-                  <TableCell style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-medium)' }}>{c.name || <span className="text-muted-foreground">No name</span>}</TableCell>
+                  <TableCell>{c.name || <span className="text-muted-foreground text-sm font-medium">No name</span>}</TableCell>
                   <TableCell className="text-sm">{customerLabel(c.phone, c.username)}</TableCell>
                   <TableCell>
                     <span className="flex flex-wrap gap-1">

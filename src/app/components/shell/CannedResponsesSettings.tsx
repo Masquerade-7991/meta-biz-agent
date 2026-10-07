@@ -12,7 +12,6 @@ import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
 import { FormError } from '@/app/auth/AuthLayout'
 import { deleteCanned, listCanned, saveCanned, type CannedResponse } from '@/app/api/inbox'
 import { errorDetail } from '@/app/api/meta'
-import { TEXT_SM_OPEN } from '@/app/lib/text'
 import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
 import { cn } from '@/app/lib/utils'
@@ -138,7 +137,7 @@ export function CannedResponsesSettings() {
             <li key={c.id} className="flex items-start gap-4 px-4 py-3">
               <div className="min-w-0 flex-1 space-y-1">
                 <p className="flex flex-wrap items-center gap-2">
-                  <span style={{ ...TEXT_SM_OPEN, fontWeight: 'var(--font-weight-semi-bold)' }}>{c.shortcut}</span>
+                  <span className="text-sm font-semibold">{c.shortcut}</span>
                   <span className="text-muted-foreground text-sm">
                     {c.title}
                   </span>

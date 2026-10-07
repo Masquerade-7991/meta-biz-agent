@@ -133,7 +133,7 @@ export function KnowledgeStep() {
         </div>
       ) : (
         <p className="text-muted-foreground text-sm">
-          <span style={{ fontWeight: 'var(--font-weight-medium)', color: 'var(--foreground)' }}>
+          <span className="font-medium" style={{ color: 'var(--foreground)' }}>
             Your agent&rsquo;s knowledge:
           </span>{' '}
           {coverageParts.join(' · ')}

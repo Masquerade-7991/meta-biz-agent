@@ -8,15 +8,13 @@ import { PLACE } from './places'
 
 // Shared pieces of the connection and tool dialogs. Plain building blocks, styled from theme tokens.
 
-const XS = { fontSize: 'var(--text-xs)' } as const
-const SM = { fontSize: 'var(--text-sm)' } as const
 
 /** A numbered form section: a short title, one line of help, then its fields. */
 export function FormSection({ n, title, help, children }: { n: number; title: string; help?: ReactNode; children: ReactNode }) {
   return (
     <section className="space-y-3">
       <div className="flex items-start gap-2.5">
-        <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground" style={{ ...XS, fontWeight: 'var(--font-weight-semi-bold)' }}>
+        <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-xs font-semibold">
           {n}
         </span>
         <div className="min-w-0">
@@ -37,7 +35,7 @@ export function FormSection({ n, title, help, children }: { n: number; title: st
 export function Field({ label, htmlFor, help, error, children }: { label: ReactNode; htmlFor?: string; help?: ReactNode; error?: string | null; children: ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label htmlFor={htmlFor} className="block" style={{ ...SM, fontWeight: 'var(--font-weight-medium)' }}>
+      <label htmlFor={htmlFor} className="block text-sm font-medium">
         {label}
       </label>
       {children}
@@ -88,7 +86,7 @@ export function Segmented<T extends string>({
             )}
           >
             <input type="radio" name={name} className="sr-only" checked={on} disabled={disabled} onChange={() => onChange(o.id)} />
-            <span className="flex items-center justify-between gap-2" style={{ ...SM, fontWeight: 'var(--font-weight-medium)' }}>
+            <span className="flex items-center justify-between gap-2 text-sm font-medium">
               {o.title}
               {on && <Check className="size-4 shrink-0 text-primary" />}
             </span>
@@ -157,8 +155,8 @@ export function PlaceBadge({ place }: { place: ValueLocation }) {
   const p = PLACE[place]
   return (
     <span
-      className="inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-mono"
-      style={{ ...XS, color: p.tone, background: `color-mix(in srgb, ${p.tone} 12%, transparent)`, fontWeight: 'var(--font-weight-semi-bold)' }}
+      className="inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-mono text-xs font-semibold"
+      style={{ color: p.tone, background: `color-mix(in srgb, ${p.tone} 12%, transparent)` }}
     >
       {p.short}
     </span>
@@ -168,7 +166,7 @@ export function PlaceBadge({ place }: { place: ValueLocation }) {
 export function MethodBadge({ method }: { method: string }) {
   const tone = method === 'GET' ? 'var(--chart-1)' : method === 'DELETE' ? 'var(--chart-3)' : 'var(--chart-2)'
   return (
-    <span className="inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-mono" style={{ ...XS, color: tone, background: `color-mix(in srgb, ${tone} 12%, transparent)`, fontWeight: 'var(--font-weight-semi-bold)' }}>
+    <span className="inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-mono text-xs font-semibold" style={{ color: tone, background: `color-mix(in srgb, ${tone} 12%, transparent)` }}>
       {method}
     </span>
   )
@@ -187,7 +185,7 @@ export function RequestPreviewBlock({ preview }: { preview: RequestPreview }) {
       ),
     )
   return (
-    <pre className="min-w-0 overflow-x-auto rounded-lg border border-border bg-muted/50 p-3 break-all whitespace-pre-wrap" style={{ ...XS, lineHeight: 1.6 }}>
+    <pre className="min-w-0 overflow-x-auto rounded-lg border border-border bg-muted/50 p-3 break-all whitespace-pre-wrap text-xs">
       <span className="font-semibold">{preview.method}</span> {mark(preview.url)}
       {preview.headers.map(([k, v]) => (
         <span key={k}>

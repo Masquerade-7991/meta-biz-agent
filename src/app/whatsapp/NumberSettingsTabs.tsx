@@ -10,7 +10,6 @@ import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
 import { requestDisplayName, saveAutomation } from '@/app/api/numbers'
 import { can } from '@/app/lib/permissions'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { WA } from '@/app/wizard/steps/whatsappTheme'
 import { AUTOMATION_LIMITS, automationErrors, displayNameError, type Automation } from './profileRules'
 import { useForcedFailure } from './useForcedFailure'
@@ -69,7 +68,7 @@ export function DisplayNameTab({ detail, onSaved, onDirty, onRegister }: TabProp
           <p className="text-muted-foreground text-xs">
             Current name
           </p>
-          <p className="flex flex-wrap items-center gap-2" style={{ fontSize: '1.125rem', fontWeight: 'var(--font-weight-semi-bold)' }}>
+          <p className="flex flex-wrap items-center gap-2 font-semibold" style={{ fontSize: '1.125rem' }}>
             {n.verifiedName || '—'}
             {n.nameStatus && <Badge variant="secondary">{NAME_STATUS[n.nameStatus] ?? n.nameStatus.toLowerCase()}</Badge>}
           </p>
@@ -123,7 +122,7 @@ export function DisplayNameTab({ detail, onSaved, onDirty, onRegister }: TabProp
         )}
       </div>
       <div className="space-y-2 rounded-lg border border-border p-4">
-        <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>What WhatsApp approves</p>
+        <p className="text-sm font-semibold">What WhatsApp approves</p>
         <ul className="space-y-1.5 text-xs">
           {GUIDELINES.map((g) => (
             <li key={g} className="flex gap-2">
@@ -176,7 +175,7 @@ export function AutomationTab({ detail, onSaved, onDirty }: TabProps) {
           {a.prompts.map((p, i) => (
             <div key={i} className="flex items-center gap-2">
               <Input value={p} maxLength={AUTOMATION_LIMITS.prompt + 20} aria-label={`Ice breaker ${i + 1}`} onChange={(e) => setA({ ...a, prompts: a.prompts.map((x, j) => (j === i ? e.target.value : x)) })} />
-              <span className={p.length > AUTOMATION_LIMITS.prompt ? 'text-destructive' : 'text-muted-foreground'} style={TEXT_XS}>
+              <span className={p.length > AUTOMATION_LIMITS.prompt ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
                 {p.length}/{AUTOMATION_LIMITS.prompt}
               </span>
               <Button type="button" size="icon" variant="ghost" aria-label={`Remove ice breaker ${i + 1}`} onClick={() => setA({ ...a, prompts: a.prompts.filter((_, j) => j !== i) })}>

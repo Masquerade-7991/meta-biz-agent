@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { errorDetail } from '@/app/api/meta'
 import { createTicket, listTickets, PRIORITIES, PRIORITY_LABEL, resolveTicket, updateTicket, type Priority, type Ticket } from '@/app/api/tickets'
 import { SlaCell } from './TicketsPage'
-import { TEXT_SM } from '@/app/lib/text'
 
 
 function ResolveDialog({ t, windowOpen, onClose, onDone }: { t: Ticket; windowOpen: boolean; onClose: () => void; onDone: () => void }) {
@@ -110,7 +109,7 @@ export function TicketPanel({ phone, windowOpen, version, onChanged }: { phone: 
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
       ) : current ? (
         <div className="space-y-3 rounded-lg border border-border p-3">
-          <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
+          <p className="text-sm font-semibold">
             #{current.number} {current.subject}
           </p>
           <SlaCell t={current} />

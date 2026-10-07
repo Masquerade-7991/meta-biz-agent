@@ -66,7 +66,7 @@ export function BillingSettingsTab() {
       <SettingsSection title="This month" description="What WhatsApp charged for messages since the 1st, from Meta’s billing figures. Replies to customers within 24 hours are free." wide>
         <div className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <p style={{ fontSize: '1.75rem', fontWeight: 'var(--font-weight-semi-bold)', lineHeight: 1.1 }}>{formatMoney(b.month.total, b.currency)}</p>
+            <p className="text-[1.75rem] font-semibold">{formatMoney(b.month.total, b.currency)}</p>
             <div className="flex items-center gap-2 text-muted-foreground text-xs">
               {b.lastSyncError ? <span className="text-destructive">Last update failed: {b.lastSyncError}</span> : b.lastSyncAt ? <span>Updated {ago(b.lastSyncAt)}</span> : <span>Not updated yet</span>}
               <Button

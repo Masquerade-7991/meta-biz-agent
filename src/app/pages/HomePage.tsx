@@ -61,7 +61,7 @@ function Step({ n, done, locked, title, note, children, action }: { n: number; d
         {done ? <Check className="size-4 text-sm" /> : <span>{n}</span>}
       </span>
       <div className="min-w-0 space-y-2">
-        <p style={{ fontWeight: 'var(--font-weight-semi-bold)' }} className={done || locked ? 'text-muted-foreground' : undefined}>
+        <p className={cn('font-semibold', (done || locked) && 'text-muted-foreground')}>
           {title}
         </p>
         {done ? (

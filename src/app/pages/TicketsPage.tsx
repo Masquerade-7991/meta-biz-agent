@@ -8,7 +8,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { errorDetail } from '@/app/api/meta'
 import { bulkTickets, listTickets, PRIORITIES, PRIORITY_CLASS, PRIORITY_LABEL, slaText, STATUS_LABEL, type Priority, type Ticket } from '@/app/api/tickets'
 import { cn } from '@/app/lib/utils'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { useMembers } from '@/app/auth/useMembers'
 import { usePolling } from '@/app/lib/usePolling'
 import { PillTabs, SearchInput } from '@/app/components/Filters'
@@ -30,8 +29,7 @@ export function SlaCell({ t }: { t: Ticket }) {
   const due = t.sla.at ? Date.parse(t.sla.at) - Date.now() : null
   return (
     <span
-      className={cn(t.sla.breached ? 'text-destructive' : due !== null && due < 30 * 60_000 ? 'text-foreground' : 'text-muted-foreground')}
-      style={{ ...TEXT_XS, fontWeight: t.sla.breached ? 'var(--font-weight-semi-bold)' : undefined }}
+      className={cn('text-xs tabular-nums', t.sla.breached ? 'font-semibold text-destructive' : due !== null && due < 30 * 60_000 ? 'text-foreground' : 'text-muted-foreground')}
     >
       {slaText(t)}
     </span>
@@ -210,7 +208,7 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
                     />
                   </TableCell>
                   <TableCell className="max-w-[60vw] sm:max-w-md">
-                    <p className="truncate" style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
+                    <p className="truncate text-sm font-semibold">
                       #{t.number} {t.subject}
                     </p>
                     {t.tags.length > 0 && (

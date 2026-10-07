@@ -3,7 +3,6 @@ import { AlertTriangle, CheckCircle2, ChevronRight, Clock, Loader2, MessageSquar
 import { cn } from '@/app/lib/utils'
 import { readable, readableName, type ToolCall, type ToolCallsState } from '@/app/wizard/testTools'
 
-const SM = { fontSize: 'var(--text-sm)' } as const
 
 /** What happened behind one reply in a Test & Eval chat. */
 export interface ReplyInfo {
@@ -41,7 +40,7 @@ export function BehindTheScenes({
   return (
     <section className="flex min-h-0 flex-col rounded-xl border border-border bg-card" aria-label="Behind the scenes">
       <div className="border-b border-border px-4 py-3">
-        <h3 style={{ ...SM, fontWeight: 'var(--font-weight-semi-bold)' }}>Behind the scenes</h3>
+        <h3 className="text-sm font-semibold">Behind the scenes</h3>
         <p className="text-muted-foreground text-xs">
           What your agent did for each reply. Customers never see this.
         </p>

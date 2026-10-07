@@ -38,7 +38,6 @@ function dayLabel(date: string, withWeekday = false) {
   })
 }
 
-const TNUM = { fontVariantNumeric: 'tabular-nums' } as const
 
 // ---------------------------------------------------------------------------------
 // Per-section loading: each card fetches, fails and retries on its own.
@@ -108,7 +107,7 @@ export function AnalyticsPage() {
             <RefreshCw className={cn('size-3.5', kLoading && 'animate-spin')} /> Refresh
           </Button>
           {updatedAt && (
-            <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)', ...TNUM }}>
+            <span className="text-muted-foreground text-xs tabular-nums">
               Updated {updatedAt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
@@ -281,7 +280,7 @@ function Kpi({
 }) {
   return (
     <div className="rounded-lg bg-muted p-4">
-      <p className="text-muted-foreground" style={{ fontSize: '0.8125rem' }}>
+      <p className="text-muted-foreground text-dense">
         {label}
       </p>
       {loading ? (
@@ -289,14 +288,14 @@ function Kpi({
       ) : value == null ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <p tabIndex={0} className="w-fit cursor-help text-muted-foreground" style={{ fontSize: '1.5rem', fontWeight: 'var(--font-weight-medium)' }}>
+            <p tabIndex={0} className="w-fit cursor-help text-muted-foreground text-2xl font-medium">
               &mdash;
             </p>
           </TooltipTrigger>
           <TooltipContent side="top">Couldn&rsquo;t load from Meta</TooltipContent>
         </Tooltip>
       ) : (
-        <p style={{ fontSize: '1.5rem', fontWeight: 'var(--font-weight-medium)' }}>{format(value)}</p>
+        <p className="text-2xl font-medium">{format(value)}</p>
       )}
       {note && (
         <p className="text-muted-foreground text-xs">
@@ -362,7 +361,7 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
           {ticks.map((t) => (
             <g key={t}>
               <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeWidth="1" />
-              <text x={PAD.left - 6} y={y(t)} dy="0.32em" textAnchor="end" fontSize="11" fill="var(--muted-foreground)" style={TNUM}>
+              <text x={PAD.left - 6} y={y(t)} dy="0.32em" textAnchor="end" fontSize="11" fill="var(--muted-foreground)" className="tabular-nums">
                 {compact(t)}
               </text>
             </g>
@@ -408,14 +407,14 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
 
         {hp && hover != null && (
           <div
-            className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-1.5 text-popover-foreground shadow-md"
-            style={{ left: `${((PAD.left + band * hover + band / 2) / W) * 100}%`, fontSize: 'var(--text-xs)' }}
+            className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-1.5 text-popover-foreground shadow-float text-xs"
+            style={{ left: `${((PAD.left + band * hover + band / 2) / W) * 100}%` }}
           >
             <p className="whitespace-nowrap text-muted-foreground">
               {dayLabel(hp.date, true)}
               {hp.partial && ' · so far'}
             </p>
-            <p className="whitespace-nowrap" style={{ fontWeight: 'var(--font-weight-medium)', ...TNUM }}>
+            <p className="whitespace-nowrap font-medium tabular-nums">
               {hp.aiThreads == null ? "Couldn't load this day" : `${hp.aiThreads.toLocaleString()} conversation${hp.aiThreads === 1 ? '' : 's'}`}
             </p>
           </div>
@@ -489,7 +488,7 @@ function HandoffChart({ points, range }: { points: HandoffPoint[]; range: Analyt
           {ticks.map((t) => (
             <g key={t}>
               <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeWidth="1" />
-              <text x={PAD.left - 6} y={y(t)} dy="0.32em" textAnchor="end" fontSize="11" fill="var(--muted-foreground)" style={TNUM}>
+              <text x={PAD.left - 6} y={y(t)} dy="0.32em" textAnchor="end" fontSize="11" fill="var(--muted-foreground)" className="tabular-nums">
                 {compact(t)}
               </text>
             </g>
@@ -510,11 +509,11 @@ function HandoffChart({ points, range }: { points: HandoffPoint[]; range: Analyt
         </svg>
         {hp && (
           <div
-            className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-1.5 text-popover-foreground shadow-md"
-            style={{ left: `${(x(hp.at) / W) * 100}%`, fontSize: 'var(--text-xs)' }}
+            className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-1.5 text-popover-foreground shadow-float text-xs"
+            style={{ left: `${(x(hp.at) / W) * 100}%` }}
           >
             <p className="whitespace-nowrap text-muted-foreground">{when(hp.at)}</p>
-            <p className="whitespace-nowrap" style={{ fontWeight: 'var(--font-weight-medium)', ...TNUM }}>
+            <p className="whitespace-nowrap font-medium tabular-nums">
               {hp.count.toLocaleString()} waiting on a person
             </p>
           </div>
@@ -555,7 +554,7 @@ function ToolTable({ rows }: { rows: ToolRow[] }) {
   return (
     <div className="space-y-3 rounded-lg border border-border p-4">
       <Legend items={[...OUTCOMES]} />
-      <div className={cn(ROW_GRID, 'hidden text-muted-foreground sm:grid')} style={{ fontSize: 'var(--text-xs)' }}>
+      <div className={cn('text-xs', ROW_GRID, 'hidden text-muted-foreground sm:grid')}>
         <span>Tool</span>
         <span className="text-right">Threads</span>
         <span>Outcome</span>
@@ -563,16 +562,16 @@ function ToolTable({ rows }: { rows: ToolRow[] }) {
       </div>
       <ul className="space-y-3 sm:space-y-2">
         {rows.map((row) => (
-          <li key={row.tool} className={ROW_GRID} style={{ fontSize: 'var(--text-sm)' }}>
+          <li key={row.tool} className={cn(ROW_GRID, 'text-sm')}>
             <span className="truncate" title={row.tool}>
               {row.tool}
             </span>
-            <span className="text-right" style={TNUM}>
+            <span className="text-right tabular-nums">
               {compact(row.threads)}
               <span className="text-muted-foreground sm:hidden"> threads</span>
             </span>
             <OutcomeBar row={row} />
-            <span className="text-right text-muted-foreground" style={TNUM}>
+            <span className="text-right text-muted-foreground tabular-nums">
               {row.avgLatencyMs == null ? '—' : ms(row.avgLatencyMs)}
             </span>
           </li>
@@ -595,7 +594,7 @@ function OutcomeBar({ row }: { row: ToolRow }) {
         </div>
       </TooltipTrigger>
       <TooltipContent side="top">
-        <ul style={TNUM}>
+        <ul className="tabular-nums">
           {OUTCOMES.map((o) => (
             <li key={o.key} className="flex items-center gap-1.5">
               <span className={cn('size-2 rounded-sm', o.className)} aria-hidden="true" />
@@ -627,12 +626,12 @@ function EventTable({ rows, avgLatencyMs }: EventData) {
           ]}
         />
         {avgLatencyMs != null && (
-          <span className="text-muted-foreground" style={{ fontSize: 'var(--text-xs)', ...TNUM }}>
+          <span className="text-muted-foreground text-xs tabular-nums">
             Avg processing time {ms(avgLatencyMs)}
           </span>
         )}
       </div>
-      <div className={cn(ROW_GRID, 'hidden text-muted-foreground sm:grid')} style={{ fontSize: 'var(--text-xs)' }}>
+      <div className={cn('text-xs', ROW_GRID, 'hidden text-muted-foreground sm:grid')}>
         <span>Event</span>
         <span className="text-right">Processed</span>
         <span>Processed of received</span>
@@ -642,11 +641,11 @@ function EventTable({ rows, avgLatencyMs }: EventData) {
         {rows.map((row) => {
           const label = `${row.type}: ${row.processed.toLocaleString()} processed of ${row.received.toLocaleString()} received`
           return (
-            <li key={row.type} className={ROW_GRID} style={{ fontSize: 'var(--text-sm)' }}>
+            <li key={row.type} className={cn(ROW_GRID, 'text-sm')}>
               <span className="truncate" title={row.type}>
                 {row.type}
               </span>
-              <span className="text-right" style={TNUM}>
+              <span className="text-right tabular-nums">
                 {compact(row.processed)}
                 <span className="text-muted-foreground"> / {compact(row.received)}</span>
               </span>
@@ -658,10 +657,10 @@ function EventTable({ rows, avgLatencyMs }: EventData) {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  <span style={TNUM}>{label.slice(row.type.length + 2)}</span>
+                  <span className="tabular-nums">{label.slice(row.type.length + 2)}</span>
                 </TooltipContent>
               </Tooltip>
-              <span className="text-right text-muted-foreground" style={TNUM}>
+              <span className="text-right text-muted-foreground tabular-nums">
                 {row.avgLatencyMs == null ? '—' : ms(row.avgLatencyMs)}
               </span>
             </li>
@@ -701,7 +700,7 @@ function ConnectorCard({ row, onViewLogs }: { row: HealthRow; onViewLogs: () => 
       </div>
 
       {s && (
-        <dl className="grid grid-cols-3 gap-3" style={TNUM}>
+        <dl className="grid grid-cols-3 gap-3 tabular-nums">
           <Stat label="Success" value={s.successRate == null ? '—' : pct(s.successRate)} />
           <Stat label="Calls" value={compact(s.executions)} />
           <Stat label="p95 time" value={s.p95LatencyS == null ? '—' : ms(s.p95LatencyS * 1000)} />
@@ -721,13 +720,13 @@ function ConnectorCard({ row, onViewLogs }: { row: HealthRow; onViewLogs: () => 
           <ul className="space-y-1">
             {row.topFailures.map((f) => (
               <li key={f.code} className="flex items-baseline gap-2 text-sm">
-                <span className="shrink-0" style={{ fontWeight: 'var(--font-weight-medium)', ...TNUM }}>
+                <span className="shrink-0 font-medium tabular-nums">
                   {f.code}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-muted-foreground" title={f.message}>
                   {f.message}
                 </span>
-                <span className="shrink-0 text-muted-foreground" style={TNUM}>
+                <span className="shrink-0 text-muted-foreground tabular-nums">
                   &times;{f.count.toLocaleString()}
                 </span>
               </li>

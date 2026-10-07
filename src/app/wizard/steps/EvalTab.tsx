@@ -337,10 +337,9 @@ function EvalCard({
                 <li key={s} className="flex items-center gap-1.5">
                   <span
                     className={cn(
-                      'flex items-center gap-1',
-                      i < stageIndex ? 'text-success' : i === stageIndex ? '' : 'text-muted-foreground',
+                      'flex items-center gap-1 text-sm',
+                      i < stageIndex ? 'text-success' : i === stageIndex ? 'font-medium' : 'text-muted-foreground',
                     )}
-                    style={{ fontSize: 'var(--text-sm)', fontWeight: i === stageIndex ? 'var(--font-weight-medium)' : 'var(--font-weight-regular)' }}
                   >
                     {i < stageIndex && <CheckCircle2 className="size-3.5" />}
                     {STAGE_LABEL[s]}
@@ -398,7 +397,7 @@ function CompletedBody({ result }: { result: EvalConversationResult }) {
   return (
     <div className="space-y-3">
       {/* PRD AC11 / V5 / V9: whole-number score only, no word label, no pass/fail. */}
-      <p style={{ fontSize: '1.5rem', fontWeight: 'var(--font-weight-medium)' }}>{Math.round(result.score)} / 5</p>
+      <p className="text-2xl font-medium">{Math.round(result.score)} / 5</p>
 
       {result.summary && (
         <p className="italic text-muted-foreground text-sm">

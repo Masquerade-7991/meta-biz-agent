@@ -48,7 +48,6 @@ import { cn, initialsOf } from '@/app/lib/utils'
 import { getSupportSettings } from '@/app/api/tickets'
 import { TicketPanel } from './TicketPanel'
 import { SendTemplateDialog } from './SendTemplateDialog'
-import { TEXT_SM, TEXT_XS } from '@/app/lib/text'
 import { useMembers } from '@/app/auth/useMembers'
 import { usePolling } from '@/app/lib/usePolling'
 import { PillTabs, SearchInput } from '@/app/components/Filters'
@@ -115,12 +114,12 @@ function ChatRow({ c, active, onOpen }: { c: ChatSummary; active: boolean; onOpe
       data-density-row
       className={cn('flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60 focus-visible:bg-muted focus-visible:outline-none', active && 'bg-muted')}
     >
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground" style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground text-sm font-semibold">
         {initials(c)}
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
-          <span className="truncate" style={{ ...TEXT_SM, fontWeight: c.unread ? 'var(--font-weight-semi-bold)' : 'var(--font-weight-medium)' }}>
+          <span className="truncate text-sm" style={{ fontWeight: c.unread ? 'var(--font-weight-semi-bold)' : 'var(--font-weight-medium)' }}>
             {display(c)}
           </span>
           <span className={cn('shrink-0 text-xs', c.unread ? 'text-primary' : 'text-muted-foreground')}>
@@ -162,7 +161,7 @@ function Bubble({ m, highlight, onCoach }: { m: ChatMessage; highlight?: boolean
   if (m.kind === 'event')
     return (
       <div className="flex justify-center py-1">
-        <span className="rounded-md px-3 py-1" style={{ ...TEXT_XS, background: WA.notice, color: WA.noticeText }}>
+        <span className="rounded-md px-3 py-1 text-xs" style={{ background: WA.notice, color: WA.noticeText }}>
           {m.body} &middot; {time(m.at)}
         </span>
       </div>
@@ -448,8 +447,7 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
             role="tab"
             aria-selected={mode === m}
             onClick={() => setMode(m)}
-            className={cn('rounded-md px-2.5 py-1 whitespace-nowrap', mode === m ? (m === 'note' ? 'bg-warning/15' : 'bg-muted') : 'text-muted-foreground hover:bg-muted/60')}
-            style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-medium)' }}
+            className={cn('rounded-md px-2.5 py-1 text-sm font-medium whitespace-nowrap', mode === m ? (m === 'note' ? 'bg-warning/15' : 'bg-muted') : 'text-muted-foreground hover:bg-muted/60')}
           >
             {m === 'reply' ? 'Reply' : 'Internal note'}
           </button>
@@ -515,7 +513,7 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
                       e.preventDefault()
                       applyCanned(c)
                     }} className={cn('block w-full px-3 py-2 text-left', i === pick && 'bg-muted')}>
-                    <span style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>{c.shortcut}</span>
+                    <span className="text-sm font-semibold">{c.shortcut}</span>
                     <span className="ml-2 text-muted-foreground text-xs">
                       {c.title}
                     </span>
@@ -746,7 +744,7 @@ function CustomerDetails({ chat, version, onChanged }: { chat: ChatDetail; versi
   return (
     <div className="space-y-6">
       <div className="flex flex-col items-center gap-2 text-center">
-        <span className="flex size-16 items-center justify-center rounded-full bg-accent text-accent-foreground" style={{ fontSize: '1.25rem', fontWeight: 'var(--font-weight-semi-bold)' }}>
+        <span className="flex size-16 items-center justify-center rounded-full bg-accent text-accent-foreground text-xl font-semibold">
           {initials({ name: contact?.name, phone: conv.phone })}
         </span>
         <p className="font-semibold">{contact?.name ?? 'Unknown name'}</p>
@@ -1006,7 +1004,7 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
           )}
           {hits && hits.length > 0 && (
             <div className="border-t border-border">
-              <p className="px-4 pt-3 pb-1 text-muted-foreground" style={{ ...TEXT_XS, fontWeight: 'var(--font-weight-semi-bold)' }}>
+              <p className="px-4 pt-3 pb-1 text-muted-foreground text-xs font-semibold">
                 In messages
               </p>
               <ul className="divide-y divide-border">

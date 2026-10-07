@@ -9,7 +9,6 @@ import { errorDetail } from '@/app/api/meta'
 import { connectAccount, PAYMENT_URL, retryAccount, setBilling, STEP_LABEL, type Billing, type Flow, type SignupConfig, type StepName, type WaAccount } from '@/app/api/whatsapp'
 import { startSignup } from './embeddedSignup'
 import { SignupWindow } from './SignupWindow'
-import { TEXT_SM } from '@/app/lib/text'
 import { cn } from '@/app/lib/utils'
 
 const ORDER: StepName[] = ['exchange', 'subscribe', 'register', 'sync', 'details', 'billing']
@@ -152,7 +151,7 @@ export function ConnectWhatsApp({ config, isOwner, workspaceName, variant, onCon
           </div>
           {config?.partnerCredit || isDummyMode() ? (
             <fieldset className="space-y-2">
-              <legend className="mb-1" style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-medium)' }}>
+              <legend className="mb-1 text-sm font-medium">
                 Who pays Meta for conversations
               </legend>
               <RadioGroup value={billing} onValueChange={(v) => setBillingChoice(v as Billing)} className="gap-2">
@@ -238,7 +237,7 @@ export function ConnectWhatsApp({ config, isOwner, workspaceName, variant, onCon
               <div className="space-y-1 rounded-md border border-border px-3 py-2.5 text-sm">
                 <p className="font-medium">Your number&rsquo;s two-step PIN</p>
                 <p className="flex items-center gap-2">
-                  <span className="font-mono tracking-widest" style={{ fontSize: '1.25rem' }}>
+                  <span className="font-mono tracking-widest text-xl">
                     {result.pin}
                   </span>
                   <Button size="sm" variant="ghost" aria-label="Copy PIN" onClick={() => void navigator.clipboard?.writeText(result.pin!).then(() => toast.success('PIN copied.'))}>

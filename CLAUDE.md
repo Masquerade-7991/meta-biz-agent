@@ -33,7 +33,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Type** is classes, not inline styles: `text-title` (page), `text-section`, `text-sm` (body), `text-xs`/`text-meta` (metadata), `text-display` (Home greeting only). Base h1–h4 are 24/20/16/14px.
 - **Page pieces** in `src/app/components/ui/page.tsx` (PageContainer, PageHeader, EmptyState, SaveBar), `sheet.tsx` for side panels, `status.tsx` StatusPill with the words in `src/app/lib/status.ts` (agent: Draft · Testing · Live · Paused).
 - **Addresses:** every page has a URL (`src/app/nav.ts` `pathFor`); the studio is `/agents/studio/<section>` (`src/app/wizard/studioPaths.ts`) and follows the wizard's `currentSection` both ways (`StudioUrlSync` in `App.tsx`). Real IDs never go in URLs.
-- **Demo controls** render only in dummy mode or dev (`App.tsx`).
+- **Demo controls** render only in dummy mode or dev (`App.tsx`); Demo controls → Loader previews the page loader.
+- **Loading a page or panel:** `PageLoader` (`ui/wavy-loader.tsx`) with an area's lines from `lib/loadingLines.ts`; small spinners only inside buttons.
+- **Forms with Save:** use `SaveButton` (it also shows the floating unsaved-changes bar); pass `onDiscard` (`useSaveOnNextSection().discard`).
+- **Lists:** compact density is `html[data-density=compact]` (`lib/density.ts`); new list rows that should tighten get `data-density-row`.
+- **AI help** (`server/assist.ts`, `src/app/api/assist.ts`): writing help needs `ANTHROPIC_API_KEY`; unanswered questions come from Inbox messages and test chats answered with Meta's fallback or handed off.
 - **⌘K palette** (`shell/CommandPalette.tsx`) lists pages, settings, the open agent's sections and quick actions; add new pages there. The studio's **Try it** panel (`steps/TryItPanel.tsx`) is the quick test chat from any section.
 - Effects return nothing or a cleanup function: wrap calls like `scrollIntoView` in a block body (newer browsers return a Promise from it, which crashes React).
 

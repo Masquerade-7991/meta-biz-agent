@@ -10,8 +10,6 @@ import { cn } from '@/app/lib/utils'
 import { Field, PlaceBadge, RequestPreviewBlock } from './parts'
 
 
-const XS = { fontSize: 'var(--text-xs)' } as const
-const SM = { fontSize: 'var(--text-sm)' } as const
 
 export type TestOutcome = ({ kind: 'done' } & ToolRunResult & { ms: number }) | { kind: 'error'; message: string }
 
@@ -77,7 +75,7 @@ export function ToolTestDialog({
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
           {asked.length > 0 && (
             <div className="space-y-3">
-              <p style={{ ...SM, fontWeight: 'var(--font-weight-semi-bold)' }}>Values the agent would fill in</p>
+              <p className="text-sm font-semibold">Values the agent would fill in</p>
               {asked.map((v) => (
                 <Field
                   key={v.id}
@@ -106,7 +104,7 @@ export function ToolTestDialog({
           )}
 
           <div className="space-y-2">
-            <p style={{ ...SM, fontWeight: 'var(--font-weight-semi-bold)' }}>What it sends</p>
+            <p className="text-sm font-semibold">What it sends</p>
             <RequestPreviewBlock preview={preview} />
           </div>
 
@@ -123,7 +121,7 @@ export function ToolTestDialog({
                     action={keyProblem ? { label: 'Replace key', onClick: onReplaceKey } : undefined}
                   />
                   {result.ok && (
-                    <pre className="max-h-72 min-w-0 overflow-auto rounded-lg border border-border bg-muted/50 p-3 break-all whitespace-pre-wrap" style={{ ...XS, lineHeight: 1.6 }}>
+                    <pre className="max-h-72 min-w-0 overflow-auto rounded-lg border border-border bg-muted/50 p-3 break-all whitespace-pre-wrap text-xs">
                       {result.body}
                     </pre>
                   )}
@@ -131,7 +129,7 @@ export function ToolTestDialog({
                     <ChevronRight className={cn('size-3.5 transition-transform', showFull && 'rotate-90')} /> Full response from Meta
                   </button>
                   {showFull && (
-                    <pre className="max-h-72 min-w-0 overflow-auto rounded-lg border border-border bg-muted/50 p-3 break-all whitespace-pre-wrap" style={{ ...XS, lineHeight: 1.6 }}>
+                    <pre className="max-h-72 min-w-0 overflow-auto rounded-lg border border-border bg-muted/50 p-3 break-all whitespace-pre-wrap text-xs">
                       {result.full}
                     </pre>
                   )}
@@ -161,7 +159,7 @@ function Banner({ ok, title, detail, action }: { ok: boolean; title: string; det
     <div className={cn('flex items-start gap-2.5 rounded-lg px-3 py-2.5', ok ? 'bg-success/10' : 'bg-destructive/10')}>
       <Icon className={cn('mt-0.5 size-4 shrink-0', ok ? 'text-success' : 'text-destructive')} />
       <div className="min-w-0 space-y-0.5">
-        <p style={{ ...SM, fontWeight: 'var(--font-weight-semi-bold)' }}>{title}</p>
+        <p className="text-sm font-semibold">{title}</p>
         {detail && (
           <p className="break-words text-muted-foreground text-xs">
             {detail}

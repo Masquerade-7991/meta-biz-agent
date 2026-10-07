@@ -14,7 +14,7 @@ function Kpi({ label, value, hint }: { label: string; value: string; hint?: stri
       <p className="text-muted-foreground text-xs">
         {label}
       </p>
-      <p className="mt-1" style={{ fontSize: '1.75rem', fontWeight: 'var(--font-weight-semi-bold)', lineHeight: 1.1 }}>
+      <p className="mt-1 text-[1.75rem] font-semibold">
         {value}
       </p>
       {hint && (
@@ -104,14 +104,14 @@ export function SupportAnalyticsPage() {
             <Kpi label="Customer satisfaction" value={d.csat.average === null ? '–' : `${Math.round(((d.csat.good + d.csat.okay * 0.5) / Math.max(1, d.csat.responses)) * 100)}%`} hint={d.csat.responses ? `${d.csat.good} good · ${d.csat.okay} okay · ${d.csat.bad} bad` : 'No answers yet'} />
           </div>
           <section className="rounded-lg border border-border p-5">
-            <h2 style={{ fontSize: '1.125rem', fontWeight: 'var(--font-weight-semi-bold)' }}>Tickets per day</h2>
+            <h2 className="font-semibold" style={{ fontSize: '1.125rem' }}>Tickets per day</h2>
             <div className="mt-4">
               <VolumeChart series={d.series} />
             </div>
           </section>
           <div className="grid gap-6 lg:grid-cols-2">
             <section className="space-y-3 rounded-lg border border-border p-5">
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 'var(--font-weight-semi-bold)' }}>Who handled chats</h2>
+              <h2 className="font-semibold" style={{ fontSize: '1.125rem' }}>Who handled chats</h2>
               {d.chats.total ? (
                 <>
                   <div className="flex h-3 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${d.chats.aiOnly} by the AI alone, ${d.chats.withTeam} with your team`}>
@@ -129,7 +129,7 @@ export function SupportAnalyticsPage() {
               )}
             </section>
             <section className="space-y-3 rounded-lg border border-border p-5">
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 'var(--font-weight-semi-bold)' }}>Broadcasts</h2>
+              <h2 className="font-semibold" style={{ fontSize: '1.125rem' }}>Broadcasts</h2>
               <div className="grid grid-cols-3 gap-3">
                 <Kpi label="Sent" value={String(d.broadcasts.sent)} />
                 <Kpi label="Read" value={pct(d.broadcasts.sent ? d.broadcasts.read / d.broadcasts.sent : null)} />
@@ -138,7 +138,7 @@ export function SupportAnalyticsPage() {
             </section>
           </div>
           <section className="rounded-lg border border-border p-5">
-            <h2 style={{ fontSize: '1.125rem', fontWeight: 'var(--font-weight-semi-bold)' }}>By person</h2>
+            <h2 className="font-semibold" style={{ fontSize: '1.125rem' }}>By person</h2>
             {d.people.length ? (
               <table className="mt-3 w-full text-sm">
                 <thead className="text-left text-muted-foreground text-xs">

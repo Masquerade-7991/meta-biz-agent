@@ -73,7 +73,7 @@ export function NotificationsBell({ onOpenChat, onOpenTarget }: { onOpenChat: (p
                     }}
                   >
                     <Icon className={cn('mt-0.5 size-4 shrink-0', n.kind === 'breached' || n.kind === 'alert_critical' ? 'text-destructive' : n.kind === 'alert' ? 'text-amber-600' : n.kind === 'reminder' ? 'text-primary' : 'text-muted-foreground')} />
-                    <span className={cn(n.kind.startsWith('alert') || n.kind === 'reminder' ? 'pr-6' : '')} style={{ fontSize: 'var(--text-sm)', lineHeight: 1.4 }}>
+                    <span className={cn('text-sm', n.kind.startsWith('alert') || n.kind === 'reminder' ? 'pr-6' : '')}>
                       {n.text}
                     </span>
                   </button>

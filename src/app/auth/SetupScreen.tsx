@@ -72,7 +72,7 @@ function Steps({ labels, current }: { labels: string[]; current: number }) {
       {labels.map((l, i) => (
         <li key={l} className="flex-1 space-y-1.5">
           <span className={cn('block h-1 rounded-full', i <= current ? 'bg-primary' : 'bg-muted')} />
-          <span className={cn(i === current ? 'text-foreground' : 'text-muted-foreground')} style={{ fontSize: 'var(--text-xs)' }}>
+          <span className={cn('text-xs', i === current ? 'text-foreground' : 'text-muted-foreground')}>
             {l}
           </span>
         </li>

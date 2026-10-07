@@ -11,7 +11,6 @@ import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
 import { saveProfile, uploadPhoto } from '@/app/api/numbers'
 import { can } from '@/app/lib/permissions'
-import { TEXT_XS } from '@/app/lib/text'
 import { WA } from '@/app/wizard/steps/whatsappTheme'
 import { PROFILE_LIMITS, profileErrors, VERTICALS, type Profile } from './profileRules'
 import { useForcedFailure } from './useForcedFailure'
@@ -25,7 +24,7 @@ const same = (a: Profile, b: Profile) => JSON.stringify(clean(a)) === JSON.strin
 
 function Count({ n, max }: { n: number; max: number }) {
   return (
-    <span className={n > max ? 'text-destructive' : 'text-muted-foreground'} style={TEXT_XS}>
+    <span className={n > max ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
       {n}/{max}
     </span>
   )

@@ -15,7 +15,7 @@ export function KnowledgeGaps({ onAddFaq }: { onAddFaq: (question: string) => vo
   if (!gaps?.length) return null
   const shown = all ? gaps : gaps.slice(0, 3)
   return (
-    <section className="mb-6 rounded-lg border border-warning/40 bg-warning/5">
+    <section className="mb-6 rounded-lg border border-warning/50 bg-card">
       <div className="flex items-start gap-3 px-4 pt-3.5 pb-2">
         <MessageCircleQuestion className="mt-0.5 size-5 shrink-0 text-warning-foreground" />
         <div>
@@ -23,7 +23,7 @@ export function KnowledgeGaps({ onAddFaq }: { onAddFaq: (question: string) => vo
           <p className="text-xs text-muted-foreground">Answer them once as an FAQ and the agent will know next time.</p>
         </div>
       </div>
-      <ul className="divide-y divide-warning/20 px-4">
+      <ul className="divide-y divide-border px-4">
         {shown.map((g) => (
           <li key={g.question} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5">
             <span className="min-w-0 flex-1 text-sm">&ldquo;{g.question}&rdquo;</span>

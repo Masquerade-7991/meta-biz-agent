@@ -5,7 +5,6 @@ import { Button } from '@/app/components/ui/button'
 import { errorDetail } from '@/app/api/meta'
 import { getNumberHealth, refreshNumberHealth, type NumberHealth } from '@/app/api/whatsapp'
 import { cn } from '@/app/lib/utils'
-import { TEXT_SM } from '@/app/lib/text'
 
 const QUALITY: Record<string, { label: string; dot: string; help: string }> = {
   GREEN: { label: 'High quality', dot: 'bg-success', help: 'Customers are happy with your messages.' },
@@ -33,7 +32,7 @@ export function NumberHealthCard({ compact }: { compact?: boolean }) {
           return (
             <li key={r.phoneNumberId} className="rounded-lg border border-border p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>{r.display}</p>
+                <p className="text-sm font-semibold">{r.display}</p>
                 <span className="flex items-center gap-1.5 text-xs">
                   <span className={cn('size-2 rounded-full', q?.dot ?? 'bg-muted-foreground')} />
                   {q?.label ?? 'Quality not rated yet'}

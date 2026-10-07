@@ -16,7 +16,6 @@ import { newValue, similarTool, syncPathValues } from './helpers'
 import { Field, FormSection, PlaceBadge, RequestPreviewBlock } from './parts'
 import { PLACE } from './places'
 
-const SM = { fontSize: 'var(--text-sm)' } as const
 const METHODS: ActionMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 const TYPES: { id: ValueType; label: string }[] = [
   { id: 'text', label: 'Text' },
@@ -192,7 +191,7 @@ export function ToolDialog({
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">
                       <PlaceBadge place={place} />
-                      <span style={{ ...SM, fontWeight: 'var(--font-weight-medium)' }}>{PLACE[place].label}</span>
+                      <span className="text-sm font-medium">{PLACE[place].label}</span>
                       <span className="truncate font-mono text-muted-foreground text-xs">
                         {PLACE[place].example}
                       </span>
@@ -225,7 +224,7 @@ export function ToolDialog({
           </FormSection>
 
           <section className="space-y-2">
-            <button type="button" onClick={() => setPreviewOpen((o) => !o)} aria-expanded={previewOpen} className="flex items-center gap-1.5" style={{ ...SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
+            <button type="button" onClick={() => setPreviewOpen((o) => !o)} aria-expanded={previewOpen} className="flex items-center gap-1.5 text-sm font-semibold">
               <ChevronRight className={cn('size-4 transition-transform', previewOpen && 'rotate-90')} /> What it sends
             </button>
             {previewOpen && (

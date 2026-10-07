@@ -36,7 +36,6 @@ import {
 } from '@/app/api/broadcasts'
 import { renderTemplate, slotsOf } from '@/app/broadcasts/templates'
 import { cn } from '@/app/lib/utils'
-import { TEXT_SM } from '@/app/lib/text'
 import { usePolling } from '@/app/lib/usePolling'
 import { customerLabel } from '@/app/lib/customer'
 import { FAILURE_HELP, FAILURE_LABEL } from '@/app/broadcasts/sendErrors'
@@ -75,7 +74,7 @@ function SendCheck({ check, error, category }: { check: Preflight | null; error:
   const real = check.audience - check.sample
   return (
     <div className="space-y-2 rounded-lg border border-border p-3 text-xs">
-      <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
+      <p className="text-sm font-semibold">
         Reaches {check.audience} {check.audience === 1 ? 'person' : 'people'}
       </p>
       {real > 0 && (
@@ -296,7 +295,7 @@ function BroadcastDetailDialog({ id, onClose, onChanged }: { id: string; onClose
                   <p className="text-muted-foreground text-xs">
                     {label}
                   </p>
-                  <p style={{ fontSize: '1.25rem', fontWeight: 'var(--font-weight-semi-bold)' }}>{n}</p>
+                  <p className="text-xl font-semibold">{n}</p>
                   {label !== 'Audience' && label !== 'Sent' && <p className="text-muted-foreground text-xs">{pct(n, done || 1)}</p>}
                 </div>
               ))}
@@ -306,7 +305,7 @@ function BroadcastDetailDialog({ id, onClose, onChanged }: { id: string; onClose
             </p>
             {b.failures.length > 0 && (
               <div className="space-y-2">
-                <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>What didn&rsquo;t go out</p>
+                <p className="text-sm font-semibold">What didn&rsquo;t go out</p>
                 <ul className="divide-y divide-border rounded-lg border border-border">
                   {b.failures.map((f) => (
                     <li key={`${f.reason}:${f.retrying}`} className="flex items-start justify-between gap-4 px-3 py-2.5">
@@ -317,7 +316,7 @@ function BroadcastDetailDialog({ id, onClose, onChanged }: { id: string; onClose
                           {FAILURE_HELP[f.reason] ?? ''}
                         </p>
                       </div>
-                      <span className={cn('shrink-0', !f.retrying && 'text-destructive')} style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
+                      <span className={cn('shrink-0 text-sm font-semibold', !f.retrying && 'text-destructive')}>
                         {f.count}
                       </span>
                     </li>
@@ -338,7 +337,7 @@ function BroadcastDetailDialog({ id, onClose, onChanged }: { id: string; onClose
                   {b.recipients.map((r) => (
                     <TableRow key={r.phone}>
                       <TableCell className="text-sm">{r.name || customerLabel(r.phone)}</TableCell>
-                      <TableCell style={TEXT_SM} className={cn(r.status === 'failed' && 'text-destructive')}>
+                      <TableCell className={cn('text-sm', r.status === 'failed' && 'text-destructive')}>
                         {r.status === 'queued' && r.retryAt ? 'retrying' : r.status}
                         {r.repliedAt ? ' · replied' : ''}
                       </TableCell>
@@ -620,7 +619,7 @@ export function BroadcastsPage() {
                     return (
                       <TableRow key={b.id} className="cursor-pointer" onClick={() => setOpen(b.id)}>
                         <TableCell>
-                          <p style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>{b.name}</p>
+                          <p className="text-sm font-semibold">{b.name}</p>
                           <p className="text-muted-foreground text-xs">
                             {b.template.name}
                           </p>
@@ -665,7 +664,7 @@ export function BroadcastsPage() {
                 <li key={t.id} className="space-y-2 rounded-lg border border-border p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate" style={{ ...TEXT_SM, fontWeight: 'var(--font-weight-semi-bold)' }}>
+                      <p className="truncate text-sm font-semibold">
                         {t.name}
                       </p>
                       <p className="text-muted-foreground text-xs">

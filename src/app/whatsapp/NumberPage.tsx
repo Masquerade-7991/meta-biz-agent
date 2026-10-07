@@ -50,7 +50,7 @@ export function NumberAvatar({ photo, name, size = 'md' }: { photo: string | nul
   return photo ? (
     <img src={photo} alt="" className={cn(px, 'shrink-0 rounded-full object-cover')} />
   ) : (
-    <span className={cn(px, 'flex shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground')} style={{ fontWeight: 'var(--font-weight-semi-bold)' }}>
+    <span className={cn('font-semibold', px, 'flex shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground')}>
       {name.trim().slice(0, 1).toUpperCase() || '#'}
     </span>
   )
