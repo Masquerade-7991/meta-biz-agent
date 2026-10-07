@@ -1,17 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, ShieldCheck, X } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router'
+import { AlertTriangle, ShieldCheck } from 'lucide-react'
 import { Label } from '@/app/components/ui/label'
-import { Input } from '@/app/components/ui/input'
 import { Textarea } from '@/app/components/ui/textarea'
 import { Button } from '@/app/components/ui/button'
-import { Badge } from '@/app/components/ui/badge'
+import { Switch } from '@/app/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { TagInput } from '@/app/components/wizard/TagInput'
 import { UnsavedChangesDialog } from '@/app/components/wizard/UnsavedChangesDialog'
-import { InlineError, LoadFailedBanner, SaveFailedBanner, SavingIndicator, LoadingIndicator } from '@/app/components/wizard/RetryBanner'
+import { InlineError, SaveFailedBanner } from '@/app/components/wizard/RetryBanner'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
-import { InfoTooltip } from '@/app/components/wizard/InfoTooltip'
 import { SaveButton } from '@/app/components/wizard/SaveButton'
 import { SelectableCard } from '@/app/components/wizard/SelectableCard'
 import { useWizard } from '@/app/wizard/WizardContext'
@@ -24,12 +22,11 @@ import {
   SAMPLE_TOPICS_TO_AVOID,
   suggestWordVariants,
 } from '@/app/wizard/mockData'
-import type { FollowUpInterval, FollowUpMaxAttempts, GuardrailsState } from '@/app/wizard/types'
-import { cn } from '@/app/lib/utils'
+import type { FollowUpInterval, GuardrailsState } from '@/app/wizard/types'
+import { pathFor } from '@/app/nav'
 import { toast } from 'sonner'
 import { pushSlice } from '@/app/api/meta'
 
-type TabId = 'avoids' | 'handoff' | 'followup'
 type HandoffSource = 'default' | 'agent' | 'custom'
 
 const MAX_WORD_PHRASES = 50
@@ -51,29 +48,28 @@ business hours, where you should confirm receipt and give an expected
 reply time; or a connection or action that failed once, where you
 should try again or offer an alternative before involving a person.`
 
-// ---- Combined save-on-Next lifecycle across the guardrails + replies slices ----
-// This screen is "one saved object" per spec, but its fields live in two existing reducer slices.
-// Fields already patch the store live on every keystroke (same convention as every other
-// save-on-Next section here) — this local state exists only to simulate the load/save round trip
-// and gate navigation with a single combined dirty-check, mirroring useSaveOnNextSection's
-// behaviour but spanning two slices instead of one.
+// One saved object spread over two slices (guardrails + replies): fields patch the store as they
+// change, and this snapshot decides what's unsaved, what Save sends and what Discard puts back.
 interface SafetySnapshot {
   groundingMode: GuardrailsState['groundingMode']
   neverSayPhrases: string[]
   topicsToAvoid: string[]
-  handoffMessageEnabled: boolean
   handoffMessage: string
   handoffMessageSource: HandoffSource
   followUpInterval: FollowUpInterval
   followUpMessage: string
   followUpMessageSource: 'default' | 'custom'
-  followUpMaxAttempts: FollowUpMaxAttempts
-  followUpRespectHours: boolean
 }
+
+const HANDOFF_OPTIONS: { value: HandoffSource; label: string }[] = [
+  { value: 'default', label: 'Meta’s standard message (in the customer’s language)' },
+  { value: 'agent', label: 'Let the agent write it, to fit the chat' },
+  { value: 'custom', label: 'My own message' },
+]
 
 export function SafetyHandoffStep() {
   const { state, patch, setSection, setPendingSkillPrefill } = useWizard()
-  const [activeTab, setActiveTab] = useState<TabId>('avoids')
+  const navigate = useNavigate()
 
   const handoffSource: HandoffSource =
     state.guardrails.handoffMessageSource ?? (state.guardrails.handoffMessageEnabled ? 'custom' : 'default')
@@ -86,14 +82,11 @@ export function SafetyHandoffStep() {
       groundingMode: state.guardrails.groundingMode,
       neverSayPhrases: state.guardrails.neverSayPhrases,
       topicsToAvoid: state.guardrails.topicsToAvoid,
-      handoffMessageEnabled: state.guardrails.handoffMessageEnabled,
       handoffMessage: state.guardrails.handoffMessage,
       handoffMessageSource: handoffSource,
       followUpInterval: state.replies.followUpInterval,
       followUpMessage: state.replies.followUpMessage,
       followUpMessageSource: followUpSource,
-      followUpMaxAttempts: state.replies.followUpMaxAttempts,
-      followUpRespectHours: state.replies.followUpRespectHours,
     }
   }
 
@@ -102,39 +95,25 @@ export function SafetyHandoffStep() {
     currentRef.current = currentSnapshot()
   })
 
-  // The studio loads the agent before this opens, so the saved snapshot is what's on screen.
-  const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'failed'>('loaded')
-  const [savedSnapshot, setSavedSnapshot] = useState<SafetySnapshot | null>(currentSnapshot)
+  // The studio loads the agent from Meta before this opens, so what's on screen is what's saved.
+  const [savedSnapshot, setSavedSnapshot] = useState<SafetySnapshot>(currentSnapshot)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'failed'>('idle')
   const [forceSaveFailure, setForceSaveFailure] = useState(false)
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false)
   const resolverRef = useRef<((result: boolean) => void) | null>(null)
-
-  function retryLoad() {
-    setLoadStatus('loading')
-    setTimeout(() => {
-      setLoadStatus('loaded')
-      setSavedSnapshot(currentRef.current)
-    }, 900)
-  }
-
-  function simulateLoadFailure() {
-    setLoadStatus('loading')
-    setTimeout(() => setLoadStatus('failed'), 900)
-  }
 
   const stateRef = useRef(state)
   stateRef.current = state
 
   async function performSave(): Promise<boolean> {
     // PRD V-b2b / AC-b4: a custom message can't be saved empty.
-    const cur = stateRef.current
-    const emptyCustom =
-      ((cur.guardrails.handoffMessageSource ?? (cur.guardrails.handoffMessageEnabled ? 'custom' : 'default')) === 'custom' &&
-        !cur.guardrails.handoffMessage.trim()) ||
-      (cur.replies.followUpEnabled && (cur.replies.followUpMessageSource ?? 'custom') === 'custom' && !cur.replies.followUpMessage.trim())
-    if (emptyCustom) {
-      toast.error('A custom message cannot be empty.')
+    const cur = currentRef.current
+    if (cur.handoffMessageSource === 'custom' && !cur.handoffMessage.trim()) {
+      toast.error('Write the handoff message, or pick another option.')
+      return false
+    }
+    if (cur.followUpInterval !== 0 && cur.followUpMessageSource === 'custom' && !cur.followUpMessage.trim()) {
+      toast.error('Write the follow-up message, or use Meta’s standard one.')
       return false
     }
     setSaveStatus('saving')
@@ -143,12 +122,31 @@ export function SafetyHandoffStep() {
       await pushSlice('guardrails', stateRef.current)
     } catch (err) {
       setSaveStatus('failed')
-      toast.error("Couldn't save to Meta", { description: err instanceof Error ? err.message : String(err) })
+      toast.error('Couldn’t save to Meta', { description: err instanceof Error ? err.message : String(err) })
       return false
     }
     setSaveStatus('idle')
     setSavedSnapshot(currentRef.current)
     return true
+  }
+
+  function discard() {
+    const s = savedSnapshot
+    patch('guardrails', {
+      groundingMode: s.groundingMode,
+      neverSayPhrases: s.neverSayPhrases,
+      topicsToAvoid: s.topicsToAvoid,
+      handoffMessage: s.handoffMessage,
+      handoffMessageSource: s.handoffMessageSource,
+      handoffMessageEnabled: s.handoffMessageSource === 'custom',
+    })
+    patch('replies', {
+      followUpInterval: s.followUpInterval,
+      followUpEnabled: s.followUpInterval !== 0,
+      followUpMessage: s.followUpMessage,
+      followUpMessageSource: s.followUpMessageSource,
+    })
+    setSaveStatus('idle')
   }
 
   function askUnsaved(): Promise<boolean> {
@@ -164,12 +162,9 @@ export function SafetyHandoffStep() {
     resolverRef.current = null
   }
 
+  const isDirty = () => JSON.stringify(savedSnapshot) !== JSON.stringify(currentRef.current)
   async function guard(intent: NavIntent): Promise<boolean> {
-    const saved = savedSnapshot
-    const curr = currentRef.current
-    if (!saved) return true
-    const dirty = JSON.stringify(saved) !== JSON.stringify(curr)
-    if (!dirty) return true
+    if (!isDirty()) return true
     if (intent === 'discard') return askUnsaved()
     return performSave()
   }
@@ -177,50 +172,44 @@ export function SafetyHandoffStep() {
   useRegisterNavGuard(guard)
   const { runGuard } = useNavigationGuard()
 
-  const loading = loadStatus === 'loading'
-  // Same combined-slice comparison guard() uses — all three tabs share one saved snapshot, so
-  // each tab's Save button reflects the whole step's dirty state, not just its own fields.
-  const dirty = savedSnapshot !== null && JSON.stringify(savedSnapshot) !== JSON.stringify(currentSnapshot())
+  const dirty = JSON.stringify(savedSnapshot) !== JSON.stringify(currentSnapshot())
   useReportSaveStatus(dirty, saveStatus === 'saving')
 
-  async function customiseHandoffRules() {
-    // Same save-or-warn discipline as Back/Next — this button navigates away from the page too,
-    // and must not silently discard unsaved changes made here.
-    const ok = await runGuard('save')
-    if (!ok) return
-    setPendingSkillPrefill({ name: 'Handoff rules', instruction: HANDOFF_RULES_PREFILL })
-    setSection('abilities')
+  // Both links leave this page, so unsaved changes are saved first (same as the studio nav).
+  async function leaveTo(go: () => void) {
+    if (await runGuard('save')) go()
   }
-
-  function loadSampleSettings() {
-    // Populates the form only — still unsaved until Next/Save and close, same as typing it by hand.
-    patch('guardrails', {
-      neverSayPhrases: SAMPLE_NEVER_SAY_WORDS,
-      topicsToAvoid: SAMPLE_TOPICS_TO_AVOID,
-      handoffMessageEnabled: true,
-      handoffMessage: SAMPLE_CUSTOM_HANDOFF_MESSAGE,
+  const customiseHandoffRules = () =>
+    leaveTo(() => {
+      setPendingSkillPrefill({ name: 'Handoff rules', instruction: HANDOFF_RULES_PREFILL })
+      setSection('abilities')
     })
-    patch('replies', { followUpInterval: 1800, followUpEnabled: true, followUpMaxAttempts: 2 })
-  }
 
   useRegisterDevControls(
     'safety',
     <DemoControlsGroup label="Safety & handoff">
-      <Button variant="outline" size="sm" onClick={loadSampleSettings}>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          // Fills the form only; still unsaved until Save, same as typing it by hand.
+          patch('guardrails', {
+            neverSayPhrases: SAMPLE_NEVER_SAY_WORDS,
+            topicsToAvoid: SAMPLE_TOPICS_TO_AVOID,
+            handoffMessageSource: 'custom',
+            handoffMessageEnabled: true,
+            handoffMessage: SAMPLE_CUSTOM_HANDOFF_MESSAGE,
+          })
+          patch('replies', { followUpInterval: 1800, followUpEnabled: true })
+        }}
+      >
         Load sample safety settings
       </Button>
-      <label className="flex items-center gap-1.5 text-muted-foreground text-xs">
-        <input
-          type="checkbox"
-          checked={state.demo.simulateMultipleLanguages}
-          onChange={(e) => patch('demo', { simulateMultipleLanguages: e.target.checked })}
-        />
+      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <input type="checkbox" checked={state.demo.simulateMultipleLanguages} onChange={(e) => patch('demo', { simulateMultipleLanguages: e.target.checked })} />
         Simulate multiple languages
       </label>
-      <Button variant="outline" size="sm" onClick={simulateLoadFailure}>
-        Force load failure
-      </Button>
-      <label className="flex items-center gap-1.5 text-muted-foreground text-xs">
+      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <input type="checkbox" checked={forceSaveFailure} onChange={(e) => setForceSaveFailure(e.target.checked)} />
         Force save failure
       </label>
@@ -228,235 +217,163 @@ export function SafetyHandoffStep() {
   )
 
   const hasMultipleLanguages = state.personalization.additionalLanguages.length > 0 || state.demo.simulateMultipleLanguages
-  const avoidsCount = state.guardrails.neverSayPhrases.length + state.guardrails.topicsToAvoid.length
   const followUpOn = state.replies.followUpInterval !== 0
 
   return (
-    <div className="space-y-6">
-      <p className="text-muted-foreground text-sm">
-        Words and topics your agent avoids, what happens when a person takes over, and whether it
-        follows up with quiet customers.
-      </p>
+    <div className="space-y-10">
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-sm text-muted-foreground">What your agent stays away from, what happens when your team takes over, and checking in on quiet customers.</p>
+        <SaveButton dirty={dirty} saving={saveStatus === 'saving'} onSave={performSave} onDiscard={discard} />
+      </div>
+      {saveStatus === 'failed' && <SaveFailedBanner message="Your changes weren’t saved. Nothing has been lost." onRetry={() => void performSave()} />}
 
-      {loadStatus === 'failed' && (
-        <LoadFailedBanner
-          message="We could not load your saved choices. Anything you save now will replace them."
-          onRetry={retryLoad}
-        />
-      )}
-      {saveStatus === 'failed' && (
-        <SaveFailedBanner message="We could not save your changes. Nothing has been lost." onRetry={() => void performSave()} />
-      )}
-      {saveStatus === 'saving' && <SavingIndicator />}
-      {loading && <LoadingIndicator label="Loading your saved choices" />}
+      <Section title="How your agent answers">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <SelectableCard
+            title="Only from my knowledge"
+            helper="Answers from what you’ve given it, and hands over when it doesn’t know."
+            selected={state.guardrails.groundingMode === 'strict'}
+            onClick={() => patch('guardrails', { groundingMode: 'strict' })}
+          />
+          <SelectableCard
+            title="Can chat naturally"
+            helper="Small talk and general help within its role, still based on your knowledge."
+            selected={state.guardrails.groundingMode === 'assisted'}
+            onClick={() => patch('guardrails', { groundingMode: 'assisted' })}
+          />
+        </div>
+        <WordsToAvoidField values={state.guardrails.neverSayPhrases} onChange={(values) => patch('guardrails', { neverSayPhrases: values })} />
+        <div className="space-y-1.5">
+          <Label>Topics it stays away from</Label>
+          <TagInput
+            values={state.guardrails.topicsToAvoid}
+            onChange={(values) => patch('guardrails', { topicsToAvoid: values.filter((v) => v.length <= MAX_TOPIC_LENGTH).slice(0, MAX_TOPICS) })}
+            placeholder="e.g. Competitors’ prices, then press Enter"
+            aria-label="Topics it stays away from"
+          />
+          <p className="text-xs text-muted-foreground">Broader than words: the agent politely declines anything on these topics.</p>
+        </div>
+      </Section>
 
-      <div className={cn(loading && 'pointer-events-none opacity-50')} aria-hidden={loading}>
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
-          <TabsList actions={<SaveButton dirty={dirty} saving={saveStatus === 'saving'} onSave={performSave} />}>
-            <TabsTrigger value="avoids" className="gap-1.5">
-              What the agent avoids
-              {avoidsCount > 0 && (
-                <Badge variant="secondary" className="text-muted-foreground">
-                  {avoidsCount}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="handoff">When a person takes over</TabsTrigger>
-            <TabsTrigger value="followup" className="gap-1.5">
-              Following up with quiet customers
-              {followUpOn && (
-                <Badge variant="secondary" className="text-muted-foreground">
-                  On
-                </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
-
-          {/* forceMount + CSS-hidden (not Radix's default unmount-when-inactive) so every tab's
-              fields keep patching the shared guardrails/replies slices no matter which tab is
-              showing — otherwise switching tabs mid-edit would silently drop unsaved changes. */}
-          <TabsContent value="avoids" forceMount className="space-y-7 data-[state=inactive]:hidden">
-            <div className="space-y-1.5">
-              <span className="flex items-center gap-1.5">
-                <Label>How freely your agent answers</Label>
-              </span>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <SelectableCard
-                  title="Only from my knowledge"
-                  helper="Answers from what you've given it; otherwise hands over to a person."
-                  selected={state.guardrails.groundingMode === 'strict'}
-                  onClick={() => patch('guardrails', { groundingMode: 'strict' })}
-                />
-                <SelectableCard
-                  title="Can chat naturally"
-                  helper="Small talk and general help within its role, still grounded in your knowledge."
-                  selected={state.guardrails.groundingMode === 'assisted'}
-                  onClick={() => patch('guardrails', { groundingMode: 'assisted' })}
-                />
-              </div>
-            </div>
-
-            <WordsToAvoidField
-              values={state.guardrails.neverSayPhrases}
-              onChange={(values) => patch('guardrails', { neverSayPhrases: values })}
+      <Section title="Handing over to your team" description="The agent hands a chat to your team when it’s unsure, something seems wrong, or the customer asks for a person.">
+        <div className="space-y-1.5">
+          <Label htmlFor="handoff-source">What it says when it hands over</Label>
+          <Select value={handoffSource} onValueChange={(v) => setHandoffSource(v as HandoffSource)}>
+            <SelectTrigger id="handoff-source" className="w-full sm:max-w-md">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {HANDOFF_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {handoffSource === 'custom' && (
+          <div className="space-y-1.5">
+            <Textarea
+              aria-label="Handoff message"
+              rows={2}
+              maxLength={MAX_CUSTOM_HANDOFF}
+              value={state.guardrails.handoffMessage}
+              onChange={(e) => patch('guardrails', { handoffMessage: e.target.value })}
+              placeholder="e.g. Let me get someone from our team to help with this. They’ll be with you shortly."
             />
-
-            <TopicsToAvoidField
-              values={state.guardrails.topicsToAvoid}
-              onChange={(values) => patch('guardrails', { topicsToAvoid: values })}
-              disabled={loading}
-            />
-
-            <div className="flex items-start gap-2.5">
-              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-              <p className="text-muted-foreground text-xs">
-                <span className="font-medium">Always protected</span>{' '}
-                &mdash; no matter what you configure above, the agent never claims to be human
-                when directly asked, never shares one customer&rsquo;s details with another, and
-                never states medical, legal, or financial advice as certain fact.
+            {hasMultipleLanguages && (
+              <p className="flex items-start gap-1.5 text-xs text-warning-foreground">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                Sent exactly as written, in this one language. Meta’s standard message matches the customer’s language.
               </p>
-            </div>
-          </TabsContent>
+            )}
+          </div>
+        )}
+        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+          <button type="button" className="font-medium text-primary hover:underline" onClick={() => void leaveTo(() => navigate(pathFor('settings', 'support')))}>
+            Who receives handed-over chats
+          </button>
+          <button type="button" className="font-medium text-primary hover:underline" onClick={() => void customiseHandoffRules()}>
+            Add your own handoff rules
+          </button>
+        </div>
+      </Section>
 
-          <TabsContent value="handoff" forceMount className="space-y-7 data-[state=inactive]:hidden">
-            <p className="text-muted-foreground text-sm">
-              Once handed over, your team picks the conversation up from your usual inbox —
-              that part isn&rsquo;t set up in this wizard.
-            </p>
-
-            <div className="space-y-2 rounded-lg bg-muted p-3">
-              <p className="text-sm">
-                <span className="font-medium">This happens automatically</span>{' '}
-                &mdash; the agent hands off when it&rsquo;s unsure, something seems wrong, or the
-                customer asks for a person, and this can&rsquo;t be turned off. Below, you control
-                what it says at that moment.
-              </p>
-              <button type="button" onClick={customiseHandoffRules} className="text-primary text-xs">
-                Customise handoff rules for your business
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              <Label>What the agent says when it hands over</Label>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <SelectableCard
-                  title="Meta’s standard message"
-                  info="A ready-made message, shown in the customer’s own language automatically."
-                  selected={handoffSource === 'default'}
-                  onClick={() => setHandoffSource('default')}
-                />
-                <SelectableCard
-                  title="Let the agent write its own"
-                  info="The agent writes a handoff message for each conversation, matching what was being discussed."
-                  selected={handoffSource === 'agent'}
-                  onClick={() => setHandoffSource('agent')}
-                />
-                <SelectableCard
-                  title="Write my own message"
-                  selected={handoffSource === 'custom'}
-                  onClick={() => setHandoffSource('custom')}
-                />
-              </div>
-
-              {handoffSource === 'custom' && (
-                <div className="space-y-1.5">
-                  <Textarea
-                    id="handoff-message"
-                    rows={2}
-                    maxLength={MAX_CUSTOM_HANDOFF}
-                    value={state.guardrails.handoffMessage}
-                    onChange={(e) => patch('guardrails', { handoffMessage: e.target.value })}
-                    placeholder="e.g. Let me get a member of our team to help you with this. They'll be with you shortly."
-                    className="bg-input-background shadow-sm"
-                    disabled={loading}
-                  />
-                  {hasMultipleLanguages && (
-                    <p className="flex items-start gap-1.5 text-warning-foreground text-xs">
-                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                      This is sent exactly as written, in this one language — Meta&rsquo;s
-                      standard message adapts to the customer&rsquo;s language instead.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="followup" forceMount className="space-y-6 data-[state=inactive]:hidden">
-            <p className="text-muted-foreground text-sm">
-              If a customer goes quiet mid-conversation, the agent can re-engage them with one
-              short check-in message.
-            </p>
-
+      <Section title="Following up with quiet customers">
+        <label className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card px-4 py-3">
+          <span>
+            <span className="block text-sm font-medium">Check in when a customer goes quiet</span>
+            <span className="block text-xs text-muted-foreground">One short message. It’s charged like any other message the agent sends.</span>
+          </span>
+          <Switch
+            checked={followUpOn}
+            onCheckedChange={(on) => patch('replies', { followUpInterval: on ? 1800 : 0, followUpEnabled: on })}
+            aria-label="Check in when a customer goes quiet"
+          />
+        </label>
+        {followUpOn && (
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <span className="flex items-center gap-1.5">
-                <Label>Follow up after</Label>
-                <InfoTooltip text="Most businesses that use this choose 30 minutes to 1 hour. Shorter can feel pushy, longer may be too late to be useful." />
-              </span>
-              <Select
-                value={String(state.replies.followUpInterval)}
-                onValueChange={(v) => {
-                  const interval = Number(v) as FollowUpInterval
-                  patch('replies', { followUpInterval: interval, followUpEnabled: interval !== 0 })
-                }}
-                disabled={loading}
-              >
-                <SelectTrigger className="w-full max-w-sm">
+              <Label htmlFor="followup-after">After</Label>
+              <Select value={String(state.replies.followUpInterval)} onValueChange={(v) => patch('replies', { followUpInterval: Number(v) as FollowUpInterval, followUpEnabled: true })}>
+                <SelectTrigger id="followup-after" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {FOLLOW_UP_INTERVALS.map((opt) => (
-                    <SelectItem key={opt.value} value={String(opt.value)}>
-                      {opt.label}
+                  {FOLLOW_UP_INTERVALS.filter((o) => o.value !== 0).map((o) => (
+                    <SelectItem key={o.value} value={String(o.value)}>
+                      {o.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
-            {followUpOn && (
-              <>
-                <p className="text-muted-foreground text-xs">
-                  Follow-up messages are charged the same way as any other message the agent sends.
-                </p>
-                <div className="space-y-2">
-                  <span className="flex items-center gap-1.5">
-                    <Label>Follow-up message</Label>
-                    <InfoTooltip text="Sent once, after the time above. Kept short and low pressure works best for a check-in message." />
-                  </span>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <SelectableCard
-                      title="Meta’s standard message"
-                      selected={followUpSource === 'default'}
-                      onClick={() => patch('replies', { followUpMessageSource: 'default' })}
-                    />
-                    <SelectableCard
-                      title="Write my own message"
-                      selected={followUpSource === 'custom'}
-                      onClick={() => patch('replies', { followUpMessageSource: 'custom' })}
-                    />
-                  </div>
-                </div>
-                {followUpSource === 'custom' && (
-                  <Textarea
-                    aria-label="Follow-up message"
-                    id="followup-message"
-                    rows={2}
-                    maxLength={MAX_FOLLOWUP_MESSAGE}
-                    value={state.replies.followUpMessage}
-                    onChange={(e) => patch('replies', { followUpMessage: e.target.value })}
-                    className="bg-input-background shadow-sm"
-                    disabled={loading}
-                  />
-                )}
-              </>
+            <div className="space-y-1.5">
+              <Label htmlFor="followup-source">Message</Label>
+              <Select value={followUpSource} onValueChange={(v) => patch('replies', { followUpMessageSource: v as 'default' | 'custom' })}>
+                <SelectTrigger id="followup-source" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Meta’s standard message</SelectItem>
+                  <SelectItem value="custom">My own message</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {followUpSource === 'custom' && (
+              <Textarea
+                aria-label="Follow-up message"
+                className="sm:col-span-2"
+                rows={2}
+                maxLength={MAX_FOLLOWUP_MESSAGE}
+                value={state.replies.followUpMessage}
+                onChange={(e) => patch('replies', { followUpMessage: e.target.value })}
+                placeholder="e.g. Just checking in. Is there anything else I can help with?"
+              />
             )}
-          </TabsContent>
-        </Tabs>
-      </div>
+          </div>
+        )}
+      </Section>
+
+      <p className="flex items-start gap-2 border-t border-border pt-6 text-xs text-muted-foreground">
+        <ShieldCheck className="mt-px size-3.5 shrink-0" />
+        Always on: the agent never claims to be human when asked, never shares one customer’s details with another, and never gives medical, legal or financial advice as fact.
+      </p>
 
       <UnsavedChangesDialog open={unsavedDialogOpen} onResolve={resolveUnsaved} />
     </div>
+  )
+}
+
+function Section({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-section font-semibold">{title}</h2>
+        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+      </div>
+      {children}
+    </section>
   )
 }
 
@@ -502,16 +419,8 @@ function WordsToAvoidField({
 
   return (
     <div className="space-y-1.5">
-      <span className="flex items-center gap-1.5">
-        <Label>Specific words or phrases</Label>
-        <InfoTooltip text="The agent is instructed never to use these. This does not depend on capital letters, so adding “cheap” also covers “Cheap” and “CHEAP”." />
-      </span>
-      <TagInput
-        values={values}
-        onChange={handleChange}
-        placeholder="Type a word or phrase and press Enter"
-        aria-label="Specific words or phrases"
-      />
+      <Label>Words it never says</Label>
+      <TagInput values={values} onChange={handleChange} placeholder="e.g. cheap, then press Enter" aria-label="Words it never says" />
       {duplicateError && <InlineError message={duplicateError} />}
       {suggestion && suggestion.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted px-3 py-2">
@@ -524,83 +433,7 @@ function WordsToAvoidField({
           </button>
         </div>
       )}
-      {values.length === 0 && (
-        <span className="flex items-center gap-1.5">
-          <p className="text-muted-foreground text-xs">
-            No words added.
-          </p>
-          <InfoTooltip text="The agent has no specific words it has been told to avoid." />
-        </span>
-      )}
-    </div>
-  )
-}
-
-// ==================================================================================
-// Topics to avoid
-// ==================================================================================
-
-function TopicsToAvoidField({
-  values,
-  onChange,
-  disabled,
-}: {
-  values: string[]
-  onChange: (values: string[]) => void
-  disabled: boolean
-}) {
-  function updateRow(i: number, text: string) {
-    onChange(values.map((v, idx) => (idx === i ? text : v)))
-  }
-  function removeRow(i: number) {
-    onChange(values.filter((_, idx) => idx !== i))
-  }
-  function addRow() {
-    if (values.length >= MAX_TOPICS) return
-    onChange([...values, ''])
-  }
-
-  return (
-    <div className="space-y-1.5">
-      <span className="flex items-center gap-1.5">
-        <Label>Topics to avoid</Label>
-        <InfoTooltip text="Broader than a specific word. The agent reads each topic and uses its judgement about what counts, so it is not exact the way words above are." />
-      </span>
-      {values.length === 0 ? (
-        <p className="text-muted-foreground text-xs">
-          No topics added.
-        </p>
-      ) : (
-        <div className="space-y-1.5">
-          {values.map((topic, i) => (
-            <div key={i} className="flex items-center gap-1">
-              <Input
-                maxLength={MAX_TOPIC_LENGTH}
-                value={topic}
-                onChange={(e) => updateRow(i, e.target.value)}
-                placeholder="e.g. Comparing us to specific competitors"
-                disabled={disabled}
-                className="border-transparent bg-muted shadow-none focus-visible:border-ring focus-visible:bg-input-background"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => removeRow(i)}
-                disabled={disabled}
-                aria-label="Remove topic"
-              >
-                <X className="size-4 text-muted-foreground" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-      {values.length < MAX_TOPICS && (
-        <Button size="sm" variant="outline" onClick={addRow} disabled={disabled}>
-          + Add a topic
-        </Button>
-      )}
+      {!duplicateError && !suggestion && <p className="text-xs text-muted-foreground">Capital letters don’t matter: “cheap” also covers “Cheap”.</p>}
     </div>
   )
 }

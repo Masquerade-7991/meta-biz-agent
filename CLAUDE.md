@@ -37,6 +37,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Loading a page or panel:** `PageLoader` (`ui/wavy-loader.tsx`) with an area's lines from `lib/loadingLines.ts`; small spinners only inside buttons.
 - **Forms with Save:** use `SaveButton` (it also shows the floating unsaved-changes bar); pass `onDiscard` (`useSaveOnNextSection().discard`).
 - **Lists:** compact density is `html[data-density=compact]` (`lib/density.ts`); new list rows that should tighten get `data-density-row`.
+- **Rich replies** (`steps/RichRepliesSection.tsx`, `steps/richReplies/*`): one side panel with three steps (when, what kind, the message) and a live phone preview; starters in `mockData.ts` `RICH_REPLY_STARTERS`.
 - **AI help** (`server/assist.ts`, `src/app/api/assist.ts`): writing help needs `ANTHROPIC_API_KEY`; unanswered questions come from Inbox messages and test chats answered with Meta's fallback or handed off.
 - **⌘K palette** (`shell/CommandPalette.tsx`) lists pages, settings, the open agent's sections and quick actions; add new pages there. The studio's **Try it** panel (`steps/TryItPanel.tsx`) is the quick test chat from any section.
 - Effects return nothing or a cleanup function: wrap calls like `scrollIntoView` in a block body (newer browsers return a Promise from it, which crashes React).
@@ -62,7 +63,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Thread control has its own path and uses `X-API-Version: 1.0.0`.
   - Several response fields are JSON-encoded strings.
   - Connector and tool names allow only letters, numbers and underscores (Meta answers a bare 400 otherwise, though its docs show names with spaces). Body params take no per-param `required` flag; use `body.required`.
-  - Skill and rich reply (UI skill) titles allow only lowercase letters, numbers and hyphens (`skillTitle`); the console keeps the readable name.
+  - Skill and rich reply (UI skill) titles allow only lowercase letters, numbers and hyphens, no hyphen at either end (`skillTitle` in `src/app/wizard/skillTitle.ts`); the console keeps the readable name and refuses two names that slug to the same title.
+  - Settings `PUT` is partial. Safety & handoff never sends `rollout` or `ai_audience` (Publish owns them via `setRollout`): re-sending them made Meta refuse the save without billing, or flipped a live agent.
+  - Meta's 429 is per app/token and shared with other systems. The relay shares identical in-flight reads and retries a read once; settings reads run two at a time (`getSettings`).
   - Tool value names may be anything but must be unique across path, query, headers and body together.
   - A connector `PUT` without `auth_config` keeps the saved keys; `upsertApiKey` replaces all keys. Keys are never kept in the browser (`stripConnectionSecrets`).
   - A tool run can answer `status: "success"` with the failure inside `output` (`{status:{code}, body}`; code 1 = finished). Read it with `readToolRun` (`src/app/wizard/toolRun.ts`).

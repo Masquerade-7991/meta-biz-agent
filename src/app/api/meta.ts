@@ -18,6 +18,8 @@ import type {
 } from '../wizard/types'
 import { compileConfig } from '../wizard/compiler'
 import { validateRichReply } from '../wizard/richReplies'
+import { skillTitle } from '../wizard/skillTitle'
+export { skillTitle }
 import type { Profile } from '../whatsapp/profileRules'
 import type { EvalConversationResult, EvalScenario, TranscriptLine } from '../wizard/steps/evalData'
 import { isDummyMode } from './dummy'
@@ -64,11 +66,20 @@ export async function parse<T>(res: Response): Promise<T> {
     json = { detail: text.slice(0, 300) }
   }
   if (!res.ok) {
-    const e = (json ?? {}) as { title?: string; detail?: string; error?: { message?: string } }
+    // Meta answers {title, detail}; Graph answers {error: {message, error_user_msg}}; anything else is shown as text.
+    const e = (json && typeof json === 'object' ? json : { detail: String(json ?? '') }) as {
+      title?: string
+      detail?: string
+      error?: { message?: string; error_user_msg?: string }
+    }
     const traceId = res.headers.get('x-trace-id') ?? undefined
     // Server-side failures carry a short reference the workspace owner can look up (GET /api/trace/<ref>).
     const ref = res.status >= 500 && traceId ? ` (Reference: ${traceId.slice(0, 8)})` : ''
-    throw new MetaError(res.status, e.title ?? `HTTP ${res.status}`, (e.detail ?? e.error?.message ?? '') + ref, traceId)
+    const said = e.detail || e.error?.error_user_msg || e.error?.message || ''
+    // Meta's own limit (the relay's local guard explains itself, so it keeps its words).
+    if (res.status === 429 && !said.startsWith('Local safety limit'))
+      throw new MetaError(429, 'Meta is limiting requests', `Meta is getting too many requests from this account right now. Wait a minute and try again.${said ? ` (Meta: ${said})` : ''}`, traceId)
+    throw new MetaError(res.status, e.title ?? `HTTP ${res.status}`, said + ref, traceId)
   }
   return json as T
 }
@@ -244,13 +255,14 @@ export const sendTestMessage = (user_msg: string, conversation_id?: string) =>
   metaFetch<AgentTestReply>(`${agent()}/agent_test`, 'POST', { user_msg, conversation_id })
 
 // ---- Settings (partial update: only the fields sent change) ----
+/** Safety & handoff's part of the settings. Rollout and audience are left out on purpose: they
+ *  belong to Publish (setRollout), and re-sending them from here turned the agent on (Meta then
+ *  refused the whole save without billing) or off from a stale draft. */
 export function settingsBody(state: WizardState) {
   const { guardrails, replies } = state
-  const s = compileConfig(state).settings
   const handoffSel = guardrails.handoffMessageSource ?? (guardrails.handoffMessageEnabled ? 'custom' : 'default')
   const followupCustom = (replies.followUpMessageSource ?? 'custom') === 'custom'
   return {
-    rollout: s.rollout,
     // Handoff itself is automatic on Meta's side; only the message source is configurable.
     handoff: {
       enabled: true,
@@ -265,8 +277,7 @@ export function settingsBody(state: WizardState) {
             ...(followupCustom ? { message: replies.followUpMessage } : {}),
           }
         : { enabled: false },
-    ai_audience: s.ai_audience,
-    never_say_phrases: s.never_say_phrases,
+    never_say_phrases: guardrails.neverSayPhrases,
   }
 }
 export const saveSettings = (state: WizardState) => metaFetch(`${agent()}/agent_config/settings`, 'PUT', settingsBody(state))
@@ -280,8 +291,25 @@ export const setRollout = (enabled: boolean, audienceMode: WizardState['publish'
 
 /** Meta answers settings GET with a one-item list (the docs show a plain object); accept both. */
 async function getSettings(phoneId?: string): Promise<MetaSettings & { agent_id?: string }> {
-  const r = await metaFetch<MetaSettings | MetaSettings[]>(`${agent(phoneId)}/agent_config/settings`)
+  const r = await settingsSlot(() => metaFetch<MetaSettings | MetaSettings[]>(`${agent(phoneId)}/agent_config/settings`))
   return (Array.isArray(r) ? r[0] : r) ?? {}
+}
+
+/** Home, the agents list and Create agent check every number at once; Meta's settings endpoint
+ *  answers 429 to bursts, so at most two of these reads run at a time. */
+let settingsBusy = 0
+const settingsQueue: (() => void)[] = []
+async function settingsSlot<T>(run: () => Promise<T>): Promise<T> {
+  // A finished read hands its slot straight to the next one waiting.
+  if (settingsBusy >= 2) await new Promise<void>((go) => settingsQueue.push(go))
+  else settingsBusy++
+  try {
+    return await run()
+  } finally {
+    const next = settingsQueue.shift()
+    if (next) next()
+    else settingsBusy--
+  }
 }
 
 interface MetaSettings {
@@ -336,9 +364,6 @@ interface MetaSkill {
   status?: 'active' | 'pending_review' | 'blocked'
 }
 
-/** Meta requires skill titles to be lowercase letters, numbers and hyphens, max 64. */
-export const skillTitle = (t: string) =>
-  t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64) || 'skill'
 
 export const listSkills = () => metaFetch<MetaSkill[]>(`${agent()}/agent_config/skills`)
 
@@ -449,13 +474,17 @@ export const deleteWebsite = (id: string) => metaFetch(`${agent()}/agent_config/
  *  60 s, so a long crawl costs ~70 checks over ~1 hour instead of eating Meta's 1000/hour website
  *  budget. Then it gives up and marks the row stalled (a page reload re-polls via hydrate). */
 export async function pollWebsite(id: string, onUpdate: (fields: Partial<WebsiteSource>) => void) {
+  let failures = 0
   for (let i = 0, wait = 5000; i < 70; i++, wait = Math.min(wait * 2, 60000)) {
     await sleep(wait)
     let w: MetaWebsite
     try {
       w = await metaFetch<MetaWebsite>(`${agent()}/agent_config/websites/${id}`)
+      failures = 0
     } catch (err) {
       if (err instanceof MetaError && err.status === 404) return // deleted meanwhile
+      // Meta once answered 500 for this check every minute for an hour; three in a row, stop asking.
+      if (++failures >= 3) break
       continue
     }
     const fields = websiteFields(w)
@@ -494,13 +523,16 @@ export function assertValidRichReply(reply: RichReply) {
   const issues = validateRichReply(reply)
   if (!reply.name.trim()) issues.unshift({ field: 'name', message: 'Name is required.' })
   if (!reply.instructionSentence.trim()) issues.push({ field: 'instructionSentence', message: 'Instruction is empty.' })
+  if (reply.instructionSentence.length > 20000) issues.push({ field: 'instructionSentence', message: 'This reply is too long for the agent. Shorten the message or remove some options.' })
   if (issues.length) throw new MetaError(422, 'Rich reply is not valid', issues.map((i) => i.message).join(' '))
 }
+/** A name with no a-z or 0-9 still gets a valid title of its own, so two of them don't collide. */
+export const uiSkillTitle = (name: string, id: string) => skillTitle(name, `reply-${id.replace(/[^a-z0-9]/gi, '').slice(-8).toLowerCase()}`)
 export const createUiSkill = async (r: RichReply) => {
   assertValidRichReply(r)
   return metaFetch<MetaUiSkill>(`${agent()}/agent-ui-skills`, 'POST', {
     // Same title rule as skills (checked live): "Order status" goes to Meta as "order-status".
-    title: skillTitle(r.name),
+    title: uiSkillTitle(r.name, r.id),
     component_type: r.type,
     status: r.enabled ? 'enabled' : 'disabled',
     instruction: r.instructionSentence,
@@ -514,7 +546,7 @@ export const updateUiSkill = async (
   reply?: RichReply,
 ) => {
   if (reply) assertValidRichReply(reply)
-  return metaFetch<MetaUiSkill>(`${agent()}/agent-ui-skills/${id}`, 'PUT', patch.title === undefined ? patch : { ...patch, title: skillTitle(patch.title) })
+  return metaFetch<MetaUiSkill>(`${agent()}/agent-ui-skills/${id}`, 'PUT', patch.title === undefined ? patch : { ...patch, title: uiSkillTitle(patch.title, reply?.id ?? id) })
 }
 export const deleteUiSkill = (id: string) => metaFetch(`${agent()}/agent-ui-skills/${id}`, 'DELETE')
 
@@ -920,9 +952,12 @@ export async function hydrateFromMeta(state: WizardState): Promise<{ patch: Patc
     if (f) {
       patch.replies = {
         followUpEnabled: !!f.enabled,
-        ...(f.followup_interval_in_seconds !== undefined
-          ? { followUpInterval: f.followup_interval_in_seconds as WizardState['replies']['followUpInterval'] }
-          : {}),
+        // Off on Meta means off here too, whatever interval Meta still remembers.
+        ...(!f.enabled
+          ? { followUpInterval: 0 as const }
+          : f.followup_interval_in_seconds !== undefined
+            ? { followUpInterval: f.followup_interval_in_seconds as WizardState['replies']['followUpInterval'] }
+            : {}),
         ...(f.message ? { followUpMessage: f.message, followUpMessageSource: 'custom' as const } : {}),
       }
     }
@@ -977,13 +1012,13 @@ export async function hydrateFromMeta(state: WizardState): Promise<{ patch: Patc
       : k.websites,
   }
   if (uiSkills) {
-    const names = new Map(state.richReplies.richReplies.map((r) => [r.metaId, r.name]))
+    const sentTitles = new Map(state.richReplies.richReplies.map((r) => [r.metaId, uiSkillTitle(r.name, r.id)]))
     patch.richReplies = {
       richReplies: reconcile<RichReply, MetaUiSkill>(
         state.richReplies.richReplies,
         uiSkills,
         // Meta holds the slug of the name; keep the readable name when it still matches.
-        (r) => ({ ...(skillTitle(names.get(r.id) ?? '') !== r.title && { name: r.title }), enabled: r.status === 'enabled', instructionSentence: r.instruction }),
+        (r) => ({ ...(sentTitles.get(r.id) !== r.title && { name: r.title }), enabled: r.status === 'enabled', instructionSentence: r.instruction }),
         (r) =>
           ({
             id: `rr-${r.id}`,

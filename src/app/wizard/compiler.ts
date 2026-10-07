@@ -211,6 +211,13 @@ function buildGroundingSkill(state: WizardState): SkillDoc {
       ? 'Only answer from configured knowledge and tools. If the answer is not grounded in what you have been told, hand off to a person instead of guessing.'
       : 'Some natural conversation is allowed within your role, but stay within the business context you have been given.',
   )
+  // Meta has no settings field for topics, so they travel in this skill.
+  const topics = guardrails.topicsToAvoid.map((t) => t.trim()).filter(Boolean)
+  if (topics.length) {
+    lines.push('')
+    lines.push('Do not discuss these topics. If a customer raises one, say politely that you can’t help with it here and offer what you can help with:')
+    for (const t of topics) lines.push(`- ${t}`)
+  }
   return {
     title: 'grounding-and-safety',
     description: 'Apply to every response to control how much the agent may improvise.',
@@ -270,8 +277,6 @@ export function compileConfig(state: WizardState): CompiledConfig {
           enabled: true,
           followup_interval_in_seconds: state.replies.followUpInterval,
           message: state.replies.followUpMessage,
-          max_attempts: state.replies.followUpMaxAttempts,
-          respect_business_hours: state.replies.followUpRespectHours,
         }
       : null,
     // ai_audience: these two enum strings have been used consistently across every prior spec,

@@ -1132,20 +1132,17 @@ export function matchFaqPreviewMessage(message: string, faqs: FaqRow[]): FaqRow[
 // ---- Step 1: Rich replies (the system underneath calls these "UI skills") ----
 
 const RICH_REPLY_TYPES: { type: RichReplyType; name: string; description: string }[] = [
-  { type: 'cta_url', name: 'Button with a link', description: 'One tappable button that opens a web page.' },
-  { type: 'interactive_reply_buttons', name: 'Reply buttons', description: 'Up to three tap-to-answer buttons under a message.' },
+  { type: 'cta_url', name: 'Link button', description: 'One tappable button that opens a web page.' },
+  { type: 'interactive_reply_buttons', name: 'Buttons', description: 'Up to three tap-to-answer buttons under a message.' },
   { type: 'image', name: 'Image', description: 'Sends a picture, with an optional caption.' },
-  { type: 'interactive_list', name: 'Menu of choices', description: 'A tappable list the customer picks one option from.' },
-  { type: 'carousel_url', name: 'Card carousel with links', description: 'Swipeable cards, each with a picture and a link button.' },
-  { type: 'carousel_quick_reply', name: 'Card carousel with quick replies', description: 'Swipeable cards, each with a picture and a tap-to-answer button.' },
-  { type: 'location', name: 'Your location on a map', description: 'Sends a map pin of where you are.' },
-  { type: 'location_request', name: 'Ask for their location', description: 'Asks the customer to share where they are.' },
-  { type: 'flow', name: 'WhatsApp form (Flow)', description: 'Opens a structured form the customer fills in, like a booking or survey.' },
+  { type: 'interactive_list', name: 'Menu', description: 'A tappable list the customer picks one option from.' },
+  { type: 'carousel_url', name: 'Cards with links', description: 'Swipeable cards, each with a picture and a link button.' },
+  { type: 'carousel_quick_reply', name: 'Cards with answers', description: 'Swipeable cards, each with a picture and a tap-to-answer button.' },
+  { type: 'location', name: 'Location', description: 'Sends a map pin of where you are.' },
+  { type: 'location_request', name: 'Ask for location', description: 'Asks the customer to share where they are.' },
+  { type: 'flow', name: 'WhatsApp form', description: 'Opens a structured form the customer fills in, like a booking or survey.' },
 ]
 
-/** WhatsApp Flows are out of scope for rich replies (PRD §4), so Flow is not offered for new
- *  replies; its label stays for any existing Flow row. */
-export const RICH_REPLY_TYPE_GALLERY = RICH_REPLY_TYPES.filter((t) => t.type !== 'flow')
 
 export const RICH_REPLY_TYPE_LABEL: Record<RichReplyType, string> = Object.fromEntries(
   RICH_REPLY_TYPES.map((t) => [t.type, t.name]),
@@ -1220,6 +1217,55 @@ export const SAMPLE_RICH_REPLIES: RichReply[] = [
     instructionSentence: 'If a customer asks to see the product, send an image at https://example.com/product-photo.jpg',
   },
 ]
+
+/** Ready-made examples shown when there are no rich replies yet; each opens the editor filled in. */
+export const RICH_REPLY_STARTERS: { label: string; draft: RichReplyStarter }[] = [
+  {
+    label: 'Book a demo',
+    draft: {
+      type: 'interactive_reply_buttons',
+      trigger: 'When a customer wants to get started or asks about pricing',
+      blanks: { messageText: 'Happy to help you get started. What would you like to do next?', buttons: ['Book a demo', 'Get pricing', 'Talk to sales'] },
+    },
+  },
+  {
+    label: 'Visit our website',
+    draft: {
+      type: 'cta_url',
+      trigger: 'When a customer asks where they can buy online',
+      blanks: { messageText: 'You can order directly from our website.', buttonLabel: 'Shop now', link: 'https://' },
+    },
+  },
+  {
+    label: 'Product menu',
+    draft: {
+      type: 'interactive_list',
+      trigger: 'When a customer asks what you sell',
+      blanks: {
+        messageText: 'Here’s what we offer. Pick one to learn more.',
+        menuButtonLabel: 'See products',
+        groupsEnabled: false,
+        options: [
+          { id: newId('option'), rowId: 'new_arrivals', title: 'New arrivals', description: '', group: '' },
+          { id: newId('option'), rowId: 'best_sellers', title: 'Best sellers', description: '', group: '' },
+          { id: newId('option'), rowId: 'gift_sets', title: 'Gift sets', description: '', group: '' },
+        ],
+      },
+    },
+  },
+  {
+    label: 'Where to find us',
+    draft: {
+      type: 'location',
+      trigger: 'When a customer asks where your store is',
+      blanks: { placeName: '', address: '', latitude: '', longitude: '' },
+    },
+  },
+]
+/** A filled-in draft of any one type (what the editor and the phone preview take). */
+export type RichReplyStarter = {
+  [T in RichReplyType]: { type: T; trigger: string; blanks: NonNullable<Extract<RichReply, { type: T }>['blanks']> }
+}[RichReplyType]
 
 // ---- Step 4: Safety & handoff ----
 

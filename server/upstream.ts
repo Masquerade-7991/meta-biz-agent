@@ -51,6 +51,8 @@ export interface UpstreamReply {
   status: number
   text: string
   contentType: string
+  /** Seconds, from Meta's Retry-After header on a 429. */
+  retryAfter?: string
 }
 
 export const parseJson = (text: string): unknown => {
@@ -113,7 +115,7 @@ export async function callUpstream(
       ...(r.ok ? {} : { error: (e && [e.title, e.detail ?? e.error?.message].filter(Boolean).join(': ').slice(0, 500)) || text.slice(0, 300) || `HTTP ${r.status} ${r.statusText}` }),
       ...(e?.fbtrace_id || e?.error?.fbtrace_id ? { fbtraceId: e.fbtrace_id ?? e.error?.fbtrace_id } : {}),
     })
-    return { status: r.status, text, contentType: r.headers.get('content-type') ?? 'application/json' }
+    return { status: r.status, text, contentType: r.headers.get('content-type') ?? 'application/json', retryAfter: r.headers.get('retry-after') ?? undefined }
   } catch (err) {
     logCall({ ...base, status: 0, ms: Date.now() - at.getTime(), error: err instanceof Error ? `${err.name}: ${err.message}` : String(err) })
     throw err

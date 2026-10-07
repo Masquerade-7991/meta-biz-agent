@@ -71,29 +71,29 @@ export function validateRichReply(draft: { type: RichReplyType; blanks: unknown 
       image(`${p}.image`, c.image, `Card ${i + 1} image`)
       text(`${p}.cardText`, c.cardText, `Card ${i + 1} text`, L.cardTextMax)
       text(`${p}.buttonLabel`, c.buttonLabel, `Card ${i + 1} button label`, L.labelMax)
-      if (withLink) url(`${p}.link`, c.link, `Card ${i + 1} button URL`)
+      if (withLink) url(`${p}.link`, c.link, `Card ${i + 1} link`)
     })
   }
   if (!d.blanks) return issues
   switch (d.type) {
     case 'cta_url': {
       const b = d.blanks
-      text('messageText', b.messageText, 'Body text', L.bodyMax)
+      text('messageText', b.messageText, 'Message', L.bodyMax)
       text('buttonLabel', b.buttonLabel, 'Button label', L.labelMax)
-      url('link', b.link, 'Button URL')
-      if (b.headerMedia) image('headerMedia', b.headerMedia, 'Header media')
-      text('footer', b.footer, 'Footer text', L.footerMax, false)
+      url('link', b.link, 'Link')
+      if (b.headerMedia) image('headerMedia', b.headerMedia, 'Header image')
+      text('footer', b.footer, 'Footer', L.footerMax, false)
       break
     }
     case 'image':
-      image('image', d.blanks.image, 'Image source')
+      image('image', d.blanks.image, 'Image')
       text('caption', d.blanks.caption, 'Caption', L.bodyMax, false)
       break
     case 'interactive_list': {
       const b = d.blanks
-      text('messageText', b.messageText, 'Body text', L.listBodyMax)
+      text('messageText', b.messageText, 'Message', L.listBodyMax)
       text('menuButtonLabel', b.menuButtonLabel, 'Button text', L.labelMax)
-      if (b.options.length < L.rowsMin || b.options.length > L.rowsMax) add('options', `Add ${L.rowsMin} to ${L.rowsMax} rows (now ${b.options.length}).`)
+      if (b.options.length < L.rowsMin || b.options.length > L.rowsMax) add('options', `Add ${L.rowsMin} to ${L.rowsMax} options (now ${b.options.length}).`)
       const seen = new Set<string>()
       b.options.forEach((o, i) => {
         const p = `options.${o.id}`
@@ -101,14 +101,14 @@ export function validateRichReply(draft: { type: RichReplyType; blanks: unknown 
         text(`${p}.rowId`, rowId, `Row ${i + 1} ID`, L.rowIdMax)
         if (rowId && seen.has(rowId)) add(`${p}.rowId`, `Row ${i + 1} ID "${rowId}" is already used by another row.`)
         seen.add(rowId)
-        text(`${p}.title`, o.title, `Row ${i + 1} title`, L.rowTitleMax)
+        text(`${p}.title`, o.title, `Option ${i + 1}`, L.rowTitleMax)
         text(`${p}.description`, o.description, `Row ${i + 1} description`, L.rowDescriptionMax, false)
       })
       break
     }
     case 'interactive_reply_buttons': {
       const b = d.blanks
-      text('messageText', b.messageText, 'Body text', L.bodyMax)
+      text('messageText', b.messageText, 'Message', L.bodyMax)
       if (b.buttons.length < L.buttonsMin || b.buttons.length > L.buttonsMax) add('buttons', `Add ${L.buttonsMin} to ${L.buttonsMax} buttons (now ${b.buttons.length}).`)
       const seen = new Set<string>()
       b.buttons.forEach((title, i) => {
@@ -121,7 +121,7 @@ export function validateRichReply(draft: { type: RichReplyType; blanks: unknown 
     }
     case 'carousel_url':
     case 'carousel_quick_reply':
-      text('messageText', d.blanks.messageText, 'Body text', L.bodyMax)
+      text('messageText', d.blanks.messageText, 'Message', L.bodyMax)
       cards(d.blanks.cards, d.type === 'carousel_url')
       break
     case 'location': {
@@ -136,11 +136,11 @@ export function validateRichReply(draft: { type: RichReplyType; blanks: unknown 
       break
     }
     case 'location_request':
-      text('messageText', d.blanks.messageText, 'Body text', L.bodyMax)
+      text('messageText', d.blanks.messageText, 'Message', L.bodyMax)
       break
     case 'flow':
       if (!d.blanks.flowName) add('flowName', 'Pick a WhatsApp form.')
-      text('messageText', d.blanks.messageText, 'Body text', L.bodyMax)
+      text('messageText', d.blanks.messageText, 'Message', L.bodyMax)
       text('buttonLabel', d.blanks.buttonLabel, 'Button label', L.labelMax)
       break
   }
@@ -269,4 +269,32 @@ export function migrateRichReply(r: any): RichReply {
     return { ...r, blanks: { ...b, options } }
   }
   return r
+}
+
+/** Coordinates from a pasted Google Maps link ("…/@19.0596,72.8295,17z", "?q=19.05,72.82",
+ *  "!3d19.05!4d72.82") or a plain "19.0596, 72.8295". Short maps.app.goo.gl links hide them: null. */
+export function coordsFromMapsLink(text: string): { latitude: string; longitude: string } | null {
+  const n = String.raw`(-?\d{1,3}(?:\.\d+)?)`
+  const t = decodeURIComponent(text.trim())
+  const m =
+    t.match(new RegExp(String.raw`!3d${n}!4d${n}`)) ??
+    t.match(new RegExp(String.raw`@${n},${n}`)) ??
+    t.match(new RegExp(String.raw`[?&](?:q|query|ll|destination)=${n},\s*${n}`)) ??
+    t.match(new RegExp(String.raw`^${n},\s*${n}$`))
+  if (!m) return null
+  const [lat, lng] = [Number(m[1]), Number(m[2])]
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null
+  return { latitude: m[1], longitude: m[2] }
+}
+
+/** A list name from the trigger: "When a customer asks for your menu" → "Asks for your menu". */
+export function nameFromTrigger(trigger: string): string {
+  const t = trigger
+    .trim()
+    .replace(/^(when(ever)?|if)\s+(someone|somebody|a customer|the customer|customers|they|people|a user|the user)\s+/i, '')
+    .replace(/^(when(ever)?|if)\s+/i, '')
+    .replace(/[.?!\s]+$/, '')
+  if (!t) return ''
+  const cut = t.length > 48 ? t.slice(0, 48).replace(/\s+\S*$/, '') + '…' : t
+  return cut[0].toUpperCase() + cut.slice(1)
 }

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect } from 'react'
+import { useSearchParams } from 'react-router'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { useWizard } from '@/app/wizard/WizardContext'
 import { SkillsSection } from './SkillsSection'
@@ -10,13 +11,17 @@ type TabId = 'skills' | 'richReplies'
 // keeps its own state registered no matter which tab is showing. Personality lives under Identity.
 export function AbilitiesStep() {
   const { state, setPendingStepFocus } = useWizard()
-  const [activeTab, setActiveTab] = useState<TabId>('skills')
+  // The tab is part of the address (?tab=rich-replies), so links and the back button land on it.
+  const [params, setParams] = useSearchParams()
+  const activeTab: TabId = params.get('tab') === 'rich-replies' ? 'richReplies' : 'skills'
+  const setActiveTab = useCallback((t: TabId) => setParams(t === 'richReplies' ? { tab: 'rich-replies' } : {}, { replace: true }), [setParams])
+  const replyCount = state.richReplies.richReplies.length
 
   // Arriving here via Safety & handoff's "Customise handoff rules" pre-fills a skill on the
   // Skills tab — switch to it so the user actually sees the editor it opens.
   useEffect(() => {
     if (state.pendingSkillPrefill) setActiveTab('skills')
-  }, [state.pendingSkillPrefill])
+  }, [state.pendingSkillPrefill, setActiveTab])
 
   // Arriving here via a "Compiled configuration" link on Overview — jump to the tab it named.
   useEffect(() => {
@@ -31,7 +36,10 @@ export function AbilitiesStep() {
     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
       <TabsList>
         <TabsTrigger value="skills">Skills</TabsTrigger>
-        <TabsTrigger value="richReplies">Rich replies</TabsTrigger>
+        <TabsTrigger value="richReplies">
+          Rich replies
+          {replyCount > 0 && <span className="ml-1.5 rounded-full bg-muted px-1.5 text-meta text-muted-foreground tabular-nums">{replyCount}</span>}
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="skills" forceMount className="data-[state=inactive]:hidden">
@@ -39,7 +47,7 @@ export function AbilitiesStep() {
       </TabsContent>
 
       <TabsContent value="richReplies" forceMount className="data-[state=inactive]:hidden">
-        <RichRepliesSection />
+        <RichRepliesSection onOpenSkills={() => setActiveTab('skills')} />
       </TabsContent>
     </Tabs>
   )

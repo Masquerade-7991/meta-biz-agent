@@ -17,7 +17,7 @@ import { handleBroadcasts } from './broadcasts.ts'
 import { handleBilling } from './billing.ts'
 import { handleHealth } from './health.ts'
 import { handleNumbers } from './numbers.ts'
-import { agentUpstream, callUpstream, env, hasToken, pathIds, resolveIds, setCallLogger, upstream, type Kind } from './upstream.ts'
+import { agentUpstream, callUpstream, env, hasToken, pathIds, resolveIds, setCallLogger, upstream, type Kind, type UpstreamReply } from './upstream.ts'
 import { accounts, assetsFor } from './accounts.ts'
 import { handleWhatsApp } from './whatsapp.ts'
 import { readTrace, trace } from './trace.ts'
@@ -59,6 +59,19 @@ function rateLimited(kind: Kind, path: string): string | null {
   return allow(`${phone}|${resource}`, 1000) ? null : `Local safety limit reached (1000 requests per hour for ${resource} on this number). Try again shortly.`
 }
 
+const inFlight = new Map<string, Promise<UpstreamReply>>()
+
+/** Meta's 429 is per app and token, shared with everything else using them; a read waits once
+ *  (Retry-After, else 2s) and tries again. Writes are never repeated. */
+async function callWith429Retry(...args: Parameters<typeof callUpstream>): Promise<UpstreamReply> {
+  const r = await callUpstream(...args)
+  if (r.status !== 429 || args[1] !== 'GET') return r
+  const wait = Math.min(Number(r.retryAfter) || 2, 10) * 1000
+  console.log(`${args[1]} ${args[2]} → 429 from upstream, retrying in ${wait}ms`)
+  await new Promise((done) => setTimeout(done, wait))
+  return callUpstream(...args)
+}
+
 async function forward(req: http.IncomingMessage, res: http.ServerResponse, kind: Kind, path: string) {
   const method = req.method ?? 'GET'
   const ttl = method === 'GET' ? ttlFor(kind, path) : 0
@@ -77,12 +90,26 @@ async function forward(req: http.IncomingMessage, res: http.ServerResponse, kind
   const contentType = req.headers['content-type']
   const body = method === 'GET' || method === 'HEAD' ? undefined : await readBody(req)
   try {
-    const r = await callUpstream(kind, method, path, body, contentType)
+    // Identical reads already on their way to Meta share one call (parallel screens, StrictMode doubles).
+    const shared = method === 'GET' ? inFlight.get(key) : undefined
+    if (shared) {
+      const r = await shared
+      res.writeHead(r.status, { 'content-type': r.contentType })
+      res.end(r.text)
+      return
+    }
+    const call = callWith429Retry(kind, method, path, body, contentType)
+    if (method === 'GET') {
+      inFlight.set(key, call)
+      void call.catch(() => {}).finally(() => inFlight.delete(key))
+    }
+    const r = await call
     res.writeHead(r.status, { 'content-type': r.contentType })
     res.end(r.text)
     const ok = r.status >= 200 && r.status < 300
     if (ttl && ok) putCached(key, r, ttl)
-    if (method !== 'GET' && ok) {
+    // Only settings reads are cached per number, so only a settings write makes them stale.
+    if (method !== 'GET' && ok && path.includes('/agent_config/settings')) {
       const { phone } = splitPhone(new URL(path, 'http://x').pathname)
       if (phone) invalidatePhone(phone)
     }
