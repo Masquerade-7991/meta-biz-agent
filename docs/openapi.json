@@ -6920,7 +6920,16 @@
                         "string",
                         "null"
                       ],
-                      "format": "date-time"
+                      "format": "date-time",
+                      "description": "The last real event: a signed delivery routed to one of this workspace’s numbers."
+                    },
+                    "lastTestAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "The last sample event from Meta’s “Test” button (names a made-up number): proves the callback and signature work."
                     },
                     "callbackUrl": {
                       "type": "string"
@@ -7073,7 +7082,16 @@
                         "string",
                         "null"
                       ],
-                      "format": "date-time"
+                      "format": "date-time",
+                      "description": "The last real event: a signed delivery routed to one of this workspace’s numbers."
+                    },
+                    "lastTestAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time",
+                      "description": "The last sample event from Meta’s “Test” button (names a made-up number): proves the callback and signature work."
                     },
                     "callbackUrl": {
                       "type": "string"

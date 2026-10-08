@@ -521,6 +521,7 @@ export async function dummyWhatsApp<T>(method: string, path: string, body: unkno
     ]
     return {
       lastAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+      lastTestAt: null,
       callbackUrl: `${location.origin}/api/webhooks/whatsapp`,
       verifyTokenSet: true,
       signatureChecked: true,

@@ -85,7 +85,7 @@ export function WebhookStatusCard() {
           label="Receiving events"
           tone={live ? 'success' : 'warning'}
           state={live ? 'Live' : 'Waiting'}
-          reason={s.lastAt ? `Last event ${ago(s.lastAt)}` : 'No event has reached this console yet'}
+          reason={s.lastAt ? `Last event ${ago(s.lastAt)}` : s.lastTestAt ? `Only Meta’s test event so far (${ago(s.lastTestAt)})` : 'No event has reached this console yet'}
         />
         <Tile
           label="Signature check"
@@ -127,8 +127,11 @@ export function WebhookStatusCard() {
             <Step done={listenerOk} hint="In Graph API Explorer, POST /<your WhatsApp account id>/subscribed_apps with the listening app’s token.">
               Listening app subscribed to this account
             </Step>
-            <Step done={live} hint="In the listening app: save the webhook, switch it to Live, then press Test next to “messages” in WhatsApp → Configuration. If that sample doesn’t appear here, the app secret on the server is wrong.">
-              Events are arriving
+            <Step done={live || !!s.lastTestAt} hint="In the listening app, press Test next to “messages” in WhatsApp → Configuration. If that sample doesn’t appear here, the app secret on the server is wrong.">
+              Meta’s test event reaches this console
+            </Step>
+            <Step done={live} hint="Real messages to the business number should appear here. If only the test event arrives, Meta isn’t sending real events to this app: connect the app to the business in Business settings → Accounts → Apps, and check the number’s recipient list if it’s a test number.">
+              Real events are arriving
             </Step>
           </ul>
         </section>

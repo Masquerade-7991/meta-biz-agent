@@ -64,7 +64,10 @@ export const getNumberHealth = () => call<NumberHealth[]>('/api/whatsapp/health'
 export const refreshNumberHealth = () => call<NumberHealth[]>('/api/whatsapp/health', 'POST', {})
 /** Whether WhatsApp webhooks reach this app (they carry customers' words and media into the inbox). */
 export interface WebhookStatus {
+  /** The last real event (routed to one of this workspace's numbers). */
   lastAt: string | null
+  /** The last sample event from Meta's "Test" button: proves the callback and signature work. */
+  lastTestAt?: string | null
   callbackUrl: string
   verifyTokenSet: boolean
   signatureChecked: boolean

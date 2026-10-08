@@ -385,6 +385,9 @@ interface Delivery {
   error?: string
   /** Changes for a number or WABA no workspace has. */
   unrouted?: number
+  /** The same body arrived again (Meta's retries, its Test button): when last, and how often. */
+  lastSeenAt?: Date
+  repeats?: number
 }
 const inboxCol = () => col<Delivery>('webhook_inbox')
 
@@ -445,6 +448,8 @@ export async function handleWebhook(req: http.IncomingMessage, res: http.ServerR
   // Couldn't store it: 503 so Meta sends it again later.
   if (stored === null) return void res.writeHead(503).end(), true
   if (stored) await processDelivery(id, payload)
+  // The same body again (Meta's retry, or its "Test" button pressed twice): kept once, but noted.
+  else await inboxCol().updateOne({ _id: id }, { $set: { lastSeenAt: new Date() }, $inc: { repeats: 1 } }).catch(() => null)
   res.writeHead(200).end()
   await reprocessWebhooks(5).catch(() => 0)
   return true

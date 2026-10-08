@@ -12,7 +12,8 @@ const owner = (op: Op): Op => numberOp({ who: 'whatsapp.manage', ...op, errors: 
 
 const OWNER_ONLY = 'Only workspace owners can see or change webhook details.'
 const WEBHOOK_STATUS = o({
-  'lastAt*': 'date-time?',
+  'lastAt*': d('date-time?', 'The last real event: a signed delivery routed to one of this workspace’s numbers.'),
+  lastTestAt: d('date-time?', 'The last sample event from Meta’s “Test” button (names a made-up number): proves the callback and signature work.'),
   'callbackUrl*': 'string',
   'verifyTokenSet*': 'boolean',
   'signatureChecked*': 'boolean',

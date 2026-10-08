@@ -157,6 +157,14 @@ const subscribedApps = (): Promise<App[] | null> =>
       )
     : Promise.resolve(null)
 
+/** When the latest matching delivery was last seen (a repeat of the same body counts). */
+async function lastDelivery(where: Record<string, unknown>): Promise<Date | null> {
+  const [row] = await col('webhook_inbox')
+    .aggregate<{ t: Date }>([{ $match: { processedAt: { $ne: null }, ...where } }, { $project: { t: { $ifNull: ['$lastSeenAt', '$receivedAt'] } } }, { $sort: { t: -1 } }, { $limit: 1 }])
+    .toArray()
+  return row?.t ?? null
+}
+
 /** Whether Meta's webhooks reach this app, what arrived, and which apps receive the account's events.
  *  The first list of apps seen is kept as a baseline, so the owner can check the business's own apps
  *  are all still there next to the listening one. Only a real Meta answer ever becomes a baseline
@@ -164,9 +172,9 @@ const subscribedApps = (): Promise<App[] | null> =>
 async function webhookStatus() {
   const since = new Date(Date.now() - DAY_MS)
   const [last, byField, inbox, apps] = await Promise.all([
-    // The last delivery the receiver accepted (a signed event from a listening app). Older rows in
-    // whatsapp_webhooks came from before the receiver existed and say nothing about it.
-    col('webhook_inbox').findOne({}, { sort: { receivedAt: -1 }, projection: { receivedAt: 1 } }),
+    // The last real event: a signed delivery the receiver routed to a number this console has. Older
+    // rows in whatsapp_webhooks came from before the receiver existed and say nothing about it.
+    lastDelivery({ unrouted: 0 }),
     col('whatsapp_webhooks')
       .aggregate<{ _id: string; n: number }>([
         { $match: { workspaceId: ws(), at: { $gte: since } } },
@@ -188,9 +196,13 @@ async function webhookStatus() {
     baseline = { workspaceId: ws(), apps, at: new Date() } as never
     await col('webhook_baseline').updateOne({ workspaceId: ws() }, { $setOnInsert: baseline as never }, { upsert: true })
   }
+  // Meta's sample events ("Test" in the app) name a made-up number, so they're kept unrouted: they
+  // prove the callback and signature work, but they aren't real traffic.
+  const lastTest = await lastDelivery({ unrouted: { $gt: 0 } })
   const secrets = env('WEBHOOK_APP_SECRETS').split(',').filter((x) => x.trim()).length
   return {
-    lastAt: (last?.receivedAt as Date | undefined) ?? null,
+    lastAt: last ?? null,
+    lastTestAt: lastTest ?? null,
     callbackUrl: `${appUrl}/api/webhooks/whatsapp`,
     verifyTokenSet: !!env('WEBHOOK_VERIFY_TOKEN'),
     signatureChecked: secrets > 0,
