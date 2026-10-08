@@ -6,6 +6,8 @@ import { randomUUID } from 'node:crypto'
 import { HttpError, type Obj, type Titles, obj, readJson, serveJson } from './http.ts'
 import { col, db, dbOffReason, ws } from './db.ts'
 import { env } from './upstream.ts'
+import { currentAssets } from './context.ts'
+import { isProtected } from './protect.ts'
 import { trace } from './trace.ts'
 import { customerLabel, isBsuid, parseCustomerKey } from '../src/app/lib/customer.ts'
 import { dismissAlert, openAlerts } from './alerts.ts'
@@ -175,6 +177,10 @@ export async function onAgentReply(phone: string) {
   await tickets().updateOne({ workspaceId: ws(), phone, status: OPEN, firstRespondedAt: null }, { $set: { firstRespondedAt: new Date(), updatedAt: new Date() } })
 }
 
+/** The business's own number (protect.ts): the console never messages its customers on its own,
+ *  so no away message and no satisfaction question. People still reply when they choose to. */
+const listenOnly = () => isProtected(currentAssets()?.wabaId)
+
 /** A customer wrote: reopen a pending ticket, take a CSAT answer, and send the away message if the team is off. */
 export async function onCustomerMessage(phone: string, body: string, owner: 'ai' | 'human', sample: boolean) {
   const now = new Date()
@@ -187,7 +193,7 @@ export async function onCustomerMessage(phone: string, body: string, owner: 'ai'
       return
     }
   }
-  if (owner !== 'human') return
+  if (owner !== 'human' || listenOnly()) return
   const s = await getSettings()
   const conv = await conversations().findOne({ workspaceId: ws(), phone })
   if (!s.awayMessage || isOpen(now, s.hours) || (conv?.awaySentAt && now.getTime() - +conv.awaySentAt < 12 * 3_600_000)) return
@@ -275,7 +281,7 @@ async function resolve(number: number, b: Obj, me: Actor) {
   const s = await getSettings()
   const conv = await conversations().findOne({ workspaceId: ws(), phone: t.phone })
   const windowOpen = !!conv?.lastInboundAt && now.getTime() - +conv.lastInboundAt < 86_400_000
-  const askCsat = b.askFeedback !== false && s.csat.enabled && windowOpen
+  const askCsat = b.askFeedback !== false && s.csat.enabled && windowOpen && !listenOnly()
   await tickets().updateOne({ _id: t._id }, { $set: { status: 'resolved', resolvedAt: now, updatedAt: now, resolution: String(b.resolution ?? '').trim().slice(0, 2000) || null, ...(askCsat && { csatRequestedAt: now }) } })
   await addMessage({ phone: String(t.phone), direction: 'out', author: 'system', kind: 'event', body: `${me.name} resolved ticket #${number}.`, at: now })
   trace('ticket.resolved', { number, askCsat, handBack: b.handBack !== false }, { entity: 'ticket', id: String(number) })
@@ -400,14 +406,14 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     if (m === 'PATCH') return update(n, obj(await readJson(req)), me)
   }
   if (path === '/api/support/settings' && m === 'GET')
-    return { ...(await getSettings()), aiSummary: !!env('ANTHROPIC_API_KEY'), saved: !!(await settingsCol().findOne({ workspaceId: ws() }, { projection: { _id: 1 } })) }
+    return { ...(await getSettings()), aiSummary: !!env('ANTHROPIC_API_KEY'), listenOnly: listenOnly(), saved: !!(await settingsCol().findOne({ workspaceId: ws() }, { projection: { _id: 1 } })) }
   if (path === '/api/support/settings' && m === 'PUT') {
     if (!can(me.role, 'settings.manage')) throw new HttpError(403, 'Only owners and admins can change support settings.')
     const members = new Set((await col('memberships').find({ workspaceId: ws() }).toArray()).map((x) => String(x.userId)))
     const settings = parseSettings(obj(await readJson(req)), members)
     await settingsCol().updateOne({ workspaceId: ws() }, { $set: { settings, updatedAt: new Date(), updatedBy: me._id } }, { upsert: true })
     trace('settings.updated', { area: 'support' })
-    return { ...settings, aiSummary: !!env('ANTHROPIC_API_KEY') }
+    return { ...settings, aiSummary: !!env('ANTHROPIC_API_KEY'), listenOnly: listenOnly() }
   }
   if (path === '/api/support/notifications' && m === 'GET') return notifications(me)
   if ((seg = path.match(/^\/api\/support\/notifications\/reminder:([a-f0-9]{24})\/dismiss$/)) && m === 'POST') {

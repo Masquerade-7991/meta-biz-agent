@@ -9,6 +9,7 @@ import { resumeBroadcasts } from './broadcasts.ts'
 import { startJobs } from './jobs.ts'
 import { startBilling } from './billing.ts'
 import { startHealth } from './health.ts'
+import { reprocessWebhooks } from './inbox.ts'
 import { agentUpstream, env, upstream } from './upstream.ts'
 
 // One stray failure (an unanswered Meta call, a dropped database socket) shouldn't take the whole
@@ -27,5 +28,7 @@ if (await ready()) {
   await startHealth()
   // JOBS=off: a second copy of the server (e.g. against a stand-in Meta) must not run real jobs.
   if (env('JOBS') !== 'off') startJobs()
+  // Webhook deliveries stored but not processed are tried again every 5 minutes.
+  setInterval(() => void reprocessWebhooks().catch(() => 0), 5 * 60_000).unref()
   if (env('COLLECTORS') !== 'off') startCollectors()
 } else if (!env('MONGODB_URI')) console.log('No MONGODB_URI: running without a database (store routes return 503)')

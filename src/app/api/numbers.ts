@@ -34,6 +34,8 @@ export interface NumberDetail {
   official: boolean | null
   /** Whether the server can remember PINs (TOKEN_ENCRYPTION_KEY is set). */
   pinStorage: boolean
+  /** The business's own number: registration, PIN and codes can't be changed here. */
+  managed?: boolean
   activity: { kind: string; data: Record<string, unknown>; at: string; by: string }[]
 }
 

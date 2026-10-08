@@ -65,18 +65,21 @@ const INDEXES: Record<string, IndexDescription[]> = {
   // Tickets (tickets.ts): numbered per workspace; one open ticket per chat at a time.
   tickets: [{ key: { workspaceId: 1, number: 1 }, unique: true }, { key: { workspaceId: 1, status: 1, createdAt: -1 } }, { key: { workspaceId: 1, phone: 1, status: 1 } }],
   support_settings: [{ key: { workspaceId: 1 }, unique: true }],
-  whatsapp_webhooks: [{ key: { at: 1 }, expireAfterSeconds: 30 * DAY }, { key: { workspaceId: 1, at: -1 } }], // raw payloads, for replay and debugging
+  // Webhooks, kept for good: each workspace's share of every event (whatsapp_webhooks), and every
+  // delivery exactly as Meta sent it (webhook_inbox, _id = sha256 of the body, so retries store once).
+  whatsapp_webhooks: [{ key: { workspaceId: 1, at: -1 } }],
+  webhook_inbox: [{ key: { processedAt: 1, receivedAt: 1 } }, { key: { receivedAt: -1 } }],
+  // The apps first seen receiving each workspace's events (health.ts), to compare against later.
+  webhook_baseline: [{ key: { workspaceId: 1 }, unique: true }],
+  // What each message cost, from the pricing in its status webhooks (one row per message and status).
+  message_charges: [{ key: { workspaceId: 1, waMessageId: 1, status: 1 }, unique: true }, { key: { workspaceId: 1, at: -1 } }],
+  // Meta Business Agent usage per number and hour: billable messages, tokens and cost (collectors.ts).
+  agent_usage: [{ key: { workspaceId: 1, phoneNumberId: 1, start: 1 }, unique: true }],
+  agent_usage_state: [{ key: { workspaceId: 1, phoneNumberId: 1 }, unique: true }],
   agent_drafts: [{ key: { workspaceId: 1, phoneNumberId: 1 }, unique: true }],
-  test_conversations: [
-    { key: { conversationId: 1 }, unique: true },
-    { key: { workspaceId: 1, phoneNumberId: 1, updatedAt: -1 } },
-    { key: { updatedAt: 1 }, expireAfterSeconds: D90 },
-  ],
-  conversation_traces: [
-    { key: { turnId: 1 }, unique: true },
-    { key: { phoneNumberId: 1, consumer: 1, ts: -1 } },
-    { key: { ts: 1 }, expireAfterSeconds: D90 },
-  ],
+  // Transcripts are kept for good: test chats and the agent's turns.
+  test_conversations: [{ key: { conversationId: 1 }, unique: true }, { key: { workspaceId: 1, phoneNumberId: 1, updatedAt: -1 } }],
+  conversation_traces: [{ key: { turnId: 1 }, unique: true }, { key: { phoneNumberId: 1, consumer: 1, ts: -1 } }],
   connector_logs: [
     { key: { dedupeKey: 1 }, unique: true },
     { key: { phoneNumberId: 1, connectorId: 1, at: -1 } },
@@ -169,6 +172,9 @@ const INDEXES: Record<string, IndexDescription[]> = {
   ),
 }
 
+/** Collections that used to delete old rows, and the field their expiry used: now kept for good. */
+const RETIRED_TTL: Record<string, string> = { whatsapp_webhooks: 'at', test_conversations: 'updatedAt', conversation_traces: 'ts' }
+
 /** Creates collections and indexes, skipped when nothing changed since the last run (serverless
  *  instances start often; this keeps their cold start short). */
 export async function ensureSchema(d: Db) {
@@ -188,6 +194,10 @@ async function createSchema(d: Db) {
     )
   }
   for (const [name, specs] of Object.entries(INDEXES)) await d.collection(name).createIndexes(specs)
+  // Expiry rules that were removed above: creating indexes never drops old ones, so drop them here.
+  for (const [name, field] of Object.entries(RETIRED_TTL))
+    for (const ix of await d.collection(name).indexes().catch(() => []))
+      if (ix.expireAfterSeconds !== undefined && ix.name && Object.keys(ix.key).join() === field) await d.collection(name).dropIndex(ix.name)
 }
 
 /** Connects once. Returns false (and leaves `db` null) when unconfigured or unreachable. */

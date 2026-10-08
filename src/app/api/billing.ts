@@ -10,7 +10,14 @@ export interface Billing {
   month: { total: number; byCategory: { category: string; cost: number; volume: number }[] }
   days: { day: string; cost: number; volume: number }[]
   /** This month: AI tokens the console spent (by feature), and the Meta AI agent's conversations. */
-  ai: { console: { feature: string; model: string; input: number; output: number; calls: number }[]; agentConversations: number | null }
+  ai: {
+    console: { feature: string; model: string; input: number; output: number; calls: number }[]
+    agentConversations: number | null
+    /** Meta Business Agent usage reported by Meta (business_agent_insights), this month. */
+    agentUsage?: { state: string | null; checkedAt: string | null; billableMessages: number; billableTokens: number; cost: number }
+  }
+  /** This month's messages as Meta priced them in status webhooks. */
+  messages?: { billable: number; free: number; byCategory: { category: string; billable: number; free: number }[] }
 }
 
 const call = jsonClient(dummyBilling)

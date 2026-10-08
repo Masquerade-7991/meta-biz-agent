@@ -6,6 +6,7 @@ import { col } from './db.ts'
 import { keyFrom, open } from './crypto.ts'
 import { env } from './upstream.ts'
 import type { Assets } from './context.ts'
+import { addProtected } from './protect.ts'
 
 export type StepState = { state: 'done' | 'failed' | 'skipped'; at: Date; error?: string }
 export interface Account {
@@ -46,6 +47,8 @@ export async function assetsFor(workspaceId: string): Promise<Assets | null> {
       token = open(a.tokenEnc, key)
     }
     for (const id of [a.wabaId, a.businessId, ...a.phoneNumbers.map((p) => p.id)].filter(Boolean)) tokens.set(id, token)
+    // The server's own account (the business's) and every number it has: never rewired (protect.ts).
+    if (a.source === 'env') addProtected(a.wabaId, a.businessId, ...a.phoneNumbers.map((p) => p.id))
   }
   const first = list.find((a) => tokens.has(a.wabaId))
   const assets: Assets | null = first

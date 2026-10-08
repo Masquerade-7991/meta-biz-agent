@@ -8,7 +8,7 @@ import { getSession, handleAuth } from './auth.ts'
 import { db, dbOffReason, initDb, NO_META_ASSETS, withWorkspace } from './db.ts'
 import { logApiCall, record, resourceOf, splitPhone } from './record.ts'
 import { handleStore } from './store.ts'
-import { send, sendError } from './http.ts'
+import { HttpError, send, sendError } from './http.ts'
 import { docsPage, openapi } from './openapi/index.ts'
 import { handleInbox, handleWebhook } from './inbox.ts'
 import { handleTickets } from './tickets.ts'
@@ -116,6 +116,7 @@ async function forward(req: http.IncomingMessage, res: http.ServerResponse, kind
     }
     record({ kind, method, path, reqBody: body, contentType: contentType ?? '', status: r.status, resText: r.text })
   } catch (err) {
+    if (err instanceof HttpError) return sendError(res, err.status, 'Not allowed', err.message)
     const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
     console.log(`${method} ${path} → 502 (${detail})`)
     sendError(res, 502, 'Upstream unreachable', `${kind === 'meta' ? agentUpstream : upstream} did not respond. ${detail}`)

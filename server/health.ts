@@ -2,7 +2,7 @@
 // limit, checked hourly and whenever Meta sends a quality or template webhook. A drop in quality or a
 // paused/rejected template raises an owner alert (alerts.ts); recovery clears it.
 import type http from 'node:http'
-import { HttpError, type Obj, type Titles, serveJson, str } from './http.ts'
+import { HttpError, type Obj, type Titles, arr, obj, serveJson, str } from './http.ts'
 import { col, db, dbOffReason, ownsMetaAssets, withWorkspace, ws } from './db.ts'
 import { env, metaJson } from './upstream.ts'
 import { appUrl } from './mail.ts'
@@ -108,6 +108,32 @@ export async function onAccountWebhook(field: string, value: Obj) {
       for (const bad of Object.keys(TEMPLATE_BAD)) await clearAlert(`${key}:${bad}`)
     return true
   }
+  // Template quality and category changes: kept as events (and in the raw archive).
+  if (field === 'message_template_quality_update' || field === 'template_category_update') {
+    trace(field === 'template_category_update' ? 'template.category' : 'template.quality', {
+      name: str(value.message_template_name) ?? null,
+      language: str(value.message_template_language) ?? null,
+      from: str(value.previous_quality_score) ?? str(value.previous_category) ?? null,
+      to: str(value.new_quality_score) ?? str(value.new_category) ?? null,
+    })
+    return true
+  }
+  // Meta's notices about the account itself: restrictions, bans, reviews, capability changes.
+  if (field === 'account_alerts' || field === 'account_update' || field === 'business_capability_update') {
+    const info = obj(value.alert_info)
+    const event = str(value.event) ?? str(info.alert_type) ?? field
+    trace('account.notice', { field, event, detail: str(info.alert_description) ?? str(obj(value.violation_info).violation_type) ?? null })
+    const serious = /BAN|RESTRICT|DISABLE|VIOLATION|FLAG/i.test(event) || str(info.alert_severity) === 'CRITICAL'
+    if (field !== 'business_capability_update' && (serious || field === 'account_alerts'))
+      await raiseAlert({
+        key: `account:${event}`,
+        severity: serious ? 'critical' : 'warning',
+        title: `WhatsApp account: ${event.replace(/_/g, ' ').toLowerCase()}`,
+        detail: str(info.alert_description) ?? 'Meta sent a notice about your WhatsApp account. Check WhatsApp Manager for details.',
+        target: 'whatsapp',
+      })
+    return true
+  }
   return false
 }
 
@@ -118,9 +144,55 @@ async function overview() {
 }
 const TITLES: Titles = { 403: 'Not allowed', 404: 'Not found', 502: 'WhatsApp didn’t answer' }
 /** Whether Meta's webhooks reach this app: the inbox only gets customers' words and media through them. */
+const DAY_MS = 86_400_000
+
+/** Whether Meta's webhooks reach this app, what arrived, and which apps receive the account's events.
+ *  The app list is read-only (GET subscribed_apps) and the first one seen is kept as a baseline, so
+ *  anyone can check the business's own app is still there next to the listening one. */
 async function webhookStatus() {
-  const last = await col('whatsapp_webhooks').findOne({ workspaceId: ws() }, { sort: { at: -1 }, projection: { at: 1 } })
-  return { lastAt: last?.at ?? null, callbackUrl: `${appUrl}/api/webhooks/whatsapp`, verifyTokenSet: !!env('WEBHOOK_VERIFY_TOKEN'), signatureChecked: !!env('APP_SECRET') }
+  const since = new Date(Date.now() - DAY_MS)
+  const [last, byField, inbox, apps] = await Promise.all([
+    col('whatsapp_webhooks').findOne({ workspaceId: ws() }, { sort: { at: -1 }, projection: { at: 1 } }),
+    col('whatsapp_webhooks')
+      .aggregate<{ _id: string; n: number }>([
+        { $match: { workspaceId: ws(), at: { $gte: since } } },
+        { $unwind: '$payload.entry' },
+        { $unwind: '$payload.entry.changes' },
+        { $group: { _id: '$payload.entry.changes.field', n: { $sum: 1 } } },
+        { $sort: { n: -1 } },
+      ])
+      .toArray(),
+    Promise.all([
+      col('webhook_inbox').countDocuments({ processedAt: null }),
+      col('webhook_inbox').countDocuments({ error: { $exists: true }, processedAt: null }),
+      col('webhook_inbox').countDocuments({ unrouted: { $gt: 0 }, receivedAt: { $gte: new Date(Date.now() - 7 * DAY_MS) } }),
+    ]),
+    ownsMetaAssets()
+      ? metaJson('graph', 'GET', '/WABA_ID/subscribed_apps').then(
+          (r) => arr(r.data).map((x) => ({ id: str(obj(obj(x).whatsapp_business_api_data).id) ?? null, name: str(obj(obj(x).whatsapp_business_api_data).name) ?? null })),
+          () => null,
+        )
+      : Promise.resolve(null),
+  ])
+  let baseline = await col('webhook_baseline').findOne({ workspaceId: ws() })
+  if (!baseline && apps) {
+    baseline = { workspaceId: ws(), apps, at: new Date() } as never
+    await col('webhook_baseline').updateOne({ workspaceId: ws() }, { $setOnInsert: baseline as never }, { upsert: true })
+  }
+  const secrets = env('WEBHOOK_APP_SECRETS').split(',').filter((x) => x.trim()).length
+  return {
+    lastAt: last?.at ?? null,
+    callbackUrl: `${appUrl}/api/webhooks/whatsapp`,
+    verifyTokenSet: !!env('WEBHOOK_VERIFY_TOKEN'),
+    signatureChecked: secrets > 0,
+    appsAccepted: secrets,
+    last24h: byField.map((f) => ({ field: f._id, count: f.n })),
+    pending: inbox[0],
+    failed: inbox[1],
+    unknownNumbers: inbox[2],
+    subscribedApps: apps,
+    baseline: baseline ? { apps: baseline.apps, at: baseline.at } : null,
+  }
 }
 
 export async function handleHealth(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {

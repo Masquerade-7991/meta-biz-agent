@@ -84,8 +84,21 @@ export const whatsapp = area('WhatsApp', {
     get: {
       id: 'webhookStatus',
       summary: 'Are Meta’s webhooks reaching us',
-      description: 'The inbox gets customers’ words and media only through webhooks.',
-      ok: o({ 'lastAt*': 'date-time?', 'callbackUrl*': 'string', 'verifyTokenSet*': 'boolean', 'signatureChecked*': 'boolean' }),
+      description:
+        'The inbox gets customers’ words and media only through webhooks. Also lists, read-only, every app Meta sends this account’s events to, next to the first list seen, so anyone can check the business’s own app is still subscribed.',
+      ok: o({
+        'lastAt*': 'date-time?',
+        'callbackUrl*': 'string',
+        'verifyTokenSet*': 'boolean',
+        'signatureChecked*': 'boolean',
+        appsAccepted: d('integer', 'Apps whose signatures are accepted (WEBHOOK_APP_SECRETS).'),
+        last24h: { type: 'array', items: o({ field: 'string', count: 'integer' }) },
+        pending: d('integer', 'Deliveries stored but not processed yet.'),
+        failed: 'integer',
+        unknownNumbers: d('integer', 'Deliveries this week for a number or account no workspace has.'),
+        subscribedApps: d({ anyOf: [{ type: 'array', items: o({ id: 'string?', name: 'string?' }) }, { type: 'null' }] }, 'GET /{WABA}/subscribed_apps, read-only.'),
+        baseline: d({ anyOf: [o({ apps: 'object[]', at: 'date-time' }), { type: 'null' }] }, 'The first list of subscribed apps seen.'),
+      }),
     },
   },
 

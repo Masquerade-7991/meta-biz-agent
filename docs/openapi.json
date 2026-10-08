@@ -195,7 +195,7 @@
           "Server"
         ],
         "summary": "Meta’s webhook events",
-        "description": "**Who can call:** Meta (signed with the app secret).\n\nMessages, statuses, echoes, standby, handovers and account events (quality, name, limits). Answers 200 at once and processes afterwards. When APP_SECRET is set the body must carry a valid `X-Hub-Signature-256`, else 401 with no body. Without a database the event is acknowledged and dropped.",
+        "description": "**Who can call:** Meta, signed by a listening app.\n\nEvery WhatsApp event for the connected accounts: messages, statuses (with per-message pricing), echoes, standby, handovers, marketing preferences, template and number changes, account notices.\n\nThe body must carry a valid `X-Hub-Signature-256` from one of the apps in WEBHOOK_APP_SECRETS (401 otherwise). With no secret set, or no database, it answers 503 so Meta keeps the event and retries (up to 7 days).\n\nEach delivery is stored exactly as sent (webhook_inbox, once per body even when Meta retries), processed, then answered 200. A delivery that fails to process is kept and retried automatically; events for a number no workspace has are kept, not dropped.\n\nThe business’s own number is listen-only: an event never makes the console send anything.",
         "security": [],
         "parameters": [
           {
@@ -204,9 +204,9 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "`sha256=<HMAC of the raw body with APP_SECRET>`."
+              "description": "`sha256=<HMAC of the raw body with the app secret>`."
             },
-            "description": "`sha256=<HMAC of the raw body with APP_SECRET>`."
+            "description": "`sha256=<HMAC of the raw body with the app secret>`."
           }
         ],
         "requestBody": {
@@ -222,7 +222,27 @@
         },
         "responses": {
           "200": {
-            "description": "Received."
+            "description": "Stored (and processed)."
+          },
+          "401": {
+            "description": "Not signed by a known app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not set up yet (no app secret) or the database is unavailable: Meta retries later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -3120,6 +3140,186 @@
           },
           "502": {
             "description": "Couldn’t write a summary right now. Try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/inbox/conversations/{phone}/transcript": {
+      "get": {
+        "operationId": "chatTranscript",
+        "tags": [
+          "Inbox"
+        ],
+        "summary": "Download a chat’s transcript",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nThe whole conversation in order, with who said what: the customer, the AI agent, a teammate, or someone outside this console (another app or the WhatsApp Business app). Kept for good. `format=txt` downloads it as a text file. When the workspace restricts agents (Support settings → restrictAgents), an agent can only open chats assigned to them or unassigned (403 “This chat is assigned to someone else.”).",
+        "parameters": [
+          {
+            "name": "phone",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Customer phone number, country code first, digits only (e.g. 919876543210), or the BSUID of a customer who hides their number.",
+              "pattern": "^(\\d{8,15}|[A-Z]{2}\\.[A-Za-z0-9.]{1,140})$"
+            },
+            "description": "Customer phone number, country code first, digits only (e.g. 919876543210), or the BSUID of a customer who hides their number."
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "txt"
+              ],
+              "description": "Default json."
+            },
+            "description": "Default json."
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "ISO time or milliseconds."
+            },
+            "description": "ISO time or milliseconds."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "phone": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "from": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time"
+                    },
+                    "to": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "from": {
+                            "type": "string"
+                          },
+                          "author": {
+                            "type": "string",
+                            "enum": [
+                              "customer",
+                              "ai",
+                              "agent",
+                              "system"
+                            ]
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "media": {
+                            "type": "object"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "waMessageId": {
+                            "type": "string"
+                          },
+                          "tools": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "at",
+                          "from",
+                          "author",
+                          "kind",
+                          "text"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "phone",
+                    "name",
+                    "from",
+                    "to",
+                    "messages"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "from must be a date.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "No chat with this number yet.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6706,7 +6906,7 @@
           "WhatsApp"
         ],
         "summary": "Are Meta’s webhooks reaching us",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\nThe inbox gets customers’ words and media only through webhooks.",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nThe inbox gets customers’ words and media only through webhooks. Also lists, read-only, every app Meta sends this account’s events to, next to the first list seen, so anyone can check the business’s own app is still subscribed.",
         "responses": {
           "200": {
             "description": "Success.",
@@ -6730,6 +6930,86 @@
                     },
                     "signatureChecked": {
                       "type": "boolean"
+                    },
+                    "appsAccepted": {
+                      "type": "integer",
+                      "description": "Apps whose signatures are accepted (WEBHOOK_APP_SECRETS)."
+                    },
+                    "last24h": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "field": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "pending": {
+                      "type": "integer",
+                      "description": "Deliveries stored but not processed yet."
+                    },
+                    "failed": {
+                      "type": "integer"
+                    },
+                    "unknownNumbers": {
+                      "type": "integer",
+                      "description": "Deliveries this week for a number or account no workspace has."
+                    },
+                    "subscribedApps": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "name": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "GET /{WABA}/subscribed_apps, read-only."
+                    },
+                    "baseline": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "apps": {
+                              "type": "array",
+                              "items": {
+                                "type": "object"
+                              }
+                            },
+                            "at": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The first list of subscribed apps seen."
                     }
                   },
                   "required": [
@@ -13019,6 +13299,10 @@
           "saved": {
             "type": "boolean",
             "description": "Read-only: false until the workspace saves these settings (the values are then Helo.ai’s defaults)."
+          },
+          "listenOnly": {
+            "type": "boolean",
+            "description": "Read-only: the business’s own number, where the console sends nothing on its own (no away message, no feedback question)."
           }
         },
         "required": [
@@ -14071,8 +14355,66 @@
                   "integer",
                   "null"
                 ]
+              },
+              "agentUsage": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "ok, no_billable_account (Meta reports usage once the agent has a payment method), error_<status>, or null before the first check."
+                  },
+                  "checkedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  },
+                  "billableMessages": {
+                    "type": "integer"
+                  },
+                  "billableTokens": {
+                    "type": "integer"
+                  },
+                  "cost": {
+                    "type": "number"
+                  }
+                },
+                "description": "Meta Business Agent usage this month (business_agent_insights, collected hourly)."
               }
             }
+          },
+          "messages": {
+            "type": "object",
+            "properties": {
+              "billable": {
+                "type": "integer"
+              },
+              "free": {
+                "type": "integer"
+              },
+              "byCategory": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "category": {
+                      "type": "string"
+                    },
+                    "billable": {
+                      "type": "integer"
+                    },
+                    "free": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "This month’s messages as WhatsApp priced them in their status webhooks."
           }
         },
         "required": [
@@ -14290,6 +14632,10 @@
             "type": "boolean",
             "description": "The server can store this number’s PIN (TOKEN_ENCRYPTION_KEY is set)."
           },
+          "managed": {
+            "type": "boolean",
+            "description": "The business’s own number: registration, PIN and codes can’t be changed here."
+          },
           "activity": {
             "type": "array",
             "items": {
@@ -14415,6 +14761,10 @@
           },
           "needsAttention": {
             "type": "boolean"
+          },
+          "protected": {
+            "type": "boolean",
+            "description": "The business’s own account: read and agent configuration only; its webhooks, registration, PIN and billing are never changed here."
           },
           "createdAt": {
             "type": "string",

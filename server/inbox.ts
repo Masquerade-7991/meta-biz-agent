@@ -4,7 +4,6 @@
 // customer's own words (same wamid, so the placeholder fills in), echoes of the agent's replies,
 // delivery ticks and handovers. Replies from people go out through the Cloud API send endpoint.
 import type http from 'node:http'
-import { createHmac, timingSafeEqual } from 'node:crypto'
 import { ObjectId } from 'mongodb'
 import { HttpError, type Obj, type Titles, arr, digits, obj, readJson, serveJson, str } from './http.ts'
 import { col, db, dbOffReason, needMetaAssets, ownsMetaAssets, withWorkspace, ws } from './db.ts'
@@ -27,6 +26,8 @@ import { ensureTicket, needCanAssign, needInScope, onAgentReply, onCustomerMessa
 import { can, type Role } from '../src/app/lib/permissions.ts'
 import { setBlocked } from './numbers.ts'
 import { recordAiUsage } from './aiUsage.ts'
+import { isProtected } from './protect.ts'
+import { chargeOf, deliveryId, replaceable, signedBy } from './webhookCore.ts'
 
 export interface Actor {
   _id: string
@@ -92,18 +93,19 @@ export async function ensureConversation(phone: string, name?: string, sample = 
 }
 
 /** Stores a message once (deduped by wamid or turn id) and keeps the conversation summary current.
- *  A webhook with the customer's words fills in a placeholder made from a turn (same wamid). */
+ *  A webhook with the customer's words fills in a placeholder made from a turn (same wamid).
+ *  True when this brought something new (a new message, or a placeholder's words): Meta's retries
+ *  and repeats answer false, so callers run their side effects once. */
 export async function addMessage(m: Msg): Promise<boolean> {
   const doc = { ...m, workspaceId: ws(), createdAt: new Date() }
-  let inserted = true
   if (m.waMessageId || m.turnId) {
     const key = m.waMessageId ? { waMessageId: m.waMessageId } : { turnId: m.turnId }
     // Text, when known, always wins: it fills a placeholder (body null) made from a turn.
     const { body, kind, ...rest } = doc
-    const r = await messages().updateOne({ workspaceId: ws(), ...key }, body !== null ? { $setOnInsert: rest, $set: { body, kind } } : { $setOnInsert: doc }, { upsert: true })
-    inserted = r.upsertedCount === 1
+    const before = await messages().findOneAndUpdate({ workspaceId: ws(), ...key }, body !== null ? { $setOnInsert: rest, $set: { body, kind } } : { $setOnInsert: doc }, { upsert: true, returnDocument: 'before', projection: { body: 1 } })
+    // A turn's placeholder getting the customer's words is news too (opt-out words, replies), but not a new message.
+    if (before) return before.body === null && body !== null
   } else await messages().insertOne(doc)
-  if (!inserted) return false
   const inbound = m.direction === 'in'
   if (inbound) await contacts().updateOne({ workspaceId: ws(), phone: m.phone }, { $max: { lastSeenAt: m.at } })
   // History pulled from Meta isn't news; only messages from the last day count as unread.
@@ -120,7 +122,7 @@ export async function addMessage(m: Msg): Promise<boolean> {
 }
 
 // ---- Meta: turns, send, thread control ----
-interface Turn {
+export interface Turn {
   turn_id?: string
   message_id?: string
   timestamp?: number
@@ -137,7 +139,15 @@ async function syncTurns(phone: string, force = false) {
   lastSync.set(key, Date.now())
   const r = await callUpstream('meta', 'GET', resolveIds(`/PHONE_NUMBER_ID/insights/conversations/turns?user_phone_number=${phone}&limit=50`)).catch(() => null)
   if (!r || r.status !== 200) return
-  for (const t of arr(obj(parseJson(r.text)).data) as Turn[]) {
+  await importTurns(phone, arr(obj(parseJson(r.text)).data) as Turn[])
+}
+
+/** Meta's conversation turns into the chat: the customer's message (its words arrive by webhook)
+ *  and the agent's reply. Used when a chat opens (syncTurns) and by the hourly collector, so
+ *  transcripts are kept even for chats nobody opens. Safe to repeat. */
+export async function importTurns(phone: string, turns: Turn[]) {
+  if (turns.some((t) => t.turn_id)) await ensureConversation(phone)
+  for (const t of turns) {
     if (!t.turn_id) continue
     const at = new Date(Number(t.timestamp) || Date.now())
     const steps = t.steps ?? []
@@ -145,8 +155,11 @@ async function syncTurns(phone: string, force = false) {
     const tools = steps.filter((s) => s.type === 'TOOL_CALL' && s.tool_name).map((s) => s.tool_name!)
     // Each turn starts with a customer message; its words arrive only by webhook.
     await addMessage({ phone, direction: 'in', author: 'customer', kind: 'text', body: null, at: new Date(at.getTime() - 1), waMessageId: t.message_id || `turn:${t.turn_id}` })
-    const echoed = await messages().findOne({ workspaceId: ws(), phone, author: 'ai', turnId: { $exists: false }, at: { $gte: new Date(at.getTime() - 120_000), $lte: new Date(at.getTime() + 120_000) } })
-    if ((reply || tools.length) && !echoed) await addMessage({ phone, direction: 'out', author: 'ai', kind: 'text', body: reply ?? '', at, turnId: t.turn_id, tools })
+    // An echo of this reply may have arrived first (full words, unknown author): it's the agent's.
+    const near = { $gte: new Date(at.getTime() - 120_000), $lte: new Date(at.getTime() + 120_000) }
+    const echoed = await messages().findOne({ workspaceId: ws(), phone, direction: 'out', turnId: { $exists: false }, $or: [{ author: 'ai' }, { authorName: OUTSIDE }], at: near })
+    if (echoed) await messages().updateOne({ _id: echoed._id, turnId: { $exists: false } }, { $set: { author: 'ai', turnId: t.turn_id, tools }, $unset: { authorName: '' } }).catch(() => null)
+    else if (reply || tools.length) await addMessage({ phone, direction: 'out', author: 'ai', kind: 'text', body: reply ?? '', at, turnId: t.turn_id, tools })
   }
 }
 
@@ -166,6 +179,10 @@ async function syncRoster() {
 }
 
 // ---- webhook ----
+/** Who sent an outbound message that didn't come from this console: another app or the WhatsApp Business app. */
+const OUTSIDE = 'Sent outside this console'
+/** The business's own number (protect.ts): the console only listens there. */
+const listenOnly = () => isProtected(currentAssets()?.wabaId)
 /** Turns one webhook `value` into chat updates. `field` is messages | standby | messaging_handovers. */
 async function processChange(field: string, value: Obj) {
   // Account events: number quality and limits, template reviews (health.ts).
@@ -192,8 +209,10 @@ async function processChange(field: string, value: Obj) {
               ? (media.caption ?? mediaLabel(media.kind, media.filename))
               : `Sent a ${type} message`
     const fresh = await addMessage({ phone, direction: 'in', author: 'customer', kind: type === 'text' ? 'text' : type === 'interactive' || type === 'button' ? 'interactive' : 'media', body, at: fromSeconds(m.timestamp), waMessageId: str(m.id), ...(media && { media }) })
+    // Meta's retries and repeats change nothing past this point.
+    if (!fresh) continue
     // The file itself comes from WhatsApp in the background (media.ts), so the webhook answers fast.
-    if (fresh && media?.waMediaId) {
+    if (media?.waMediaId) {
       const saved = await messages().findOne({ workspaceId: ws(), waMessageId: str(m.id) }, { projection: { _id: 1 } })
       if (saved) await enqueue('media.fetch', { messageId: String(saved._id) })
     }
@@ -207,10 +226,12 @@ async function processChange(field: string, value: Obj) {
     const word = body.trim().toUpperCase()
     if (['STOP', 'UNSUBSCRIBE', 'START'].includes(word)) await contacts().updateOne({ workspaceId: ws(), phone }, { $set: { optedOut: word !== 'START' } })
     await wakeOnMessage(phone)
-    // On `messages` our app holds the chat; on `standby` the agent does.
-    const owner = field === 'messages' ? 'human' : 'ai'
-    const conv = await conversations().findOneAndUpdate({ workspaceId: ws(), phone }, { $set: { owner } }, { returnDocument: 'after' })
-    await onCustomerMessage(phone, body, owner, !!conv?.sample)
+    // On `messages` our app holds the chat; on `standby` the agent does. A listen-only app (the
+    // business's own number) can't tell from the field, so ownership there follows handovers only.
+    const conv = listenOnly()
+      ? await conversations().findOne({ workspaceId: ws(), phone })
+      : await conversations().findOneAndUpdate({ workspaceId: ws(), phone }, { $set: { owner: field === 'messages' ? 'human' : 'ai' } }, { returnDocument: 'after' })
+    await onCustomerMessage(phone, body, conv?.owner === 'human' ? 'human' : 'ai', !!conv?.sample)
   }
   for (const raw of arr(v.message_echoes)) {
     const e = obj(raw)
@@ -220,20 +241,41 @@ async function processChange(field: string, value: Obj) {
     await ensureConversation(phone, undefined, false, link)
     const body = str(obj(msg.text).body) ?? str(obj(obj(msg.interactive).body).text) ?? `Sent a ${str(msg.type) ?? 'message'}`
     const at = fromSeconds(e.timestamp)
-    await addMessage({ phone, direction: 'out', author: 'ai', kind: 'text', body, at, waMessageId: str(e.id) })
-    // The full echo replaces the turn's short preview of the same reply.
-    await messages().deleteMany({ workspaceId: ws(), phone, author: 'ai', turnId: { $exists: true }, at: { $gte: new Date(at.getTime() - 120_000), $lte: new Date(at.getTime() + 120_000) } })
+    const waMessageId = str(e.id)
+    // Sent from this console: already stored under its id.
+    if (waMessageId && (await messages().findOne({ workspaceId: ws(), waMessageId }, { projection: { _id: 1 } }))) continue
+    // The agent's reply: its turn's short preview gets the full words.
+    const turn = await messages().findOneAndUpdate(
+      { workspaceId: ws(), phone, author: 'ai', turnId: { $exists: true }, waMessageId: { $exists: false }, at: { $gte: new Date(at.getTime() - 120_000), $lte: new Date(at.getTime() + 120_000) } },
+      { $set: { body, ...(waMessageId && { waMessageId }) } },
+    )
+    // Anything else was sent by another app or the WhatsApp Business app; a later turn may show it was the agent (syncTurns).
+    if (!turn) await addMessage({ phone, direction: 'out', author: 'agent', authorName: OUTSIDE, kind: 'text', body, at, waMessageId })
   }
   for (const raw of arr(v.statuses)) {
     const s = obj(raw)
     const status = str(s.status)
-    if (str(s.id) && status && ['sent', 'delivered', 'read', 'failed'].includes(status)) {
-      const msg = await messages().findOneAndUpdate({ workspaceId: ws(), waMessageId: String(s.id) }, { $set: { status } }, { projection: { phone: 1 } })
+    const allowed = status ? replaceable(status) : null
+    // What it cost, when Meta says (pricing and conversation on the status), once per status.
+    const charge = chargeOf(s)
+    if (charge)
+      await col('message_charges').updateOne(
+        { workspaceId: ws(), waMessageId: charge.waMessageId, status: charge.status },
+        { $setOnInsert: { ...charge, workspaceId: ws(), phoneNumberId: str(obj(value.metadata).phone_number_id) ?? null } },
+        { upsert: true },
+      )
+    if (str(s.id) && status && allowed) {
       const error = str(obj(arr(s.errors)[0]).title)
       const code = obj(arr(s.errors)[0]).code
+      // Statuses only move forward: a late "delivered" never replaces "read".
+      const msg = await messages().findOneAndUpdate(
+        { workspaceId: ws(), waMessageId: String(s.id), $or: [{ status: { $exists: false } }, { status: { $in: allowed } }] },
+        { $set: { status, ...(error && { error: { title: error, code: typeof code === 'number' ? code : null, detail: str(obj(obj(arr(s.errors)[0]).error_data).details) ?? null } }) } },
+        { projection: { phone: 1 } },
+      )
       if (msg) trace('message.status', { status, ...(error && { error, code }) }, { entity: 'conversation', id: String(msg.phone) })
       // Same trace as the broadcast that sent it, so one id follows click → send → delivery.
-      const rec = await col('broadcast_recipients').findOne({ workspaceId: ws(), waMessageId: String(s.id) })
+      const rec = await col('broadcast_recipients').findOne({ workspaceId: ws(), waMessageId: String(s.id), status: { $in: ['queued', ...allowed.filter(Boolean)] } })
       if (rec)
         await withWorkspace(
           ws(),
@@ -246,6 +288,16 @@ async function processChange(field: string, value: Obj) {
           currentAssets() ?? null,
           { traceId: rec.traceId },
         )
+    }
+  }
+  // A customer stopped or resumed marketing messages from WhatsApp's own settings.
+  for (const raw of arr(v.user_preferences)) {
+    const pref = obj(raw)
+    const { key: phone } = await resolveCustomer(pref.wa_id, pref.user_id)
+    if (!phone || pref.category !== 'marketing_messages') continue
+    if (pref.value === 'stop' || pref.value === 'resume') {
+      await contacts().updateOne({ workspaceId: ws(), phone }, { $set: { optedOut: pref.value === 'stop' } })
+      trace('contact.preference', { marketing: pref.value }, { entity: 'conversation', id: phone })
     }
   }
   if (field === 'messaging_handovers') {
@@ -273,9 +325,11 @@ export async function processWebhook(payload: unknown) {
     }
 }
 
-/** Sends each event to the workspace that connected that number (or, for account events, that WABA). */
-async function routeWebhook(payload: unknown) {
+/** Sends each event to the workspace that connected that number (or, for account events, that WABA).
+ *  Returns how many changes no workspace claimed (kept in webhook_inbox, shown in Webhook status). */
+async function routeWebhook(payload: unknown): Promise<number> {
   const byWorkspace = new Map<string, unknown[]>()
+  let unrouted = 0
   for (const entry of arr(obj(payload).entry))
     for (const change of arr(obj(entry).changes)) {
       const phoneId = str(obj(obj(obj(change).value).metadata).phone_number_id)
@@ -283,6 +337,7 @@ async function routeWebhook(payload: unknown) {
         ? await workspaceForNumber(phoneId)
         : ((await accounts().findOne({ wabaId: String(obj(entry).id ?? '') }, { projection: { workspaceId: 1 } }))?.workspaceId ?? null)
       if (wsId) byWorkspace.set(wsId, [...(byWorkspace.get(wsId) ?? []), { ...obj(entry), changes: [change] }])
+      else unrouted++
     }
   for (const [wsId, entries] of byWorkspace)
     await withWorkspace(
@@ -294,9 +349,56 @@ async function routeWebhook(payload: unknown) {
       },
       await assetsFor(wsId),
     )
+  return unrouted
 }
 
-/** Public: Meta's verification handshake (GET) and events (POST). Runs in the workspace that owns the number. */
+/** Apps whose signature the receiver accepts (WEBHOOK_APP_SECRETS, comma-separated): the listening
+ *  app, and any other we add later. Kept apart from META_APP_SECRET (Embedded Signup). */
+const webhookSecrets = () => env('WEBHOOK_APP_SECRETS').split(',').map((x) => x.trim()).filter(Boolean)
+
+/** One delivery from Meta, exactly as sent. */
+interface Delivery {
+  _id: string
+  receivedAt: Date
+  /** Which secret in WEBHOOK_APP_SECRETS signed it. */
+  app: number
+  payload: unknown
+  processedAt: Date | null
+  attempts: number
+  error?: string
+  /** Changes for a number or WABA no workspace has. */
+  unrouted?: number
+}
+const inboxCol = () => col<Delivery>('webhook_inbox')
+
+/** Processes one stored delivery and records the outcome on it. */
+async function processDelivery(id: string, payload: unknown) {
+  const inbox = inboxCol()
+  try {
+    const unrouted = await routeWebhook(payload)
+    await inbox.updateOne({ _id: id }, { $set: { processedAt: new Date(), unrouted }, $unset: { error: '' }, $inc: { attempts: 1 } })
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    console.log('webhook processing failed:', error)
+    await inbox.updateOne({ _id: id }, { $set: { error }, $inc: { attempts: 1 } })
+  }
+}
+
+/** Deliveries stored but not processed (a crash, a cold instance): tried again, oldest first.
+ *  Runs after each delivery and from the daily cron. */
+export async function reprocessWebhooks(limit = 20) {
+  const pending = await inboxCol()
+    .find({ processedAt: null, attempts: { $lt: 10 }, receivedAt: { $lt: new Date(Date.now() - 60_000) } })
+    .sort({ receivedAt: 1 })
+    .limit(limit)
+    .toArray()
+  for (const d of pending) await processDelivery(d._id, d.payload)
+  return pending.length
+}
+
+/** Public: Meta's verification handshake (GET) and events (POST).
+ *  POST: check the signature, store the delivery exactly as sent (once, even when Meta retries),
+ *  process it, then answer. A failure is kept and retried later; nothing is dropped. */
 export async function handleWebhook(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {
   const u = new URL(req.url ?? '/', 'http://x')
   if (u.pathname !== '/api/webhooks/whatsapp') return false
@@ -308,18 +410,26 @@ export async function handleWebhook(req: http.IncomingMessage, res: http.ServerR
   const chunks: Buffer[] = []
   for await (const c of req) chunks.push(c as Buffer)
   const raw = Buffer.concat(chunks)
-  const secret = env('APP_SECRET')
-  if (secret) {
-    const expected = Buffer.from('sha256=' + createHmac('sha256', secret).update(raw).digest('hex'))
-    const got = Buffer.from(String(req.headers['x-hub-signature-256'] ?? ''))
-    if (got.length !== expected.length || !timingSafeEqual(got, expected)) {
-      res.writeHead(401).end()
-      return true
-    }
-  }
-  res.writeHead(200).end() // acknowledge first; Meta retries slow answers
-  if (!db) return true
-  await routeWebhook(parseJson(raw.toString('utf8'))).catch((err: unknown) => console.log('webhook processing failed:', err instanceof Error ? err.message : err))
+  const secrets = webhookSecrets()
+  // Not set up yet: 503 makes Meta keep the event and retry (up to 7 days) instead of losing it.
+  if (!secrets.length) return void res.writeHead(503).end(), true
+  const app = signedBy(raw, req.headers['x-hub-signature-256'] as string | undefined, secrets)
+  if (app === null) return void res.writeHead(401).end(), true
+  if (!db) return void res.writeHead(503).end(), true
+  const id = deliveryId(raw)
+  const payload = parseJson(raw.toString('utf8'))
+  const stored = await inboxCol()
+    .insertOne({ _id: id, receivedAt: new Date(), app, payload, processedAt: null, attempts: 0 })
+    .then(() => true, (err: { code?: number }) => (err?.code === 11000 ? false : Promise.reject(err)))
+    .catch((err: unknown) => {
+      console.log('webhook not stored:', err instanceof Error ? err.message : err)
+      return null
+    })
+  // Couldn't store it: 503 so Meta sends it again later.
+  if (stored === null) return void res.writeHead(503).end(), true
+  if (stored) await processDelivery(id, payload)
+  res.writeHead(200).end()
+  await reprocessWebhooks(5).catch(() => 0)
   return true
 }
 
@@ -369,6 +479,50 @@ async function listConversations(me: Actor, filter: string, q: string) {
     })
     .filter((r) => !needle || r.phone.includes(needle) || (r.name ?? '').toLowerCase().includes(needle))
 }
+
+/** The whole conversation in order, with who said what: the customer, the AI agent, a teammate, or
+ *  someone outside this console. `from`/`to` limit it to a time range. */
+async function transcript(phone: string, me: Actor, u: URL) {
+  const conv = await conversations().findOne({ workspaceId: ws(), phone })
+  if (!conv) throw new HttpError(404, 'No chat with this number yet.')
+  await needInScope(me, conv.assigneeId)
+  const range = (k: string) => {
+    const v = u.searchParams.get(k)
+    if (!v) return null
+    const d = new Date(/^\d+$/.test(v) ? Number(v) : v)
+    if (Number.isNaN(+d)) throw new HttpError(400, `${k} must be a date.`)
+    return d
+  }
+  const [from, to] = [range('from'), range('to')]
+  const contact = await contacts().findOne({ workspaceId: ws(), phone }, { projection: { name: 1 } })
+  const rows = await messages()
+    .find({ workspaceId: ws(), phone, ...((from || to) && { at: { ...(from && { $gte: from }), ...(to && { $lte: to }) } }) })
+    .sort({ at: 1 })
+    .toArray()
+  const who = (m: Obj) =>
+    m.author === 'customer' ? (str(contact?.name) ?? `+${phone}`) : m.author === 'ai' ? 'AI agent' : m.author === 'system' ? 'System' : (str(m.authorName) ?? 'Team')
+  return {
+    phone,
+    name: str(contact?.name) ?? null,
+    from: from ?? rows[0]?.at ?? null,
+    to: to ?? rows.at(-1)?.at ?? null,
+    messages: rows.map((m) => ({
+      at: m.at,
+      from: who(m),
+      author: m.author,
+      kind: m.kind,
+      text: m.body ?? (m.author === 'customer' ? '(message words not received)' : ''),
+      ...(m.media && { media: { kind: obj(m.media).kind, filename: obj(m.media).filename ?? null } }),
+      ...(m.status && { status: m.status }),
+      ...(m.waMessageId && { waMessageId: m.waMessageId }),
+      ...(Array.isArray(m.tools) && m.tools.length && { tools: m.tools }),
+    })),
+  }
+}
+
+/** The transcript as plain text, one line per message. */
+const transcriptText = (t: Awaited<ReturnType<typeof transcript>>) =>
+  [`Conversation with ${t.name ? `${t.name} (+${t.phone})` : `+${t.phone}`}`, '', ...t.messages.map((m) => `[${new Date(m.at as Date).toISOString().replace('T', ' ').slice(0, 19)} UTC] ${m.from}: ${m.text}${m.media ? ` [${m.media.kind}${m.media.filename ? `: ${m.media.filename}` : ''}]` : ''}`)].join('\n') + '\n'
 
 async function getConversation(phone: string, me?: Actor) {
   const conv = await conversations().findOne({ workspaceId: ws(), phone })
@@ -602,6 +756,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     const phone = phoneParam(decodeURIComponent(seg[1]))
     const action = seg[2]
     if (!action && m === 'GET') return getConversation(phone, me)
+    if (action === 'transcript' && m === 'GET') return transcript(phone, me, u)
     if (m !== 'POST') throw new HttpError(405, 'Method not allowed.')
     if (action === 'media') {
       await sendMedia(me, phone, req)
@@ -716,5 +871,18 @@ export async function handleInbox(req: http.IncomingMessage, res: http.ServerRes
         return true
       },
     )
+  // Transcript as a .txt download.
+  const txt = u.pathname.match(/^\/api\/inbox\/conversations\/([^/]+)\/transcript$/)
+  if (txt && req.method === 'GET' && u.searchParams.get('format') === 'txt' && db) {
+    try {
+      const phone = phoneParam(decodeURIComponent(txt[1]))
+      const text = transcriptText(await transcript(phone, me, u))
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'content-disposition': `attachment; filename="chat-${phone}.txt"` }).end(text)
+    } catch (err) {
+      const status = err instanceof HttpError ? err.status : 500
+      res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify({ title: TITLES[status] ?? 'Error', detail: err instanceof Error ? err.message : 'Couldn’t build the transcript.', status }))
+    }
+    return true
+  }
   return serveJson(req, res, { titles: TITLES, db, noDb: { title: dbOffReason, detail: 'The inbox needs the database.' } }, () => route(req, u, me))
 }

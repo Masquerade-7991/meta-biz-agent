@@ -96,6 +96,27 @@ export const inbox = area('Inbox', {
     okDescription: 'The summary.',
     errors: { 400: 'Summaries need an Anthropic API key in the server settings (ANTHROPIC_API_KEY).', 502: 'Couldn’t write a summary right now. Try again.' },
   }),
+  '/api/inbox/conversations/{phone}/transcript': {
+    get: {
+      id: 'chatTranscript',
+      summary: 'Download a chat’s transcript',
+      description:
+        'The whole conversation in order, with who said what: the customer, the AI agent, a teammate, or someone outside this console (another app or the WhatsApp Business app). Kept for good. `format=txt` downloads it as a text file. ' +
+        SCOPE,
+      query: { format: d('json|txt', 'Default json.'), from: d('string', 'ISO time or milliseconds.'), to: 'string' },
+      ok: o({
+        'phone*': 'string',
+        'name*': 'string?',
+        'from*': 'date-time?',
+        'to*': 'date-time?',
+        'messages*': {
+          type: 'array',
+          items: o({ 'at*': 'date-time', 'from*': 'string', 'author*': 'customer|ai|agent|system', 'kind*': 'string', 'text*': 'string', media: 'object', status: 'string', waMessageId: 'string', tools: 'string[]' }),
+        },
+      }),
+      errors: { ...NOT_FOUND, 400: 'from must be a date.' },
+    },
+  },
   '/api/inbox/media/{id}': {
     get: {
       id: 'downloadMedia',

@@ -2,6 +2,7 @@
 // headers, placeholders and timeouts stay the same for both.
 import { HttpError, obj, str, type Obj } from './http.ts'
 import { currentAssets, traceId } from './context.ts'
+import { addProtected, refusal } from './protect.ts'
 try {
   process.loadEnvFile?.('.env')
 } catch {
@@ -26,6 +27,8 @@ export const envIds: Record<string, string> = {
   PHONE_NUMBER_ID: env('PHONE_NUMBER_ID'),
   BUSINESS_ID: env('BUSINESS_ID'),
 }
+// The business's own account is read-only where it matters (protect.ts), plus anything in PROTECTED_IDS.
+addProtected(envIds.WABA_ID, envIds.PHONE_NUMBER_ID, envIds.BUSINESS_ID, ...env('PROTECTED_IDS').split(','))
 
 /** Swaps literal WABA_ID / PHONE_NUMBER_ID / BUSINESS_ID path segments for the current workspace's
  *  account (outside any workspace, e.g. a diagnostic script, for the .env account). */
@@ -90,9 +93,15 @@ export async function callUpstream(
   contentType?: string,
   source: CallLog['source'] = 'relay',
 ): Promise<UpstreamReply> {
+  const refused = refusal(kind, method, path, body)
+  if (refused) {
+    console.log(`${method} ${safeUrl(path)} → refused (protected account)`)
+    throw new HttpError(403, refused)
+  }
   const headers: Record<string, string> = {}
   // Thread Control is the one endpoint on the 1.0.0 contract; Graph calls send no version.
-  if (kind === 'meta') headers['X-API-Version'] = path.includes('/thread_control') ? '1.0.0' : '2.0.0'
+  // Usage insights answer 404 "API version not found" to any version header (checked live, Oct 2026).
+  if (kind === 'meta' && !path.includes('/business_agent_insights')) headers['X-API-Version'] = path.includes('/thread_control') ? '1.0.0' : '2.0.0'
   if (contentType) headers['content-type'] = contentType
   const token = tokenFor(path)
   if (token) headers.authorization = `Bearer ${token}`

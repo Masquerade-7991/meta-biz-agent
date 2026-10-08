@@ -3,10 +3,11 @@
 import { col, db, withWorkspace, ws } from './db.ts'
 import { assetsFor } from './accounts.ts'
 import { hash, saveTurns } from './record.ts'
-import { metaGet } from './upstream.ts'
+import { importTurns, type Turn } from './inbox.ts'
+import { callUpstream, metaGet, parseJson } from './upstream.ts'
 
 type Obj = Record<string, unknown>
-export type Job = 'metrics' | 'handoffs' | 'connectorLogs' | 'traces'
+export type Job = 'metrics' | 'handoffs' | 'connectorLogs' | 'traces' | 'agentUsage'
 
 /** YYYY-MM-DD in `timeZone` (default: server local); en-CA formats dates that way. */
 export const dayIn = (d: Date, timeZone?: string) => new Intl.DateTimeFormat('en-CA', { timeZone }).format(d)
@@ -174,6 +175,8 @@ async function traces() {
         ).catch(orSkip(null))
         if (!r) break
         await saveTurns(phone, consumer, r.data)
+        // The same turns become the chat's transcript (messages), kept for good.
+        if (Array.isArray(r.data)) await importTurns(consumer, r.data as Turn[]).catch(() => null)
         after = r.paging?.cursors?.after ?? ''
         if (!r.paging?.next || !after) break
       }
@@ -181,7 +184,46 @@ async function traces() {
   }
 }
 
-const JOBS: Record<Job, () => Promise<void>> = { metrics, handoffs, connectorLogs, traces }
+// ---- agent_usage: Meta Business Agent billable messages, tokens and cost, per number and hour ----
+// GET /{phone}/business_agent_insights?granularity=HOUR&start=&end= (Unix seconds, no API-version
+// header). Until the business adds a payment method for the agent, Meta answers 404 "Billable account
+// not found"; that's recorded as the number's usage state, not an error.
+async function agentUsage() {
+  const now = Math.floor(Date.now() / 1000)
+  for (const phone of await agentPhones()) {
+    const latest = await col('agent_usage').findOne({ workspaceId: ws(), phoneNumberId: phone }, { sort: { start: -1 }, projection: { start: 1 } })
+    // From the last stored hour (it may still have been filling), or the last 30 days the first time.
+    const start = latest ? Math.floor(+(latest.start as Date) / 1000) : now - 30 * 86400
+    const r = await callUpstream('meta', 'GET', `/${phone}/business_agent_insights` + q({ granularity: 'HOUR', start, end: now }), undefined, undefined, 'collector').catch(() => null)
+    if (!r) continue
+    const state = r.status === 200 ? 'ok' : /Billable account not found/i.test(r.text) ? 'no_billable_account' : `error_${r.status}`
+    await col('agent_usage_state').updateOne({ workspaceId: ws(), phoneNumberId: phone }, { $set: { state, checkedAt: new Date() } }, { upsert: true })
+    if (r.status !== 200) continue
+    const rows = ((parseJson(r.text) as { data?: Obj[] } | null)?.data ?? []).filter((x) => x.start !== undefined)
+    if (rows.length)
+      await col('agent_usage').bulkWrite(
+        rows.map((x) => ({
+          updateOne: {
+            filter: { workspaceId: ws(), phoneNumberId: phone, start: new Date(Number(x.start) * 1000) },
+            update: {
+              $set: {
+                end: new Date(Number(x.end) * 1000),
+                channel: x.channel ?? null,
+                billableMessages: Number(x.billable_messages ?? 0),
+                billableTokens: Number(x.billable_tokens ?? 0),
+                cost: Number(x.cost ?? 0),
+                updatedAt: new Date(),
+              },
+            },
+            upsert: true,
+          },
+        })),
+        { ordered: false },
+      )
+  }
+}
+
+const JOBS: Record<Job, () => Promise<void>> = { metrics, handoffs, connectorLogs, traces, agentUsage }
 const running = new Set<Job>()
 
 /** Runs one job now (skips if it's already running or there is no database). */
@@ -205,6 +247,7 @@ export function startCollectors() {
   every('handoffs', 15 * 60_000)
   every('connectorLogs', HOUR)
   every('traces', HOUR)
+  every('agentUsage', HOUR)
   void runOnce('metrics')
   void runOnce('handoffs')
 }

@@ -146,7 +146,31 @@ async function overview() {
     month: await monthToDate(),
     days: days.map((d) => ({ day: String(d._id), cost: d.cost, volume: d.volume })),
     ai: await aiUsageMonth(),
+    messages: await chargesMonth(),
   }
+}
+
+/** This month's messages as Meta priced them in their status webhooks (message_charges): billable or
+ *  free, by category. Counted once per message. Shown next to Meta's own daily totals above. */
+async function chargesMonth() {
+  const from = new Date(new Date().toISOString().slice(0, 7) + '-01T00:00:00Z')
+  const rows = await col('message_charges')
+    .aggregate<{ _id: { category: string | null; billable: boolean | null }; n: number }>([
+      { $match: { workspaceId: ws(), at: { $gte: from } } },
+      { $group: { _id: { id: '$waMessageId', category: '$category', billable: '$billable' } } },
+      { $group: { _id: { category: '$_id.category', billable: '$_id.billable' }, n: { $sum: 1 } } },
+    ])
+    .toArray()
+  const byCategory = new Map<string, { category: string; billable: number; free: number }>()
+  for (const r of rows) {
+    const key = r._id.category ?? 'unknown'
+    const row = byCategory.get(key) ?? { category: key, billable: 0, free: 0 }
+    if (r._id.billable === false) row.free += r.n
+    else row.billable += r.n
+    byCategory.set(key, row)
+  }
+  const list = [...byCategory.values()].sort((a, z) => z.billable - a.billable)
+  return { billable: list.reduce((n, r) => n + r.billable, 0), free: list.reduce((n, r) => n + r.free, 0), byCategory: list }
 }
 
 async function route(req: http.IncomingMessage, path: string, me: Actor) {

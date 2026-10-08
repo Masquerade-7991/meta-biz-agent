@@ -125,6 +125,7 @@ export const schemas: Record<string, Schema> = {
     'restrictAgents*': d('boolean', 'Agents see only their own chats and tickets, plus unassigned ones.'),
     aiSummary: d('boolean', 'Read-only: the server can write AI summaries (ANTHROPIC_API_KEY is set).'),
     saved: d('boolean', 'Read-only: false until the workspace saves these settings (the values are then Helo.ai’s defaults).'),
+    listenOnly: d('boolean', 'Read-only: the business’s own number, where the console sends nothing on its own (no away message, no feedback question).'),
   }),
   Notice: o(
     {
@@ -298,7 +299,15 @@ export const schemas: Record<string, Schema> = {
     'ai*': o({
       console: { type: 'array', items: o({ feature: 'string', model: 'string', input: 'integer', output: 'integer', calls: 'integer' }) },
       agentConversations: 'integer?',
+      agentUsage: d(
+        o({ state: d('string?', 'ok, no_billable_account (Meta reports usage once the agent has a payment method), error_<status>, or null before the first check.'), checkedAt: 'date-time?', billableMessages: 'integer', billableTokens: 'integer', cost: 'number' }),
+        'Meta Business Agent usage this month (business_agent_insights, collected hourly).',
+      ),
     }),
+    messages: d(
+      o({ billable: 'integer', free: 'integer', byCategory: { type: 'array', items: o({ category: 'string', billable: 'integer', free: 'integer' }) } }),
+      'This month’s messages as WhatsApp priced them in their status webhooks.',
+    ),
   }),
   WaNumber: o({
     'id*': 'string',
@@ -327,6 +336,7 @@ export const schemas: Record<string, Schema> = {
     'automation*': 'Automation',
     'official*': d('boolean?', 'Official business account (green tick).'),
     'pinStorage*': d('boolean', 'The server can store this number’s PIN (TOKEN_ENCRYPTION_KEY is set).'),
+    managed: d('boolean', 'The business’s own number: registration, PIN and codes can’t be changed here.'),
     'activity*': { type: 'array', items: o({ kind: 'string', data: 'object', at: 'date-time', by: 'string' }) },
   }),
   WaAccount: o({
@@ -343,6 +353,7 @@ export const schemas: Record<string, Schema> = {
     'hasPin*': 'boolean',
     'canDisconnect*': 'boolean',
     'needsAttention*': 'boolean',
+    protected: d('boolean', 'The business’s own account: read and agent configuration only; its webhooks, registration, PIN and billing are never changed here.'),
     'createdAt*': 'date-time',
   }),
   NumberHealth: o({

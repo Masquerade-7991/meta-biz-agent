@@ -3,6 +3,7 @@
 // registration, ownership check and blocked customers. Meta is the source of truth:
 // each change goes to Meta first and is recorded here (phone_numbers, events) only once it's accepted.
 import type http from 'node:http'
+import { isProtected } from './protect.ts'
 import { HttpError, type Obj, type Titles, arr, obj, readJson, serveJson, str } from './http.ts'
 import { col, db, dbOffReason, ws } from './db.ts'
 import { currentAssets } from './context.ts'
@@ -153,6 +154,8 @@ async function detail(id: string) {
     number: view(n, { pinKnown: !!pin, limit: health?.limit ?? null }),
     /** Whether the server can keep a PIN (needs TOKEN_ENCRYPTION_KEY). */
     pinStorage: !!tokenKey(),
+    // The business's own number: registration, PIN and codes are left to Helo.ai (protect.ts).
+    managed: isProtected(id),
     profile: {
       about: str(profile.about) ?? '',
       address: str(profile.address) ?? '',

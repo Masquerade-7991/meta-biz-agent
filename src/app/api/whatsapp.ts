@@ -18,6 +18,8 @@ export interface WaAccount {
   steps: Partial<Record<StepName, Step>>
   hasPin: boolean
   canDisconnect: boolean
+  /** The business's own account: the console reads it but never rewires it. */
+  protected?: boolean
   needsAttention: boolean
   createdAt: string
 }
@@ -66,6 +68,17 @@ export interface WebhookStatus {
   callbackUrl: string
   verifyTokenSet: boolean
   signatureChecked: boolean
+  /** How many apps' signatures the server accepts (WEBHOOK_APP_SECRETS). */
+  appsAccepted?: number
+  last24h?: { field: string; count: number }[]
+  /** Deliveries stored but not processed yet, and how many of those failed. */
+  pending?: number
+  failed?: number
+  /** Deliveries in the last 7 days for a number or account no workspace has. */
+  unknownNumbers?: number
+  /** Apps receiving this account's events now (read from Meta), and the first list seen. */
+  subscribedApps?: { id: string | null; name: string | null }[] | null
+  baseline?: { apps: { id: string | null; name: string | null }[]; at: string } | null
 }
 export const getWebhookStatus = () => call<WebhookStatus>('/api/whatsapp/webhook-status')
 export const PAYMENT_URL = 'https://business.facebook.com/wa/manage/home/'

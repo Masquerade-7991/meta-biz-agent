@@ -113,12 +113,47 @@ export function BillingSettingsTab() {
           </div>
         </div>
       </SettingsSection>
+      {b.messages && b.messages.billable + b.messages.free > 0 && (
+        <SettingsSection title="Messages this month" description="As WhatsApp priced each message when it was delivered (from webhooks). Meta’s daily totals above are what you’re charged.">
+          <dl className="space-y-2 text-sm">
+            {b.messages.byCategory.map((c) => (
+              <div key={c.category} className="flex justify-between gap-4">
+                <dt className="capitalize text-muted-foreground">{c.category.replace(/_/g, ' ')}</dt>
+                <dd className="tabular-nums">
+                  {c.billable.toLocaleString()} billable{c.free ? ` · ${c.free.toLocaleString()} free` : ''}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </SettingsSection>
+      )}
       <SettingsSection title="AI usage" description="This month so far. Meta bills the AI agent’s own conversations; Helo.ai features like chat summaries use Claude and are counted in tokens here.">
         <dl className="space-y-3 text-sm">
           <div className="flex justify-between gap-4">
             <dt className="text-muted-foreground">AI agent conversations (Meta)</dt>
             <dd>{b.ai.agentConversations === null ? 'Not collected yet' : b.ai.agentConversations.toLocaleString()}</dd>
           </div>
+          {b.ai.agentUsage && (
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">AI agent tokens and cost (Meta)</dt>
+              <dd className="text-right">
+                {b.ai.agentUsage.state === 'ok' ? (
+                  <>
+                    {b.ai.agentUsage.billableTokens.toLocaleString()} tokens
+                    <span className="block text-xs text-muted-foreground">
+                      {b.ai.agentUsage.billableMessages.toLocaleString()} billable messages &middot; {formatMoney(b.ai.agentUsage.cost, b.currency)}
+                    </span>
+                  </>
+                ) : b.ai.agentUsage.state === 'no_billable_account' ? (
+                  <span className="text-muted-foreground">Meta reports this once the agent has a payment method</span>
+                ) : b.ai.agentUsage.state ? (
+                  <span className="text-muted-foreground">Meta didn’t answer; checked hourly</span>
+                ) : (
+                  'Not collected yet'
+                )}
+              </dd>
+            </div>
+          )}
           {b.ai.console.length === 0 ? (
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Helo.ai AI features</dt>

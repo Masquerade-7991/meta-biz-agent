@@ -43,6 +43,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **⌘K palette** (`shell/CommandPalette.tsx`) lists pages, settings, the open agent's sections and quick actions; add new pages there. The studio's **Try it** panel (`steps/TryItPanel.tsx`) is the quick test chat from any section.
 - Effects return nothing or a cleanup function: wrap calls like `scrollIntoView` in a block body (newer browsers return a Promise from it, which crashes React).
 
+## Webhooks and the business's own account
+
+- **Listening, not owning:** events arrive through a separate *listening* Meta app subscribed to the business's WABA alongside the business's own app. Meta sends each subscribed app its own copy, so the business's webhook is untouched. Never set `override_callback_uri` / `webhook_configuration`, never call `subscribed_apps` POST/DELETE for it.
+- **Protected account (`server/protect.ts`):** the `.env` account (and `PROTECTED_IDS`) can't have its subscriptions, callback, registration, PIN, codes, coexistence sync or credit line changed. `callUpstream` refuses those calls for everything (relay and modules); `server/protect.test.ts` covers it. Connect/Retry/Disconnect/billing refuse it too, and the UI hides those controls.
+- **Listen-only:** on the protected number the console never messages customers on its own (no away message, no CSAT); people still send by clicking.
+- **Receiver (`server/inbox.ts handleWebhook`):** signatures from any app in `WEBHOOK_APP_SECRETS` (none set → 503 so Meta retries); every delivery is stored as sent in `webhook_inbox` (id = sha256 of the body, retries store once), processed, then answered; failures are retried (`reprocessWebhooks`, after each delivery, every 5 min locally, daily cron). Side effects run once per new message; statuses only move forward; pricing goes to `message_charges`.
+- **Kept for good:** `messages`, `conversations`, `conversation_traces`, `test_conversations`, `whatsapp_webhooks`, `webhook_inbox` (old TTLs dropped by `RETIRED_TTL` in `server/db.ts`). Transcript: `GET /api/inbox/conversations/{phone}/transcript[?format=txt]`. The hourly `traces` collector also writes turns into `messages` (`importTurns`).
+- **Agent usage:** `agentUsage` collector reads `GET /{phone}/business_agent_insights?granularity=HOUR&start=&end=` (Unix seconds, **no** `X-API-Version` header). Meta answers 404 "Billable account not found" until the agent has a payment method; that's stored as the state, not an error.
+
 ## Support platform (Home, Inbox, Tickets, Contacts, Broadcasts, Analytics)
 
 - **Server modules:** `inbox.ts` (chats, replies, thread control, canned responses, webhook, AI assist), `tickets.ts` (tickets, SLA, routing, CSAT, support settings, notifications, analytics), `contacts.ts` (contacts, fields, segments, CSV import), `broadcasts.ts` (templates, broadcasts, send worker). All workspace-scoped; sending needs `ownsMetaAssets()`.
@@ -77,6 +86,5 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Deliberately not wired
 
 - **Native integrations:** there is no Meta API for them, so the tab stays a mock.
-- **Live inbound messages:** the webhook receiver exists (`POST /api/webhooks/whatsapp`, `server/inbox.ts`; optional `WEBHOOK_VERIFY_TOKEN`, `APP_SECRET`), but Meta still sends this number's webhooks to Helo.ai. Until they're routed here, the Inbox rebuilds each chat from Meta's conversation turns (the agent's replies; customer text shows as a placeholder), and Demo controls → Inbox → "Simulate customer message" drives the same processor.
 - **Budget and mTLS:** out of scope per PRD §4.
 - **Duplicate agent:** a copy needs a second phone number, and the setup has one.

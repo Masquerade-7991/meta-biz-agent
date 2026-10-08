@@ -40,7 +40,11 @@ function AccountCard({ a, isOwner, onChange, onRemove }: { a: WaAccount; isOwner
           </li>
         ))}
       </ul>
-      {a.source !== 'env' && <AccountSteps account={a} canEdit={isOwner} onChange={onChange} />}
+      {a.protected ? (
+        <p className="text-xs text-muted-foreground">Managed by Helo.ai: the console reads this account and configures its AI agent, but never changes its webhooks, registration, PIN or billing.</p>
+      ) : (
+        <AccountSteps account={a} canEdit={isOwner} onChange={onChange} />
+      )}
       {isOwner && (a.hasPin || a.canDisconnect) && (
         <div className="flex flex-wrap items-center gap-2">
           {a.hasPin &&

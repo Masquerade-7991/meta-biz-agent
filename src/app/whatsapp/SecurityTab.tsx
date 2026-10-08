@@ -71,6 +71,15 @@ export function SecurityTab({ detail, onSaved }: TabProps) {
   const verified = n.codeVerification === 'VERIFIED' || n.status === 'CONNECTED'
   const live = n.status === 'CONNECTED'
 
+  if (detail.managed)
+    return (
+      <div className="max-w-2xl">
+        <Section title="Managed by Helo.ai" description="This number’s registration, two-step PIN and verification are handled by Helo.ai, so they can’t be changed here. Nothing on this page can move its webhooks or switch it off.">
+          <p className="text-sm text-muted-foreground">Profile, ice breakers and the AI agent stay editable on their own tabs.</p>
+        </Section>
+      </div>
+    )
+
   return (
     <div className="max-w-2xl space-y-6">
       {!verified && (

@@ -16,6 +16,7 @@ import { accounts, forgetAssets, tokenKey, type Account, type StepState } from '
 import type { Actor } from './inbox.ts'
 import { trace } from './trace.ts'
 import { enqueue } from './jobs.ts'
+import { isProtected } from './protect.ts'
 import { can } from '../src/app/lib/permissions.ts'
 
 type Step = keyof Account['steps']
@@ -119,6 +120,9 @@ const tokenOf = (a: Account) => {
   if (!a.tokenEnc || !key) throw new HttpError(400, 'This account’s access can’t be read on this server. Disconnect it and connect again.')
   return open(a.tokenEnc, key)
 }
+const MANAGED = 'This WhatsApp account is managed by Helo.ai. The console reads it and configures its AI agent, but never changes its webhooks, registration, PIN or billing.'
+/** The business's own account (.env) or one listed in PROTECTED_IDS (protect.ts). */
+const isManaged = (a: Account) => a.source === 'env' || isProtected(a.wabaId)
 const flowOf = (a: Account) => (a.source === 'coexistence' ? 'coexistence' : 'new')
 
 /** What the browser sees: no tokens, no PIN. */
@@ -126,7 +130,7 @@ function view(a: Account) {
   const { tokenEnc: _t, pinEnc, workspaceId: _w, ...rest } = a as Account & { _id?: unknown }
   delete (rest as { _id?: unknown })._id
   const steps = Object.fromEntries(Object.entries(a.steps).map(([k, v]) => [k, v]))
-  return { ...rest, steps, hasPin: !!pinEnc, canDisconnect: a.source !== 'env', needsAttention: Object.values(a.steps).some((s) => s?.state === 'failed') }
+  return { ...rest, steps, hasPin: !!pinEnc, protected: isManaged(a), canDisconnect: !isManaged(a), needsAttention: Object.values(a.steps).some((s) => s?.state === 'failed') }
 }
 
 async function connect(b: Obj, me: Actor) {
@@ -138,6 +142,8 @@ async function connect(b: Obj, me: Actor) {
   const wabaId = String(b.wabaId ?? '').replace(/\D/g, '')
   const phoneId = String(b.phoneNumberId ?? '').replace(/\D/g, '')
   if (!code || !wabaId || !phoneId) throw new HttpError(400, 'The signup didn’t return a WhatsApp account and number. Please run it again.')
+  // Signup re-subscribes the app and re-registers the number with a new PIN: never on the business's own account.
+  if (isProtected(wabaId) || isProtected(phoneId)) throw new HttpError(403, MANAGED)
   const flow = b.flow === 'coexistence' ? 'coexistence' : 'new'
   const mode = b.billing === 'partner_credit' && cfg().creditLineId ? 'partner_credit' : 'own'
   // The code expires 30 seconds after signup, so it's exchanged before anything else.
@@ -192,10 +198,11 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     const a = await find(seg[1])
     const owner = () => {
       if (!can(me.role, 'whatsapp.manage')) throw new HttpError(403, 'Only workspace owners can change WhatsApp accounts.')
+      // Disconnect, retry and billing all rewire the account on Meta; the business's own stays as it is.
+      if (isManaged(a)) throw new HttpError(403, MANAGED)
     }
     if (!seg[2] && m === 'DELETE') {
       owner()
-      if (a.source === 'env') throw new HttpError(400, 'This account is set up by Helo.ai on the server and can’t be disconnected here.')
       // Stop our app receiving its events; the WhatsApp account itself stays the business's.
       await asBusiness(a, tokenOf(a), () => metaJson('graph', 'DELETE', `/${a.wabaId}/subscribed_apps`)).catch(() => null)
       await accounts().deleteOne({ workspaceId: ws(), wabaId: a.wabaId })
@@ -229,7 +236,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       throw new HttpError(400, 'Billing mode must be partner_credit or own.')
     }
     if (seg[2] === 'pin' && m === 'GET') {
-      owner()
+      if (!can(me.role, 'whatsapp.manage')) throw new HttpError(403, 'Only workspace owners can change WhatsApp accounts.')
       const key = tokenKey()
       if (!a.pinEnc || !key) throw new HttpError(404, 'There’s no PIN stored for this number.')
       return { pin: open(a.pinEnc, key) }

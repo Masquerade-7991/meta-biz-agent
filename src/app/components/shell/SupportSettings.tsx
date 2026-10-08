@@ -152,6 +152,7 @@ export function SupportSettingsTab() {
           <p className="text-muted-foreground text-xs">
             Sent at most once every 12 hours when a customer writes to your team outside business hours. The AI agent keeps answering chats it holds.
           </p>
+          {s.listenOnly && <p className="text-xs text-warning-foreground">Not sent on Helo.ai’s own number: this console never messages its customers on its own.</p>}
         </div>
       </SettingsSection>
 
@@ -276,6 +277,7 @@ export function SupportSettingsTab() {
           Ask for feedback when resolving
           <Switch checked={s.csat.enabled} onCheckedChange={(v) => set({ csat: { ...s.csat, enabled: v } })} />
         </label>
+        {s.listenOnly && <p className="text-xs text-warning-foreground">Not asked on Helo.ai’s own number: this console never messages its customers on its own.</p>}
         <div className="space-y-1.5">
           <Label htmlFor="csatq">Question</Label>
           <Input id="csatq" value={s.csat.question} onChange={(e) => set({ csat: { ...s.csat, question: e.target.value } })} maxLength={200} />

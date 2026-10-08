@@ -236,6 +236,8 @@ export async function saveTurns(phone: string, consumer: string, data: unknown) 
             phoneNumberId: phone,
             consumer,
             conversationId: str(t.conversation_id) ?? null,
+            // The customer's message that started the turn (its wamid), so transcripts line up with webhooks.
+            messageId: str(t.message_id) ?? null,
             ts: toDate(t.timestamp),
             e2eLatencyMs: typeof t.e2e_latency_ms === 'number' ? t.e2e_latency_ms : null,
             steps: Array.isArray(t.steps) ? t.steps : [],

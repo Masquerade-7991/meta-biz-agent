@@ -3,6 +3,7 @@
 // There's no long-running process on Vercel, so background jobs (broadcast sending, snoozes,
 // reminders, syncs) run in short bursts after requests, plus a daily cron as a safety net.
 import type http from 'node:http'
+import { reprocessWebhooks } from './inbox.ts'
 import { handle, ready } from './app.ts'
 import { db } from './db.ts'
 import { jobsTick } from './jobs.ts'
@@ -49,6 +50,7 @@ async function cron(req: http.IncomingMessage, res: http.ServerResponse) {
   await startBilling()
   await startHealth()
   const ran = await jobsTick(40_000)
-  for (const job of ['metrics', 'handoffs', 'connectorLogs', 'traces'] as const) await runOnce(job)
+  for (const job of ['metrics', 'handoffs', 'connectorLogs', 'traces', 'agentUsage'] as const) await runOnce(job)
+  await reprocessWebhooks(200)
   res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, jobs: ran }))
 }

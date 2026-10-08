@@ -38,6 +38,8 @@ export interface SupportSettings {
   restrictAgents: boolean
   /** Whether the server can write AI summaries (ANTHROPIC_API_KEY set). */
   aiSummary: boolean
+  /** The business's own number: the console sends nothing on its own (no away message, no feedback question). */
+  listenOnly?: boolean
   /** False until the workspace saves these settings (the hours above are then Helo.ai's defaults). */
   saved?: boolean
 }

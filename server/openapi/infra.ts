@@ -37,13 +37,18 @@ export const infra = area('Server', {
     post: {
       id: 'receiveWebhook',
       summary: 'Meta’s webhook events',
-      description:
-        'Messages, statuses, echoes, standby, handovers and account events (quality, name, limits). Answers 200 at once and processes afterwards. When APP_SECRET is set the body must carry a valid `X-Hub-Signature-256`, else 401 with no body. Without a database the event is acknowledged and dropped.',
-      who: { text: 'Meta (signed with the app secret).', public: true },
-      headers: { 'X-Hub-Signature-256': d('string', '`sha256=<HMAC of the raw body with APP_SECRET>`.') },
+      description: [
+        'Every WhatsApp event for the connected accounts: messages, statuses (with per-message pricing), echoes, standby, handovers, marketing preferences, template and number changes, account notices.',
+        'The body must carry a valid `X-Hub-Signature-256` from one of the apps in WEBHOOK_APP_SECRETS (401 otherwise). With no secret set, or no database, it answers 503 so Meta keeps the event and retries (up to 7 days).',
+        'Each delivery is stored exactly as sent (webhook_inbox, once per body even when Meta retries), processed, then answered 200. A delivery that fails to process is kept and retried automatically; events for a number no workspace has are kept, not dropped.',
+        'The business’s own number is listen-only: an event never makes the console send anything.',
+      ].join('\n\n'),
+      who: { text: 'Meta, signed by a listening app.', public: true },
+      headers: { 'X-Hub-Signature-256': d('string', '`sha256=<HMAC of the raw body with the app secret>`.') },
       body: d('object', 'Meta’s webhook payload ({object, entry[{changes[{field, value}]}]}).'),
       ok: null,
-      okDescription: 'Received.',
+      okDescription: 'Stored (and processed).',
+      errors: { 401: 'Not signed by a known app.', 503: 'Not set up yet (no app secret) or the database is unavailable: Meta retries later.' },
     },
   },
   '/api/cron': {

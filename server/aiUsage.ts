@@ -32,8 +32,22 @@ export async function aiUsageMonth() {
     .aggregate([{ $match: { 'meta.phoneNumberId': { $in: phones }, 'meta.metric': 'ai_threads', ts: { $gte: new Date(from + 'T00:00:00Z') } } }, { $group: { _id: null, n: { $sum: '$value' } } }])
     .toArray()
     .catch(() => [])
+  // Meta's own agent usage, hour by hour (collectors.ts agentUsage): billable messages, tokens and cost.
+  const [billed] = await col('agent_usage')
+    .aggregate([{ $match: { workspaceId: ws(), start: { $gte: new Date(from + 'T00:00:00Z') } } }, { $group: { _id: null, messages: { $sum: '$billableMessages' }, tokens: { $sum: '$billableTokens' }, cost: { $sum: '$cost' } } }])
+    .toArray()
+    .catch(() => [])
+  const state = await col('agent_usage_state').findOne({ workspaceId: ws() }, { sort: { checkedAt: -1 } })
   return {
     console: rows.map((r) => ({ feature: String(r._id.feature), model: String(r._id.model), input: r.input, output: r.output, calls: r.calls })),
     agentConversations: agent[0]?.n ?? null,
+    agentUsage: {
+      /** ok · no_billable_account (Meta reports usage once the agent has a payment method) · error_<status> · null (not checked yet) */
+      state: (state?.state as string | undefined) ?? null,
+      checkedAt: (state?.checkedAt as Date | undefined) ?? null,
+      billableMessages: billed?.messages ?? 0,
+      billableTokens: billed?.tokens ?? 0,
+      cost: billed?.cost ?? 0,
+    },
   }
 }

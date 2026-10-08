@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { Ban, Bot, Check, CheckCheck, Clock, FileText, GraduationCap, Hand, ListChecks, Loader2, MessageSquareText, MoreHorizontal, PanelRight, Paperclip, Send, Sparkles, StickyNote, Undo2, Wrench, X } from 'lucide-react'
+import { Ban, Bot, Download, Check, CheckCheck, Clock, FileText, GraduationCap, Hand, ListChecks, Loader2, MessageSquareText, MoreHorizontal, PanelRight, Paperclip, Send, Sparkles, StickyNote, Undo2, Wrench, X } from 'lucide-react'
+import { isDummyMode } from '@/app/api/dummy'
 import { Sheet, SheetBody, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
@@ -615,6 +616,13 @@ function BlockMenu({ chat, onChange }: { chat: ChatDetail; onChange: (d: ChatDet
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {!isDummyMode() && !chat.conversation.sample && (
+            <DropdownMenuItem asChild>
+              <a href={`/api/inbox/conversations/${encodeURIComponent(chat.conversation.phone)}/transcript?format=txt`} download>
+                <Download className="size-4" /> Download transcript
+              </a>
+            </DropdownMenuItem>
+          )}
           {blocked ? (
             <DropdownMenuItem onSelect={() => void run(false)}>Unblock on WhatsApp</DropdownMenuItem>
           ) : (
