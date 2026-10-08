@@ -19,7 +19,7 @@ import { automationErrors, displayNameError, profileErrors, VERTICALS, type Auto
 import type { Actor } from './inbox.ts'
 
 const numbers = () => col('phone_numbers')
-const FIELDS = 'id,display_phone_number,verified_name,quality_rating,name_status,new_name_status,new_display_name,status,code_verification_status,platform_type,throughput'
+const FIELDS = 'id,display_phone_number,verified_name,quality_rating,name_status,new_name_status,new_display_name,status,code_verification_status,platform_type,throughput,account_mode'
 const PROFILE_FIELDS = 'about,address,description,email,profile_picture_url,websites,vertical'
 const STALE_MS = 5 * 60_000
 
@@ -57,6 +57,7 @@ export async function syncNumbers() {
             newName: str(p.new_display_name) ?? null,
             newNameStatus: str(p.new_name_status) ?? null,
             platform: str(p.platform_type) ?? null,
+            sandbox: str(p.account_mode) === 'SANDBOX',
             throughput: str(obj(p.throughput).level) ?? null,
             photo,
             syncedAt: new Date(),
@@ -67,7 +68,7 @@ export async function syncNumbers() {
       )
       count++
     }
-    if (rows.length) await accounts().updateOne({ _id: a._id }, { $set: { phoneNumbers: rows.map((p) => ({ id: String(p.id), display: str(p.display_phone_number) ?? '', verifiedName: str(p.verified_name) ?? '' })) } })
+    if (rows.length) await accounts().updateOne({ _id: a._id }, { $set: { phoneNumbers: rows.map((p) => ({ id: String(p.id), display: str(p.display_phone_number) ?? '', verifiedName: str(p.verified_name) ?? '', sandbox: str(p.account_mode) === 'SANDBOX' })) } })
   }
   forgetAssets(ws())
   trace('numbers.synced', { count })

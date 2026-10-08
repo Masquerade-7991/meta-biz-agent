@@ -18,7 +18,7 @@ import { enqueue } from './jobs.ts'
 import { deleteView, listViews, remind, saveView, searchMessages, snooze, upcomingReminders, wakeOnMessage } from './followups.ts'
 import { checkMedia, mediaLabel, MEDIA_RULES, type MediaKind, type MessageMedia } from '../src/app/inbox/media.ts'
 import { interactiveError, interactivePayload, interactiveText, type InteractiveReply } from '../src/app/inbox/interactive.ts'
-import { reasonOf } from '../src/app/broadcasts/sendErrors.ts'
+import { reasonOf, undeliveredLine } from '../src/app/broadcasts/sendErrors.ts'
 import { isBsuid, NO_CONTROL_HIDDEN, parseCustomerKey, sendTarget } from '../src/app/lib/customer.ts'
 import { accounts, assetsFor, workspaceForNumber } from './accounts.ts'
 import { SAMPLE_CHATS } from '../src/app/inbox/sampleData.ts'
@@ -131,14 +131,20 @@ export interface Turn {
 
 /** Pulls the customer's recent turns from Meta into the chat (throttled per customer). */
 const lastSync = new Map<string, number>()
+/** Customers Meta has no conversation with (allowlisted numbers that never chatted): not asked again for
+ *  10 minutes, or until they write. Otherwise every inbox open makes a failed call per such number. */
+const noConversation = new Map<string, number>()
 async function syncTurns(phone: string, force = false) {
   // Meta's turns are looked up by phone number; a number-hidden customer's arrive by webhook only.
   if (!ownsMetaAssets() || isBsuid(phone)) return
   const key = `${ws()}|${phone}`
   if (!force && Date.now() - (lastSync.get(key) ?? 0) < 15_000) return
+  if (!force && Date.now() < (noConversation.get(key) ?? 0)) return
   lastSync.set(key, Date.now())
   const r = await callUpstream('meta', 'GET', resolveIds(`/PHONE_NUMBER_ID/insights/conversations/turns?user_phone_number=${phone}&limit=50`)).catch(() => null)
+  if (r && (r.status === 400 || r.status === 404)) noConversation.set(key, Date.now() + 10 * 60_000)
   if (!r || r.status !== 200) return
+  noConversation.delete(key)
   await importTurns(phone, arr(obj(parseJson(r.text)).data) as Turn[])
 }
 
@@ -195,6 +201,7 @@ async function processChange(field: string, value: Obj) {
     const who = contactFor(people, digits(m.from), str(m.from_user_id) ?? '')
     const { key: phone, link } = await resolveCustomer(m.from, m.from_user_id ?? who?.bsuid, { username: who?.username })
     if (!phone) continue
+    noConversation.delete(`${ws()}|${phone}`)
     await ensureConversation(phone, who?.name, false, link)
     const type = str(m.type) ?? 'text'
     const media = MEDIA_TYPES.has(type as MediaKind) ? inboundMedia(type as MediaKind, m) : undefined
@@ -274,6 +281,16 @@ async function processChange(field: string, value: Obj) {
         { projection: { phone: 1 } },
       )
       if (msg) trace('message.status', { status, ...(error && { error, code }) }, { entity: 'conversation', id: String(msg.phone) })
+      // A reply WhatsApp couldn't deliver that isn't stored under its own id (the AI agent's replies are
+      // rebuilt from Meta's turns): say so in the chat, once, instead of showing an answer nobody got.
+      else if (status === 'failed' && !(await messages().findOne({ workspaceId: ws(), waMessageId: String(s.id) }, { projection: { _id: 1 } }))) {
+        const { key: phone, link } = await resolveCustomer(s.recipient_id, s.recipient_user_id)
+        if (phone) {
+          await ensureConversation(phone, undefined, false, link)
+          const detail = str(obj(obj(arr(s.errors)[0]).error_data).details) ?? error ?? null
+          await addMessage({ phone, direction: 'out', author: 'system', kind: 'event', body: undeliveredLine(code, detail), at: fromSeconds(s.timestamp), waMessageId: `failed:${String(s.id)}` })
+        }
+      }
       // Same trace as the broadcast that sent it, so one id follows click → send → delivery.
       const rec = await col('broadcast_recipients').findOne({ workspaceId: ws(), waMessageId: String(s.id), status: { $in: ['queued', ...allowed.filter(Boolean)] } })
       if (rec)

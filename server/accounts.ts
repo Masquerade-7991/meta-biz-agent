@@ -14,7 +14,7 @@ export interface Account {
   wabaId: string
   wabaName: string
   businessId: string
-  phoneNumbers: { id: string; display: string; verifiedName: string }[]
+  phoneNumbers: { id: string; display: string; verifiedName: string; /** A Meta test number: it can only message up to 5 verified recipients. */ sandbox?: boolean }[]
   /** env: the server's own WABA from .env; signup / coexistence: connected through Embedded Signup. */
   source: 'env' | 'signup' | 'coexistence'
   /** The customer's business token, sealed (crypto.ts); null for the env account. */

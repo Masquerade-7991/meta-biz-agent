@@ -20,6 +20,7 @@ const WEBHOOK_STATUS = o({
   last24h: { type: 'array', items: o({ field: 'string', count: 'integer' }) },
   pending: d('integer', 'Deliveries stored but not processed yet.'),
   failed: 'integer',
+  sandboxNumbers: d('integer', 'Numbers on the account that are Meta test numbers (sandbox).'),
   unknownNumbers: d('integer', 'Deliveries this week for a number or account no workspace has.'),
   subscribedApps: d({ anyOf: [{ type: 'array', items: o({ id: 'string?', name: 'string?' }) }, { type: 'null' }] }, 'GET /{WABA}/subscribed_apps, read-only.'),
   listenerAppId: d('string?', 'This console’s own listening app (its Meta app id), to point it out in the list.'),

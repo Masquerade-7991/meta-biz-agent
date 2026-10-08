@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createHmac } from 'node:crypto'
 import { chargeOf, deliveryId, replaceable, signedBy } from './webhookCore.ts'
+import { reasonOf, undeliveredLine } from '../src/app/broadcasts/sendErrors.ts'
 
 const sign = (body: string, secret: string) => 'sha256=' + createHmac('sha256', secret).update(body).digest('hex')
 
@@ -42,4 +43,12 @@ test('reads what a status says the message cost', () => {
   assert.equal(c.conversationOrigin, 'marketing')
   assert.equal(c.at.toISOString(), new Date(1791400000 * 1000).toISOString())
   assert.equal(chargeOf({ id: 'wamid.2', status: 'read' }), null)
+})
+
+test('says why a reply was not delivered, in plain words', () => {
+  assert.equal(reasonOf(131030), 'test_number')
+  assert.match(undeliveredLine(131030), /Meta test number.*up to 5 verified recipients.*\(error 131030\)/)
+  assert.match(undeliveredLine(131047), /24 hours/)
+  assert.match(undeliveredLine(999999, 'Something broke.'), /Something broke\.\s*\(error 999999\)/)
+  assert.match(undeliveredLine(undefined), /no reason/)
 })

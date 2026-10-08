@@ -127,7 +127,7 @@ export function WebhookStatusCard() {
             <Step done={listenerOk} hint="In Graph API Explorer, POST /<your WhatsApp account id>/subscribed_apps with the listening app’s token.">
               Listening app subscribed to this account
             </Step>
-            <Step done={live} hint="In the listening app: save the webhook (callback URL, verify token, fields), switch it to Live, then send a message to the business number. Development mode only delivers events for people with a role on the app.">
+            <Step done={live} hint="In the listening app: save the webhook, switch it to Live, then press Test next to “messages” in WhatsApp → Configuration. If that sample doesn’t appear here, the app secret on the server is wrong.">
               Events are arriving
             </Step>
           </ul>
@@ -196,6 +196,11 @@ export function WebhookStatusCard() {
             ))}
           </ul>
         </div>
+      )}
+      {(s.sandboxNumbers ?? 0) > 0 && (
+        <p className="text-xs text-warning-foreground">
+          {plural(s.sandboxNumbers!, 'number')} on this account {s.sandboxNumbers === 1 ? 'is a Meta test number' : 'are Meta test numbers'}: replies reach only up to 5 verified recipients, and Meta may not send their events to every app.
+        </p>
       )}
       {(s.unknownNumbers ?? 0) > 0 && (
         <p className="text-xs text-warning-foreground">{plural(s.unknownNumbers!, 'event')} this week for a number this console doesn’t know (kept, not shown).</p>

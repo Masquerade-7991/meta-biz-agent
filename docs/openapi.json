@@ -6956,6 +6956,10 @@
                     "failed": {
                       "type": "integer"
                     },
+                    "sandboxNumbers": {
+                      "type": "integer",
+                      "description": "Numbers on the account that are Meta test numbers (sandbox)."
+                    },
                     "unknownNumbers": {
                       "type": "integer",
                       "description": "Deliveries this week for a number or account no workspace has."
@@ -7104,6 +7108,10 @@
                     },
                     "failed": {
                       "type": "integer"
+                    },
+                    "sandboxNumbers": {
+                      "type": "integer",
+                      "description": "Numbers on the account that are Meta test numbers (sandbox)."
                     },
                     "unknownNumbers": {
                       "type": "integer",
@@ -14656,6 +14664,10 @@
               "null"
             ]
           },
+          "sandbox": {
+            "type": "boolean",
+            "description": "A Meta test number (sandbox): replies reach only up to 5 verified recipients."
+          },
           "throughput": {
             "type": [
               "string",
@@ -14865,6 +14877,10 @@
                 },
                 "verifiedName": {
                   "type": "string"
+                },
+                "sandbox": {
+                  "type": "boolean",
+                  "description": "A Meta test number: it can only message up to 5 verified recipients."
                 }
               }
             }

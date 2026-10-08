@@ -201,6 +201,7 @@ async function webhookStatus() {
     pending: inbox[0],
     failed: inbox[1],
     unknownNumbers: inbox[2],
+    sandboxNumbers: await col('phone_numbers').countDocuments({ workspaceId: ws(), sandbox: true }),
     subscribedApps: apps,
     baseline: baseline ? { apps: baseline.apps, at: baseline.at } : null,
   }

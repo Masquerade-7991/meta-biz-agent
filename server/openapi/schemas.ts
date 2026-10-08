@@ -322,6 +322,7 @@ export const schemas: Record<string, Schema> = {
     'newName*': 'string?',
     'newNameStatus*': 'string?',
     'platform*': 'string?',
+    sandbox: d('boolean', 'A Meta test number (sandbox): replies reach only up to 5 verified recipients.'),
     'throughput*': 'string?',
     'photo*': 'string?',
     'limit*': d('string?', 'Messaging limit tier.'),
@@ -343,7 +344,7 @@ export const schemas: Record<string, Schema> = {
     'wabaId*': 'string',
     'wabaName*': 'string',
     'businessId*': 'string',
-    'phoneNumbers*': { type: 'array', items: o({ id: 'string', display: 'string', verifiedName: 'string' }) },
+    'phoneNumbers*': { type: 'array', items: o({ id: 'string', display: 'string', verifiedName: 'string', sandbox: d('boolean', 'A Meta test number: it can only message up to 5 verified recipients.') }) },
     'source*': d('env|signup|coexistence', '`env`: the server’s own number from .env.'),
     'billing*': o({ mode: 'partner_credit|own', state: 'shared|pending|confirmed|failed', error: 'string' }),
     'steps*': d(

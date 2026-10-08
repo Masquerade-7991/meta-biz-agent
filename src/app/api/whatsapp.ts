@@ -12,7 +12,7 @@ export interface WaAccount {
   wabaId: string
   wabaName: string
   businessId: string
-  phoneNumbers: { id: string; display: string; verifiedName: string }[]
+  phoneNumbers: { id: string; display: string; verifiedName: string; /** A Meta test number: replies reach only up to 5 verified recipients. */ sandbox?: boolean }[]
   source: 'env' | 'signup' | 'coexistence'
   billing: { mode: 'partner_credit' | 'own'; state: 'shared' | 'pending' | 'confirmed' | 'failed'; error?: string }
   steps: Partial<Record<StepName, Step>>
@@ -74,6 +74,8 @@ export interface WebhookStatus {
   /** Deliveries stored but not processed yet, and how many of those failed. */
   pending?: number
   failed?: number
+  /** Numbers on this account that are Meta test numbers (sandbox). */
+  sandboxNumbers?: number
   /** Deliveries in the last 7 days for a number or account no workspace has. */
   unknownNumbers?: number
   /** This console's own listening app (its Meta app id), to point it out in the list. */

@@ -20,6 +20,8 @@ export interface WaNumber {
   newName: string | null
   newNameStatus: string | null
   platform: string | null
+  /** A Meta test number (sandbox): it can only message up to 5 verified recipients. */
+  sandbox?: boolean
   throughput: string | null
   photo: string | null
   limit: string | null

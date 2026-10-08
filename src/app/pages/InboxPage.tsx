@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type Keybo
 import { toast } from 'sonner'
 import { Ban, Bot, Download, Check, CheckCheck, Clock, FileText, GraduationCap, Hand, ListChecks, Loader2, MessageSquareText, MoreHorizontal, PanelRight, Paperclip, Send, Sparkles, StickyNote, Undo2, Wrench, X } from 'lucide-react'
 import { isDummyMode } from '@/app/api/dummy'
+import { listAccounts } from '@/app/api/whatsapp'
 import { Sheet, SheetBody, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
@@ -595,6 +596,24 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
   )
 }
 
+/** On a Meta test number (sandbox) the AI agent answers, but WhatsApp delivers only to up to 5 verified
+ *  recipients, so say so above the chats instead of leaving people wondering where the reply went. */
+function TestNumberNote() {
+  const [test, setTest] = useState(false)
+  useEffect(() => {
+    listAccounts().then(
+      (rows) => setTest(rows.some((a) => a.phoneNumbers.some((n) => n.sandbox))),
+      () => null,
+    )
+  }, [])
+  if (!test) return null
+  return (
+    <p className="border-b border-border bg-warning/10 px-4 py-2 text-xs text-warning-foreground">
+      This is a Meta test number. The AI agent answers, but WhatsApp delivers replies only to up to 5 verified test recipients. Add a phone under WhatsApp → API Setup → To in the Meta app that owns the number, or use a real number.
+    </p>
+  )
+}
+
 /** Block the customer on WhatsApp (or unblock), after a confirmation that says what it does. */
 function BlockMenu({ chat, onChange }: { chat: ChatDetail; onChange: (d: ChatDetail) => void }) {
   const [confirm, setConfirm] = useState(false)
@@ -974,7 +993,9 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
   useRegisterDevControls('inbox', demo)
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex h-full min-h-0 flex-col">
+      <TestNumberNote />
+      <div className="flex min-h-0 flex-1">
       <section className={cn('flex w-full shrink-0 flex-col border-r border-border md:w-80', open && 'hidden md:flex')} aria-label="Chats">
         <div className="space-y-3 border-b border-border p-4">
           <SearchInput value={q} onChange={setQ} placeholder="Search names, numbers and messages" label="Search chats" />
@@ -1111,5 +1132,6 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
         />
       )}
     </div>
+      </div>
   )
 }

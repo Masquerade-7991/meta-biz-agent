@@ -17,6 +17,7 @@ import type { Actor } from './inbox.ts'
 import { trace } from './trace.ts'
 import { enqueue } from './jobs.ts'
 import { isProtected } from './protect.ts'
+import { queueNumbersSync } from './numbers.ts'
 import { can } from '../src/app/lib/permissions.ts'
 
 type Step = keyof Account['steps']
@@ -192,7 +193,12 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     const gaps = missing()
     return { ready: !gaps.length, missing: gaps, appId: c.appId || null, configId: c.configId || null, sdkVersion: c.sdkVersion, partnerCredit: !!c.creditLineId }
   }
-  if (path === '/api/whatsapp/accounts' && m === 'GET') return (await accounts().find({ workspaceId: ws() }).sort({ createdAt: 1 }).toArray()).map(view)
+  if (path === '/api/whatsapp/accounts' && m === 'GET') {
+    const list = await accounts().find({ workspaceId: ws() }).sort({ createdAt: 1 }).toArray()
+    // Whether a number is a Meta test number comes from the number sync; ask for one when it isn't known yet.
+    if (list.some((a) => a.phoneNumbers.some((n) => n.sandbox === undefined))) void queueNumbersSync().catch(() => null)
+    return list.map(view)
+  }
   if (path === '/api/whatsapp/connect' && m === 'POST') return connect(obj(await readJson(req)), me)
   if ((seg = path.match(/^\/api\/whatsapp\/accounts\/(\d+)(?:\/([a-z]+))?$/))) {
     const a = await find(seg[1])

@@ -6,6 +6,7 @@ export type FailureReason =
   | 'marketing_limit'
   | 'stopped_marketing'
   | 'not_on_whatsapp'
+  | 'test_number'
   | 'outside_window'
   | 'too_fast'
   | 'template_problem'
@@ -20,6 +21,7 @@ export const FAILURE_LABEL: Record<FailureReason, string> = {
   marketing_limit: 'Meta’s daily marketing limit for this person',
   stopped_marketing: 'Turned off marketing messages from you in WhatsApp',
   not_on_whatsapp: 'Not on WhatsApp, or their app is too old',
+  test_number: 'Test number: this recipient isn’t verified for it',
   outside_window: 'Outside the 24-hour reply window',
   too_fast: 'Sent too fast; WhatsApp asked to slow down',
   template_problem: 'Template problem (paused, not approved or wrong values)',
@@ -34,6 +36,7 @@ export const FAILURE_LABEL: Record<FailureReason, string> = {
 export const FAILURE_HELP: Partial<Record<FailureReason, string>> = {
   marketing_limit: 'WhatsApp caps how many marketing messages one person gets from all businesses in a day. We try again in 24 hours, up to twice.',
   stopped_marketing: 'They can turn marketing back on from your chat in WhatsApp. Utility messages still reach them.',
+  test_number: 'Meta test numbers can only message up to 5 verified recipients. Add the phone under WhatsApp → API Setup → To in the Meta app that owns the number, or use a real number.',
   outside_window: 'Only templates can start a conversation. Send a template instead.',
   too_fast: 'We retry these automatically after a short wait.',
   template_problem: 'Check the template in Broadcasts → Templates, or in WhatsApp Manager.',
@@ -45,6 +48,7 @@ const CODES: Record<number, FailureReason> = {
   131050: 'stopped_marketing',
   131026: 'not_on_whatsapp',
   131047: 'outside_window',
+  131030: 'test_number',
   4: 'too_fast',
   80007: 'too_fast',
   130429: 'too_fast',
@@ -81,4 +85,21 @@ export const RETRY: Partial<Record<FailureReason, { afterMs: number; max: number
 export function retryAt(reason: FailureReason, retries: number, now = Date.now()): Date | null {
   const r = RETRY[reason]
   return r && retries < r.max ? new Date(now + r.afterMs) : null
+}
+
+/** One sentence for the chat when WhatsApp couldn't deliver a message (the AI agent's reply or a team
+ *  member's), so the Inbox doesn't just show an answer the customer never got. */
+export function undeliveredLine(code: unknown, detail?: string | null): string {
+  const reason = reasonOf(code)
+  const why: Partial<Record<FailureReason, string>> = {
+    test_number: 'this is a Meta test number, which can only message up to 5 verified recipients. Add the phone in the Meta app’s WhatsApp → API Setup → To list, or use a real number.',
+    outside_window: 'it’s more than 24 hours since the customer last wrote. Send a template to start again.',
+    not_on_whatsapp: 'the number isn’t on WhatsApp, or their app is too old.',
+    stopped_marketing: 'the customer turned off marketing messages from you.',
+    account_problem: 'your WhatsApp account needs attention (billing, policy or registration).',
+    too_fast: 'WhatsApp asked to slow down.',
+    meta_down: 'WhatsApp was unavailable.',
+  }
+  const text = why[reason] ?? (detail ? `${detail.replace(/[.\s]+$/, '')}.` : 'WhatsApp gave no reason.')
+  return `WhatsApp couldn’t deliver a reply to this customer: ${text}${typeof code === 'number' ? ` (error ${code})` : ''}`
 }
