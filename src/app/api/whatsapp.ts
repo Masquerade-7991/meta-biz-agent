@@ -76,11 +76,15 @@ export interface WebhookStatus {
   failed?: number
   /** Deliveries in the last 7 days for a number or account no workspace has. */
   unknownNumbers?: number
+  /** This console's own listening app (its Meta app id), to point it out in the list. */
+  listenerAppId?: string | null
   /** Apps receiving this account's events now (read from Meta), and the first list seen. */
   subscribedApps?: { id: string | null; name: string | null }[] | null
   baseline?: { apps: { id: string | null; name: string | null }[]; at: string } | null
 }
 export const getWebhookStatus = () => call<WebhookStatus>('/api/whatsapp/webhook-status')
+/** Owner: the apps Meta lists now become the expected list (after an app was added or removed on purpose). */
+export const resetWebhookBaseline = () => call<WebhookStatus>('/api/whatsapp/webhook-status/baseline', 'POST', {})
 export const PAYMENT_URL = 'https://business.facebook.com/wa/manage/home/'
 export const STEP_LABEL: Record<StepName, string> = {
   exchange: 'Secure access to your account',

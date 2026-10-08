@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Eye, Unplug } from 'lucide-react'
+import { Eye, Lock, Unplug } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
-import { Badge } from '@/app/components/ui/badge'
+import { StatusPill } from '@/app/components/ui/status'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/app/components/ui/tooltip'
 import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
 import { FormError } from '@/app/auth/AuthLayout'
 import { useAuth } from '@/app/auth/AuthContext'
@@ -27,9 +28,21 @@ function AccountCard({ a, isOwner, onChange, onRemove }: { a: WaAccount; isOwner
             {SOURCE[a.source]}
           </p>
         </div>
-        <span className="flex flex-wrap gap-1">
-          {a.needsAttention ? <Badge className="bg-warning/15 text-warning-foreground">Needs attention</Badge> : <Badge className="bg-success text-success-foreground">Connected</Badge>}
-          <Badge variant="secondary">{a.billing.mode === 'partner_credit' ? 'Billed through Helo.ai' : 'Pays Meta directly'}</Badge>
+        <span className="flex flex-wrap gap-1.5">
+          {a.needsAttention ? <StatusPill tone="warning">Needs attention</StatusPill> : <StatusPill tone="success">Connected</StatusPill>}
+          <StatusPill tone="neutral" dot={false}>{a.billing.mode === 'partner_credit' ? 'Billed through Helo.ai' : 'Pays Meta directly'}</StatusPill>
+          {a.protected && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <StatusPill tone="info" dot={false} className="cursor-default">
+                    <Lock className="size-3" /> Managed by Helo.ai
+                  </StatusPill>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-64">The console reads this account and configures its AI agent, but never changes its webhooks, registration, PIN or billing.</TooltipContent>
+            </Tooltip>
+          )}
         </span>
       </div>
       <ul className="space-y-1 text-sm">
@@ -40,11 +53,7 @@ function AccountCard({ a, isOwner, onChange, onRemove }: { a: WaAccount; isOwner
           </li>
         ))}
       </ul>
-      {a.protected ? (
-        <p className="text-xs text-muted-foreground">Managed by Helo.ai: the console reads this account and configures its AI agent, but never changes its webhooks, registration, PIN or billing.</p>
-      ) : (
-        <AccountSteps account={a} canEdit={isOwner} onChange={onChange} />
-      )}
+      {!a.protected && <AccountSteps account={a} canEdit={isOwner} onChange={onChange} />}
       {isOwner && (a.hasPin || a.canDisconnect) && (
         <div className="flex flex-wrap items-center gap-2">
           {a.hasPin &&
@@ -84,7 +93,7 @@ export function WhatsAppSettings({ onManageNumbers }: { onManageNumbers?: () => 
 
   return (
     <div>
-      <SettingsSection wide title="WhatsApp accounts" description="Billing, PIN and disconnecting, per WhatsApp account. Numbers, their profiles and connecting a new one are on the WhatsApp page.">
+      <SettingsSection wide title="WhatsApp account" description="Billing, PIN and disconnecting. Numbers, their profiles and connecting a new one are on the WhatsApp page.">
         {onManageNumbers && can(me?.role, 'numbers.view') && (
           <Button variant="outline" size="sm" className="mb-3" onClick={onManageNumbers}>
             {rows?.length ? 'Manage numbers on the WhatsApp page' : 'Connect a number on the WhatsApp page'} &rarr;
@@ -107,7 +116,7 @@ export function WhatsAppSettings({ onManageNumbers }: { onManageNumbers?: () => 
         )}
       </SettingsSection>
       {!!rows?.length && (
-        <SettingsSection wide title="Customer messages" description="WhatsApp delivers customers’ messages, photos and delivery ticks to this app by webhook.">
+        <SettingsSection wide title="Live events" description="How WhatsApp delivers customers’ messages, replies and delivery ticks to this console, and who else receives them.">
           <WebhookStatusCard />
         </SettingsSection>
       )}

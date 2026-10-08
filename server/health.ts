@@ -4,11 +4,13 @@
 import type http from 'node:http'
 import { HttpError, type Obj, type Titles, arr, obj, serveJson, str } from './http.ts'
 import { col, db, dbOffReason, ownsMetaAssets, withWorkspace, ws } from './db.ts'
-import { env, metaJson } from './upstream.ts'
+import { env, metaJson, upstream } from './upstream.ts'
 import { appUrl } from './mail.ts'
 import { defineJob, enqueue } from './jobs.ts'
 import { clearAlert, raiseAlert } from './alerts.ts'
 import { trace } from './trace.ts'
+import type { Actor } from './inbox.ts'
+import { can } from '../src/app/lib/permissions.ts'
 import { queueNumbersSync, syncNumbers } from './numbers.ts'
 
 const health = () => col('number_health')
@@ -143,12 +145,22 @@ async function overview() {
   return rows.map((r) => ({ phoneNumberId: String(r.phoneNumberId), display: r.display, name: r.name, quality: r.quality, nameStatus: r.nameStatus, status: r.status, limit: r.limit, limitLabel: limitLabel(r.limit), checkedAt: r.checkedAt }))
 }
 const TITLES: Titles = { 403: 'Not allowed', 404: 'Not found', 502: 'WhatsApp didn’t answer' }
-/** Whether Meta's webhooks reach this app: the inbox only gets customers' words and media through them. */
 const DAY_MS = 86_400_000
+type App = { id: string | null; name: string | null }
+
+/** The apps Meta sends this account's events to (read-only GET subscribed_apps); null when unavailable. */
+const subscribedApps = (): Promise<App[] | null> =>
+  ownsMetaAssets()
+    ? metaJson('graph', 'GET', '/WABA_ID/subscribed_apps').then(
+        (r) => arr(r.data).map((x) => ({ id: str(obj(obj(x).whatsapp_business_api_data).id) ?? null, name: str(obj(obj(x).whatsapp_business_api_data).name) ?? null })),
+        () => null,
+      )
+    : Promise.resolve(null)
 
 /** Whether Meta's webhooks reach this app, what arrived, and which apps receive the account's events.
- *  The app list is read-only (GET subscribed_apps) and the first one seen is kept as a baseline, so
- *  anyone can check the business's own app is still there next to the listening one. */
+ *  The first list of apps seen is kept as a baseline, so the owner can check the business's own apps
+ *  are all still there next to the listening one. Only a real Meta answer ever becomes a baseline
+ *  (never a local test double), and only an owner's request records it. */
 async function webhookStatus() {
   const since = new Date(Date.now() - DAY_MS)
   const [last, byField, inbox, apps] = await Promise.all([
@@ -167,15 +179,10 @@ async function webhookStatus() {
       col('webhook_inbox').countDocuments({ error: { $exists: true }, processedAt: null }),
       col('webhook_inbox').countDocuments({ unrouted: { $gt: 0 }, receivedAt: { $gte: new Date(Date.now() - 7 * DAY_MS) } }),
     ]),
-    ownsMetaAssets()
-      ? metaJson('graph', 'GET', '/WABA_ID/subscribed_apps').then(
-          (r) => arr(r.data).map((x) => ({ id: str(obj(obj(x).whatsapp_business_api_data).id) ?? null, name: str(obj(obj(x).whatsapp_business_api_data).name) ?? null })),
-          () => null,
-        )
-      : Promise.resolve(null),
+    subscribedApps(),
   ])
   let baseline = await col('webhook_baseline').findOne({ workspaceId: ws() })
-  if (!baseline && apps) {
+  if (!baseline && apps && !/localhost|127\.0\.0\.1/.test(upstream)) {
     baseline = { workspaceId: ws(), apps, at: new Date() } as never
     await col('webhook_baseline').updateOne({ workspaceId: ws() }, { $setOnInsert: baseline as never }, { upsert: true })
   }
@@ -186,6 +193,8 @@ async function webhookStatus() {
     verifyTokenSet: !!env('WEBHOOK_VERIFY_TOKEN'),
     signatureChecked: secrets > 0,
     appsAccepted: secrets,
+    /** The console's own listening app (APP_ID), to point it out in the list. */
+    listenerAppId: env('APP_ID') || null,
     last24h: byField.map((f) => ({ field: f._id, count: f.n })),
     pending: inbox[0],
     failed: inbox[1],
@@ -195,10 +204,28 @@ async function webhookStatus() {
   }
 }
 
-export async function handleHealth(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {
+/** "Mark current list as expected": after an intended change (an app added or removed on purpose). */
+async function resetBaseline() {
+  const apps = await subscribedApps()
+  if (!apps) throw new HttpError(502, 'Couldn’t read the list from Meta right now. Try again.')
+  await col('webhook_baseline').updateOne({ workspaceId: ws() }, { $set: { apps, at: new Date() } }, { upsert: true })
+  trace('webhook.baseline_reset', { apps: apps.length })
+  return webhookStatus()
+}
+
+const OWNER_ONLY = 'Only workspace owners can see or change webhook details.'
+
+export async function handleHealth(req: http.IncomingMessage, res: http.ServerResponse, me: Actor): Promise<boolean> {
   const path = new URL(req.url ?? '/', 'http://x').pathname
-  if (path === '/api/whatsapp/webhook-status' && req.method === 'GET')
-    return serveJson(req, res, { titles: TITLES, db, noDb: { title: dbOffReason, detail: 'Webhook status needs the database.' } }, webhookStatus)
+  // Webhook details (apps, ids, delivery) are the owner's: everyone else is refused here, not just hidden.
+  if (path === '/api/whatsapp/webhook-status' || path === '/api/whatsapp/webhook-status/baseline') {
+    const baseline = path.endsWith('/baseline')
+    if ((baseline ? req.method !== 'POST' : req.method !== 'GET')) return false
+    return serveJson(req, res, { titles: TITLES, db, noDb: { title: dbOffReason, detail: 'Webhook status needs the database.' } }, () => {
+      if (!can(me.role, 'whatsapp.manage')) throw new HttpError(403, OWNER_ONLY)
+      return baseline ? resetBaseline() : webhookStatus()
+    })
+  }
   if (path !== '/api/whatsapp/health') return false
   return serveJson(req, res, { titles: TITLES, db, noDb: { title: dbOffReason, detail: 'Number health needs the database.' } }, async () => {
     if (req.method === 'POST') {

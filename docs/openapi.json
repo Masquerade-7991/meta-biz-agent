@@ -6906,7 +6906,7 @@
           "WhatsApp"
         ],
         "summary": "Are Meta’s webhooks reaching us",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\nThe inbox gets customers’ words and media only through webhooks. Also lists, read-only, every app Meta sends this account’s events to, next to the first list seen, so anyone can check the business’s own app is still subscribed.",
+        "description": "**Who can call:** Owner (`whatsapp.manage`).\n\nThe inbox gets customers’ words and media only through webhooks. Also lists, read-only, every app Meta sends this account’s events to, next to the list saved earlier, so the owner can check the business’s own apps are all still subscribed.",
         "responses": {
           "200": {
             "description": "Success.",
@@ -6988,6 +6988,13 @@
                       ],
                       "description": "GET /{WABA}/subscribed_apps, read-only."
                     },
+                    "listenerAppId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "This console’s own listening app (its Meta app id), to point it out in the list."
+                    },
                     "baseline": {
                       "anyOf": [
                         {
@@ -7026,7 +7033,173 @@
             "$ref": "#/components/responses/NotLoggedIn"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "Only workspace owners can see or change webhook details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/whatsapp/webhook-status/baseline": {
+      "post": {
+        "operationId": "markWebhookAppsExpected",
+        "tags": [
+          "WhatsApp"
+        ],
+        "summary": "Mark the current list of apps as expected",
+        "description": "**Who can call:** Owner (`whatsapp.manage`).\n\nAfter an app was added or removed on purpose: the apps Meta lists now become the list the status compares against. Reads Meta; changes nothing there.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lastAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "date-time"
+                    },
+                    "callbackUrl": {
+                      "type": "string"
+                    },
+                    "verifyTokenSet": {
+                      "type": "boolean"
+                    },
+                    "signatureChecked": {
+                      "type": "boolean"
+                    },
+                    "appsAccepted": {
+                      "type": "integer",
+                      "description": "Apps whose signatures are accepted (WEBHOOK_APP_SECRETS)."
+                    },
+                    "last24h": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "field": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "pending": {
+                      "type": "integer",
+                      "description": "Deliveries stored but not processed yet."
+                    },
+                    "failed": {
+                      "type": "integer"
+                    },
+                    "unknownNumbers": {
+                      "type": "integer",
+                      "description": "Deliveries this week for a number or account no workspace has."
+                    },
+                    "subscribedApps": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "name": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "GET /{WABA}/subscribed_apps, read-only."
+                    },
+                    "listenerAppId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "This console’s own listening app (its Meta app id), to point it out in the list."
+                    },
+                    "baseline": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "apps": {
+                              "type": "array",
+                              "items": {
+                                "type": "object"
+                              }
+                            },
+                            "at": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The first list of subscribed apps seen."
+                    }
+                  },
+                  "required": [
+                    "lastAt",
+                    "callbackUrl",
+                    "verifyTokenSet",
+                    "signatureChecked"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "description": "Only workspace owners can see or change webhook details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Couldn’t read the list from Meta right now. Try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "503": {
             "$ref": "#/components/responses/DatabaseUnavailable"

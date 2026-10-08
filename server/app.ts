@@ -192,7 +192,7 @@ export async function handle(req: http.IncomingMessage, res: http.ServerResponse
       if (req.method !== 'GET' && req.method !== 'HEAD' && !can(s.role, 'agent.edit')) return sendError(res, 403, 'Not allowed', 'Only owners and admins change the AI agent.')
       await forward(req, res, metaRoute[1] as Kind, path)
     }
-    else if (await handleHealth(req, res)) return
+    else if (await handleHealth(req, res, me)) return
     else if (await handleNumbers(req, res, me)) return
     else if (await handleWhatsApp(req, res, me)) return
     else if (await handleInbox(req, res, me)) return

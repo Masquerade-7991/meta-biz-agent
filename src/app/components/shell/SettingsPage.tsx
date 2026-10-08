@@ -378,8 +378,10 @@ const SETTINGS_GROUPS: { label: string; items: { id: SettingsTab; label: string 
 export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: SettingsTab; onTabChange: (t: SettingsTab) => void; onManageNumbers?: () => void }) {
   const { me } = useAuth()
   const billing = can(me?.role, 'billing.view')
+  // WhatsApp accounts and webhook details are the owner's alone.
+  const whatsapp = can(me?.role, 'whatsapp.manage')
   // A link (email, notification) can name a tab this role can't open; show Profile instead.
-  const shown = tab === 'billing' && !billing ? 'profile' : tab
+  const shown = (tab === 'billing' && !billing) || (tab === 'whatsapp' && !whatsapp) ? 'profile' : tab
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
       <h1 className="mb-6">Settings</h1>
@@ -392,7 +394,7 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
                 <p className="hidden px-2.5 pb-1.5 text-xs font-medium text-muted-foreground md:block">{g.label}</p>
                 <ul className="contents md:block md:space-y-0.5">
                   {g.items
-                    .filter((i) => i.id !== 'billing' || billing)
+                    .filter((i) => (i.id !== 'billing' || billing) && (i.id !== 'whatsapp' || whatsapp))
                     .map((i) => (
                       <li key={i.id} className="shrink-0">
                         <button
@@ -417,9 +419,11 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
         <TabsContent value="profile">
           <Profile />
         </TabsContent>
-        <TabsContent value="whatsapp">
-          <WhatsAppSettings onManageNumbers={onManageNumbers} />
-        </TabsContent>
+        {whatsapp && (
+          <TabsContent value="whatsapp">
+            <WhatsAppSettings onManageNumbers={onManageNumbers} />
+          </TabsContent>
+        )}
         {billing && (
           <TabsContent value="billing">
             <BillingSettingsTab />

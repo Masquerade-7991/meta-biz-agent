@@ -512,7 +512,32 @@ export async function dummyWhatsApp<T>(method: string, path: string, body: unkno
   const b = (body ?? {}) as Record<string, string>
   waAccounts ??= [dummyAccountNow()]
   const u = new URL(path, 'http://x')
-  if (u.pathname === '/api/whatsapp/webhook-status') return { lastAt: new Date(Date.now() - 4 * 60_000).toISOString(), callbackUrl: `${location.origin}/api/webhooks/whatsapp`, verifyTokenSet: true, signatureChecked: true } as T
+  if (u.pathname === '/api/whatsapp/webhook-status' || u.pathname === '/api/whatsapp/webhook-status/baseline') {
+    const apps = [
+      { id: '1143680903703001', name: 'Business Agent' },
+      { id: '1175759883130788', name: 'onCloud' },
+      { id: '696810982412286', name: 'onCloudWABA' },
+      { id: '1828077015051809', name: 'ai-business-agent' },
+    ]
+    return {
+      lastAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+      callbackUrl: `${location.origin}/api/webhooks/whatsapp`,
+      verifyTokenSet: true,
+      signatureChecked: true,
+      appsAccepted: 1,
+      listenerAppId: '1828077015051809',
+      last24h: [
+        { field: 'messages', count: 42 },
+        { field: 'message_echoes', count: 9 },
+        { field: 'phone_number_quality_update', count: 1 },
+      ],
+      pending: 0,
+      failed: 0,
+      unknownNumbers: 0,
+      subscribedApps: apps,
+      baseline: { apps: apps.slice(0, 3), at: new Date(Date.now() - 2 * 86_400_000).toISOString() },
+    } as T
+  }
   if (u.pathname === '/api/whatsapp/health')
     return waAccounts.flatMap((a) =>
       a.phoneNumbers.map((n) => ({ phoneNumberId: n.id, display: n.display, name: n.verifiedName, quality: 'GREEN', nameStatus: 'APPROVED', status: 'CONNECTED', limit: 'TIER_2K', limitLabel: '2,000', checkedAt: new Date().toISOString() })),

@@ -10,6 +10,22 @@ const numberOp = (op: Op): Op => ({ ...op, ok: op.ok ?? 'NumberDetail', errors: 
 const edit = (op: Op): Op => numberOp({ who: 'numbers.edit', ...op, errors: { 403: EDIT_DENIED, ...op.errors } })
 const owner = (op: Op): Op => numberOp({ who: 'whatsapp.manage', ...op, errors: { 403: OWNER_DENIED, ...op.errors } })
 
+const OWNER_ONLY = 'Only workspace owners can see or change webhook details.'
+const WEBHOOK_STATUS = o({
+  'lastAt*': 'date-time?',
+  'callbackUrl*': 'string',
+  'verifyTokenSet*': 'boolean',
+  'signatureChecked*': 'boolean',
+  appsAccepted: d('integer', 'Apps whose signatures are accepted (WEBHOOK_APP_SECRETS).'),
+  last24h: { type: 'array', items: o({ field: 'string', count: 'integer' }) },
+  pending: d('integer', 'Deliveries stored but not processed yet.'),
+  failed: 'integer',
+  unknownNumbers: d('integer', 'Deliveries this week for a number or account no workspace has.'),
+  subscribedApps: d({ anyOf: [{ type: 'array', items: o({ id: 'string?', name: 'string?' }) }, { type: 'null' }] }, 'GET /{WABA}/subscribed_apps, read-only.'),
+  listenerAppId: d('string?', 'This console’s own listening app (its Meta app id), to point it out in the list.'),
+  baseline: d({ anyOf: [o({ apps: 'object[]', at: 'date-time' }), { type: 'null' }] }, 'The first list of subscribed apps seen.'),
+})
+
 export const whatsapp = area('WhatsApp', {
   '/api/whatsapp/config': {
     get: {
@@ -84,21 +100,21 @@ export const whatsapp = area('WhatsApp', {
     get: {
       id: 'webhookStatus',
       summary: 'Are Meta’s webhooks reaching us',
+      who: 'whatsapp.manage',
       description:
-        'The inbox gets customers’ words and media only through webhooks. Also lists, read-only, every app Meta sends this account’s events to, next to the first list seen, so anyone can check the business’s own app is still subscribed.',
-      ok: o({
-        'lastAt*': 'date-time?',
-        'callbackUrl*': 'string',
-        'verifyTokenSet*': 'boolean',
-        'signatureChecked*': 'boolean',
-        appsAccepted: d('integer', 'Apps whose signatures are accepted (WEBHOOK_APP_SECRETS).'),
-        last24h: { type: 'array', items: o({ field: 'string', count: 'integer' }) },
-        pending: d('integer', 'Deliveries stored but not processed yet.'),
-        failed: 'integer',
-        unknownNumbers: d('integer', 'Deliveries this week for a number or account no workspace has.'),
-        subscribedApps: d({ anyOf: [{ type: 'array', items: o({ id: 'string?', name: 'string?' }) }, { type: 'null' }] }, 'GET /{WABA}/subscribed_apps, read-only.'),
-        baseline: d({ anyOf: [o({ apps: 'object[]', at: 'date-time' }), { type: 'null' }] }, 'The first list of subscribed apps seen.'),
-      }),
+        'The inbox gets customers’ words and media only through webhooks. Also lists, read-only, every app Meta sends this account’s events to, next to the list saved earlier, so the owner can check the business’s own apps are all still subscribed.',
+      ok: WEBHOOK_STATUS,
+      errors: { 403: OWNER_ONLY },
+    },
+  },
+  '/api/whatsapp/webhook-status/baseline': {
+    post: {
+      id: 'markWebhookAppsExpected',
+      summary: 'Mark the current list of apps as expected',
+      who: 'whatsapp.manage',
+      description: 'After an app was added or removed on purpose: the apps Meta lists now become the list the status compares against. Reads Meta; changes nothing there.',
+      ok: WEBHOOK_STATUS,
+      errors: { 403: OWNER_ONLY, 502: 'Couldn’t read the list from Meta right now. Try again.' },
     },
   },
 

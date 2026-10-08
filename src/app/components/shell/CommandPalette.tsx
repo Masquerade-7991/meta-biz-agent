@@ -102,7 +102,7 @@ export function CommandPalette() {
           </CommandGroup>
         )}
         <CommandGroup heading="Settings">
-          {SETTINGS.filter((s) => s.tab !== 'billing' || can(me.role, 'billing.view')).map((s) => (
+          {SETTINGS.filter((s) => (s.tab !== 'billing' || can(me.role, 'billing.view')) && (s.tab !== 'whatsapp' || can(me.role, 'whatsapp.manage'))).map((s) => (
             <CommandItem key={s.tab} value={`settings ${s.label}`} onSelect={() => go(pathFor('settings', s.tab))}>
               <Settings />
               {s.label}
