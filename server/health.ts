@@ -164,7 +164,9 @@ const subscribedApps = (): Promise<App[] | null> =>
 async function webhookStatus() {
   const since = new Date(Date.now() - DAY_MS)
   const [last, byField, inbox, apps] = await Promise.all([
-    col('whatsapp_webhooks').findOne({ workspaceId: ws() }, { sort: { at: -1 }, projection: { at: 1 } }),
+    // The last delivery the receiver accepted (a signed event from a listening app). Older rows in
+    // whatsapp_webhooks came from before the receiver existed and say nothing about it.
+    col('webhook_inbox').findOne({}, { sort: { receivedAt: -1 }, projection: { receivedAt: 1 } }),
     col('whatsapp_webhooks')
       .aggregate<{ _id: string; n: number }>([
         { $match: { workspaceId: ws(), at: { $gte: since } } },
@@ -188,7 +190,7 @@ async function webhookStatus() {
   }
   const secrets = env('WEBHOOK_APP_SECRETS').split(',').filter((x) => x.trim()).length
   return {
-    lastAt: last?.at ?? null,
+    lastAt: (last?.receivedAt as Date | undefined) ?? null,
     callbackUrl: `${appUrl}/api/webhooks/whatsapp`,
     verifyTokenSet: !!env('WEBHOOK_VERIFY_TOKEN'),
     signatureChecked: secrets > 0,

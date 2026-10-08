@@ -85,7 +85,7 @@ export function WebhookStatusCard() {
           label="Receiving events"
           tone={live ? 'success' : 'warning'}
           state={live ? 'Live' : 'Waiting'}
-          reason={s.lastAt ? `Last event ${ago(s.lastAt)}` : 'No events from WhatsApp yet'}
+          reason={s.lastAt ? `Last event ${ago(s.lastAt)}` : 'No event has reached this console yet'}
         />
         <Tile
           label="Signature check"
@@ -127,7 +127,7 @@ export function WebhookStatusCard() {
             <Step done={listenerOk} hint="In Graph API Explorer, POST /<your WhatsApp account id>/subscribed_apps with the listening app’s token.">
               Listening app subscribed to this account
             </Step>
-            <Step done={live} hint="Switch the app to Live mode, then send a message to the business number. Development mode only delivers events for people with a role on the app.">
+            <Step done={live} hint="In the listening app: save the webhook (callback URL, verify token, fields), switch it to Live, then send a message to the business number. Development mode only delivers events for people with a role on the app.">
               Events are arriving
             </Step>
           </ul>
