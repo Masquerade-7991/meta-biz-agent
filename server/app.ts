@@ -66,6 +66,10 @@ const inFlight = new Map<string, Promise<UpstreamReply>>()
  *  (Retry-After, else 2s) and tries again. Writes are never repeated. */
 async function callWith429Retry(...args: Parameters<typeof callUpstream>): Promise<UpstreamReply> {
   const r = await callUpstream(...args)
+  // A 401 from Meta means the server's token was refused, not that the member's session ended: the
+  // browser treats any 401 as "logged out", so it must never see Meta's.
+  if (r.status === 401)
+    return { ...r, status: 502, contentType: 'application/json', text: JSON.stringify({ title: 'Meta refused the access token', detail: 'Meta answered 401: the access token in the server settings has expired or was revoked. Ask the workspace owner to replace it.', status: 502 }) }
   if (r.status !== 429 || args[1] !== 'GET') return r
   const wait = Math.min(Number(r.retryAfter) || 2, 10) * 1000
   console.log(`${args[1]} ${args[2]} → 429 from upstream, retrying in ${wait}ms`)
