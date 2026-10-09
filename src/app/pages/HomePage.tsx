@@ -9,7 +9,7 @@ import { AGENT_STATUS, agentStatusOf, type Tone } from '@/app/lib/status'
 import { cn } from '@/app/lib/utils'
 import { Button } from '@/app/components/ui/button'
 import { useAuth } from '@/app/auth/AuthContext'
-import { errorText, getAgentOnNumber, type AgentOnNumber } from '@/app/api/meta'
+import { errorDetail, errorText, getAgentOnNumber, type AgentOnNumber } from '@/app/api/meta'
 import { can } from '@/app/lib/permissions'
 import type { NavId } from '@/app/nav'
 import type { SettingsTab } from '@/app/components/shell/SettingsPage'
@@ -24,16 +24,27 @@ import { PageLoader } from '@/app/components/ui/wavy-loader'
 interface Snapshot {
   number: { id: string; display: string; name: string } | null
   agent: AgentOnNumber | null
+  /** Why the agent lookup failed, when no number answered with one: Home can't tell "no agent" apart. */
+  lookupError: string | null
 }
 
 /** What Home needs: the workspace's WhatsApp accounts, and the first number that has an agent. */
 async function loadSnapshot(accounts: WaAccount[]): Promise<Snapshot> {
   const numbers = accounts.flatMap((a) => a.phoneNumbers)
-  const withAgents = await Promise.all(numbers.map(async (n) => ({ n, agent: await getAgentOnNumber(n.id).catch(() => null) })))
+  const withAgents = await Promise.all(
+    numbers.map(async (n) => {
+      try {
+        return { n, agent: await getAgentOnNumber(n.id), error: null }
+      } catch (err) {
+        return { n, agent: null, error: errorDetail(err) }
+      }
+    }),
+  )
   const pick = withAgents.find((x) => x.agent) ?? withAgents[0]
   return {
     number: pick ? { id: pick.n.id, display: pick.n.display || pick.n.id, name: pick.n.verifiedName } : null,
     agent: pick?.agent ?? null,
+    lookupError: pick?.agent ? null : (withAgents.find((x) => x.error)?.error ?? null),
   }
 }
 
@@ -516,7 +527,16 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
               <ThisWeek onNavigate={onNavigate} />
             </>
           )}
-          {!(snap.agent && accounts[0] && billingDone(accounts[0])) && (
+          {!snap.agent && snap.lookupError && (
+            <div className="rounded-xl border border-warning/50 p-6 text-sm">
+              <p className="font-semibold">Couldn&rsquo;t reach your AI agent</p>
+              <p className="mt-1 text-muted-foreground">{snap.lookupError}</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => setAttempt((n) => n + 1)}>
+                Try again
+              </Button>
+            </div>
+          )}
+          {!snap.lookupError && !(snap.agent && accounts[0] && billingDone(accounts[0])) && (
         <GetStarted
           onCreateAgent={() => navigate('/agents?new')}
           snap={snap}
