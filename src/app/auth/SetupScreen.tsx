@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { CheckCircle2, Loader2 } from 'lucide-react'
+import { CheckCircle2, Loader2, Mail } from 'lucide-react'
+import { roleLabel } from '@/app/lib/permissions'
+import { answerInvite } from './workspaceSwitch'
 import { Button } from '@/app/components/ui/button'
 import { cn } from '@/app/lib/utils'
 import { useAuth } from './AuthContext'
@@ -44,6 +46,8 @@ export function VerifyScreen({ token, onDone }: { token: string; onDone: (me: Me
       </AuthLayout>
     )
 
+  if (result.invite) return <InviteAnswer invite={result.invite} onDone={onDone} />
+
   const joinedNow = result.purpose === 'invite' && result.me?.setup === 'complete'
   const copy = {
     signup: { title: 'Email verified', body: `Thanks, ${result.me?.user.email} is confirmed. Next, set up your account.`, button: 'Set up my account' },
@@ -61,6 +65,70 @@ export function VerifyScreen({ token, onDone }: { token: string; onDone: (me: Me
       <Button className="w-full" autoFocus onClick={() => onDone(result.me ?? null)}>
         {copy.button}
       </Button>
+    </AuthLayout>
+  )
+}
+
+/**
+ * An invite to someone who already has an account. They answer it signed in as the invited email;
+ * signed in as someone else (or not at all), they log in first and find it in the workspace menu.
+ */
+function InviteAnswer({ invite, onDone }: { invite: NonNullable<Verified['invite']>; onDone: (me: Me | null) => void }) {
+  const { me, logout } = useAuth()
+  const [busy, setBusy] = useState(false)
+  const signedInAsInvitee = me?.user.email === invite.email
+  const who = invite.inviterName ? `${invite.inviterName} invited you` : 'You’re invited'
+
+  if (invite.already)
+    return (
+      <AuthLayout>
+        <AuthHeading title={`You’re already in ${invite.workspaceName}`}>Switch to it from the workspace menu at the top left.</AuthHeading>
+        <Button className="w-full" onClick={() => onDone(null)}>
+          Open Helo.ai
+        </Button>
+      </AuthLayout>
+    )
+
+  if (!signedInAsInvitee)
+    return (
+      <AuthLayout>
+        <Mail className="mb-5 size-10 text-primary" aria-hidden />
+        <AuthHeading title={`Join ${invite.workspaceName}`}>
+          {who} as {roleLabel(invite.role)}. Log in as <strong>{invite.email}</strong> to accept. The invite also waits in the workspace menu once you’re in.
+        </AuthHeading>
+        <Button
+          className="w-full"
+          onClick={async () => {
+            if (me) await logout()
+            onDone(null)
+          }}
+        >
+          {me ? `Log out and log in as ${invite.email}` : 'Log in to accept'}
+        </Button>
+      </AuthLayout>
+    )
+
+  async function answer(accept: boolean) {
+    setBusy(true)
+    const next = await answerInvite(invite.id, accept)
+    setBusy(false)
+    if (next && !accept) onDone(next)
+  }
+  return (
+    <AuthLayout>
+      <Mail className="mb-5 size-10 text-primary" aria-hidden />
+      <AuthHeading title={`Join ${invite.workspaceName}?`}>
+        {who} as {roleLabel(invite.role)}. You keep your current workspaces and can switch between them from the workspace menu.
+      </AuthHeading>
+      <div className="flex gap-2">
+        <Button className="flex-1" disabled={busy} onClick={() => void answer(true)}>
+          {busy && <Loader2 className="size-4 animate-spin" />}
+          Accept and join
+        </Button>
+        <Button variant="outline" className="flex-1" disabled={busy} onClick={() => void answer(false)}>
+          Decline
+        </Button>
+      </div>
     </AuthLayout>
   )
 }

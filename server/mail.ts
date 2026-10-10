@@ -117,6 +117,16 @@ export const mail = {
       lines: [`Your account is ready and you’re in the ${workspace} workspace.`, `Log in any time with ${to} and your password.`],
       button: { label: 'Open Helo.ai', url: appUrl },
     }),
+  /** For someone who already has a Helo.ai account: they keep their workspaces and add this one. */
+  inviteExisting: (to: string, token: string, inviter: string, workspace: string) =>
+    send(to, `${inviter} invited you to ${workspace} on Helo.ai`, {
+      heading: `Join ${workspace}`,
+      lines: [`${inviter} invited you to the ${workspace} workspace. You keep your current workspaces and can switch between them from the workspace menu.`],
+      button: { label: 'Review invite', url: link(token) },
+      note: 'This invite expires in 7 days. You can also accept or decline it from the workspace menu in Helo.ai.',
+    }),
+  memberLeft: (to: string, member: string, workspace: string) =>
+    send(to, `${member} left ${workspace}`, { heading: `${member} left ${workspace}`, lines: [`${member} left the workspace. Their open tickets stay assigned to them until you reassign them.`] }),
   memberJoined: (to: string, member: string, workspace: string) =>
     send(to, `${member} joined ${workspace}`, { heading: `${member} joined ${workspace}`, lines: [`${member} accepted your invite and can now work on your agents.`] }),
   passwordChanged: (to: string) =>

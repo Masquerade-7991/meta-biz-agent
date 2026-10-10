@@ -3,6 +3,8 @@ import { Loader2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { useAuth } from './AuthContext'
 import { authApi } from './api'
+import { answerInvite } from './workspaceSwitch'
+import { roleLabel } from '@/app/lib/permissions'
 import { errorDetail } from '@/app/api/meta'
 import { setDummyMode } from '@/app/api/dummy'
 import { AuthHeading, AuthLayout, Field, FormError, TextButton } from './AuthLayout'
@@ -243,6 +245,36 @@ export function CreateWorkspaceScreen() {
           Create workspace
         </Button>
       </form>
+      {!!me?.invites.length && (
+        <section className="mt-8 space-y-3">
+          <h2 className="text-sm font-semibold">Or join a workspace you’re invited to</h2>
+          {me.invites.map((i) => (
+            <div key={i.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+              <span className="min-w-0 text-sm">
+                <span className="block truncate font-medium">{i.workspaceName}</span>
+                <span className="block text-meta text-muted-foreground">
+                  {i.inviterName ? `${i.inviterName} invited you` : 'You’re invited'} as {roleLabel(i.role)}
+                </span>
+              </span>
+              <span className="flex shrink-0 gap-1.5">
+                <Button size="sm" onClick={() => void answerInvite(i.id, true)}>
+                  Join
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    const next = await answerInvite(i.id, false)
+                    if (next) setMe(next)
+                  }}
+                >
+                  Decline
+                </Button>
+              </span>
+            </div>
+          ))}
+        </section>
+      )}
       <p className="mt-8 text-muted-foreground text-sm">
         Not you? <TextButton onClick={() => void logout()}>Log out</TextButton>
       </p>

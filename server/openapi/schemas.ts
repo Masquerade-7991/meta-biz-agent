@@ -18,7 +18,10 @@ export const schemas: Record<string, Schema> = {
     'role*': t(`${ROLE}?`),
     'setup*': d('complete|account|password', '`account`: email verified, name, password and workspace still to set. `password`: opened a reset link.'),
     'joining*': { anyOf: [o({ workspaceName: 'string', inviterName: 'string?' }), { type: 'null' }], description: 'Invited and still setting up: the workspace they’ll join.' },
+    'workspaces*': d({ type: 'array', items: o({ 'id*': 'string', 'name*': 'string', 'role*': ROLE }) }, 'Every workspace this person belongs to. `workspace` is the one this session works in.'),
+    'invites*': d('PendingInvite[]', 'Invites to further workspaces, answered with acceptInvite / declineInvite. Empty until setup is finished.'),
   }),
+  PendingInvite: o({ 'id*': 'string', 'workspaceName*': 'string', 'inviterName*': 'string?', 'role*': ROLE, 'expiresAt*': 'date-time' }),
   Members: o({
     'members*': 'Member[]',
     'invites*': d('Invite[]', 'Empty unless you can manage members.'),

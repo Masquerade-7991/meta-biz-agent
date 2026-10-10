@@ -671,7 +671,7 @@
           "Accounts & workspace"
         ],
         "summary": "Open an emailed link",
-        "description": "**Who can call:** Anyone; no sign-in.\n\nRedeems the token from a sign-up, invite, password-reset or email-change link. Sets the session cookie `sid` (HttpOnly, SameSite=Lax, 30 days; Secure on https). (not for an email change).",
+        "description": "**Who can call:** Anyone; no sign-in.\n\nRedeems the token from a sign-up, invite, password-reset or email-change link. Sets the session cookie `sid` (HttpOnly, SameSite=Lax, 30 days; Secure on https). (not for an email change). An invite to someone who already has an account is not redeemed here: the answer carries `invite`, and the person accepts it signed in as that email (acceptInvite). No session is started for it.",
         "security": [],
         "requestBody": {
           "required": true,
@@ -714,6 +714,48 @@
                     "email": {
                       "type": "string",
                       "description": "The new address, for an email change."
+                    },
+                    "invite": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "workspaceName": {
+                          "type": "string"
+                        },
+                        "inviterName": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "admin",
+                            "supervisor",
+                            "agent"
+                          ],
+                          "description": "Owners can give any role; admins can’t make or change owners."
+                        },
+                        "already": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "email",
+                        "workspaceName",
+                        "inviterName",
+                        "role",
+                        "already"
+                      ],
+                      "description": "An invite to an existing account, to accept or decline in the app."
                     }
                   },
                   "required": [
@@ -1322,6 +1364,173 @@
         }
       }
     },
+    "/api/account/workspace": {
+      "post": {
+        "operationId": "switchWorkspace",
+        "tags": [
+          "Accounts & workspace"
+        ],
+        "summary": "Switch workspace",
+        "description": "**Who can call:** Signed in with setup finished, a member of that workspace.\n\nThis session works in the given workspace from now on. Other sessions keep theirs.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "workspaceId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "workspaceId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "You’re not a member of that workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/account/invites/{id}/accept": {
+      "post": {
+        "operationId": "acceptInvite",
+        "tags": [
+          "Accounts & workspace"
+        ],
+        "summary": "Accept an invite",
+        "description": "**Who can call:** Signed in with setup finished, as the invited email.\n\nJoins the workspace with the invited role and switches this session to it. Emails the inviter.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Record id (MongoDB ObjectId).",
+              "pattern": "^[a-f0-9]{24}$"
+            },
+            "description": "Record id (MongoDB ObjectId)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "410": {
+            "description": "This invite was revoked, has expired or was already answered. / This workspace no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/account/invites/{id}/decline": {
+      "post": {
+        "operationId": "declineInvite",
+        "tags": [
+          "Accounts & workspace"
+        ],
+        "summary": "Decline an invite",
+        "description": "**Who can call:** Signed in with setup finished, as the invited email.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Record id (MongoDB ObjectId).",
+              "pattern": "^[a-f0-9]{24}$"
+            },
+            "description": "Record id (MongoDB ObjectId)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "410": {
+            "description": "This invite was revoked, has expired or was already answered.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
     "/api/workspace": {
       "post": {
         "operationId": "createWorkspace",
@@ -1329,7 +1538,7 @@
           "Accounts & workspace"
         ],
         "summary": "Create a workspace",
-        "description": "**Who can call:** Signed in with setup finished, not in a workspace yet.\n\nYou become its owner.",
+        "description": "**Who can call:** Signed in with setup finished.\n\nYou become its owner, and this session switches to it. You can belong to several workspaces.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1367,8 +1576,8 @@
           "403": {
             "$ref": "#/components/responses/Forbidden"
           },
-          "409": {
-            "description": "You’re already in a workspace.",
+          "429": {
+            "description": "Too many workspaces created (5 an hour).",
             "content": {
               "application/json": {
                 "schema": {
@@ -1376,6 +1585,47 @@
                 }
               }
             }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/workspace/leave": {
+      "post": {
+        "operationId": "leaveWorkspace",
+        "tags": [
+          "Accounts & workspace"
+        ],
+        "summary": "Leave this workspace",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nEnds your membership of the session’s workspace and emails its owners. Your other workspaces are untouched; the session moves to the one you joined most recently.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "You’re the only owner. Make someone else an owner before you leave.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "503": {
             "$ref": "#/components/responses/DatabaseUnavailable"
@@ -1421,7 +1671,7 @@
           "Accounts & workspace"
         ],
         "summary": "Invite someone",
-        "description": "**Who can call:** Admin or above (`members.manage`).\n\nEmails an invite link (valid 7 days).",
+        "description": "**Who can call:** Admin or above (`members.manage`).\n\nEmails an invite link (valid 7 days). Someone who already has an account keeps their other workspaces and answers the invite in the app.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1487,7 +1737,7 @@
             }
           },
           "409": {
-            "description": "Already in a workspace, or already invited.",
+            "description": "Already in this workspace, or already invited.",
             "content": {
               "application/json": {
                 "schema": {
@@ -12611,6 +12861,42 @@
               }
             ],
             "description": "Invited and still setting up: the workspace they’ll join."
+          },
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "owner",
+                    "admin",
+                    "supervisor",
+                    "agent"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "role"
+              ]
+            },
+            "description": "Every workspace this person belongs to. `workspace` is the one this session works in."
+          },
+          "invites": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PendingInvite"
+            },
+            "description": "Invites to further workspaces, answered with acceptInvite / declineInvite. Empty until setup is finished."
           }
         },
         "required": [
@@ -12618,7 +12904,46 @@
           "workspace",
           "role",
           "setup",
-          "joining"
+          "joining",
+          "workspaces",
+          "invites"
+        ]
+      },
+      "PendingInvite": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "workspaceName": {
+            "type": "string"
+          },
+          "inviterName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "admin",
+              "supervisor",
+              "agent"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "workspaceName",
+          "inviterName",
+          "role",
+          "expiresAt"
         ]
       },
       "Members": {

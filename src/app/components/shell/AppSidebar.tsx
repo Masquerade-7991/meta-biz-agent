@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/app/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/app/components/ui/tooltip'
-import mark from '@/assets/helo-mark.svg'
+import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { NAV_GROUPS, navFor, type NavId } from '@/app/nav'
 import { cn } from '@/app/lib/utils'
 import { useAuth } from '@/app/auth/AuthContext'
@@ -64,14 +64,8 @@ export function AppSidebar({
         drawer ? 'w-full' : cn('border-r border-sidebar-border', collapsed ? 'w-16' : 'w-56'),
       )}
     >
-      <div className={cn('flex h-14 shrink-0 items-center gap-2.5', collapsed ? 'justify-center' : 'px-4')}>
-        <img src={mark} alt="" className="size-7" />
-        {!collapsed && (
-          <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm font-semibold text-foreground">Helo.ai</p>
-            <p className="truncate text-meta text-muted-foreground">{me?.workspace?.name}</p>
-          </div>
-        )}
+      <div className={cn('flex h-14 shrink-0 items-center', collapsed ? 'justify-center' : 'px-2.5')}>
+        <WorkspaceSwitcher collapsed={collapsed} onOpenSettings={onOpenSettings} />
       </div>
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-2.5 py-3">
@@ -204,9 +198,6 @@ function AccountMenu({
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-meta font-normal text-muted-foreground">
-          {me?.workspace?.name} · {roleLabel(me?.role)}
-        </DropdownMenuLabel>
         <DropdownMenuItem onSelect={onLogout}>
           <LogOut className="size-4" /> Log out
         </DropdownMenuItem>
