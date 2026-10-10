@@ -25,6 +25,7 @@ id_rsa*
 id_ed25519*
 .npmrc
 .netrc
+src/assets/helo-conversations.webp
 
 # ---------------------------------------------------------------------------------------------
 # Dependencies and build output
