@@ -42,7 +42,7 @@ function Preview({ p, name, photo }: { p: Profile; name: string; photo: string |
       </div>
     )
   return (
-    <div className="overflow-hidden rounded-2xl border border-border shadow-sm" style={{ background: '#fff', fontFamily: WA.font, fontSize: 14 }}>
+    <div className="overflow-hidden rounded-lg border border-border shadow-sm" style={{ background: '#fff', fontFamily: WA.font, fontSize: 14 }}>
       <div className="flex flex-col items-center gap-2 px-4 pt-6 pb-4">
         <NumberAvatar photo={photo} name={name} size="lg" />
         <p style={{ fontSize: 20, color: WA.text }}>{name}</p>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { BookOpen, FlaskConical, Monitor, Moon, Plus, Rows3, Rows4, Settings, Sun } from 'lucide-react'
+import { ArrowLeftRight, BookOpen, FlaskConical, Monitor, Moon, Plus, Rows3, Rows4, Settings, Sun } from 'lucide-react'
 import { setDensity } from '@/app/lib/density'
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/app/components/ui/command'
 import { OPEN_COMMAND_PALETTE } from '@/app/lib/commandPalette'
@@ -10,6 +10,7 @@ import { useWizard } from '@/app/wizard/WizardContext'
 import { STUDIO_NAV_SECTIONS } from '@/app/wizard/studioNav'
 import { studioPath } from '@/app/wizard/studioPaths'
 import { setTheme } from '@/app/lib/theme'
+import { switchWorkspace } from '@/app/auth/workspaceSwitch'
 import { can } from '@/app/lib/permissions'
 
 const SETTINGS: { tab: string; label: string }[] = [
@@ -17,6 +18,9 @@ const SETTINGS: { tab: string; label: string }[] = [
   { tab: 'billing', label: 'Billing' },
   { tab: 'whatsapp', label: 'WhatsApp settings' },
   { tab: 'support', label: 'Hours & response targets' },
+  { tab: 'teams', label: 'Teams & people' },
+  { tab: 'routing', label: 'Routing rules' },
+  { tab: 'escalation', label: 'Escalation matrix' },
   { tab: 'canned', label: 'Canned responses' },
   { tab: 'fields', label: 'Contact fields' },
   { tab: 'profile', label: 'Your profile' },
@@ -109,6 +113,25 @@ export function CommandPalette() {
             </CommandItem>
           ))}
         </CommandGroup>
+        {me.workspaces.length > 1 && (
+          <CommandGroup heading="Workspaces">
+            {me.workspaces
+              .filter((w) => w.id !== me.workspace?.id)
+              .map((w) => (
+                <CommandItem
+                  key={w.id}
+                  value={`switch workspace ${w.name}`}
+                  onSelect={() => {
+                    setOpen(false)
+                    void switchWorkspace(w.id)
+                  }}
+                >
+                  <ArrowLeftRight />
+                  Switch to {w.name}
+                </CommandItem>
+              ))}
+          </CommandGroup>
+        )}
         <CommandGroup heading="Lists">
           {(['comfortable', 'compact'] as const).map((d) => (
             <CommandItem

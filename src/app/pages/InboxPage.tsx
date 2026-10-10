@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { Ban, Bot, Download, Check, CheckCheck, Clock, FileText, GraduationCap, Hand, ListChecks, Loader2, MessageSquareText, MoreHorizontal, PanelRight, Paperclip, Send, Sparkles, StickyNote, Undo2, Wrench, X } from 'lucide-react'
+import { Ban, Bot, ChevronDown, Download, Check, CheckCheck, Clock, Zap, FileText, GraduationCap, Hand, ListChecks, Loader2, MessageSquareText, MoreHorizontal, PanelRight, Paperclip, Send, Sparkles, StickyNote, Undo2, Wrench, X } from 'lucide-react'
 import { isDummyMode } from '@/app/api/dummy'
 import { listAccounts } from '@/app/api/whatsapp'
 import { Sheet, SheetBody, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
@@ -60,6 +60,12 @@ import { EmojiPicker } from '@/app/inbox/EmojiPicker'
 import { WindowChip } from '@/app/inbox/WindowChip'
 import { FollowUpBanner, FollowUpMenu } from '@/app/inbox/FollowUpMenu'
 import { InteractiveDialog } from '@/app/inbox/InteractiveDialog'
+import { HandoverCard } from '@/app/inbox/HandoverCard'
+import { useOpenTicket } from '@/app/inbox/useOpenTicket'
+import { afterSend } from '@/app/inbox/afterSend'
+import { describeActions, type CannedActions } from '@/app/inbox/macros'
+import { sessionStarts } from '@/app/inbox/sessions'
+import { listTeams, type Team, type Ticket } from '@/app/api/tickets'
 import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu'
@@ -74,7 +80,9 @@ const POLL_MS = 5000
 const FILTERS: { id: ChatFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'mine', label: 'Mine' },
+  { id: 'team', label: 'My team' },
   { id: 'unassigned', label: 'Unassigned' },
+  { id: 'closing', label: 'Closing soon' },
   { id: 'ai', label: 'AI handling' },
   { id: 'snoozed', label: 'Snoozed' },
 ]
@@ -121,7 +129,7 @@ function ChatRow({ c, active, onOpen }: { c: ChatSummary; active: boolean; onOpe
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-sm" style={{ fontWeight: c.unread ? 'var(--font-weight-semi-bold)' : 'var(--font-weight-medium)' }}>
+          <span className={cn('truncate text-sm', c.unread ? 'font-semibold' : 'font-medium')}>
             {display(c)}
           </span>
           <span className={cn('shrink-0 text-xs', c.unread ? 'text-primary' : 'text-muted-foreground')}>
@@ -133,23 +141,23 @@ function ChatRow({ c, active, onOpen }: { c: ChatSummary; active: boolean; onOpe
             {c.preview ? who + (c.preview.body ?? 'Sent a message') : 'No messages yet'}
           </span>
           {c.unread > 0 && (
-            <span className="flex min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-primary-foreground" style={{ fontSize: '0.6875rem', lineHeight: '1.25rem' }}>
+            <span className="flex min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-micro leading-5 text-primary-foreground">
               {c.unread}
             </span>
           )}
         </span>
         <span className="mt-1 flex flex-wrap items-center gap-1.5">
-          <span className={cn('inline-flex items-center gap-1 rounded px-1.5', c.owner === 'ai' ? 'bg-accent text-accent-foreground' : 'bg-warning/15 text-warning-foreground')} style={{ fontSize: '0.6875rem', lineHeight: '1.125rem' }}>
+          <span className={cn('inline-flex items-center gap-1 rounded px-1.5 text-micro', c.owner === 'ai' ? 'bg-accent text-accent-foreground' : 'bg-warning/15 text-warning-foreground')}>
             {c.owner === 'ai' ? <Bot className="size-3" /> : <Hand className="size-3" />}
             {c.owner === 'ai' ? 'AI' : 'Team'}
           </span>
           {c.sample && (
-            <span className="rounded bg-muted px-1.5 text-muted-foreground" style={{ fontSize: '0.6875rem', lineHeight: '1.125rem' }}>
+            <span className="rounded bg-muted px-1.5 text-micro text-muted-foreground">
               Sample
             </span>
           )}
           {c.snoozedUntil && Date.parse(c.snoozedUntil) > Date.now() && (
-            <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 text-muted-foreground" style={{ fontSize: '0.6875rem', lineHeight: '1.125rem' }}>
+            <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 text-micro text-muted-foreground">
               <Clock className="size-3" /> until {when(c.snoozedUntil)}
             </span>
           )}
@@ -301,14 +309,25 @@ function Thread({ messages, focusId, onCoach }: { messages: ChatMessage[]; focus
     else end.current?.scrollIntoView({ block: 'end' })
   }, [count, focusId])
   let lastDay = ''
+  const sessions = useMemo(() => sessionStarts(messages), [messages])
   return (
     <div className="space-y-1.5 px-4 py-4 md:px-8" style={{ background: WA.wallpaper }}>
       {messages.map((m) => {
         const d = dayLabel(m.at)
         const sep = d !== lastDay
         lastDay = d
+        const session = sessions.get(m.id)
         return (
           <div key={m.id} className="space-y-1.5">
+            {session && session.n > 1 && (
+              <div className="flex items-center gap-3 py-2" role="separator" aria-label={`Session ${session.n}`}>
+                <span className="h-px flex-1" style={{ background: WA.meta, opacity: 0.25 }} />
+                <span className="text-xs font-medium" style={{ color: WA.meta }}>
+                  Session {session.n} · new 24-hour window
+                </span>
+                <span className="h-px flex-1" style={{ background: WA.meta, opacity: 0.25 }} />
+              </div>
+            )}
             {sep && (
               <div className="flex justify-center py-2">
                 <span className="rounded-md px-2.5 py-1 shadow-sm" style={{ background: WA.chip, color: WA.meta, fontSize: 12.5 }}>
@@ -333,8 +352,10 @@ function Thread({ messages, focusId, onCoach }: { messages: ChatMessage[]; focus
   )
 }
 
-function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDetail; canned: CannedResponse[]; aiSummary: boolean; onSent: (d: ChatDetail) => void; onSummary: (text: string) => void }) {
+function Composer({ chat, canned, aiSummary, ticket, onSent, onSummary }: { chat: ChatDetail; canned: CannedResponse[]; aiSummary: boolean; ticket: Ticket | null; onSent: (d: ChatDetail) => void; onSummary: (text: string) => void }) {
   const [mode, setMode] = useState<'reply' | 'note'>('reply')
+  // A macro's actions, waiting for the reply to go out.
+  const [macro, setMacro] = useState<{ title: string; actions: CannedActions } | null>(null)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [pick, setPick] = useState(0)
@@ -389,19 +410,34 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
   }
   const applyCanned = (c: CannedResponse) => {
     setDraft(fillCanned(c.body, { name: contact?.name, phone: conv.phone }))
+    setMacro(c.actions ? { title: c.title, actions: c.actions } : null)
     setPick(0)
   }
-  async function submit() {
+  /** Sends, then (for "Send and …" or a macro) acts on the ticket. */
+  async function submit(then?: CannedActions) {
     const text = draft.trim()
     if ((!text && !file) || busy || locked) return
     setBusy(true)
     try {
+      let sent: ChatDetail
       if (file) {
         setProgress(0)
-        onSent(await sendMedia(conv.phone, file, text, setProgress))
+        sent = await sendMedia(conv.phone, file, text, setProgress)
         setFile(null)
-      } else onSent(mode === 'note' ? await addNote(conv.phone, text) : await sendReply(conv.phone, text))
+      } else sent = mode === 'note' ? await addNote(conv.phone, text) : await sendReply(conv.phone, text)
+      onSent(sent)
       setDraft('')
+      const actions = mode === 'reply' ? { ...macro?.actions, ...then } : undefined
+      setMacro(null)
+      if (actions && Object.keys(actions).length) {
+        try {
+          await afterSend(conv.phone, ticket, actions)
+          toast.success(`Sent, then ${describeActions(actions)}.`)
+          onSent(await getChat(conv.phone))
+        } catch (err) {
+          toast.error('Sent, but the ticket wasn’t updated', { description: errorDetail(err) })
+        }
+      }
     } catch (err) {
       toast.error(errorDetail(err))
     } finally {
@@ -479,7 +515,7 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
           )}
         </span>
         {mode === 'reply' && conv.owner === 'ai' && conv.windowOpen && (
-          <span className="ml-auto hidden text-muted-foreground sm:inline text-xs">
+          <span className="ml-auto hidden truncate text-xs text-muted-foreground 2xl:inline">
             Replying takes the chat over from the AI agent.
           </span>
         )}
@@ -573,11 +609,47 @@ function Composer({ chat, canned, aiSummary, onSent, onSummary }: { chat: ChatDe
               aria-label={mode === 'note' ? 'Internal note' : 'Reply'}
               className={cn('max-h-40 min-h-11 resize-none', mode === 'note' && 'bg-warning/5')}
             />
-            <Button onClick={() => void submit()} disabled={(!draft.trim() && !file) || busy} aria-label={mode === 'note' ? 'Add note' : 'Send reply'}>
-              {busy ? <Loader2 className="size-4 animate-spin" /> : mode === 'note' ? <StickyNote className="size-4" /> : <Send className="size-4" />}
-              {mode === 'note' ? 'Add note' : 'Send'}
-            </Button>
+            <div className="flex">
+              <Button
+                onClick={() => void submit()}
+                disabled={(!draft.trim() && !file) || busy}
+                aria-label={mode === 'note' ? 'Add note' : 'Send reply'}
+                className={cn(mode === 'reply' && 'rounded-r-none')}
+              >
+                {busy ? <Loader2 className="size-4 animate-spin" /> : mode === 'note' ? <StickyNote className="size-4" /> : <Send className="size-4" />}
+                {mode === 'note' ? 'Add note' : 'Send'}
+              </Button>
+              {mode === 'reply' && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="rounded-l-none border-l border-primary-foreground/25 px-2" disabled={(!draft.trim() && !file) || busy} aria-label="More ways to send">
+                      <ChevronDown className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" side="top" className="w-60">
+                    <DropdownMenuItem disabled={!ticket} onSelect={() => void submit({ status: 'resolved' })}>
+                      <CheckCheck className="size-4" /> Send and resolve
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={!ticket} onSelect={() => void submit({ status: 'pending' })}>
+                      <Clock className="size-4" /> Send and wait on customer
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={isBsuid(conv.phone)} onSelect={() => void submit({ handBack: true })}>
+                      <Bot className="size-4" /> Send and hand back to AI
+                    </DropdownMenuItem>
+                    {!ticket && <p className="px-2 py-1.5 text-xs text-muted-foreground">Resolve and wait need an open ticket.</p>}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
           </div>
+          {macro && mode === 'reply' && (
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Zap className="size-3.5 text-primary" /> After sending, “{macro.title}” will {describeActions(macro.actions)}.
+              <button type="button" className="underline hover:text-foreground" onClick={() => setMacro(null)}>
+                Skip
+              </button>
+            </p>
+          )}
         </div>
       )}
       {buttonsOpen && (
@@ -780,6 +852,7 @@ function CustomerDetails({ chat, version, onChanged }: { chat: ChatDetail; versi
         </p>
       </div>
       <TicketPanel phone={conv.phone} windowOpen={conv.windowOpen} version={version} onChanged={onChanged} />
+      <TranscriptLink chat={chat} />
       <dl className="space-y-4 text-sm">
         <div>
           <dt className="text-muted-foreground text-xs">
@@ -797,6 +870,40 @@ function CustomerDetails({ chat, version, onChanged }: { chat: ChatDetail; versi
         </div>
       </dl>
     </div>
+  )
+}
+
+/** The whole chat as text, for supervisors and up (and in Dummy mode, built from what's on screen). */
+function TranscriptLink({ chat }: { chat: ChatDetail }) {
+  const { me } = useAuth()
+  if (!can(me?.role, 'chats.all')) return null
+  const phone = chat.conversation.phone
+  const file = `chat-${phone}.txt`
+  if (isDummyMode() || chat.conversation.sample)
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full"
+        onClick={() => {
+          const who = (m: ChatMessage) => (m.author === 'customer' ? chat.contact?.name || 'Customer' : m.author === 'ai' ? 'AI agent' : m.author === 'system' ? 'System' : m.authorName || 'Team')
+          const text = chat.messages.filter((m) => m.kind !== 'note').map((m) => `[${new Date(m.at).toLocaleString()}] ${who(m)}: ${m.body ?? ''}`).join('\n')
+          const a = document.createElement('a')
+          a.href = URL.createObjectURL(new Blob([text + '\n'], { type: 'text/plain;charset=utf-8' }))
+          a.download = file
+          a.click()
+          setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+        }}
+      >
+        <Download className="size-4" /> Download transcript
+      </Button>
+    )
+  return (
+    <Button variant="outline" size="sm" className="w-full" asChild>
+      <a href={`/api/inbox/conversations/${encodeURIComponent(phone)}/transcript?format=txt`} download={file}>
+        <Download className="size-4" /> Download transcript
+      </a>
+    </Button>
   )
 }
 
@@ -881,6 +988,11 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
   const [views, setViews] = useState<SavedView[]>([])
   const [hits, setHits] = useState<SearchHit[] | null>(null)
   const [focusId, setFocusId] = useState<string | null>(null)
+  const ticket = useOpenTicket(open, version)
+  const [teams, setTeams] = useState<Team[]>([])
+  useEffect(() => {
+    listTeams().then(setTeams, () => {})
+  }, [])
   const members = useMembers()
   useEffect(() => {
     listViews().then(setViews, () => {})
@@ -1101,6 +1213,18 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
                 </button>
               </div>
             )}
+            <HandoverCard
+              key={chat.conversation.phone}
+              chat={chat}
+              ticket={ticket}
+              teamName={teams.find((t) => t.id === ticket?.teamId)?.name ?? null}
+              aiSummary={aiSummary}
+              onChange={(d) => {
+                setChat(d)
+                setVersion((v) => v + 1)
+                refreshList()
+              }}
+            />
             <div className="min-h-0 flex-1 overflow-y-auto" style={{ background: WA.wallpaper }}>
               <Thread messages={chat.messages} focusId={focusId} onCoach={can(me?.role, 'agent.edit') ? (question, reply) => setCoach({ question, reply }) : undefined} />
             </div>
@@ -1108,6 +1232,7 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
               chat={chat}
               canned={canned}
               aiSummary={aiSummary}
+              ticket={ticket}
               onSummary={setSummary}
               onSent={(d) => {
                 setChat(d)

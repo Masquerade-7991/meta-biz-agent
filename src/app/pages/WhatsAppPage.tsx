@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Loader2, Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
+import { PageContainer } from '@/app/components/ui/page'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
@@ -16,7 +17,7 @@ import { statusHelp } from '@/app/whatsapp/profileRules'
 import { can } from '@/app/lib/permissions'
 import { cn } from '@/app/lib/utils'
 
-const QUALITY: Record<string, string> = { GREEN: 'bg-success', YELLOW: 'bg-amber-500', RED: 'bg-destructive' }
+const QUALITY: Record<string, string> = { GREEN: 'bg-success', YELLOW: 'bg-warning', RED: 'bg-destructive' }
 const limitText = (l: string | null) => (l ? l.replace('TIER_', '').replace('UNLIMITED', 'Unlimited') : '—')
 
 const ACCOUNT_KEY = 'helo-whatsapp-account'
@@ -76,14 +77,14 @@ export function WhatsAppPage() {
   }, [rows, connecting])
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
+    <PageContainer>
       {open ? (
         <NumberPage key={open} id={open} showBack backLabel={account ? `All numbers in ${account.name}` : 'All numbers'} onBack={() => (setOpen(null), load())} />
       ) : (
         <div className="space-y-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h1>WhatsApp</h1>
+              <h1 className="text-title font-semibold">WhatsApp</h1>
               <p className="mt-1 text-muted-foreground">Your numbers, their profiles, names and settings, as customers see them on WhatsApp.</p>
               {account && (
                 <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -132,7 +133,7 @@ export function WhatsAppPage() {
           ) : !rows ? (
             <PageLoader context="whatsapp" />
           ) : rows.length === 0 ? (
-            <div className="rounded-xl border border-border p-6">
+            <div className="rounded-lg border border-border p-6">
               <ConnectWhatsApp config={config} isOwner={can(me?.role, 'whatsapp.manage')} workspaceName={me?.workspace?.name ?? 'this workspace'} variant="compact" onConnected={() => load(true)} />
             </div>
           ) : (
@@ -172,7 +173,7 @@ export function WhatsAppPage() {
                           </TableCell>
                           <TableCell>
                             <span className="flex items-center gap-1.5 text-sm" title={st.help}>
-                              <span className={cn('size-2 rounded-full', st.tone === 'ok' ? 'bg-success' : st.tone === 'warn' ? 'bg-amber-500' : 'bg-destructive')} />
+                              <span className={cn('size-2 rounded-full', st.tone === 'ok' ? 'bg-success' : st.tone === 'warn' ? 'bg-warning' : 'bg-destructive')} />
                               {st.label}
                             </span>
                           </TableCell>
@@ -215,6 +216,6 @@ export function WhatsAppPage() {
           />
         </DialogContent>
       </Dialog>
-    </div>
+    </PageContainer>
   )
 }

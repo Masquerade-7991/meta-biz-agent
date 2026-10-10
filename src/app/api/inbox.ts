@@ -1,5 +1,6 @@
 // Inbox client: /api/inbox/* on the server (chats, replies, notes, assignment, thread control,
 // canned responses, sample data). Dummy mode answers from sample chats in this browser instead.
+import type { CannedActions } from '../inbox/macros'
 import { jsonClient } from './client'
 import { dummyInbox } from './supportDummy'
 import { isDummyMode } from './dummy'
@@ -57,8 +58,10 @@ export interface CannedResponse {
   shortcut: string
   body: string
   shared: boolean
+  /** A macro: what happens to the ticket after it's sent. */
+  actions?: CannedActions | null
 }
-export type ChatFilter = 'all' | 'mine' | 'unassigned' | 'ai' | 'snoozed'
+export type ChatFilter = 'all' | 'mine' | 'team' | 'unassigned' | 'closing' | 'ai' | 'snoozed'
 export interface SavedView {
   id: string
   name: string

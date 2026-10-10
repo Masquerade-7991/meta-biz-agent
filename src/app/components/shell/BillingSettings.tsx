@@ -88,7 +88,7 @@ export function BillingSettingsTab() {
           {b.budget ? (
             <div className="space-y-1">
               <div className="h-2 overflow-hidden rounded-full bg-muted">
-                <div className={used >= 1 ? 'h-full bg-destructive' : used >= 0.8 ? 'h-full bg-amber-500' : 'h-full bg-primary'} style={{ width: `${used * 100}%` }} />
+                <div className={used >= 1 ? 'h-full bg-destructive' : used >= 0.8 ? 'h-full bg-warning' : 'h-full bg-primary'} style={{ width: `${used * 100}%` }} />
               </div>
               <p className="text-muted-foreground text-xs">
                 {Math.round(used * 100)}% of your {formatMoney(b.budget, b.currency, 0)} budget

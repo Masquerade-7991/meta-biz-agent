@@ -3,6 +3,8 @@ import { PageLoader } from '@/app/components/ui/wavy-loader'
 import { CircleHelp, ExternalLink, Menu, Search } from 'lucide-react'
 import { openCommandPalette, PALETTE_SHORTCUT } from '@/app/lib/commandPalette'
 import { NotificationsBell } from './NotificationsBell'
+import { ThemeToggle } from './ThemeToggle'
+import { HEADER_ICON_BUTTON } from './headerButton'
 import { Sheet, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
 import {
   DropdownMenu,
@@ -30,7 +32,8 @@ const InboxPage = lazy(() => import('@/app/pages/InboxPage').then((m) => ({ defa
 const TicketsPage = lazy(() => import('@/app/pages/TicketsPage').then((m) => ({ default: m.TicketsPage })))
 const ContactsPage = lazy(() => import('@/app/pages/ContactsPage').then((m) => ({ default: m.ContactsPage })))
 const BroadcastsPage = lazy(() => import('@/app/pages/BroadcastsPage').then((m) => ({ default: m.BroadcastsPage })))
-const SupportAnalyticsPage = lazy(() => import('@/app/pages/SupportAnalyticsPage').then((m) => ({ default: m.SupportAnalyticsPage })))
+const ReportsPage = lazy(() => import('@/app/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })))
+const AnalyticsDashboard = lazy(() => import('@/app/analytics/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard })))
 const WhatsAppPage = lazy(() => import('@/app/pages/WhatsAppPage').then((m) => ({ default: m.WhatsAppPage })))
 const AgentsListPage = lazy(() => import('./AgentsListPage').then((m) => ({ default: m.AgentsListPage })))
 const SettingsPage = lazy(() => import('./SettingsPage').then((m) => ({ default: m.SettingsPage })))
@@ -113,7 +116,9 @@ export function ProductShell({
           <WhatsAppPage />
         )
       case 'analytics':
-        return <SupportAnalyticsPage />
+        return <AnalyticsDashboard />
+      case 'reports':
+        return <ReportsPage />
       case 'ai-agents':
         return (
           <AgentsListPage
@@ -158,12 +163,13 @@ export function ProductShell({
           >
             <Search className="size-4" />
             <span className="flex-1 text-left">Search or jump to…</span>
-            <kbd className="rounded border border-border bg-card px-1.5 font-mono text-[0.6875rem]">{PALETTE_SHORTCUT}</kbd>
+            <kbd className="rounded border border-border bg-card px-1.5 font-mono text-micro">{PALETTE_SHORTCUT}</kbd>
           </button>
           <div className="ml-auto flex items-center gap-1 md:ml-2">
-            <button type="button" onClick={openCommandPalette} aria-label="Search or jump to" className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground md:hidden">
+            <button type="button" onClick={openCommandPalette} aria-label="Search or jump to" className={`${HEADER_ICON_BUTTON} md:hidden`}>
               <Search className="size-5" />
             </button>
+            <ThemeToggle />
             <HelpMenu />
             <NotificationsBell
               onOpenChat={openChat}
@@ -188,7 +194,7 @@ function HelpMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" aria-label="Help and guides" className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+        <button type="button" aria-label="Help and guides" className={HEADER_ICON_BUTTON}>
           <CircleHelp className="size-5" />
         </button>
       </DropdownMenuTrigger>
@@ -198,7 +204,7 @@ function HelpMenu() {
           {SHORTCUTS.map((s) => (
             <li key={s.keys} className="flex items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground">{s.what}</span>
-              <kbd className="shrink-0 rounded border border-border bg-muted px-1.5 font-mono text-[0.6875rem]">{s.keys}</kbd>
+              <kbd className="shrink-0 rounded border border-border bg-muted px-1.5 font-mono text-micro">{s.keys}</kbd>
             </li>
           ))}
         </ul>

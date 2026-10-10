@@ -16,6 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - To test wiring while it's down, use a throwaway local stand-in server as the upstream: `BASE_URL_2=http://localhost:<port> node server/index.ts`.
 - **Accounts gate the API (`server/auth.ts`):**
   - Every `/api/*` route except `/api/health` and the account routes needs a signed-in workspace member, and runs inside that member's workspace (`ws()` in `server/db.ts`).
+  - A person can belong to several workspaces (memberships unique per workspace + person). Each session works in one (`sessions.workspaceId`), switched with `POST /api/account/workspace`. Someone who already has an account answers an invite in the app, signed in as the invited email (`/api/account/invites/{id}/accept|decline`); the emailed link alone never joins them.
   - Accounts need MongoDB.
   - Emails go through Gmail SMTP (`SMTP_USER` / `SMTP_PASS` App password). Without `SMTP_PASS`, emails, including magic links, print to the relay log.
   - Dummy mode skips login entirely.
@@ -31,8 +32,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## UI conventions
 
 - **Tokens** live in `src/styles/theme.css` (light on `:root`, dark on `.dark`, switched by `src/app/lib/theme.ts`). Neutral greys, the Helo blue (`primary`) for actions, Helo red (`brand`) only for the logo and progress bars; the active-nav bar is `primary` blue. Text colours meet WCAG AA; keep it that way (status text uses the `-foreground` shades on `/10`–`/15` tints).
-- **Type** is classes, not inline styles: `text-title` (page), `text-section`, `text-sm` (body), `text-xs`/`text-meta` (metadata), `text-display` (Home greeting only). Base h1–h4 are 24/20/16/14px.
-- **Page pieces** in `src/app/components/ui/page.tsx` (PageContainer, PageHeader, EmptyState, SaveBar), `sheet.tsx` for side panels, `status.tsx` StatusPill with the words in `src/app/lib/status.ts` (agent: Draft · Testing · Live · Paused).
+- **Type** is classes, not inline styles: `text-title` (page), `text-section`, `text-sm` (body), `text-xs`/`text-meta` (metadata), `text-micro` (counts and chips in dense rows), `text-display` (Home greeting only). Base h1–h4 are 24/20/16/14px. Only the WhatsApp look-alikes (bubbles, previews: `whatsappTheme.ts`) keep fixed inline sizes.
+- **Colours** are tokens only: `warning`/`success`/`destructive` (and their `-foreground`) for status, never raw palette classes like `amber-500`. Cards are `rounded-lg`.
+- **Page pieces** in `src/app/components/ui/page.tsx` (PageContainer, PageHeader, EmptyState, SaveBar): every page uses them. `sheet.tsx` for side panels and editors, `status.tsx` StatusPill with the words in `src/app/lib/status.ts` (agent: Draft · Testing · Live · Paused), `kpi.tsx` KpiTile (value, change against the period before, sparkline). Settings sections are `SettingsSection` (`stacked` for grids and wide tables).
+- **Charts:** `src/app/components/charts/*`. TimeSeriesChart and Donut use Recharts (only load them from lazily loaded pages); Sparkline, BarList, Funnel and Heatmap are plain SVG/divs. Colours come from `--chart-1..5`; rates use `domain={[0, 1]}`.
+- **Top bar:** search, the theme toggle (`ThemeToggle`: light/dark; ⌘K keeps Match system), help and the bell, all `HEADER_ICON_BUTTON`. The sidebar top is the workspace switcher; the account menu has no theme.
 - **Addresses:** every page has a URL (`src/app/nav.ts` `pathFor`); the studio is `/agents/studio/<section>` (`src/app/wizard/studioPaths.ts`) and follows the wizard's `currentSection` both ways (`StudioUrlSync` in `App.tsx`). Real IDs never go in URLs.
 - **Demo controls** render only in dummy mode or dev (`App.tsx`); Demo controls → Loader previews the page loader.
 - **Loading a page or panel:** `PageLoader` (`ui/wavy-loader.tsx`) with an area's lines from `lib/loadingLines.ts`; small spinners only inside buttons.
@@ -55,11 +59,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Support platform (Home, Inbox, Tickets, Contacts, Broadcasts, Analytics)
 
-- **Server modules:** `inbox.ts` (chats, replies, thread control, canned responses, webhook, AI assist), `tickets.ts` (tickets, SLA, routing, CSAT, support settings, notifications, analytics), `contacts.ts` (contacts, fields, segments, CSV import), `broadcasts.ts` (templates, broadcasts, send worker). All workspace-scoped; sending needs `ownsMetaAssets()`.
+- **Server modules:** `inbox.ts` (chats, replies, thread control, canned responses and macros, webhook, AI assist), `tickets.ts` (tickets, SLA, CSAT, support settings, notifications), `supportOps.ts` (teams, people's skills/limit/availability, routing rules, escalation matrix and its minute sweep), `analytics.ts` (the Analytics page and its logs), `reports.ts` (CSV downloads, scheduled report emails), `contacts.ts` (contacts, fields, segments, CSV import), `broadcasts.ts` (templates, broadcasts, send worker). All workspace-scoped; sending needs `ownsMetaAssets()`.
+- **Routing and escalation:** the decisions are pure and shared (`src/app/support/routing.ts`): first matching rule wins, then the default routing in support settings; only available people under their limit get tickets. Escalation levels fire in order, once each (`escalationLevel` on the ticket), and alert by bell (`escalations[].notify`) and optionally email.
+- **Agents in analytics:** messages, conversations and tickets carry `phoneNumberId` (the number a webhook arrived on, `currentNumber()` in inbox.ts); rows without one count as the default number. Analytics and report tables are built once (`src/app/analytics/types.ts`, `src/app/reports/catalog.ts`) for server, print view and Dummy mode.
 - **Model:** one conversation per customer phone; a ticket is one issue inside it (opens on handoff, take-over or a team reply).
 - **Sample data never reaches Meta:** rows with `sample: true` are stored but not sent. Tests send only to sample contacts.
 - **Shared pure logic** lives in `src/` and is imported by the server too: `src/app/inbox/sampleData.ts`, `src/app/broadcasts/templates.ts`. SLA business-hours maths is `server/businessHours.ts`.
-- **Tests:** `node --test server/*.test.ts src/app/contacts/csv.test.ts src/app/whatsapp/signupEvent.test.ts src/app/wizard/*.test.ts`.
+- **Tests:** `node --test server/*.test.ts src/app/contacts/csv.test.ts src/app/whatsapp/signupEvent.test.ts src/app/wizard/*.test.ts src/app/inbox/*.test.ts`.
 
 ## Rules for Meta wiring
 

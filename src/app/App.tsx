@@ -25,6 +25,7 @@ const AuthScreen = lazy(() => import('@/app/auth/AuthScreens').then((m) => ({ de
 const CreateWorkspaceScreen = lazy(() => import('@/app/auth/AuthScreens').then((m) => ({ default: m.CreateWorkspaceScreen })))
 const AccountSetupScreen = lazy(() => import('@/app/auth/SetupScreen').then((m) => ({ default: m.AccountSetupScreen })))
 const NewPasswordScreen = lazy(() => import('@/app/auth/SetupScreen').then((m) => ({ default: m.NewPasswordScreen })))
+const ReportPrint = lazy(() => import('@/app/reports/ReportPrint').then((m) => ({ default: m.ReportPrint })))
 const VerifyScreen = lazy(() => import('@/app/auth/SetupScreen').then((m) => ({ default: m.VerifyScreen })))
 
 function AgentBuilderFlow({ onExitToShell }: { onExitToShell: (page?: NavId) => void }) {
@@ -117,6 +118,8 @@ function Gate() {
   if (legacyPage && NAV_ITEMS.some((i) => i.id === legacyPage)) return <Navigate to={pathFor(legacyPage)} replace />
 
   const path = location.pathname
+  // The print view of a report: no console around it, so the page prints (or saves as PDF) cleanly.
+  if (path === '/reports/print') return <ReportPrint />
   if (path === '/agents/setup') return <SetupFrontDoor onFinish={() => navigate(STUDIO_BASE)} />
   if (path === STUDIO_BASE || path.startsWith(STUDIO_BASE + '/'))
     return <AgentBuilderFlow onExitToShell={(page) => navigate(pathFor(page ?? 'ai-agents'))} />

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2, Plus, Send, Trash2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
+import { PageContainer, PageHeader } from '@/app/components/ui/page'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/app/components/ui/tooltip'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
@@ -91,7 +92,7 @@ function SendCheck({ check, error, category }: { check: Preflight | null; error:
       {real > 0 && <p className="text-muted-foreground">Based on what WhatsApp charged you for {category.toLowerCase()} messages in the last 30 days.</p>}
       {check.sample > 0 && <p className="text-muted-foreground">{check.sample} sample contacts are only stored, never sent to WhatsApp.</p>}
       {check.gotMarketingToday > 0 && (
-        <p className="text-amber-700 dark:text-amber-400">
+        <p className="text-warning-foreground">
           {check.gotMarketingToday} already got a marketing message from you today. WhatsApp may hold theirs back under its daily limit; we&rsquo;ll retry tomorrow.
         </p>
       )}
@@ -547,40 +548,43 @@ export function BroadcastsPage() {
   usePolling(load, 5000, [], !!sending, LIVE_BROADCASTS)
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1>Broadcasts</h1>
-          <p className="mt-1 text-muted-foreground">Send approved WhatsApp templates to groups of contacts, now or later.</p>
-        </div>
-        {tab === 'broadcasts' ? (
-          can(me?.role, 'broadcasts.send') ? (
-            <Button onClick={() => setCreating(true)} disabled={!templates} title={!templates ? 'Loading your templates…' : undefined}>
-              <Plus className="size-4" />
-              {templates ? 'New broadcast' : 'Loading templates…'}
-            </Button>
+    <PageContainer>
+      <PageHeader
+        title="Broadcasts"
+        description="Send approved WhatsApp templates to groups of contacts, now or later."
+        className="mb-0"
+        actions={
+          <>
+          {tab === 'broadcasts' ? (
+            can(me?.role, 'broadcasts.send') ? (
+              <Button onClick={() => setCreating(true)} disabled={!templates} title={!templates ? 'Loading your templates…' : undefined}>
+                <Plus className="size-4" />
+                {templates ? 'New broadcast' : 'Loading templates…'}
+              </Button>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0}>
+                    <Button disabled>
+                      <Plus className="size-4" />
+                      New broadcast
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Supervisors, admins and owners send broadcasts.</TooltipContent>
+              </Tooltip>
+            )
           ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span tabIndex={0}>
-                  <Button disabled>
-                    <Plus className="size-4" />
-                    New broadcast
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Supervisors, admins and owners send broadcasts.</TooltipContent>
-            </Tooltip>
-          )
-        ) : (
-          can(me?.role, 'templates.create') && (
-            <Button onClick={() => setCreatingTpl(true)}>
-              <Plus className="size-4" />
-              New template
-            </Button>
-          )
-        )}
-      </div>
+            can(me?.role, 'templates.create') && (
+              <Button onClick={() => setCreatingTpl(true)}>
+                <Plus className="size-4" />
+                New template
+              </Button>
+            )
+          )}
+          </>
+        }
+      />
       {error && (
         <div className="mt-4">
           <FormError>{error}</FormError>
@@ -731,6 +735,6 @@ export function BroadcastsPage() {
           deleteTemplate(t.name).then(loadTemplates, (err) => toast.error(errorDetail(err)))
         }}
       />
-    </div>
+    </PageContainer>
   )
 }

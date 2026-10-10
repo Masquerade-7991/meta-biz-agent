@@ -19,7 +19,7 @@ export function WindowChip({ lastInboundAt }: { lastInboundAt: string | null }) 
   const closing = ms > 0 && ms < 3_600_000
   return (
     <span
-      className={cn('inline-flex items-center gap-1 rounded px-1.5', ms <= 0 ? 'bg-muted text-muted-foreground' : closing ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300' : 'bg-success/15 text-foreground')}
+      className={cn('inline-flex items-center gap-1 rounded px-1.5', ms <= 0 ? 'bg-muted text-muted-foreground' : closing ? 'bg-warning/15 text-warning-foreground' : 'bg-success/15 text-foreground')}
       style={{ fontSize: '0.6875rem', lineHeight: '1.125rem' }}
       title="WhatsApp allows free-form replies for 24 hours after the customer’s last message. After that, only approved templates."
     >

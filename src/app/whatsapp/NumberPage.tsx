@@ -25,7 +25,7 @@ export interface TabProps {
 
 const QUALITY: Record<string, { label: string; dot: string }> = {
   GREEN: { label: 'High quality', dot: 'bg-success' },
-  YELLOW: { label: 'Medium quality', dot: 'bg-amber-500' },
+  YELLOW: { label: 'Medium quality', dot: 'bg-warning' },
   RED: { label: 'Low quality', dot: 'bg-destructive' },
 }
 const ACTIVITY: Record<string, string> = {
@@ -123,7 +123,7 @@ export function NumberPage({ id, showBack, onBack, backLabel = 'All numbers', in
           </p>
           <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
             <span className="flex items-center gap-1.5">
-              <span className={cn('size-2 rounded-full', st.tone === 'ok' ? 'bg-success' : st.tone === 'warn' ? 'bg-amber-500' : 'bg-destructive')} />
+              <span className={cn('size-2 rounded-full', st.tone === 'ok' ? 'bg-success' : st.tone === 'warn' ? 'bg-warning' : 'bg-destructive')} />
               {st.label}
             </span>
             <span className="flex items-center gap-1.5">
@@ -141,7 +141,7 @@ export function NumberPage({ id, showBack, onBack, backLabel = 'All numbers', in
       </div>
 
       {st.tone !== 'ok' && (
-        <div className={cn('flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm', st.tone === 'bad' ? 'border-destructive/40 bg-destructive/5' : 'border-amber-500/40 bg-amber-500/5')}>
+        <div className={cn('flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm', st.tone === 'bad' ? 'border-destructive/40 bg-destructive/5' : 'border-warning/40 bg-warning/5')}>
           <span className="min-w-60 flex-1">
             <strong>{st.label}.</strong> {st.help}
           </span>

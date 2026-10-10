@@ -1,18 +1,17 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { Switch } from '@/app/components/ui/switch'
-import { Checkbox } from '@/app/components/ui/checkbox'
 import { Textarea } from '@/app/components/ui/textarea'
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { FormError } from '@/app/auth/AuthLayout'
 import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
-import { getSupportSettings, PRIORITIES, PRIORITY_LABEL, saveSupportSettings, type Day, type SupportSettings } from '@/app/api/tickets'
+import { getSupportSettings, listTeams, PRIORITIES, PRIORITY_LABEL, saveSupportSettings, type Day, type SupportSettings, type Team } from '@/app/api/tickets'
 import { useMembers } from '@/app/auth/useMembers'
 import { SettingsSection } from './SettingsSection'
 import { can } from '@/app/lib/permissions'
@@ -40,8 +39,10 @@ export function SupportSettingsTab() {
   const [holiday, setHoliday] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [teams, setTeams] = useState<Team[]>([])
   useEffect(() => {
     getSupportSettings().then(setS, (err) => setError(errorDetail(err)))
+    listTeams().then(setTeams, () => {})
   }, [])
   if (!s)
     return error ? (
@@ -53,7 +54,6 @@ export function SupportSettingsTab() {
   const set = (patch: Partial<SupportSettings>) => setS({ ...s, ...patch })
   const setDay = (d: Day, v: { open: string; close: string } | null) => set({ hours: { ...s.hours, week: { ...s.hours.week, [d]: v } } })
   const setSla = (p: (typeof PRIORITIES)[number], k: 'firstResponse' | 'resolve', v: number) => set({ sla: { ...s.sla, [p]: { ...s.sla[p], [k]: v } } })
-  const setTeam = (i: number, patch: Partial<SupportSettings['teams'][number]>) => set({ teams: s.teams.map((t, j) => (j === i ? { ...t, ...patch } : t)) })
 
   async function save() {
     setBusy(true)
@@ -187,7 +187,7 @@ export function SupportSettingsTab() {
         </div>
       </SettingsSection>
 
-      <SettingsSection wide title="Teams and routing" description="Who gets a new ticket when the AI agent hands a chat over. Teams group people for round-robin.">
+      <SettingsSection wide title="Default routing" description="Who gets a new ticket when no routing rule decides. People set to away or offline are skipped.">
         <RadioGroup value={s.routing.mode} onValueChange={(v) => set({ routing: { ...s.routing, mode: v as SupportSettings['routing']['mode'] } })} className="space-y-2">
           <label className="flex items-start gap-2.5 text-sm">
             <RadioGroupItem value="round_robin" className="mt-0.5" />
@@ -203,7 +203,7 @@ export function SupportSettingsTab() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="everyone">Everyone in the workspace</SelectItem>
-                    {s.teams.map((t) => (
+                    {teams.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
                         {t.name || 'Unnamed team'}
                       </SelectItem>
@@ -243,33 +243,9 @@ export function SupportSettingsTab() {
             </span>
           </label>
         </RadioGroup>
-        <div className="space-y-2">
-          {s.teams.map((t, i) => (
-            <div key={t.id} className="space-y-2 rounded-lg border border-border p-3">
-              <div className="flex items-center gap-2">
-                <Input value={t.name} onChange={(e) => setTeam(i, { name: e.target.value })} placeholder="Team name, e.g. Billing" className="h-8" aria-label="Team name" />
-                <Button type="button" variant="ghost" size="sm" aria-label={`Remove ${t.name || 'team'}`} onClick={() => set({ teams: s.teams.filter((_, j) => j !== i) })}>
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-2">
-                {members.map((m) => (
-                  <label key={m.userId} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={t.memberIds.includes(m.userId)}
-                      onCheckedChange={(on) => setTeam(i, { memberIds: on ? [...t.memberIds, m.userId] : t.memberIds.filter((id) => id !== m.userId) })}
-                    />
-                    {m.name}
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
-          <Button type="button" variant="outline" size="sm" onClick={() => set({ teams: [...s.teams, { id: crypto.randomUUID(), name: '', memberIds: [] }] })}>
-            <Plus className="size-4" />
-            Add team
-          </Button>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          Routing rules run first; this is what happens when none matches. Manage teams in Teams &amp; people and rules in Routing rules.
+        </p>
       </SettingsSection>
 
       <SettingsSection wide title="Customer feedback" description="After a ticket is resolved, ask the customer how it went with three WhatsApp buttons. Answers show on the ticket.">
