@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Rows4, Settings, Sun, UserPlus } from 'lucide-react'
+import { Check, LogOut, PanelLeftClose, PanelLeftOpen, Rows3, Rows4, Settings, UserPlus } from 'lucide-react'
 import { getDensity, setDensity, type Density } from '@/app/lib/density'
 import { Avatar, AvatarFallback } from '@/app/components/ui/avatar'
 import {
@@ -17,7 +17,6 @@ import { cn } from '@/app/lib/utils'
 import { useAuth } from '@/app/auth/AuthContext'
 import type { SettingsTab } from './SettingsPage'
 import { can, roleLabel } from '@/app/lib/permissions'
-import { getTheme, setTheme, type ThemeChoice } from '@/app/lib/theme'
 
 const initial = (name?: string) => name?.trim()[0]?.toUpperCase() || '?'
 const COLLAPSE_KEY = 'helo-nav-collapsed'
@@ -155,27 +154,17 @@ function AccountMenu({
   onOpenSettings: (tab: SettingsTab) => void
   onLogout: () => void
 }) {
-  const [theme, setThemeState] = useState<ThemeChoice>(getTheme)
   const [density, setDensityState] = useState<Density>(getDensity)
   const pickDensity = (d: Density) => {
     setDensity(d)
     setDensityState(d)
   }
-  const pick = (t: ThemeChoice) => {
-    setTheme(t)
-    setThemeState(t)
-  }
-  const THEMES: { id: ThemeChoice; label: string; icon: typeof Sun }[] = [
-    { id: 'light', label: 'Light', icon: Sun },
-    { id: 'dark', label: 'Dark', icon: Moon },
-    { id: 'system', label: 'Match system', icon: Monitor },
-  ]
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label="Account, theme and workspace"
+          aria-label="Account and workspace"
           className={cn(
             'flex items-center gap-2.5 rounded-md text-left transition-colors outline-none hover:bg-sidebar-accent/70 focus-visible:ring-[3px] focus-visible:ring-ring/50',
             collapsed ? 'size-9 justify-center' : 'w-full px-1.5 py-1.5',
@@ -206,14 +195,6 @@ function AccountMenu({
             <UserPlus className="size-4" /> Invite people
           </DropdownMenuItem>
         )}
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-meta font-normal text-muted-foreground">Theme</DropdownMenuLabel>
-        {THEMES.map((t) => (
-          <DropdownMenuItem key={t.id} onSelect={(e) => (e.preventDefault(), pick(t.id))}>
-            <t.icon className="size-4" /> {t.label}
-            {theme === t.id && <Check className="ml-auto size-4" />}
-          </DropdownMenuItem>
-        ))}
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-meta font-normal text-muted-foreground">Lists</DropdownMenuLabel>
         {(['comfortable', 'compact'] as const).map((d) => (

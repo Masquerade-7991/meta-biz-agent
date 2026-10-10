@@ -3,71 +3,12 @@ import { errorDetail } from '@/app/api/meta'
 import { getSupportAnalytics, type SupportAnalytics } from '@/app/api/tickets'
 import { PillTabs } from '@/app/components/Filters'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
+import { KpiTile as Kpi } from '@/app/components/ui/kpi'
+import { TimeSeriesChart } from '@/app/components/charts/TimeSeriesChart'
 
 const RANGES = [7, 30, 90] as const
 const dur = (m: number | null) => (m === null ? '–' : m < 60 ? `${Math.round(m)}m` : m < 60 * 48 ? `${(m / 60).toFixed(m < 600 ? 1 : 0)}h` : `${Math.round(m / 1440)}d`)
 const pct = (x: number | null) => (x === null ? '–' : `${Math.round(x * 100)}%`)
-
-function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-lg border border-border p-4">
-      <p className="text-muted-foreground text-xs">
-        {label}
-      </p>
-      <p className="mt-1 text-[1.75rem] font-semibold">
-        {value}
-      </p>
-      {hint && (
-        <p className="mt-1 text-muted-foreground text-xs">
-          {hint}
-        </p>
-      )}
-    </div>
-  )
-}
-
-/** Tickets opened vs resolved per day, as paired bars. */
-function VolumeChart({ series }: { series: SupportAnalytics['series'] }) {
-  const W = 720
-  const H = 180
-  const max = Math.max(1, ...series.flatMap((d) => [d.created, d.resolved]))
-  const slot = W / series.length
-  const bar = Math.max(1.5, Math.min(14, slot / 2 - 2))
-  const step = Math.ceil(series.length / 10)
-  return (
-    <figure className="space-y-2">
-      <svg viewBox={`0 0 ${W} ${H + 20}`} className="block h-auto w-full" role="img" aria-label={`Tickets opened and resolved per day over ${series.length} days`}>
-        {[0.5, 1].map((f) => (
-          <line key={f} x1={0} x2={W} y1={H - H * f} y2={H - H * f} className="stroke-border" strokeDasharray="3 3" />
-        ))}
-        {series.map((d, i) => {
-          const x = i * slot + slot / 2
-          return (
-            <g key={d.date}>
-              <title>{`${d.date}: ${d.created} opened, ${d.resolved} resolved`}</title>
-              <rect x={x - bar - 1} y={H - (d.created / max) * H} width={bar} height={(d.created / max) * H} rx={2} className="fill-primary" />
-              <rect x={x + 1} y={H - (d.resolved / max) * H} width={bar} height={(d.resolved / max) * H} rx={2} className="fill-success" />
-              {i % step === 0 && (
-                <text x={x} y={H + 14} textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 10 }}>
-                  {new Date(d.date + 'T00:00').toLocaleDateString([], { day: 'numeric', month: 'short' })}
-                </text>
-              )}
-            </g>
-          )
-        })}
-      </svg>
-      <figcaption className="flex gap-4 text-muted-foreground text-xs">
-        <span className="flex items-center gap-1.5">
-          <span className="size-2.5 rounded-sm bg-primary" /> Opened
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="size-2.5 rounded-sm bg-success" /> Resolved
-        </span>
-        <span className="ml-auto">Most in a day: {max}</span>
-      </figcaption>
-    </figure>
-  )
-}
 
 /** How the support team is doing: volume, speed, SLAs, satisfaction, AI vs people, broadcasts. */
 export function SupportAnalyticsPage() {
@@ -98,20 +39,27 @@ export function SupportAnalyticsPage() {
       ) : (
         <div className="mt-6 space-y-8">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Kpi label="Tickets opened" value={String(d.created)} hint={`${d.resolved} resolved · ${d.open} open now`} />
-            <Kpi label="Typical first reply" value={dur(d.medianFirstReplyMin)} hint={`First-reply target met ${pct(d.slaFirstReplyMet)}`} />
-            <Kpi label="Typical time to resolve" value={dur(d.medianResolveMin)} hint={`Resolution target met ${pct(d.slaResolveMet)}`} />
-            <Kpi label="Customer satisfaction" value={d.csat.average === null ? '–' : `${Math.round(((d.csat.good + d.csat.okay * 0.5) / Math.max(1, d.csat.responses)) * 100)}%`} hint={d.csat.responses ? `${d.csat.good} good · ${d.csat.okay} okay · ${d.csat.bad} bad` : 'No answers yet'} />
+            <Kpi label="Tickets opened" value={String(d.created)} sub={`${d.resolved} resolved · ${d.open} open now`} />
+            <Kpi label="Typical first reply" value={dur(d.medianFirstReplyMin)} sub={`First-reply target met ${pct(d.slaFirstReplyMet)}`} />
+            <Kpi label="Typical time to resolve" value={dur(d.medianResolveMin)} sub={`Resolution target met ${pct(d.slaResolveMet)}`} />
+            <Kpi label="Customer satisfaction" value={d.csat.average === null ? '–' : `${Math.round(((d.csat.good + d.csat.okay * 0.5) / Math.max(1, d.csat.responses)) * 100)}%`} sub={d.csat.responses ? `${d.csat.good} good · ${d.csat.okay} okay · ${d.csat.bad} bad` : 'No answers yet'} />
           </div>
           <section className="rounded-lg border border-border p-5">
-            <h2 className="font-semibold" style={{ fontSize: '1.125rem' }}>Tickets per day</h2>
+            <h2 className="text-section font-semibold">Tickets per day</h2>
             <div className="mt-4">
-              <VolumeChart series={d.series} />
+              <TimeSeriesChart
+                data={d.series}
+                label={`Tickets opened and resolved per day over ${d.series.length} days`}
+                series={[
+                  { key: 'created', label: 'Opened' },
+                  { key: 'resolved', label: 'Resolved' },
+                ]}
+              />
             </div>
           </section>
           <div className="grid gap-6 lg:grid-cols-2">
             <section className="space-y-3 rounded-lg border border-border p-5">
-              <h2 className="font-semibold" style={{ fontSize: '1.125rem' }}>Who handled chats</h2>
+              <h2 className="text-section font-semibold">Who handled chats</h2>
               {d.chats.total ? (
                 <>
                   <div className="flex h-3 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${d.chats.aiOnly} by the AI alone, ${d.chats.withTeam} with your team`}>
@@ -129,7 +77,7 @@ export function SupportAnalyticsPage() {
               )}
             </section>
             <section className="space-y-3 rounded-lg border border-border p-5">
-              <h2 className="font-semibold" style={{ fontSize: '1.125rem' }}>Broadcasts</h2>
+              <h2 className="text-section font-semibold">Broadcasts</h2>
               <div className="grid grid-cols-3 gap-3">
                 <Kpi label="Sent" value={String(d.broadcasts.sent)} />
                 <Kpi label="Read" value={pct(d.broadcasts.sent ? d.broadcasts.read / d.broadcasts.sent : null)} />
@@ -138,7 +86,7 @@ export function SupportAnalyticsPage() {
             </section>
           </div>
           <section className="rounded-lg border border-border p-5">
-            <h2 className="font-semibold" style={{ fontSize: '1.125rem' }}>By person</h2>
+            <h2 className="text-section font-semibold">By person</h2>
             {d.people.length ? (
               <table className="mt-3 w-full text-sm">
                 <thead className="text-left text-muted-foreground text-xs">

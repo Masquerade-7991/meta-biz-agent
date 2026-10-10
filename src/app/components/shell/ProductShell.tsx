@@ -3,6 +3,8 @@ import { PageLoader } from '@/app/components/ui/wavy-loader'
 import { CircleHelp, ExternalLink, Menu, Search } from 'lucide-react'
 import { openCommandPalette, PALETTE_SHORTCUT } from '@/app/lib/commandPalette'
 import { NotificationsBell } from './NotificationsBell'
+import { ThemeToggle } from './ThemeToggle'
+import { HEADER_ICON_BUTTON } from './headerButton'
 import { Sheet, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
 import {
   DropdownMenu,
@@ -161,9 +163,10 @@ export function ProductShell({
             <kbd className="rounded border border-border bg-card px-1.5 font-mono text-[0.6875rem]">{PALETTE_SHORTCUT}</kbd>
           </button>
           <div className="ml-auto flex items-center gap-1 md:ml-2">
-            <button type="button" onClick={openCommandPalette} aria-label="Search or jump to" className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground md:hidden">
+            <button type="button" onClick={openCommandPalette} aria-label="Search or jump to" className={`${HEADER_ICON_BUTTON} md:hidden`}>
               <Search className="size-5" />
             </button>
+            <ThemeToggle />
             <HelpMenu />
             <NotificationsBell
               onOpenChat={openChat}
@@ -188,7 +191,7 @@ function HelpMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" aria-label="Help and guides" className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+        <button type="button" aria-label="Help and guides" className={HEADER_ICON_BUTTON}>
           <CircleHelp className="size-5" />
         </button>
       </DropdownMenuTrigger>

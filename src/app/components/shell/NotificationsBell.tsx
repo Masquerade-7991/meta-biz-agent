@@ -3,6 +3,7 @@ import { AlarmClock, AlertTriangle, Bell, BellRing, Inbox, UserCheck, X } from '
 import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover'
 import { dismissNotice, isAlert, listNotices, type AlertNotice, type Notice } from '@/app/api/tickets'
 import { cn } from '@/app/lib/utils'
+import { HEADER_ICON_BUTTON } from './headerButton'
 import { usePolling } from '@/app/lib/usePolling'
 
 const LIVE_NOTICES = ['ticket.', 'alert.', 'reminder.']
@@ -40,10 +41,10 @@ export function NotificationsBell({ onOpenChat, onOpenTarget }: { onOpenChat: (p
       }}
     >
       <PopoverTrigger asChild>
-        <button type="button" className="relative rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={fresh ? `Notifications, ${fresh} new` : 'Notifications'}>
-          <Bell className="size-4" />
+        <button type="button" className={HEADER_ICON_BUTTON} aria-label={fresh ? `Notifications, ${fresh} new` : 'Notifications'}>
+          <Bell className="size-5" />
           {fresh > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-destructive-foreground" style={{ fontSize: '0.625rem', lineHeight: '1rem' }}>
+            <span className="absolute top-0.5 right-0.5 flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[0.625rem] leading-4 text-destructive-foreground">
               {fresh}
             </span>
           )}
