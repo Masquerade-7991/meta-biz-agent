@@ -128,7 +128,7 @@ function GetStarted({
   const number = account?.phoneNumbers[0]
   const agent = snap.agent
   return (
-    <section className="rounded-xl border border-border p-6 md:p-8">
+    <section className="rounded-lg border border-border p-6 md:p-8">
       <h2 className="text-section font-semibold">{!connected ? 'Start by connecting WhatsApp' : agent ? 'You’re set up' : 'Next, build your AI agent'}</h2>
       <ol className="mt-2 divide-y divide-border">
         <Step
@@ -319,7 +319,7 @@ function RecentChats({ chats: loadChats, onOpenChat, onNavigate }: { chats: () =
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1">
                   <span className="text-xs text-muted-foreground tabular-nums">{timeAgo(c.lastMessageAt)}</span>
-                  {c.unread > 0 && <span className="flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[0.6875rem] leading-5 text-primary-foreground">{c.unread}</span>}
+                  {c.unread > 0 && <span className="flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-micro leading-5 text-primary-foreground">{c.unread}</span>}
                 </span>
               </button>
             </li>
@@ -439,7 +439,7 @@ function ThisWeek({ onNavigate }: { onNavigate: (id: NavId) => void }) {
                     <div className="w-1/3 rounded-t-sm bg-border-strong" style={{ height: `${(x.created / max) * 100}%`, minHeight: x.created ? 3 : 0 }} title={`${x.created} opened`} />
                     <div className="w-1/3 rounded-t-sm bg-success" style={{ height: `${(x.resolved / max) * 100}%`, minHeight: x.resolved ? 3 : 0 }} title={`${x.resolved} resolved`} />
                   </div>
-                  <span className="text-[0.6875rem] text-muted-foreground">{new Date(x.date + 'T12:00').toLocaleDateString(undefined, { weekday: 'short' })}</span>
+                  <span className="text-micro text-muted-foreground">{new Date(x.date + 'T12:00').toLocaleDateString(undefined, { weekday: 'short' })}</span>
                 </div>
               ))}
             </div>
@@ -505,7 +505,7 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
         <p className="mt-1 text-muted-foreground">{me?.workspace?.name}</p>
       </div>
       {error ? (
-        <div className="rounded-xl border border-border p-6 text-sm">
+        <div className="rounded-lg border border-border p-6 text-sm">
           <p className="text-destructive">Couldn&rsquo;t check your WhatsApp setup. {error}</p>
           <Button variant="outline" size="sm" className="mt-3" onClick={() => setAttempt((n) => n + 1)}>
             Try again
@@ -528,7 +528,7 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
             </>
           )}
           {!snap.agent && snap.lookupError && (
-            <div className="rounded-xl border border-warning/50 p-6 text-sm">
+            <div className="rounded-lg border border-warning/50 p-6 text-sm">
               <p className="font-semibold">Couldn&rsquo;t reach your AI agent</p>
               <p className="mt-1 text-muted-foreground">{snap.lookupError}</p>
               <Button variant="outline" size="sm" className="mt-3" onClick={() => setAttempt((n) => n + 1)}>

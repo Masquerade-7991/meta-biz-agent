@@ -129,7 +129,7 @@ function ChatRow({ c, active, onOpen }: { c: ChatSummary; active: boolean; onOpe
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-sm" style={{ fontWeight: c.unread ? 'var(--font-weight-semi-bold)' : 'var(--font-weight-medium)' }}>
+          <span className={cn('truncate text-sm', c.unread ? 'font-semibold' : 'font-medium')}>
             {display(c)}
           </span>
           <span className={cn('shrink-0 text-xs', c.unread ? 'text-primary' : 'text-muted-foreground')}>
@@ -141,23 +141,23 @@ function ChatRow({ c, active, onOpen }: { c: ChatSummary; active: boolean; onOpe
             {c.preview ? who + (c.preview.body ?? 'Sent a message') : 'No messages yet'}
           </span>
           {c.unread > 0 && (
-            <span className="flex min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-primary-foreground" style={{ fontSize: '0.6875rem', lineHeight: '1.25rem' }}>
+            <span className="flex min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-micro leading-5 text-primary-foreground">
               {c.unread}
             </span>
           )}
         </span>
         <span className="mt-1 flex flex-wrap items-center gap-1.5">
-          <span className={cn('inline-flex items-center gap-1 rounded px-1.5', c.owner === 'ai' ? 'bg-accent text-accent-foreground' : 'bg-warning/15 text-warning-foreground')} style={{ fontSize: '0.6875rem', lineHeight: '1.125rem' }}>
+          <span className={cn('inline-flex items-center gap-1 rounded px-1.5 text-micro', c.owner === 'ai' ? 'bg-accent text-accent-foreground' : 'bg-warning/15 text-warning-foreground')}>
             {c.owner === 'ai' ? <Bot className="size-3" /> : <Hand className="size-3" />}
             {c.owner === 'ai' ? 'AI' : 'Team'}
           </span>
           {c.sample && (
-            <span className="rounded bg-muted px-1.5 text-muted-foreground" style={{ fontSize: '0.6875rem', lineHeight: '1.125rem' }}>
+            <span className="rounded bg-muted px-1.5 text-micro text-muted-foreground">
               Sample
             </span>
           )}
           {c.snoozedUntil && Date.parse(c.snoozedUntil) > Date.now() && (
-            <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 text-muted-foreground" style={{ fontSize: '0.6875rem', lineHeight: '1.125rem' }}>
+            <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 text-micro text-muted-foreground">
               <Clock className="size-3" /> until {when(c.snoozedUntil)}
             </span>
           )}

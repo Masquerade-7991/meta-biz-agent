@@ -957,7 +957,7 @@ export function DocumentsTab({
         }}
         onClick={() => docInputRef.current?.click()}
         className={cn(
-          'flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors',
+          'flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors',
           dragOver ? 'border-primary bg-accent' : 'border-border hover:border-primary/50',
         )}
       >

@@ -45,7 +45,7 @@ export function NotificationsBell({ onOpenChat, onOpenTarget }: { onOpenChat: (p
         <button type="button" className={HEADER_ICON_BUTTON} aria-label={fresh ? `Notifications, ${fresh} new` : 'Notifications'}>
           <Bell className="size-5" />
           {fresh > 0 && (
-            <span className="absolute top-0.5 right-0.5 flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[0.625rem] leading-4 text-destructive-foreground">
+            <span className="absolute top-0.5 right-0.5 flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-micro leading-4 text-destructive-foreground">
               {fresh}
             </span>
           )}

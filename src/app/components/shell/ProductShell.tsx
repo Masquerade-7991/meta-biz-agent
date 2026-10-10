@@ -163,7 +163,7 @@ export function ProductShell({
           >
             <Search className="size-4" />
             <span className="flex-1 text-left">Search or jump to…</span>
-            <kbd className="rounded border border-border bg-card px-1.5 font-mono text-[0.6875rem]">{PALETTE_SHORTCUT}</kbd>
+            <kbd className="rounded border border-border bg-card px-1.5 font-mono text-micro">{PALETTE_SHORTCUT}</kbd>
           </button>
           <div className="ml-auto flex items-center gap-1 md:ml-2">
             <button type="button" onClick={openCommandPalette} aria-label="Search or jump to" className={`${HEADER_ICON_BUTTON} md:hidden`}>
@@ -204,7 +204,7 @@ function HelpMenu() {
           {SHORTCUTS.map((s) => (
             <li key={s.keys} className="flex items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground">{s.what}</span>
-              <kbd className="shrink-0 rounded border border-border bg-muted px-1.5 font-mono text-[0.6875rem]">{s.keys}</kbd>
+              <kbd className="shrink-0 rounded border border-border bg-muted px-1.5 font-mono text-micro">{s.keys}</kbd>
             </li>
           ))}
         </ul>

@@ -38,7 +38,7 @@ export function BehindTheScenes({
   onOpenConnections: () => void
 }) {
   return (
-    <section className="flex min-h-0 flex-col rounded-xl border border-border bg-card" aria-label="Behind the scenes">
+    <section className="flex min-h-0 flex-col rounded-lg border border-border bg-card" aria-label="Behind the scenes">
       <div className="border-b border-border px-4 py-3">
         <h3 className="text-sm font-semibold">Behind the scenes</h3>
         <p className="text-muted-foreground text-xs">

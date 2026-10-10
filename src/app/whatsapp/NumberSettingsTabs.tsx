@@ -74,7 +74,7 @@ export function DisplayNameTab({ detail, onSaved, onDirty, onRegister }: TabProp
           </p>
         </div>
         {pending && (
-          <p className="rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm">
+          <p className="rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm">
             <strong>&ldquo;{n.newName}&rdquo; is in review.</strong> Your current name stays until WhatsApp approves it. We update this page when the review finishes.
           </p>
         )}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
+import { PageContainer, PageHeader } from '@/app/components/ui/page'
 import { Badge } from '@/app/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table'
@@ -208,7 +209,7 @@ function Members() {
   return (
     <div>
       {manage && (
-        <SettingsSection title="Invite people" description="They get an email with a link to set up their account and join with the role you pick. Invites expire after 7 days.">
+        <SettingsSection title="Invite people" description="They get an email to join with the role you pick. People who already use Helo.ai keep their other workspaces and accept in the app. Invites expire after 7 days.">
           <form onSubmit={sendInvite} className="space-y-4">
             <Field label="Email" type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} />
             <RolePicker id="invite-role" label="Role" value={inviteRole} roles={roles} onChange={setInviteRole} />
@@ -389,8 +390,8 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
   // A link (email, notification) can name a tab this role can't open; show Profile instead.
   const shown = (tab === 'billing' && !billing) || (tab === 'whatsapp' && !whatsapp) ? 'profile' : tab
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
-      <h1 className="mb-6">Settings</h1>
+    <PageContainer>
+      <PageHeader title="Settings" description="Your workspace and its people, how the support desk works, and your own account." />
       <Tabs value={shown} onValueChange={(v) => onTabChange(v as SettingsTab)} className="gap-6 md:flex-row md:items-start">
         {/* Grouped by whose settings they are: the workspace, the support desk, and you. */}
         <nav aria-label="Settings sections" className="shrink-0 md:w-52">
@@ -458,6 +459,6 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
         </TabsContent>
         </div>
       </Tabs>
-    </div>
+    </PageContainer>
   )
 }

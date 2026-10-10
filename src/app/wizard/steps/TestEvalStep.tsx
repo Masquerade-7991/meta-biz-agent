@@ -483,7 +483,7 @@ export function TestEvalStep() {
       </TabsContent>
 
       <TabsContent value="checks" className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
           <div className="space-y-0.5">
             <p className="font-semibold">
               {!checkRows
@@ -503,7 +503,7 @@ export function TestEvalStep() {
         </div>
 
         {checkRows && (
-          <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+          <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
             {checkRows.map((row) => {
               const expanded = expandedCheck === row.id
               return (

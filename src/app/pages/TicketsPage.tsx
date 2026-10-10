@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { ChevronsUp, Star } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
@@ -6,7 +7,7 @@ import { Checkbox } from '@/app/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table'
 import { errorDetail } from '@/app/api/meta'
-import { bulkTickets, escalateDemoTicket, listTeams, listTickets, PRIORITIES, type Team, PRIORITY_CLASS, PRIORITY_LABEL, slaText, STATUS_LABEL, type Priority, type Ticket } from '@/app/api/tickets'
+import { bulkTickets, escalateDemoTicket, getTicket, listTeams, listTickets, PRIORITIES, type Team, PRIORITY_CLASS, PRIORITY_LABEL, slaText, STATUS_LABEL, type Priority, type Ticket } from '@/app/api/tickets'
 import { cn } from '@/app/lib/utils'
 import { useMembers } from '@/app/auth/useMembers'
 import { usePolling } from '@/app/lib/usePolling'
@@ -51,6 +52,18 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
   useEffect(() => {
     listTeams().then(setTeams, () => {})
   }, [])
+  // Links in emails (escalations) name a ticket: /tickets?n=1042 opens its chat.
+  const [params] = useSearchParams()
+  const linked = params.get('n')
+  const opened = useRef<string | null>(null)
+  useEffect(() => {
+    if (!linked || !/^\d+$/.test(linked) || opened.current === linked) return
+    opened.current = linked
+    getTicket(Number(linked)).then(
+      (t) => onOpenChat(t.phone),
+      (err) => toast.error(`Couldn’t open ticket #${linked}`, { description: errorDetail(err) }),
+    )
+  }, [linked, onOpenChat])
   const [q, setQ] = useState('')
   const [rows, setRows] = useState<Ticket[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -290,7 +303,7 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
                   <TableCell className="text-sm">
                     {t.name || customerLabel(t.phone)}
                     {t.sample && (
-                      <span className="ml-1.5 rounded bg-muted px-1.5 text-[0.6875rem] text-muted-foreground">
+                      <span className="ml-1.5 rounded bg-muted px-1.5 text-micro text-muted-foreground">
                         Sample
                       </span>
                     )}
