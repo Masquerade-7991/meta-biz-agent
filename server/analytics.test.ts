@@ -25,3 +25,12 @@ test('median and satisfaction', () => {
   assert.equal(csatScore(0, 0, 0), null)
   assert.equal(csatScore(2, 2, 0), 0.75)
 })
+
+test('filters reject dates that match the pattern but are not real days', async () => {
+  const { parseFilter } = await import('./analytics.ts')
+  const url = (q: string) => new URL('http://x/api/analytics/overview?' + q)
+  assert.throws(() => parseFilter(url('from=2026-02-31&to=2026-03-05'), 'UTC'), /must be dates/)
+  assert.throws(() => parseFilter(url('from=2026-13-45&to=2026-03-05'), 'UTC'), /must be dates/)
+  assert.throws(() => parseFilter(url('from=2026-03-05&to=2026-03-01'), 'UTC'), /not after/)
+  assert.deepEqual(parseFilter(url('from=2026-02-28&to=2026-03-01'), 'UTC').from, '2026-02-28')
+})

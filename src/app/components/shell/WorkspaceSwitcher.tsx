@@ -90,20 +90,21 @@ export function WorkspaceSwitcher({ collapsed, onOpenSettings }: { collapsed: bo
                       </span>
                     </span>
                   </p>
+                  {/* Menu items, not buttons: Radix menus only move focus between items, so these stay reachable by keyboard. */}
                   <div className="flex gap-2 pl-6">
-                    <Button size="xs" onClick={() => void answerInvite(i.id, true)}>
+                    <DropdownMenuItem className="h-6 rounded-md bg-primary px-2 text-xs font-medium text-primary-foreground focus:bg-primary/90 focus:text-primary-foreground" onSelect={() => void answerInvite(i.id, true)}>
                       Accept
-                    </Button>
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      onClick={async () => {
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="h-6 rounded-md px-2 text-xs"
+                      onSelect={async (e) => {
+                        e.preventDefault() // stay open: the other invites may still need an answer
                         const next = await answerInvite(i.id, false)
                         if (next) setMe(next)
                       }}
                     >
                       Decline
-                    </Button>
+                    </DropdownMenuItem>
                   </div>
                 </div>
               ))}

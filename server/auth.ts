@@ -154,7 +154,11 @@ export async function getSession(req: http.IncomingMessage): Promise<Session | n
   const s = await sessions().findOne({ tokenHash: sha256(token), expiresAt: { $gt: new Date() } })
   const user = s && (await users().findOne({ _id: s.userId }))
   if (!s || !user) return null
-  return { user, ...(await activeWorkspace(user._id, s.workspaceId)), setup: setupOf(user), sessionHash: s.tokenHash }
+  const active = await activeWorkspace(user._id, s.workspaceId)
+  // Pin what was resolved (older sessions, and ones that lost their workspace, have none stored), so
+  // joining or creating a workspace in another session never moves this one: "other sessions keep theirs".
+  if (active.workspace && active.workspace._id !== s.workspaceId) await sessions().updateOne({ tokenHash: s.tokenHash }, { $set: { workspaceId: active.workspace._id } })
+  return { user, ...active, setup: setupOf(user), sessionHash: s.tokenHash }
 }
 
 /** The workspace a session works in: the one it chose if the person is still a member there,
@@ -310,8 +314,10 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     const user = await users().findOne({ email: e })
     const ok = await verifyPassword(pw, user?.passwordHash ?? DUMMY_HASH)
     if (!user?.passwordHash || !ok) throw new HttpError(401, 'Email or password is incorrect.')
-    await startSession(res, user._id)
-    return me((await sessionFor(user._id))!)
+    // Start in the workspace they were most recently added to, and stay there.
+    const start = await sessionFor(user._id)
+    await startSession(res, user._id, start?.workspace?._id)
+    return me(start!)
   }
   if (path === '/api/auth/logout' && m === 'POST') {
     const token = cookieValue(req)

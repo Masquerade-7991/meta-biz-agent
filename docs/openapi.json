@@ -6071,10 +6071,9 @@
             "required": true,
             "schema": {
               "type": "string",
-              "description": "Record id (MongoDB ObjectId).",
-              "pattern": "^[a-f0-9]{24}$"
-            },
-            "description": "Record id (MongoDB ObjectId)."
+              "description": "Report id from GET /api/reports (e.g. business_review, tickets).",
+              "pattern": "^[a-z_]+$"
+            }
           },
           {
             "name": "from",
@@ -6129,20 +6128,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Success.",
+            "description": "The report as a CSV attachment (content-disposition: attachment).",
             "content": {
-              "application/json": {
+              "text/csv": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean",
-                      "const": true
-                    }
-                  },
-                  "required": [
-                    "ok"
-                  ]
+                  "type": "string"
                 }
               }
             }
@@ -6337,10 +6327,9 @@
             "required": true,
             "schema": {
               "type": "string",
-              "description": "Record id (MongoDB ObjectId).",
-              "pattern": "^[a-f0-9]{24}$"
-            },
-            "description": "Record id (MongoDB ObjectId)."
+              "description": "Schedule id (UUID).",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -6479,10 +6468,9 @@
             "required": true,
             "schema": {
               "type": "string",
-              "description": "Record id (MongoDB ObjectId).",
-              "pattern": "^[a-f0-9]{24}$"
-            },
-            "description": "Record id (MongoDB ObjectId)."
+              "description": "Schedule id (UUID).",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -6542,10 +6530,9 @@
             "required": true,
             "schema": {
               "type": "string",
-              "description": "Record id (MongoDB ObjectId).",
-              "pattern": "^[a-f0-9]{24}$"
-            },
-            "description": "Record id (MongoDB ObjectId)."
+              "description": "Schedule id (UUID).",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {

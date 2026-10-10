@@ -113,3 +113,9 @@ test('rule and matrix validation explain the problem', () => {
   assert.throws(() => parseMatrix({ levels: { urgent: [{ percent: 100, notify: [] }] } }, new Set()), /does nothing/)
   assert.equal(parseMatrix({ enabled: true, levels: {} }, new Set()).enabled, true)
 })
+
+test('notify only accepts the real recipients, not prototype names', () => {
+  const m = parseMatrix({ levels: { urgent: [{ percent: 100, notify: ['toString', 'assignee', 'assignee', 'constructor'] }] } }, new Set())
+  assert.deepEqual(m.levels.urgent[0].notify, ['assignee'])
+  assert.throws(() => parseMatrix({ levels: { urgent: [{ percent: 100, notify: ['toString'] }] } }, new Set()), /does nothing/)
+})

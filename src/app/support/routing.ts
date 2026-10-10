@@ -286,7 +286,8 @@ export function parseMatrix(v: unknown, teams: Set<string>): EscalationMatrix {
         const l = isObj(raw) ? raw : {}
         const percent = Math.round(Number(l.percent))
         if (!(percent >= 25 && percent <= 500)) throw new Error(`${p} level ${i + 1}: fire between 25% and 500% of the target.`)
-        const notify = strs(l.notify).filter((n): n is Notify => n in notifyLabel)
+        // Own names only: "toString" and "constructor" are in the prototype chain, not the labels.
+        const notify = [...new Set(strs(l.notify))].filter((n): n is Notify => Object.hasOwn(notifyLabel, n))
         const reassignTeamId = l.reassignTeamId && teams.has(String(l.reassignTeamId)) ? String(l.reassignTeamId) : null
         if (!notify.length && !reassignTeamId && l.raisePriority !== true) throw new Error(`${p} level ${i + 1} does nothing: notify someone, move the ticket or raise its priority.`)
         return { clock: l.clock === 'first_response' ? 'first_response' : 'resolution', percent, notify, email: l.email === true, reassignTeamId, raisePriority: l.raisePriority === true }

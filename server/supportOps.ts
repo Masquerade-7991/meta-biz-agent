@@ -7,7 +7,7 @@ import { HttpError, type Obj, obj, readJson } from './http.ts'
 import { col, db, withWorkspace, ws } from './db.ts'
 import { assetsFor } from './accounts.ts'
 import { trace } from './trace.ts'
-import { isOpen } from './businessHours.ts'
+import { addBusinessMinutes, isOpen } from './businessHours.ts'
 import { mail } from './mail.ts'
 import { customerLabel } from '../src/app/lib/customer.ts'
 import { can } from '../src/app/lib/permissions.ts'
@@ -56,12 +56,15 @@ const teamOut = (t: Obj): Team => ({
 export async function getTeams(): Promise<Team[]> {
   let rows = await teamsCol().find({ workspaceId: ws() }).sort({ createdAt: 1 }).toArray()
   if (!rows.length) {
-    const old = (await getSettings()).teams
+    // Moved once: after that the old list is cleared and flagged, so deleting every team doesn't bring them back.
+    const flagged = await col('support_settings').findOne({ workspaceId: ws(), teamsMigrated: true }, { projection: { _id: 1 } })
+    const old = flagged ? [] : (await getSettings()).teams
     if (old.length) {
       const now = new Date()
       await teamsCol()
         .insertMany(old.map((t) => ({ _id: t.id as never, workspaceId: ws(), name: t.name, description: '', leadId: null, memberIds: t.memberIds, assign: 'round_robin', createdAt: now })))
         .catch(() => {}) // another request moved them first
+      await col('support_settings').updateOne({ workspaceId: ws() }, { $set: { teamsMigrated: true, 'settings.teams': [] } })
       rows = await teamsCol().find({ workspaceId: ws() }).sort({ createdAt: 1 }).toArray()
     }
   }
@@ -187,7 +190,18 @@ export async function escalateDue(now = Date.now()): Promise<number> {
     if (!next) continue
     const level = levels[next - 1]
     const set: Obj = { escalationLevel: next, escalatedAt: new Date(now), updatedAt: new Date(now) }
-    if (level.raisePriority) set.priority = raise(t.priority as Priority)
+    if (level.raisePriority) {
+      const raised = raise(t.priority as Priority)
+      if (raised !== t.priority) {
+        // New targets count from when the ticket opened, the same as changing the priority by hand.
+        const s = await getSettings()
+        Object.assign(set, {
+          priority: raised,
+          firstResponseDueAt: addBusinessMinutes(t.createdAt as Date, s.sla[raised].firstResponse, s.hours),
+          resolveDueAt: addBusinessMinutes(t.createdAt as Date, s.sla[raised].resolve, s.hours),
+        })
+      }
+    }
     let movedTo: Team | null = null
     if (level.reassignTeamId) {
       movedTo = teams.find((x) => x.id === level.reassignTeamId) ?? null

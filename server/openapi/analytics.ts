@@ -47,6 +47,7 @@ const SCHEDULE = o({
   emails: d('string[]', 'Anyone else (needs settings.manage).'),
   enabled: 'boolean',
 })
+const SCHEDULE_ID = { id: d('string', 'Schedule id (UUID).', { format: 'uuid' }) }
 const SCHEDULE_ERRORS = {
   400: 'Give the schedule a name. / Pick at least one report. / Add at least one person to send it to. / X isn’t an email address.',
   403: 'Only owners and admins send reports outside the workspace.',
@@ -62,7 +63,11 @@ export const reports = area('Analytics', {
       summary: 'Download a report as CSV',
       description: 'UTF-8 with a byte-order mark so Excel reads it right; cells that start with = + - @ are quoted as text. Logs give up to 50,000 rows. Answers text/csv as an attachment.',
       who: WHO,
+      params: { id: d('string', 'Report id from GET /api/reports (e.g. business_review, tickets).', { pattern: '^[a-z_]+$' }) },
       query: FILTER,
+      ok: 'string',
+      okType: 'text/csv',
+      okDescription: 'The report as a CSV attachment (content-disposition: attachment).',
       errors: { 404: 'No report called X.' },
     },
   },
@@ -71,10 +76,10 @@ export const reports = area('Analytics', {
     post: { id: 'createReportSchedule', summary: 'Schedule a report email', description: '20 per workspace at most. The email carries the headline numbers; each report is attached as CSV.', who: WHO, body: SCHEDULE, ok: 'object', errors: SCHEDULE_ERRORS },
   },
   '/api/reports/schedules/{id}': {
-    put: { id: 'updateReportSchedule', summary: 'Change a schedule', who: WHO, body: SCHEDULE, ok: 'object', errors: { ...SCHEDULE_ERRORS, 404: 'That schedule no longer exists.' } },
-    delete: { id: 'deleteReportSchedule', summary: 'Delete a schedule', who: WHO, errors: { 404: 'That schedule no longer exists.' } },
+    put: { id: 'updateReportSchedule', params: SCHEDULE_ID, summary: 'Change a schedule', who: WHO, body: SCHEDULE, ok: 'object', errors: { ...SCHEDULE_ERRORS, 404: 'That schedule no longer exists.' } },
+    delete: { id: 'deleteReportSchedule', params: SCHEDULE_ID, summary: 'Delete a schedule', who: WHO, errors: { 404: 'That schedule no longer exists.' } },
   },
   '/api/reports/schedules/{id}/send': {
-    post: { id: 'sendReportSchedule', summary: 'Send a schedule now', description: 'Covers the period its cadence would; doesn’t change when it next goes out.', who: WHO, ok: o({ 'sent*': d('integer', 'People emailed.') }), errors: { 404: 'That schedule no longer exists.', 502: 'Email not sent.' } },
+    post: { id: 'sendReportSchedule', params: SCHEDULE_ID, summary: 'Send a schedule now', description: 'Covers the period its cadence would; doesn’t change when it next goes out.', who: WHO, ok: o({ 'sent*': d('integer', 'People emailed.') }), errors: { 404: 'That schedule no longer exists.', 502: 'Email not sent.' } },
   },
 })

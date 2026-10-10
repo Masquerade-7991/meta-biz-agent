@@ -130,7 +130,10 @@ async function sendSchedule(s: ReportSchedule) {
   const workspace = String((await col('workspaces').findOne({ _id: ws() as never }))?.name ?? 'Your workspace')
   const fmt = (d: string) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
   const period = range.from === range.to ? fmt(range.from) : `${fmt(range.from)} – ${fmt(range.to)}`
-  const path = `/analytics?from=${range.from}&to=${range.to}${s.numbers.length ? `&agents=${s.numbers.join(',')}` : ''}${s.team ? `&team=${s.team}` : ''}`
+  const q = new URLSearchParams({ from: range.from, to: range.to })
+  if (s.numbers.length) q.set('agents', s.numbers.join(','))
+  if (s.team) q.set('team', s.team)
+  const path = `/analytics?${q}`
   for (const email of to) await mail.report(email, { name: s.name, workspace, period, table, path }, files)
   trace('report.sent', { reports: s.reports.length, recipients: to.length, cadence: s.cadence })
   return to.length

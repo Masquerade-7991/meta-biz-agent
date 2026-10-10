@@ -47,7 +47,9 @@ export function parseFilter(u: URL, tz: string): AnalyticsFilter {
   const today = isoDay(new Date(), tz)
   const to = u.searchParams.get('to') || today
   const from = u.searchParams.get('from') || addDays(to, -29)
-  if (!DAY.test(from) || !DAY.test(to) || from > to) throw new HttpError(400, 'from and to must be dates (YYYY-MM-DD), from not after to.')
+  // A real calendar day: 2026-02-31 and 2026-13-45 match the pattern but aren't dates.
+  const real = (d: string) => DAY.test(d) && !Number.isNaN(Date.parse(d + 'T00:00:00Z')) && new Date(d + 'T00:00:00Z').toISOString().slice(0, 10) === d
+  if (!real(from) || !real(to) || from > to) throw new HttpError(400, 'from and to must be dates (YYYY-MM-DD), from not after to.')
   if (daysBetween(from, to) > MAX_DAYS) throw new HttpError(400, `Pick ${MAX_DAYS} days or fewer.`)
   const list = (k: string) => (u.searchParams.get(k) ?? '').split(',').map((x) => x.trim()).filter(Boolean)
   const numbers = list('numbers').filter((id) => currentAssets()?.ids.has(id))
@@ -146,7 +148,12 @@ async function period(f: AnalyticsFilter, tz: string, from: string, to: string):
   const dayOf = (d: unknown) => isoDay(d as Date, tz)
   const count = <T>(xs: T[], key: (x: T) => string) => {
     const m = new Map<string, T[]>()
-    for (const x of xs) m.set(key(x), [...(m.get(key(x)) ?? []), x])
+    for (const x of xs) {
+      const k = key(x)
+      const bucket = m.get(k)
+      if (bucket) bucket.push(x)
+      else m.set(k, [x])
+    }
     return m
   }
   const chatsByDay = count(chatDays, (r) => String(r._id.day))
@@ -221,7 +228,7 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
   const monthStart = dayStart(isoDay(new Date(), tz).slice(0, 8) + '01', tz)
   const service = await col('message_charges')
     .aggregate([
-      { $match: { workspaceId: ws(), at: { $gte: monthStart }, category: 'service', status: { $in: ['sent', 'delivered', 'read'] } } },
+      { $match: { workspaceId: ws(), at: { $gte: monthStart }, category: 'service', status: { $in: ['delivered', 'read'] } } },
       { $group: { _id: { n: '$phoneNumberId', m: '$waMessageId' } } },
       { $group: { _id: '$_id.n', used: { $sum: 1 } } },
     ])
@@ -255,7 +262,9 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
     const m = new Map<string, Obj[]>()
     for (const t of tk) {
       const k = key(t) ?? 'none'
-      m.set(k, [...(m.get(k) ?? []), t])
+      const bucket = m.get(k)
+      if (bucket) bucket.push(t)
+      else m.set(k, [t])
     }
     return m
   }
@@ -398,39 +407,53 @@ export async function logPage(kind: LogKind, f: AnalyticsFilter, skip: number, l
   const contacts = async (phones: unknown[]) => new Map((await col('contacts').find({ workspaceId: ws(), phone: { $in: [...new Set(phones.map(String))] } }).toArray()).map((c) => [String(c.phone), String(c.name ?? '')]))
   const who = (m: Map<string, string>, phone: unknown) => m.get(String(phone)) || customerLabel(String(phone))
 
-  if (kind === 'tickets' || kind === 'handovers' || kind === 'escalations') {
+  if (kind === 'escalations') {
+    // One row per escalation event (a ticket can have several), newest first, paged by event.
+    const base: Obj = { workspaceId: ws(), ...byNumber(f) }
+    if (f.team) base.teamId = f.team === 'none' ? null : f.team
+    if (f.person) base.assigneeId = f.person === 'none' ? null : f.person
+    const [res] = await col('tickets')
+      .aggregate([
+        { $match: { ...base, escalations: { $elemMatch: { at: { $gte: start, $lt: end } } } } },
+        { $unwind: '$escalations' },
+        { $match: { 'escalations.at': { $gte: start, $lt: end } } },
+        { $sort: { 'escalations.at': -1 } },
+        { $facet: { total: [{ $count: 'n' }], page: [{ $skip: skip }, { $limit: limit }] } },
+      ])
+      .toArray()
+    const total = Number(res?.total?.[0]?.n ?? 0)
+    const events = (res?.page ?? []) as Obj[]
+    const [cust, teams] = await Promise.all([contacts(events.map((t) => t.phone)), getTeams()])
+    const team = (id: unknown) => teams.find((t) => t.id === id)?.name ?? null
+    return {
+      kind,
+      total,
+      columns: [
+        { key: 'at', label: 'When' },
+        { key: 'ticket', label: 'Ticket' },
+        { key: 'customer', label: 'Customer' },
+        { key: 'priority', label: 'Priority' },
+        { key: 'level', label: 'Level', numeric: true },
+        { key: 'reason', label: 'Why' },
+        { key: 'notified', label: 'People alerted', numeric: true },
+        { key: 'team', label: 'Team' },
+      ],
+      rows: events.map((t) => {
+        const e = obj(t.escalations)
+        return { at: fmt(e.at, tz), ticket: `#${t.number}`, customer: who(cust, t.phone), priority: String(t.priority), level: Number(e.level), reason: String(e.reason), notified: ((e.notify as string[]) ?? []).length, team: team(e.teamId ?? t.teamId) }
+      }),
+    }
+  }
+  if (kind === 'tickets' || kind === 'handovers') {
     const where: Obj = { workspaceId: ws(), ...byNumber(f) }
     if (f.team) where.teamId = f.team === 'none' ? null : f.team
     if (f.person) where.assigneeId = f.person === 'none' ? null : f.person
-    if (kind === 'escalations') where.escalations = { $elemMatch: { at: { $gte: start, $lt: end } } }
-    else where.createdAt = { $gte: start, $lt: end }
+    where.createdAt = { $gte: start, $lt: end }
     if (kind === 'handovers') where.source = { $in: ['handoff', 'takeover'] }
     const total = await col('tickets').countDocuments(where)
     const rows = await col('tickets').find(where).sort({ createdAt: -1 }).skip(skip).limit(limit).toArray()
     const [people, cust, teams] = await Promise.all([names(rows.map((t) => t.assigneeId)), contacts(rows.map((t) => t.phone)), getTeams()])
     const team = (id: unknown) => teams.find((t) => t.id === id)?.name ?? null
-    if (kind === 'escalations') {
-      const flat = rows.flatMap((t) =>
-        ((t.escalations as Obj[] | undefined) ?? [])
-          .filter((e) => +(e.at as Date) >= +start && +(e.at as Date) < +end)
-          .map((e) => ({ at: fmt(e.at, tz), ticket: `#${t.number}`, customer: who(cust, t.phone), priority: String(t.priority), level: Number(e.level), reason: String(e.reason), notified: ((e.notify as string[]) ?? []).length, team: team(e.teamId ?? t.teamId) })),
-      )
-      return {
-        kind,
-        total,
-        columns: [
-          { key: 'at', label: 'When' },
-          { key: 'ticket', label: 'Ticket' },
-          { key: 'customer', label: 'Customer' },
-          { key: 'priority', label: 'Priority' },
-          { key: 'level', label: 'Level', numeric: true },
-          { key: 'reason', label: 'Why' },
-          { key: 'notified', label: 'People alerted', numeric: true },
-          { key: 'team', label: 'Team' },
-        ],
-        rows: flat,
-      }
-    }
     if (kind === 'handovers')
       return {
         kind,
@@ -547,8 +570,13 @@ async function route(u: URL, me: Actor): Promise<unknown> {
   const m = u.pathname.match(/^\/api\/analytics\/logs\/([a-z_]+)$/)
   if (m) {
     if (!LOG_KINDS.includes(m[1] as LogKind)) throw new HttpError(404, `No log called ${m[1]}.`)
-    const limit = Math.min(200, Math.max(1, Number(u.searchParams.get('limit') ?? 50)))
-    const skip = Math.max(0, Number(u.searchParams.get('skip') ?? 0))
+    // Anything that isn't a number falls back to the default; fractions are cut off.
+    const int = (k: string, d: number) => {
+      const v = Math.trunc(Number(u.searchParams.get(k) ?? d))
+      return Number.isFinite(v) ? v : d
+    }
+    const limit = Math.min(200, Math.max(1, int('limit', 50)))
+    const skip = Math.max(0, int('skip', 0))
     return logPage(m[1] as LogKind, f, skip, limit)
   }
   throw new HttpError(404, 'Not found.')

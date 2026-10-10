@@ -1214,6 +1214,7 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
               </div>
             )}
             <HandoverCard
+              key={chat.conversation.phone}
               chat={chat}
               ticket={ticket}
               teamName={teams.find((t) => t.id === ticket?.teamId)?.name ?? null}
