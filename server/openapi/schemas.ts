@@ -89,8 +89,8 @@ export const schemas: Record<string, Schema> = {
     },
     'messages*': 'ChatMessage[]',
   }),
-  CannedResponse: o({ 'id*': 'string', 'title*': 'string', 'shortcut*': 'string', 'body*': 'string', 'shared*': d('boolean', 'Shared with the whole workspace (else only yours).') }),
-  SavedView: o({ 'id*': 'string', 'name*': 'string', 'filter*': 'all|mine|unassigned|ai|snoozed', 'q*': 'string' }),
+  CannedResponse: o({ 'id*': 'string', 'title*': 'string', 'shortcut*': 'string', 'body*': 'string', 'shared*': d('boolean', 'Shared with the whole workspace (else only yours).'), actions: d('object?', 'A macro: {status?, priority?, tags?, handBack?} applied to the open ticket after sending.') }),
+  SavedView: o({ 'id*': 'string', 'name*': 'string', 'filter*': 'all|mine|team|unassigned|closing|ai|snoozed', 'q*': 'string' }),
   SearchHit: o({ 'id*': 'string', 'phone*': 'string', 'name*': 'string?', 'body*': 'string', 'at*': 'date-time', 'kind*': 'text|note|media|interactive|template|event', 'author*': 'customer|ai|agent|system' }),
 
   // ---- Tickets ----

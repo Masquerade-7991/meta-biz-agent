@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Pencil, Plus, Trash2, Zap } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
+import { TagInput } from '@/app/components/wizard/TagInput'
+import { describeActions, type CannedActions } from '@/app/inbox/macros'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
@@ -18,13 +21,13 @@ import { cn } from '@/app/lib/utils'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
 
 type Draft = Omit<CannedResponse, 'id'>
-const EMPTY: Draft = { title: '', shortcut: '', body: '', shared: true }
+const EMPTY: Draft = { title: '', shortcut: '', body: '', shared: true, actions: null }
 
 function Editor({ initial, onClose, onSaved }: { initial: CannedResponse | null; onClose: () => void; onSaved: (c: CannedResponse) => void }) {
   const { me } = useAuth()
   // Shared responses are the team's: owners and admins share them; others keep their own.
   const admin = can(me?.role, 'settings.manage')
-  const [d, setD] = useState<Draft>(initial ? { title: initial.title, shortcut: initial.shortcut, body: initial.body, shared: initial.shared } : { ...EMPTY, shared: admin })
+  const [d, setD] = useState<Draft>(initial ? { title: initial.title, shortcut: initial.shortcut, body: initial.body, shared: initial.shared, actions: initial.actions ?? null } : { ...EMPTY, shared: admin })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const set = (patch: Partial<Draft>) => setD((p) => ({ ...p, ...patch }))
@@ -70,6 +73,7 @@ function Editor({ initial, onClose, onSaved }: { initial: CannedResponse | null;
               {'{{name}}'} becomes the customer&rsquo;s first name and {'{{phone}}'} their number. WhatsApp formatting works: *bold*, _italic_.
             </p>
           </div>
+          <MacroFields value={d.actions ?? null} onChange={(actions) => set({ actions })} />
           <label className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5 text-sm">
             <span>
               Share with the whole team
@@ -142,6 +146,11 @@ export function CannedResponsesSettings() {
                     {c.title}
                   </span>
                   {!c.shared && <Badge variant="secondary">Only you</Badge>}
+                  {c.actions && (
+                    <Badge variant="info" title={`After sending: ${describeActions(c.actions)}`}>
+                      <Zap className="size-3" /> Macro
+                    </Badge>
+                  )}
                 </p>
                 <p className="line-clamp-2 text-muted-foreground text-xs">
                   {c.body}
@@ -189,5 +198,60 @@ export function CannedResponsesSettings() {
         onCancel={() => setRemoving(null)}
       />
     </div>
+  )
+}
+
+/** A canned response can also act on the ticket after it's sent: a macro. */
+function MacroFields({ value, onChange }: { value: CannedActions | null; onChange: (a: CannedActions | null) => void }) {
+  const a = value ?? {}
+  const set = (patch: Partial<CannedActions>) => {
+    const next = Object.fromEntries(Object.entries({ ...a, ...patch }).filter(([, v]) => v !== undefined && v !== false && !(Array.isArray(v) && !v.length))) as CannedActions
+    onChange(Object.keys(next).length ? next : null)
+  }
+  return (
+    <fieldset className="space-y-3 rounded-md border border-border px-3 py-3">
+      <legend className="px-1 text-sm font-medium">After sending (optional)</legend>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label>Ticket</Label>
+          <Select value={a.status ?? 'keep'} onValueChange={(v) => set({ status: v === 'keep' ? undefined : (v as CannedActions['status']), ...(v === 'resolved' && { handBack: undefined }) })}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="keep">Leave as it is</SelectItem>
+              <SelectItem value="pending">Wait on the customer</SelectItem>
+              <SelectItem value="resolved">Resolve it</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Priority</Label>
+          <Select value={a.priority ?? 'keep'} onValueChange={(v) => set({ priority: v === 'keep' ? undefined : (v as CannedActions['priority']) })}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="keep">Leave as it is</SelectItem>
+              <SelectItem value="urgent">Urgent</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="normal">Normal</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Add tags to the ticket</Label>
+        <TagInput values={a.tags ?? []} onChange={(tags) => set({ tags })} placeholder="e.g. refund" aria-label="Tags to add" />
+      </div>
+      {a.status !== 'resolved' && (
+        <label className="flex items-center gap-2.5 text-sm">
+          <Switch checked={!!a.handBack} onCheckedChange={(handBack) => set({ handBack })} />
+          Hand the chat back to the AI agent
+        </label>
+      )}
+      {value && <p className="text-xs text-muted-foreground">After sending, this will {describeActions(value)}.</p>}
+    </fieldset>
   )
 }

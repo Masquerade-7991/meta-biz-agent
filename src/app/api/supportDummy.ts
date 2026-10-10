@@ -30,6 +30,7 @@ import type { Contact, FieldDef, Segment } from './contacts'
 import type { Broadcast, BroadcastDetail, WaTemplate } from './broadcasts'
 import type { WaAccount } from './whatsapp'
 import { renderTemplate } from '../broadcasts/templates'
+import { parseActions } from '../inbox/macros'
 
 interface Chat {
   phone: string
@@ -52,6 +53,7 @@ let chats: Chat[] | null = null
 let canned: CannedResponse[] = [
   { id: 'c1', title: 'Refund timeline', shortcut: '/refund', body: 'Hi {{name}}, refunds reach your account in 3 to 5 working days.', shared: true },
   { id: 'c2', title: 'Book a demo', shortcut: '/demo', body: 'Happy to show you around, {{name}}. Pick a time that suits you: https://helo.ai/contact-us', shared: true },
+  { id: 'c3', title: 'Refund done (macro)', shortcut: '/refunded', body: 'Hi {{name}}, your refund is on its way. Anything else I can help with?', shared: true, actions: { status: 'resolved', tags: ['refund'] } },
 ]
 
 function load(): Chat[] {
@@ -118,6 +120,16 @@ export async function dummyInbox<T>(method: string, path: string, body: unknown)
     return list
       .filter((c) => (f === 'snoozed' ? asleep(c) : !asleep(c)))
       .filter((c) => (f === 'mine' ? c.assigneeId === ME.id : f === 'unassigned' ? c.owner === 'human' && !c.assigneeId : f === 'ai' ? c.owner === 'ai' : true))
+      .filter((c) => {
+        if (f === 'closing') {
+          const last = lastInbound(c)
+          const left = last ? Date.parse(last) + 86_400_000 - Date.now() : -1
+          return left > 0 && left <= 3_600_000
+        }
+        // The demo person is in both sample teams, so "my team" is any chat with an open team ticket.
+        if (f === 'team') return ticketsNow().some((t) => t.phone === c.phone && t.status !== 'resolved' && !!t.teamId)
+        return true
+      })
       .filter((c) => !q || c.name.toLowerCase().includes(q) || c.phone.includes(q))
       .map(summary)
       .sort((a, z) => Date.parse(z.lastMessageAt ?? '0') - Date.parse(a.lastMessageAt ?? '0')) as T
@@ -181,7 +193,10 @@ export async function dummyInbox<T>(method: string, path: string, body: unknown)
       c.assigneeId ??= ME.id
     }
     if (m[2] === 'notes') push(c, { direction: 'out', author: 'agent', authorId: ME.id, authorName: ME.name, kind: 'note', body: String(b.text) })
-    if (m[2] === 'assign') c.assigneeId = b.userId ?? null
+    if (m[2] === 'assign') {
+      c.assigneeId = b.userId ?? null
+      for (const t of ticketsNow()) if (t.phone === c.phone && t.status !== 'resolved') t.assigneeId = c.assigneeId
+    }
     if (m[2] === 'read') c.unread = 0
     if (m[2] === 'block') {
       if (!windowOpen(c)) throw new MetaError(400, 'Check the details', 'WhatsApp only lets you block someone who messaged this number in the last 24 hours.')
@@ -216,7 +231,7 @@ export async function dummyInbox<T>(method: string, path: string, body: unknown)
     }
     const shortcut = '/' + String(b.shortcut ?? '').replace(/^\//, '').toLowerCase()
     if (canned.some((x) => x.shortcut === shortcut && x.id !== id)) throw new MetaError(409, 'Already exists', `${shortcut} is already used.`)
-    const row = { id: id ?? `c${++seq}`, title: String(b.title), shortcut, body: String(b.body), shared: (body as { shared?: boolean }).shared !== false }
+    const row = { id: id ?? `c${++seq}`, title: String(b.title), shortcut, body: String(b.body), shared: (body as { shared?: boolean }).shared !== false, actions: parseActions((body as { actions?: unknown }).actions) ?? null }
     canned = id ? canned.map((x) => (x.id === id ? row : x)) : [...canned, row]
     return row as T
   }

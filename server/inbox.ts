@@ -10,6 +10,7 @@ import { HttpError, type Obj, type Titles, arr, digits, obj, readJson, serveJson
 import { col, db, dbOffReason, needMetaAssets, ownsMetaAssets, withWorkspace, ws } from './db.ts'
 import { callUpstream, env, metaJson, parseJson, resolveIds } from './upstream.ts'
 import { currentAssets } from './context.ts'
+import { parseActions } from '../src/app/inbox/macros.ts'
 import { trace } from './trace.ts'
 import { contactFor, resolveCustomer, webhookContacts } from './customers.ts'
 import { recipientFailed } from './broadcasts.ts'
@@ -474,6 +475,14 @@ async function listConversations(me: Actor, filter: string, q: string) {
   if (filter === 'mine') where.assigneeId = me._id
   if (filter === 'unassigned') Object.assign(where, { owner: 'human', assigneeId: null })
   if (filter === 'ai') where.owner = 'ai'
+  // The 24-hour reply window closes within the hour: answer now or only templates are left.
+  if (filter === 'closing') where.lastInboundAt = { $gt: new Date(Date.now() - WINDOW), $lte: new Date(Date.now() - WINDOW + 3_600_000) }
+  // Chats whose open ticket sits with one of my teams.
+  if (filter === 'team') {
+    const mine = (await col('teams').find({ workspaceId: ws(), memberIds: me._id }, { projection: { _id: 1 } }).toArray()).map((t) => String(t._id))
+    const phones = await col('tickets').distinct('phone', { workspaceId: ws(), status: { $in: ['open', 'pending'] }, teamId: { $in: mine } })
+    where.phone = { $in: phones }
+  }
   // Snoozed chats live under their own filter until their time comes.
   const now = new Date()
   const scope = await scopeFor(me)
@@ -695,7 +704,8 @@ async function saveCanned(me: Actor, body: Obj, id?: string) {
   if (!/^\/[a-z0-9-_]+$/.test(shortcut)) throw new HttpError(400, 'Shortcuts use letters, numbers, - and _ only, like /refund.')
   // Shared responses are the team's; only roles that manage settings can share or change them.
   const admin = can(me.role, 'settings.manage')
-  const doc = { title: text(body.title, 'a title', 80), shortcut, body: text(body.body, 'the reply'), shared: body.shared !== false && admin, updatedAt: new Date() }
+  const actions = parseActions(body.actions)
+  const doc = { title: text(body.title, 'a title', 80), shortcut, body: text(body.body, 'the reply'), shared: body.shared !== false && admin, actions: actions ?? null, updatedAt: new Date() }
   if (id && !admin && (await canned().findOne({ _id: new ObjectId(id), workspaceId: ws(), shared: true }))) throw new HttpError(403, 'Only owners and admins can change the team’s shared responses.')
   const clash = await canned().findOne({ workspaceId: ws(), shortcut, ...(id && { _id: { $ne: new ObjectId(id) } }) })
   if (clash) throw new HttpError(409, `${shortcut} is already used by “${clash.title}”.`)
@@ -824,6 +834,8 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       needCanAssign(me, userId, (await conversations().findOne({ workspaceId: ws(), phone }, { projection: { assigneeId: 1 } }))?.assigneeId)
       if (userId && !(await col('memberships').findOne({ workspaceId: ws(), userId }))) throw new HttpError(400, 'That person isn’t in this workspace.')
       await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { assigneeId: userId } })
+      // The chat's open ticket follows, so the ticket list, SLA alerts and escalations name the same person.
+      await col('tickets').updateMany({ workspaceId: ws(), phone, status: { $in: ['open', 'pending'] } }, { $set: { assigneeId: userId, updatedAt: new Date() } })
     } else if (action === 'control') {
       if (body.action !== 'take' && body.action !== 'release') throw new HttpError(400, 'Action must be take or release.')
       await setControl(me, phone, body.action)

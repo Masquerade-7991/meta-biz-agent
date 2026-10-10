@@ -2103,13 +2103,15 @@
               "enum": [
                 "all",
                 "mine",
+                "team",
                 "unassigned",
+                "closing",
                 "ai",
                 "snoozed"
               ],
-              "description": "`ai`: the AI agent is answering. Default `all`."
+              "description": "`team`: the open ticket sits with one of your teams. `closing`: the 24-hour reply window closes within the hour. `ai`: the AI agent is answering. Default `all`."
             },
-            "description": "`ai`: the AI agent is answering. Default `all`."
+            "description": "`team`: the open ticket sits with one of your teams. `closing`: the 24-hour reply window closes within the hour. `ai`: the AI agent is answering. Default `all`."
           },
           {
             "name": "q",
@@ -2644,7 +2646,7 @@
           "Inbox"
         ],
         "summary": "Assign the chat",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\nWithout `tickets.reassign` (supervisor+) you can only take unassigned chats or release your own.",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nThe chat’s open ticket moves with it. Without `tickets.reassign` (supervisor+) you can only take unassigned chats or release your own.",
         "parameters": [
           {
             "name": "phone",
@@ -3756,7 +3758,9 @@
                     "enum": [
                       "all",
                       "mine",
+                      "team",
                       "unassigned",
+                      "closing",
                       "ai",
                       "snoozed"
                     ]
@@ -3917,6 +3921,37 @@
                   },
                   "shared": {
                     "type": "boolean"
+                  },
+                  "actions": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "resolved"
+                        ]
+                      },
+                      "priority": {
+                        "type": "string",
+                        "enum": [
+                          "urgent",
+                          "high",
+                          "normal",
+                          "low"
+                        ]
+                      },
+                      "tags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "handBack": {
+                        "type": "boolean"
+                      }
+                    },
+                    "description": "A macro: what the composer does to the chat’s open ticket after sending. Invalid fields are dropped; handBack is ignored with resolved."
                   }
                 },
                 "required": [
@@ -4010,6 +4045,12 @@
                   },
                   "shared": {
                     "type": "boolean"
+                  },
+                  "actions": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
                   }
                 },
                 "required": [
@@ -14901,6 +14942,13 @@
           "shared": {
             "type": "boolean",
             "description": "Shared with the whole workspace (else only yours)."
+          },
+          "actions": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "A macro: {status?, priority?, tags?, handBack?} applied to the open ticket after sending."
           }
         },
         "required": [
@@ -14925,7 +14973,9 @@
             "enum": [
               "all",
               "mine",
+              "team",
               "unassigned",
+              "closing",
               "ai",
               "snoozed"
             ]
