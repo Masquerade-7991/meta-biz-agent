@@ -28,10 +28,15 @@ export const auth = area('Accounts & workspace', {
     post: {
       id: 'verifyLink',
       summary: 'Open an emailed link',
-      description: `Redeems the token from a sign-up, invite, password-reset or email-change link. ${SETS_COOKIE} (not for an email change).`,
+      description: `Redeems the token from a sign-up, invite, password-reset or email-change link. ${SETS_COOKIE} (not for an email change). An invite to someone who already has an account is not redeemed here: the answer carries \`invite\`, and the person accepts it signed in as that email (acceptInvite). No session is started for it.`,
       who: 'public',
       body: o({ 'token*': 'string' }),
-      ok: o({ 'purpose*': 'signup|invite|reset|email_change', me: 'Me', email: d('string', 'The new address, for an email change.') }),
+      ok: o({
+        'purpose*': 'signup|invite|reset|email_change',
+        me: 'Me',
+        email: d('string', 'The new address, for an email change.'),
+        invite: d(o({ 'id*': 'string', 'email*': 'string', 'workspaceName*': 'string', 'inviterName*': 'string?', 'role*': ROLE, 'already*': 'boolean' }), 'An invite to an existing account, to accept or decline in the app.'),
+      }),
       errors: { 410: 'This link has expired or was already used. / This workspace no longer exists.', 409: 'Already exists.' },
     },
   },
@@ -113,15 +118,54 @@ export const auth = area('Accounts & workspace', {
       errors: { 400: 'Your current password is incorrect.', 409: 'Another account already uses that email.', 429: 'Too many attempts.' },
     },
   },
+  '/api/account/workspace': {
+    post: {
+      id: 'switchWorkspace',
+      summary: 'Switch workspace',
+      description: 'This session works in the given workspace from now on. Other sessions keep theirs.',
+      who: { text: 'Signed in with setup finished, a member of that workspace.' },
+      body: o({ 'workspaceId*': 'string' }),
+      ok: 'Me',
+      errors: { 404: 'You’re not a member of that workspace.' },
+    },
+  },
+  '/api/account/invites/{id}/accept': {
+    post: {
+      id: 'acceptInvite',
+      summary: 'Accept an invite',
+      description: 'Joins the workspace with the invited role and switches this session to it. Emails the inviter.',
+      who: { text: 'Signed in with setup finished, as the invited email.' },
+      ok: 'Me',
+      errors: { 410: 'This invite was revoked, has expired or was already answered. / This workspace no longer exists.' },
+    },
+  },
+  '/api/account/invites/{id}/decline': {
+    post: {
+      id: 'declineInvite',
+      summary: 'Decline an invite',
+      who: { text: 'Signed in with setup finished, as the invited email.' },
+      ok: 'Me',
+      errors: { 410: 'This invite was revoked, has expired or was already answered.' },
+    },
+  },
   '/api/workspace': {
     post: {
       id: 'createWorkspace',
       summary: 'Create a workspace',
-      description: 'You become its owner.',
-      who: { text: 'Signed in with setup finished, not in a workspace yet.' },
+      description: 'You become its owner, and this session switches to it. You can belong to several workspaces.',
+      who: { text: 'Signed in with setup finished.' },
       body: o({ 'name*': NAME }),
       ok: 'Me',
-      errors: { 409: 'You’re already in a workspace.' },
+      errors: { 429: 'Too many workspaces created (5 an hour).' },
+    },
+  },
+  '/api/workspace/leave': {
+    post: {
+      id: 'leaveWorkspace',
+      summary: 'Leave this workspace',
+      description: 'Ends your membership of the session’s workspace and emails its owners. Your other workspaces are untouched; the session moves to the one you joined most recently.',
+      ok: 'Me',
+      errors: { 400: 'You’re the only owner. Make someone else an owner before you leave.' },
     },
   },
   '/api/workspace/members': {
@@ -131,12 +175,12 @@ export const auth = area('Accounts & workspace', {
     post: {
       id: 'invite',
       summary: 'Invite someone',
-      description: 'Emails an invite link (valid 7 days).',
+      description: 'Emails an invite link (valid 7 days). Someone who already has an account keeps their other workspaces and answers the invite in the app.',
       who: 'members.manage',
       body: o({ 'email*': EMAIL, role: { ...ROLE, default: 'agent' } }),
       errors: {
         403: 'Your role can’t invite someone as an owner.',
-        409: 'Already in a workspace, or already invited.',
+        409: 'Already in this workspace, or already invited.',
         429: 'Too many invites (50 an hour per workspace).',
       },
     },

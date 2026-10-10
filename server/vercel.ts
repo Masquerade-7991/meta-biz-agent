@@ -7,6 +7,7 @@ import { reprocessWebhooks } from './inbox.ts'
 import { handle, ready } from './app.ts'
 import { db } from './db.ts'
 import { jobsTick } from './jobs.ts'
+import { escalateAll } from './supportOps.ts'
 import { resumeBroadcasts } from './broadcasts.ts'
 import { startBilling } from './billing.ts'
 import { startHealth } from './health.ts'
@@ -31,6 +32,7 @@ export default async function vercel(req: http.IncomingMessage, res: http.Server
   if (db && Date.now() - lastKick > 15_000) {
     lastKick = Date.now()
     await jobsTick(8_000).catch(() => 0)
+    await escalateAll().catch(() => 0) // at most once a minute per instance
   }
 }
 
@@ -52,5 +54,6 @@ async function cron(req: http.IncomingMessage, res: http.ServerResponse) {
   const ran = await jobsTick(40_000)
   for (const job of ['metrics', 'handoffs', 'connectorLogs', 'traces', 'agentUsage'] as const) await runOnce(job)
   await reprocessWebhooks(200)
+  await escalateAll(true)
   res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, jobs: ran }))
 }

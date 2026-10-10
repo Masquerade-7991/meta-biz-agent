@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Rows3, Rows4, Settings, Sun, UserPlus } from 'lucide-react'
+import { Check, LogOut, PanelLeftClose, PanelLeftOpen, Rows3, Rows4, Settings, UserPlus } from 'lucide-react'
 import { getDensity, setDensity, type Density } from '@/app/lib/density'
 import { Avatar, AvatarFallback } from '@/app/components/ui/avatar'
 import {
@@ -11,13 +11,12 @@ import {
   DropdownMenuTrigger,
 } from '@/app/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/app/components/ui/tooltip'
-import mark from '@/assets/helo-mark.svg'
+import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { NAV_GROUPS, navFor, type NavId } from '@/app/nav'
 import { cn } from '@/app/lib/utils'
 import { useAuth } from '@/app/auth/AuthContext'
 import type { SettingsTab } from './SettingsPage'
 import { can, roleLabel } from '@/app/lib/permissions'
-import { getTheme, setTheme, type ThemeChoice } from '@/app/lib/theme'
 
 const initial = (name?: string) => name?.trim()[0]?.toUpperCase() || '?'
 const COLLAPSE_KEY = 'helo-nav-collapsed'
@@ -65,14 +64,8 @@ export function AppSidebar({
         drawer ? 'w-full' : cn('border-r border-sidebar-border', collapsed ? 'w-16' : 'w-56'),
       )}
     >
-      <div className={cn('flex h-14 shrink-0 items-center gap-2.5', collapsed ? 'justify-center' : 'px-4')}>
-        <img src={mark} alt="" className="size-7" />
-        {!collapsed && (
-          <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm font-semibold text-foreground">Helo.ai</p>
-            <p className="truncate text-meta text-muted-foreground">{me?.workspace?.name}</p>
-          </div>
-        )}
+      <div className={cn('flex h-14 shrink-0 items-center', collapsed ? 'justify-center' : 'px-2.5')}>
+        <WorkspaceSwitcher collapsed={collapsed} onOpenSettings={onOpenSettings} />
       </div>
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-2.5 py-3">
@@ -155,27 +148,17 @@ function AccountMenu({
   onOpenSettings: (tab: SettingsTab) => void
   onLogout: () => void
 }) {
-  const [theme, setThemeState] = useState<ThemeChoice>(getTheme)
   const [density, setDensityState] = useState<Density>(getDensity)
   const pickDensity = (d: Density) => {
     setDensity(d)
     setDensityState(d)
   }
-  const pick = (t: ThemeChoice) => {
-    setTheme(t)
-    setThemeState(t)
-  }
-  const THEMES: { id: ThemeChoice; label: string; icon: typeof Sun }[] = [
-    { id: 'light', label: 'Light', icon: Sun },
-    { id: 'dark', label: 'Dark', icon: Moon },
-    { id: 'system', label: 'Match system', icon: Monitor },
-  ]
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label="Account, theme and workspace"
+          aria-label="Account and workspace"
           className={cn(
             'flex items-center gap-2.5 rounded-md text-left transition-colors outline-none hover:bg-sidebar-accent/70 focus-visible:ring-[3px] focus-visible:ring-ring/50',
             collapsed ? 'size-9 justify-center' : 'w-full px-1.5 py-1.5',
@@ -207,14 +190,6 @@ function AccountMenu({
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-meta font-normal text-muted-foreground">Theme</DropdownMenuLabel>
-        {THEMES.map((t) => (
-          <DropdownMenuItem key={t.id} onSelect={(e) => (e.preventDefault(), pick(t.id))}>
-            <t.icon className="size-4" /> {t.label}
-            {theme === t.id && <Check className="ml-auto size-4" />}
-          </DropdownMenuItem>
-        ))}
-        <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-meta font-normal text-muted-foreground">Lists</DropdownMenuLabel>
         {(['comfortable', 'compact'] as const).map((d) => (
           <DropdownMenuItem key={d} onSelect={(e) => (e.preventDefault(), pickDensity(d))}>
@@ -223,9 +198,6 @@ function AccountMenu({
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-meta font-normal text-muted-foreground">
-          {me?.workspace?.name} · {roleLabel(me?.role)}
-        </DropdownMenuLabel>
         <DropdownMenuItem onSelect={onLogout}>
           <LogOut className="size-4" /> Log out
         </DropdownMenuItem>

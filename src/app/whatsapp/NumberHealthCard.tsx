@@ -8,7 +8,7 @@ import { cn } from '@/app/lib/utils'
 
 const QUALITY: Record<string, { label: string; dot: string; help: string }> = {
   GREEN: { label: 'High quality', dot: 'bg-success', help: 'Customers are happy with your messages.' },
-  YELLOW: { label: 'Medium quality', dot: 'bg-amber-500', help: 'Some customers blocked or reported you lately. Send marketing only to people who asked for it.' },
+  YELLOW: { label: 'Medium quality', dot: 'bg-warning', help: 'Some customers blocked or reported you lately. Send marketing only to people who asked for it.' },
   RED: { label: 'Low quality', dot: 'bg-destructive', help: 'Many customers blocked or reported you. WhatsApp may lower your daily limit; pause marketing broadcasts.' },
 }
 const NAME: Record<string, string> = { APPROVED: 'Display name approved', PENDING_REVIEW: 'Display name in review', DECLINED: 'Display name declined', EXPIRED: 'Display name review expired', AVAILABLE_WITHOUT_REVIEW: 'Display name approved' }

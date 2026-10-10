@@ -145,7 +145,8 @@ const INDEXES: Record<string, IndexDescription[]> = {
   // Accounts (auth.ts). Tokens and session ids are stored as sha256 only; both expire via TTL.
   users: [{ key: { email: 1 }, unique: true }],
   workspaces: [{ key: { createdAt: 1 } }],
-  memberships: [{ key: { userId: 1 }, unique: true }, { key: { workspaceId: 1 } }],
+  // A person can belong to several workspaces, once each.
+  memberships: [{ key: { workspaceId: 1, userId: 1 }, unique: true }, { key: { userId: 1 } }, { key: { workspaceId: 1 } }],
   magic_links: [
     { key: { tokenHash: 1 }, unique: true },
     { key: { workspaceId: 1, purpose: 1 } },
@@ -174,6 +175,8 @@ const INDEXES: Record<string, IndexDescription[]> = {
 
 /** Collections that used to delete old rows, and the field their expiry used: now kept for good. */
 const RETIRED_TTL: Record<string, string> = { whatsapp_webhooks: 'at', test_conversations: 'updatedAt', conversation_traces: 'ts' }
+/** Unique indexes that no longer are (one workspace per person, before multi-workspace membership). */
+const RETIRED_UNIQUE: Record<string, string> = { memberships: 'userId' }
 
 /** Creates collections and indexes, skipped when nothing changed since the last run (serverless
  *  instances start often; this keeps their cold start short). */
@@ -193,6 +196,10 @@ async function createSchema(d: Db) {
       TIME_SERIES.includes(name) ? { timeseries: { timeField: 'ts', metaField: 'meta', granularity: 'hours' }, expireAfterSeconds: Y2 } : {},
     )
   }
+  // Dropped first: a unique index blocks creating the plain one of the same name.
+  for (const [name, field] of Object.entries(RETIRED_UNIQUE))
+    for (const ix of await d.collection(name).indexes().catch(() => []))
+      if (ix.unique && ix.name && Object.keys(ix.key).join() === field) await d.collection(name).dropIndex(ix.name)
   for (const [name, specs] of Object.entries(INDEXES)) await d.collection(name).createIndexes(specs)
   // Expiry rules that were removed above: creating indexes never drops old ones, so drop them here.
   for (const [name, field] of Object.entries(RETIRED_TTL))

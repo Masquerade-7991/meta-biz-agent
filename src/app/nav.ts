@@ -1,7 +1,7 @@
-import { BarChart3, Bot, Contact, Home, Inbox, Megaphone, Settings, Smartphone, Ticket, type LucideIcon } from 'lucide-react'
+import { BarChart3, Bot, Contact, FileText, Home, Inbox, Megaphone, Settings, Smartphone, Ticket, type LucideIcon } from 'lucide-react'
 import { can, type Action, type Role } from '@/app/lib/permissions'
 
-export type NavId = 'home' | 'inbox' | 'tickets' | 'contacts' | 'ai-agents' | 'broadcasts' | 'whatsapp' | 'analytics' | 'settings'
+export type NavId = 'home' | 'inbox' | 'tickets' | 'contacts' | 'ai-agents' | 'broadcasts' | 'whatsapp' | 'analytics' | 'reports' | 'settings'
 
 export interface NavItem {
   id: NavId
@@ -23,6 +23,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'ai-agents', label: 'AI Agents', icon: Bot, group: 'grow' },
   { id: 'broadcasts', label: 'Broadcasts', icon: Megaphone, group: 'grow' },
   { id: 'analytics', label: 'Analytics', icon: BarChart3, need: 'reports.view', group: 'grow' },
+  { id: 'reports', label: 'Reports', icon: FileText, need: 'reports.view', group: 'grow' },
   { id: 'whatsapp', label: 'WhatsApp', icon: Smartphone, need: 'numbers.view', group: 'setup' },
   { id: 'settings', label: 'Settings', icon: Settings, group: 'setup' },
 ]
@@ -41,6 +42,7 @@ const PAGE_PATHS: Record<NavId, string> = {
   broadcasts: '/broadcasts',
   whatsapp: '/whatsapp',
   analytics: '/analytics',
+  reports: '/reports',
   settings: '/settings',
 }
 export const pathFor = (id: NavId, settingsTab?: string) => (id === 'settings' && settingsTab ? `/settings/${settingsTab}` : PAGE_PATHS[id])

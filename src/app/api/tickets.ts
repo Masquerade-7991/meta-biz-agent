@@ -2,6 +2,8 @@
 // Dummy mode answers in this browser (see supportDummy.ts).
 import { jsonClient } from './client'
 import { dummyTickets } from './supportDummy'
+import type { AgentProfile, EscalationMatrix, Rule, Team } from '@/app/support/routing'
+export type { AgentProfile, EscalationMatrix, Rule, Team }
 
 export type Priority = 'urgent' | 'high' | 'normal' | 'low'
 export type TicketStatus = 'open' | 'pending' | 'resolved'
@@ -24,6 +26,11 @@ export interface Ticket {
   resolution: string | null
   csat: { score: 1 | 2 | 3; label: string; at: string } | null
   sla: { kind: 'firstResponse' | 'resolve' | 'done'; at: string | null; breached: boolean }
+  /** The team whose queue it's in (routing rules, escalation). */
+  teamId?: string | null
+  /** 0 = not escalated; 1–3 = the escalation matrix level reached. */
+  escalationLevel?: number
+  escalations?: { level: number; at: string; reason: string; notify: string[]; teamId?: string }[]
   sample?: boolean
 }
 export type Day = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'
@@ -46,7 +53,7 @@ export interface SupportSettings {
 /** Something about one ticket: an SLA due or overdue, or a ticket that's yours or nobody's. */
 export interface TicketNotice {
   id: string
-  kind: 'breached' | 'due' | 'assigned' | 'unassigned'
+  kind: 'breached' | 'due' | 'assigned' | 'unassigned' | 'escalated'
   text: string
   at: string
   number: number
@@ -75,16 +82,31 @@ const call = jsonClient(dummyTickets)
 const qs = (p: Record<string, string | undefined>) =>
   new URLSearchParams(Object.entries(p).filter((e): e is [string, string] => !!e[1])).toString()
 
-export const listTickets = (f: { status?: string; assignee?: string; priority?: string; q?: string; phone?: string } = {}) => call<Ticket[]>(`/api/tickets?${qs(f)}`)
+export const listTickets = (f: { status?: string; assignee?: string; priority?: string; q?: string; phone?: string; team?: string; escalated?: string } = {}) => call<Ticket[]>(`/api/tickets?${qs(f)}`)
 export const getTicket = (n: number) => call<Ticket>(`/api/tickets/${n}`)
 export const createTicket = (phone: string, subject: string, priority: Priority) => call<Ticket>('/api/tickets', 'POST', { phone, subject, priority })
-export const updateTicket = (n: number, patch: Partial<Pick<Ticket, 'status' | 'priority' | 'assigneeId' | 'subject' | 'tags'>>) => call<Ticket>(`/api/tickets/${n}`, 'PATCH', patch)
+export const updateTicket = (n: number, patch: Partial<Pick<Ticket, 'status' | 'priority' | 'assigneeId' | 'subject' | 'tags' | 'teamId'>>) => call<Ticket>(`/api/tickets/${n}`, 'PATCH', patch)
 export const resolveTicket = (n: number, o: { resolution: string; askFeedback: boolean; handBack: boolean }) => call<Ticket>(`/api/tickets/${n}/resolve`, 'POST', o)
-export const bulkTickets = (numbers: number[], o: { action: 'resolve' } | { patch: Partial<Pick<Ticket, 'status' | 'priority' | 'assigneeId'>> }) =>
+export const bulkTickets = (numbers: number[], o: { action: 'resolve' } | { patch: Partial<Pick<Ticket, 'status' | 'priority' | 'assigneeId' | 'teamId'>> }) =>
   call<{ ok: true; count: number }>('/api/tickets/bulk', 'POST', { numbers, ...o })
 
 export const getSupportSettings = () => call<SupportSettings>('/api/support/settings')
 export const saveSupportSettings = (s: Omit<SupportSettings, 'aiSummary'>) => call<SupportSettings>('/api/support/settings', 'PUT', s)
+// Teams, people, routing rules and the escalation matrix (server/supportOps.ts).
+export const listTeams = () => call<Team[]>('/api/support/teams')
+export const createTeam = (t: Omit<Team, 'id'>) => call<Team>('/api/support/teams', 'POST', t)
+export const updateTeam = (id: string, t: Omit<Team, 'id'>) => call<Team>(`/api/support/teams/${id}`, 'PUT', t)
+export const deleteTeam = (id: string) => call<{ ok: true }>(`/api/support/teams/${id}`, 'DELETE')
+export const listAgents = () => call<AgentRow[]>('/api/support/agents')
+export const updateAgent = (userId: string, patch: Partial<Pick<AgentProfile, 'skills' | 'maxOpen' | 'availability'>>) => call<{ ok: true }>(`/api/support/agents/${userId}`, 'PUT', patch)
+export const getRules = () => call<Rule[]>('/api/support/rules')
+export const saveRules = (rules: Rule[]) => call<Rule[]>('/api/support/rules', 'PUT', rules)
+export const getEscalation = () => call<EscalationMatrix>('/api/support/escalation')
+export const saveEscalation = (m: EscalationMatrix) => call<EscalationMatrix>('/api/support/escalation', 'PUT', m)
+/** Dummy mode only (Demo controls): the oldest open ticket reaches its next escalation level. */
+export const escalateDemoTicket = () => call<{ number: number; level: number }>('/api/support/demo/escalate', 'POST', {})
+export type AgentRow = AgentProfile & { open: number; teamIds: string[] }
+
 export const listNotices = () => call<Notice[]>('/api/support/notifications')
 /** Alerts and reminders stay until dismissed; ids look like alert:<key> or reminder:<id>. */
 export const dismissNotice = (id: string) => call<{ ok: true }>(`/api/support/notifications/${encodeURIComponent(id).replace(/^(alert|reminder)%3A/, '$1:')}/dismiss`, 'POST', {})

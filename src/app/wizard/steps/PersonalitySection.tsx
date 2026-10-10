@@ -157,7 +157,7 @@ export function PersonalitySection({ saveSlot }: { saveSlot?: HTMLElement | null
                   type="button"
                   onClick={() => patch('personalization', { tone: preset.id as ToneId })}
                   className={cn(
-                    'rounded-xl border px-4 py-3 text-left transition-colors',
+                    'rounded-lg border px-4 py-3 text-left transition-colors',
                     active ? 'border-primary bg-accent' : 'border-border hover:border-primary/50',
                   )}
                 >

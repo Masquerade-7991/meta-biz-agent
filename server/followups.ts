@@ -82,7 +82,7 @@ export async function dismissReminder(id: string, userId: string) {
 }
 
 // ---- saved views ----
-const FILTERS = new Set(['all', 'mine', 'unassigned', 'ai', 'snoozed'])
+const FILTERS = new Set(['all', 'mine', 'team', 'unassigned', 'closing', 'ai', 'snoozed'])
 export const listViews = (userId: string) =>
   col('saved_views').find({ workspaceId: ws(), userId }).sort({ name: 1 }).toArray().then((rows) => rows.map((v) => ({ id: String(v._id), name: v.name, filter: v.filter, q: v.q })))
 export async function saveView(userId: string, b: Obj) {

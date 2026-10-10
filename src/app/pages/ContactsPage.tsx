@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Download, Loader2, MessageSquare, Plus, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
+import { PageContainer, PageHeader } from '@/app/components/ui/page'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { Switch } from '@/app/components/ui/switch'
@@ -420,29 +421,30 @@ export function ContactsPage({ onOpenChat }: { onOpenChat: (phone: string) => vo
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1>Contacts</h1>
-          <p className="mt-1 text-muted-foreground">Everyone who has chatted with you, plus people you add or import.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {manage && (
-            <Button variant="outline" onClick={() => setImporting(true)}>
-              <Upload className="size-4" />
-              Import CSV
+    <PageContainer>
+      <PageHeader
+        title="Contacts"
+        description="Everyone who has chatted with you, plus people you add or import."
+        className="mb-0"
+        actions={
+          <>
+            {manage && (
+              <Button variant="outline" onClick={() => setImporting(true)}>
+                <Upload className="size-4" />
+                Import CSV
+              </Button>
+            )}
+            <Button variant="outline" onClick={exportCsv} disabled={!rows?.length}>
+              <Download className="size-4" />
+              Export CSV
             </Button>
-          )}
-          <Button variant="outline" onClick={exportCsv} disabled={!rows?.length}>
-            <Download className="size-4" />
-            Export CSV
-          </Button>
-          <Button onClick={() => setEditing('new')}>
-            <Plus className="size-4" />
-            Add contact
-          </Button>
-        </div>
-      </div>
+            <Button onClick={() => setEditing('new')}>
+              <Plus className="size-4" />
+              Add contact
+            </Button>
+          </>
+        }
+      />
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <SearchInput value={q} onChange={setQ} placeholder="Search name, number or email" label="Search contacts" className="h-9 w-64" />
@@ -600,6 +602,6 @@ export function ContactsPage({ onOpenChat }: { onOpenChat: (phone: string) => vo
           }, (err) => toast.error(errorDetail(err)))
         }}
       />
-    </div>
+    </PageContainer>
   )
 }

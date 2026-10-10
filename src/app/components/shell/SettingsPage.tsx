@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
+import { PageContainer, PageHeader } from '@/app/components/ui/page'
 import { Badge } from '@/app/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table'
@@ -12,6 +13,9 @@ import { useAuth } from '@/app/auth/AuthContext'
 import { Field, FormError } from '@/app/auth/AuthLayout'
 import { CannedResponsesSettings } from './CannedResponsesSettings'
 import { SupportSettingsTab } from './SupportSettings'
+import { TeamsSettings } from './TeamsSettings'
+import { RoutingRulesSettings } from './RoutingRulesSettings'
+import { EscalationSettings } from './EscalationSettings'
 import { BillingSettingsTab } from './BillingSettings'
 import { ContactFieldsSettings } from './ContactFieldsSettings'
 import { authApi, type Invite, type Member } from '@/app/auth/api'
@@ -22,7 +26,7 @@ import { WhatsAppSettings } from './WhatsAppSettings'
 import { assignableRoles, can, canSetRole, roleLabel, ROLES, type Role } from '@/app/lib/permissions'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
 
-export type SettingsTab = 'profile' | 'whatsapp' | 'billing' | 'members' | 'canned' | 'support' | 'fields'
+export type SettingsTab = 'profile' | 'whatsapp' | 'billing' | 'members' | 'canned' | 'support' | 'fields' | 'teams' | 'routing' | 'escalation'
 
 
 const days = (from: string, to = Date.now()) => Math.round((to - Date.parse(from)) / 86_400_000)
@@ -205,7 +209,7 @@ function Members() {
   return (
     <div>
       {manage && (
-        <SettingsSection title="Invite people" description="They get an email with a link to set up their account and join with the role you pick. Invites expire after 7 days.">
+        <SettingsSection title="Invite people" description="They get an email to join with the role you pick. People who already use Helo.ai keep their other workspaces and accept in the app. Invites expire after 7 days.">
           <form onSubmit={sendInvite} className="space-y-4">
             <Field label="Email" type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} />
             <RolePicker id="invite-role" label="Role" value={inviteRole} roles={roles} onChange={setInviteRole} />
@@ -368,6 +372,9 @@ const SETTINGS_GROUPS: { label: string; items: { id: SettingsTab; label: string 
     label: 'Support desk',
     items: [
       { id: 'support', label: 'Hours & response targets' },
+      { id: 'teams', label: 'Teams & people' },
+      { id: 'routing', label: 'Routing rules' },
+      { id: 'escalation', label: 'Escalation' },
       { id: 'canned', label: 'Canned responses' },
       { id: 'fields', label: 'Contact fields' },
     ],
@@ -383,8 +390,8 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
   // A link (email, notification) can name a tab this role can't open; show Profile instead.
   const shown = (tab === 'billing' && !billing) || (tab === 'whatsapp' && !whatsapp) ? 'profile' : tab
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
-      <h1 className="mb-6">Settings</h1>
+    <PageContainer>
+      <PageHeader title="Settings" description="Your workspace and its people, how the support desk works, and your own account." />
       <Tabs value={shown} onValueChange={(v) => onTabChange(v as SettingsTab)} className="gap-6 md:flex-row md:items-start">
         {/* Grouped by whose settings they are: the workspace, the support desk, and you. */}
         <nav aria-label="Settings sections" className="shrink-0 md:w-52">
@@ -438,11 +445,20 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
         <TabsContent value="support">
           <SupportSettingsTab />
         </TabsContent>
+        <TabsContent value="teams">
+          <TeamsSettings />
+        </TabsContent>
+        <TabsContent value="routing">
+          <RoutingRulesSettings />
+        </TabsContent>
+        <TabsContent value="escalation">
+          <EscalationSettings />
+        </TabsContent>
         <TabsContent value="fields">
           <ContactFieldsSettings />
         </TabsContent>
         </div>
       </Tabs>
-    </div>
+    </PageContainer>
   )
 }

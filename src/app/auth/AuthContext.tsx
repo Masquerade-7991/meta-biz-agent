@@ -1,10 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { isDummyMode } from '@/app/api/dummy'
 import { UNAUTHORIZED_EVENT } from '@/app/api/meta'
-import { authApi, type Me } from './api'
+import { authApi, demoMe, type Me } from './api'
 
 // Dummy mode runs with no server (e.g. the UI-only deploy), so it signs in as a local demo owner.
-const DEMO: Me = { user: { id: 'demo', name: 'Demo User', email: 'demo@helo.ai' }, workspace: { id: 'demo', name: 'Helo Demo Store' }, role: 'owner', setup: 'complete', joining: null }
 
 interface AuthValue {
   /** undefined while loading, null when signed out. */
@@ -20,7 +19,7 @@ interface AuthValue {
 const AuthContext = createContext<AuthValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [me, setMe] = useState<Me | null | undefined>(isDummyMode() ? DEMO : undefined)
+  const [me, setMe] = useState<Me | null | undefined>(isDummyMode() ? demoMe : undefined)
   const [serverDown, setServerDown] = useState(false)
   const [databaseDown, setDatabaseDown] = useState(false)
 

@@ -2,7 +2,6 @@
 // people (AI handoff, someone takes over, or a person replies). SLA clocks run on business hours;
 // routing picks the assignee; resolving can ask for feedback (CSAT) and hand the chat back to the AI.
 import type http from 'node:http'
-import { randomUUID } from 'node:crypto'
 import { HttpError, type Obj, type Titles, obj, readJson, serveJson } from './http.ts'
 import { col, db, dbOffReason, ws } from './db.ts'
 import { env } from './upstream.ts'
@@ -14,8 +13,9 @@ import { dismissAlert, openAlerts } from './alerts.ts'
 import { dismissReminder, dueReminders } from './followups.ts'
 import { addBusinessMinutes, DAYS, DEFAULT_HOURS, isOpen, type Hours } from './businessHours.ts'
 import { contactNames } from './contacts.ts'
-import { addMessage, conversations, sendInteractive, sendText, setControl, type Actor } from './inbox.ts'
+import { addMessage, conversations, currentNumber, sendInteractive, sendText, setControl, type Actor } from './inbox.ts'
 import { can, mayAssign } from '../src/app/lib/permissions.ts'
+import { getTeams, routeTicket, supportOpsRoute } from './supportOps.ts'
 
 export const PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const
 export type Priority = (typeof PRIORITIES)[number]
@@ -32,7 +32,9 @@ export interface SupportSettings {
   awayMessage: string
   /** Minutes of business time per priority. */
   sla: Record<Priority, { firstResponse: number; resolve: number }>
+  /** The default when no routing rule matches (supportOps.ts). */
   routing: { mode: 'unassigned' | 'round_robin' | 'fixed'; teamId: string | null; userId: string | null }
+  /** Before teams had their own collection; read once by getTeams to move them over. */
   teams: { id: string; name: string; memberIds: string[] }[]
   csat: { enabled: boolean; question: string }
   /** Agents see only chats and tickets assigned to them, plus unassigned ones (supervisors and up see all). */
@@ -72,7 +74,7 @@ export function needCanAssign(me: Actor, to: string | null, from: unknown) {
 
 // ---- validation of the settings form ----
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
-function parseSettings(b: Obj, members: Set<string>): SupportSettings {
+function parseSettings(b: Obj, members: Set<string>, teamIds: Set<string>, legacyTeams: SupportSettings['teams']): SupportSettings {
   const h = obj(b.hours)
   const tz = String(h.timezone ?? '')
   try {
@@ -98,15 +100,9 @@ function parseSettings(b: Obj, members: Set<string>): SupportSettings {
       return [p, { firstResponse: Math.round(first), resolve: Math.round(resolve) }]
     }),
   ) as SupportSettings['sla']
-  const teams = (Array.isArray(b.teams) ? b.teams : []).map((t) => {
-    const x = obj(t)
-    const name = String(x.name ?? '').trim()
-    if (!name) throw new HttpError(400, 'Every team needs a name.')
-    return { id: String(x.id || randomUUID()), name: name.slice(0, 60), memberIds: (Array.isArray(x.memberIds) ? x.memberIds : []).map(String).filter((id) => members.has(id)) }
-  })
   const r = obj(b.routing)
   const mode = r.mode === 'fixed' || r.mode === 'unassigned' ? r.mode : 'round_robin'
-  const routing = { mode, teamId: teams.some((t) => t.id === r.teamId) ? String(r.teamId) : null, userId: members.has(String(r.userId)) ? String(r.userId) : null } as SupportSettings['routing']
+  const routing = { mode, teamId: teamIds.has(String(r.teamId)) ? String(r.teamId) : null, userId: members.has(String(r.userId)) ? String(r.userId) : null } as SupportSettings['routing']
   if (mode === 'fixed' && !routing.userId) throw new HttpError(400, 'Pick who gets every new ticket.')
   const c = obj(b.csat)
   return {
@@ -114,23 +110,10 @@ function parseSettings(b: Obj, members: Set<string>): SupportSettings {
     awayMessage: String(b.awayMessage ?? '').trim().slice(0, 1000),
     sla,
     routing,
-    teams,
+    teams: legacyTeams,
     csat: { enabled: c.enabled !== false, question: String(c.question ?? '').trim().slice(0, 200) || DEFAULT_SETTINGS.csat.question },
     restrictAgents: b.restrictAgents === true,
   }
-}
-
-// ---- routing ----
-async function pickAssignee(s: SupportSettings): Promise<string | null> {
-  if (s.routing.mode === 'fixed') return s.routing.userId
-  if (s.routing.mode === 'unassigned') return null
-  const pool = s.routing.teamId
-    ? (s.teams.find((t) => t.id === s.routing.teamId)?.memberIds ?? [])
-    : ((await col('memberships').find({ workspaceId: ws() }).sort({ createdAt: 1 }).toArray()).map((m) => String(m.userId)))
-  if (!pool.length) return null
-  // Round robin: an atomic counter per workspace, so two tickets at once never get the same turn.
-  const r = await col('counters').findOneAndUpdate({ _id: `rr:${ws()}` as never }, { $inc: { seq: 1 } }, { upsert: true, returnDocument: 'after' })
-  return pool[(Number(r?.seq ?? 1) - 1) % pool.length]
 }
 
 // ---- lifecycle hooks (called by inbox.ts) ----
@@ -145,7 +128,9 @@ export async function ensureTicket(phone: string, source: 'handoff' | 'takeover'
   const priority = opts.priority ?? 'normal'
   const conv = await conversations().findOne({ workspaceId: ws(), phone })
   const lastWords = await col('messages').findOne({ workspaceId: ws(), phone, author: 'customer', body: { $type: 'string' } }, { sort: { at: -1 } })
-  const assigneeId = conv?.assigneeId ?? (await pickAssignee(s))
+  // Someone already looking after the chat keeps it; otherwise the routing rules decide.
+  const routed = await routeTicket({ phone, source, priority, explicitPriority: !!opts.priority, text: String(lastWords?.body ?? '') })
+  const assigneeId = conv?.assigneeId ?? routed.assigneeId
   const n = await col('counters').findOneAndUpdate({ _id: `ticket:${ws()}` as never }, { $inc: { seq: 1 } }, { upsert: true, returnDocument: 'after' })
   const doc = {
     workspaceId: ws(),
@@ -153,14 +138,17 @@ export async function ensureTicket(phone: string, source: 'handoff' | 'takeover'
     phone,
     subject: (opts.subject || String(lastWords?.body ?? '') || `Chat with +${phone}`).slice(0, 120),
     status: 'open',
-    priority,
+    priority: routed.priority,
     assigneeId,
-    tags: [] as string[],
+    teamId: routed.teamId,
+    tags: routed.tags,
     source,
     createdAt: now,
     updatedAt: now,
-    firstResponseDueAt: addBusinessMinutes(now, s.sla[priority].firstResponse, s.hours),
-    resolveDueAt: addBusinessMinutes(now, s.sla[priority].resolve, s.hours),
+    firstResponseDueAt: addBusinessMinutes(now, s.sla[routed.priority].firstResponse, s.hours),
+    resolveDueAt: addBusinessMinutes(now, s.sla[routed.priority].resolve, s.hours),
+    escalationLevel: 0,
+    phoneNumberId: (conv?.phoneNumberId as string | undefined) ?? currentNumber(),
     firstRespondedAt: null,
     resolvedAt: null,
     resolution: null,
@@ -168,7 +156,8 @@ export async function ensureTicket(phone: string, source: 'handoff' | 'takeover'
     ...((opts.sample ?? conv?.sample) && { sample: true }),
   }
   await tickets().insertOne(doc)
-  trace('ticket.created', { number: doc.number, source, priority, assigned: !!assigneeId }, { entity: 'ticket', id: String(doc.number) })
+  trace('ticket.created', { number: doc.number, source, priority: doc.priority, assigned: !!assigneeId, rule: routed.rule }, { entity: 'ticket', id: String(doc.number) })
+  if (routed.rule) await addMessage({ phone, direction: 'out', author: 'system', kind: 'event', body: `Ticket #${doc.number} routed by the rule “${routed.rule}”.`, at: now })
   if (assigneeId && !conv?.assigneeId) await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { assigneeId } })
   return doc
 }
@@ -221,6 +210,9 @@ async function list(u: URL, me: Actor) {
   if (p('assignee') === 'me') where.assigneeId = me._id
   if (p('assignee') === 'none') where.assigneeId = null
   if (PRIORITIES.includes(p('priority') as never)) where.priority = p('priority')
+  if (p('team') === 'none') where.teamId = null
+  else if (p('team')) where.teamId = p('team')
+  if (p('escalated') === '1') where.escalationLevel = { $gt: 0 }
   if (p('phone')) where.phone = parseCustomerKey(p('phone'))
   const scope = await scopeFor(me)
   if (scope) where.$and = [scope]
@@ -263,6 +255,12 @@ async function update(number: number, b: Obj, me: Actor) {
     if (id && !(await col('memberships').findOne({ workspaceId: ws(), userId: id }))) throw new HttpError(400, 'That person isn’t in this workspace.')
     set.assigneeId = id
     await conversations().updateOne({ workspaceId: ws(), phone: t.phone }, { $set: { assigneeId: id } })
+  }
+  if (b.teamId !== undefined) {
+    if (!can(me.role, 'tickets.reassign')) throw new HttpError(403, 'Only supervisors, admins and owners move tickets between teams.')
+    const id = b.teamId === null ? null : String(b.teamId)
+    if (id && !(await getTeams()).some((t) => t.id === id)) throw new HttpError(400, 'That team no longer exists.')
+    set.teamId = id
   }
   if (typeof b.subject === 'string' && b.subject.trim()) set.subject = b.subject.trim().slice(0, 120)
   if (Array.isArray(b.tags)) set.tags = b.tags.map((x) => String(x).trim().toLowerCase()).filter(Boolean).slice(0, 20)
@@ -311,6 +309,14 @@ async function notifications(me: Actor) {
     list.push({ id: `new:${t.number}`, kind: t.assigneeId ? 'assigned' : 'unassigned', text: t.assigneeId ? `#${t.number} ${who} is assigned to you` : `#${t.number} ${who} needs someone`, at: t.createdAt as Date, number: Number(t.number), phone: String(t.phone) })
     return list
   })
+  // Escalations name the people they notify (assignee, team lead, supervisors, admins).
+  const escalated = await tickets().find({ workspaceId: ws(), status: OPEN, 'escalations.notify': me._id }).sort({ escalatedAt: -1 }).limit(30).toArray()
+  const escNames = await contactNames(escalated.map((t) => String(t.phone)))
+  for (const t of escalated) {
+    const last = ((t.escalations as Obj[]) ?? []).filter((e) => (e.notify as string[]).includes(me._id)).at(-1)
+    if (last)
+      items.push({ id: `esc:${t.number}:${last.level}`, kind: 'escalated', text: `#${t.number} ${escNames.get(String(t.phone)) || customerLabel(String(t.phone))} escalated to level ${last.level}: ${String(last.reason).toLowerCase()}`, at: last.at as Date, number: Number(t.number), phone: String(t.phone) })
+  }
   // Account alerts (budget, number quality, templates) are for owners, and stay on top until dismissed.
   const alerts =
     can(me.role, 'alerts.receive')
@@ -410,7 +416,8 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   if (path === '/api/support/settings' && m === 'PUT') {
     if (!can(me.role, 'settings.manage')) throw new HttpError(403, 'Only owners and admins can change support settings.')
     const members = new Set((await col('memberships').find({ workspaceId: ws() }).toArray()).map((x) => String(x.userId)))
-    const settings = parseSettings(obj(await readJson(req)), members)
+    const teamIds = new Set((await getTeams()).map((t) => t.id))
+    const settings = parseSettings(obj(await readJson(req)), members, teamIds, (await getSettings()).teams)
     await settingsCol().updateOne({ workspaceId: ws() }, { $set: { settings, updatedAt: new Date(), updatedBy: me._id } }, { upsert: true })
     trace('settings.updated', { area: 'support' })
     return { ...settings, aiSummary: !!env('ANTHROPIC_API_KEY'), listenOnly: listenOnly() }
@@ -429,6 +436,8 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     if (![7, 30, 90].includes(days)) throw new HttpError(400, 'days must be 7, 30 or 90.')
     return analytics(days)
   }
+  const ops = await supportOpsRoute(req, u, me)
+  if (ops !== undefined) return ops
   throw new HttpError(404, 'Not found.')
 }
 

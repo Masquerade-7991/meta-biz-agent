@@ -4,11 +4,13 @@
 // customer's own words (same wamid, so the placeholder fills in), echoes of the agent's replies,
 // delivery ticks and handovers. Replies from people go out through the Cloud API send endpoint.
 import type http from 'node:http'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { ObjectId } from 'mongodb'
 import { HttpError, type Obj, type Titles, arr, digits, obj, readJson, serveJson, str } from './http.ts'
 import { col, db, dbOffReason, needMetaAssets, ownsMetaAssets, withWorkspace, ws } from './db.ts'
 import { callUpstream, env, metaJson, parseJson, resolveIds } from './upstream.ts'
 import { currentAssets } from './context.ts'
+import { parseActions } from '../src/app/inbox/macros.ts'
 import { trace } from './trace.ts'
 import { contactFor, resolveCustomer, webhookContacts } from './customers.ts'
 import { recipientFailed } from './broadcasts.ts'
@@ -39,6 +41,12 @@ const fromSeconds = (v: unknown) => (Number(v) > 0 ? new Date(Number(v) * 1000) 
 const DAY = 86_400_000
 
 export const conversations = () => col('conversations')
+
+/** The WhatsApp number a piece of chat work is for: the number a webhook event arrived on, else the
+ *  workspace's default. Stamped on messages, conversations and tickets so analytics can split by agent.
+ *  Rows from before this was stamped have none and count as the default number. */
+const numberScope = new AsyncLocalStorage<string>()
+export const currentNumber = () => numberScope.getStore() || currentAssets()?.phoneNumberId || null
 const messages = () => col('messages')
 const contacts = () => col('contacts')
 
@@ -97,7 +105,8 @@ export async function ensureConversation(phone: string, name?: string, sample = 
  *  True when this brought something new (a new message, or a placeholder's words): Meta's retries
  *  and repeats answer false, so callers run their side effects once. */
 export async function addMessage(m: Msg): Promise<boolean> {
-  const doc = { ...m, workspaceId: ws(), createdAt: new Date() }
+  const number = currentNumber()
+  const doc = { ...m, workspaceId: ws(), createdAt: new Date(), ...(number && { phoneNumberId: number }) }
   if (m.waMessageId || m.turnId) {
     const key = m.waMessageId ? { waMessageId: m.waMessageId } : { turnId: m.turnId }
     // Text, when known, always wins: it fills a placeholder (body null) made from a turn.
@@ -115,6 +124,8 @@ export async function addMessage(m: Msg): Promise<boolean> {
     {
       $max: { lastMessageAt: m.at, ...(inbound && { lastInboundAt: m.at }) },
       ...(inbound && fresh && { $inc: { unread: 1 } }),
+      // The number the customer last wrote to: replies and tickets belong to it.
+      ...(inbound && number && { $set: { phoneNumberId: number } }),
     },
   )
   trace('message.added', { direction: m.direction, author: m.author, kind: m.kind }, { entity: 'conversation', id: m.phone })
@@ -338,7 +349,8 @@ export async function processWebhook(payload: unknown) {
       const value = obj(c.value)
       const phoneId = str(obj(value.metadata).phone_number_id)
       if (phoneId && !mine?.has(phoneId)) continue
-      await processChange(String(c.field), value)
+      if (phoneId) await numberScope.run(phoneId, () => processChange(String(c.field), value))
+      else await processChange(String(c.field), value)
     }
 }
 
@@ -463,6 +475,14 @@ async function listConversations(me: Actor, filter: string, q: string) {
   if (filter === 'mine') where.assigneeId = me._id
   if (filter === 'unassigned') Object.assign(where, { owner: 'human', assigneeId: null })
   if (filter === 'ai') where.owner = 'ai'
+  // The 24-hour reply window closes within the hour: answer now or only templates are left.
+  if (filter === 'closing') where.lastInboundAt = { $gt: new Date(Date.now() - WINDOW), $lte: new Date(Date.now() - WINDOW + 3_600_000) }
+  // Chats whose open ticket sits with one of my teams.
+  if (filter === 'team') {
+    const mine = (await col('teams').find({ workspaceId: ws(), memberIds: me._id }, { projection: { _id: 1 } }).toArray()).map((t) => String(t._id))
+    const phones = await col('tickets').distinct('phone', { workspaceId: ws(), status: { $in: ['open', 'pending'] }, teamId: { $in: mine } })
+    where.phone = { $in: phones }
+  }
   // Snoozed chats live under their own filter until their time comes.
   const now = new Date()
   const scope = await scopeFor(me)
@@ -684,7 +704,8 @@ async function saveCanned(me: Actor, body: Obj, id?: string) {
   if (!/^\/[a-z0-9-_]+$/.test(shortcut)) throw new HttpError(400, 'Shortcuts use letters, numbers, - and _ only, like /refund.')
   // Shared responses are the team's; only roles that manage settings can share or change them.
   const admin = can(me.role, 'settings.manage')
-  const doc = { title: text(body.title, 'a title', 80), shortcut, body: text(body.body, 'the reply'), shared: body.shared !== false && admin, updatedAt: new Date() }
+  const actions = parseActions(body.actions)
+  const doc = { title: text(body.title, 'a title', 80), shortcut, body: text(body.body, 'the reply'), shared: body.shared !== false && admin, actions: actions ?? null, updatedAt: new Date() }
   if (id && !admin && (await canned().findOne({ _id: new ObjectId(id), workspaceId: ws(), shared: true }))) throw new HttpError(403, 'Only owners and admins can change the team’s shared responses.')
   const clash = await canned().findOne({ workspaceId: ws(), shortcut, ...(id && { _id: { $ne: new ObjectId(id) } }) })
   if (clash) throw new HttpError(409, `${shortcut} is already used by “${clash.title}”.`)
@@ -813,6 +834,8 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       needCanAssign(me, userId, (await conversations().findOne({ workspaceId: ws(), phone }, { projection: { assigneeId: 1 } }))?.assigneeId)
       if (userId && !(await col('memberships').findOne({ workspaceId: ws(), userId }))) throw new HttpError(400, 'That person isn’t in this workspace.')
       await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { assigneeId: userId } })
+      // The chat's open ticket follows, so the ticket list, SLA alerts and escalations name the same person.
+      await col('tickets').updateMany({ workspaceId: ws(), phone, status: { $in: ['open', 'pending'] } }, { $set: { assigneeId: userId, updatedAt: new Date() } })
     } else if (action === 'control') {
       if (body.action !== 'take' && body.action !== 'release') throw new HttpError(400, 'Action must be take or release.')
       await setControl(me, phone, body.action)

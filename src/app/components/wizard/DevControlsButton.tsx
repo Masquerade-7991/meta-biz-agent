@@ -30,7 +30,7 @@ export function DevControlsButton() {
   const [open, setOpen] = useState(false)
 
   return (
-    <div data-demo-panel className="pointer-events-auto fixed right-4 bottom-4 z-60 hidden lg:block">
+    <div data-demo-panel className="pointer-events-auto fixed right-4 bottom-4 z-60 hidden lg:block print:hidden">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button variant="outline" size="icon" aria-label="Demo controls" className="relative rounded-full shadow-md">
