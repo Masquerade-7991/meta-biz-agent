@@ -1,6 +1,6 @@
 import { useId, type ComponentProps, type ReactNode } from 'react'
 import logo from '@/assets/helo-logo.svg'
-import heroArt from '@/assets/helo-conversations.webp'
+import heroArt from '@/assets/helo-conversations.svg'
 import metaPartner from '@/assets/meta-partner.svg'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'

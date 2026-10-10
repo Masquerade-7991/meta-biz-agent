@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 420" fill="none" role="img" aria-label="A customer chatting with a Helo.ai agent on WhatsApp">
+  <!-- soft shapes behind the phone -->
+  <circle cx="112" cy="96" r="64" fill="#2270D0" opacity="0.08"/>
+  <circle cx="470" cy="330" r="78" fill="#EC1C24" opacity="0.08"/>
+
+  <!-- phone -->
+  <rect x="150" y="14" width="260" height="392" rx="34" fill="#14181B"/>
+  <rect x="160" y="24" width="240" height="372" rx="26" fill="#FFFFFF"/>
+  <rect x="236" y="30" width="88" height="10" rx="5" fill="#14181B"/>
+
+  <!-- chat header -->
+  <path d="M160 50a26 26 0 0 1 26-26h188a26 26 0 0 1 26 26v38H160z" fill="#F4F4F2"/>
+  <circle cx="190" cy="68" r="14" fill="#2270D0"/>
+  <path d="M184 68h12M190 62v12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+  <rect x="213" y="58" width="82" height="8" rx="4" fill="#14181B"/>
+  <rect x="213" y="72" width="48" height="6" rx="3" fill="#137337" opacity="0.7"/>
+
+  <!-- customer bubble -->
+  <rect x="176" y="104" width="150" height="46" rx="14" fill="#F4F4F2"/>
+  <rect x="188" y="116" width="118" height="7" rx="3.5" fill="#14181B" opacity="0.7"/>
+  <rect x="188" y="130" width="76" height="7" rx="3.5" fill="#14181B" opacity="0.35"/>
+
+  <!-- agent bubble 1 -->
+  <rect x="236" y="166" width="150" height="58" rx="14" fill="#2270D0"/>
+  <rect x="248" y="178" width="124" height="7" rx="3.5" fill="#fff"/>
+  <rect x="248" y="192" width="100" height="7" rx="3.5" fill="#fff" opacity="0.8"/>
+  <rect x="248" y="206" width="62" height="7" rx="3.5" fill="#fff" opacity="0.6"/>
+
+  <!-- customer bubble 2 -->
+  <rect x="176" y="240" width="108" height="34" rx="14" fill="#F4F4F2"/>
+  <rect x="188" y="253" width="82" height="7" rx="3.5" fill="#14181B" opacity="0.7"/>
+
+  <!-- handover card -->
+  <rect x="176" y="292" width="208" height="62" rx="12" fill="#FFFFFF" stroke="#E7E6E3" stroke-width="1.5"/>
+  <circle cx="202" cy="323" r="14" fill="#EC1C24" opacity="0.12"/>
+  <circle cx="202" cy="318" r="5" fill="#EC1C24"/>
+  <path d="M192 332a10 8 0 0 1 20 0z" fill="#EC1C24"/>
+  <rect x="226" y="308" width="104" height="8" rx="4" fill="#14181B" opacity="0.8"/>
+  <rect x="226" y="323" width="138" height="6" rx="3" fill="#14181B" opacity="0.3"/>
+  <rect x="226" y="335" width="86" height="6" rx="3" fill="#14181B" opacity="0.3"/>
+
+  <!-- composer -->
+  <rect x="176" y="364" width="176" height="20" rx="10" fill="#F4F4F2"/>
+  <circle cx="370" cy="374" r="11" fill="#137337"/>
+  <path d="M365 374h10m-4-4 4 4-4 4" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- floating chips -->
+  <g>
+    <rect x="22" y="150" width="124" height="44" rx="22" fill="#FFFFFF" stroke="#E7E6E3" stroke-width="1.5"/>
+    <circle cx="46" cy="172" r="10" fill="#137337" opacity="0.15"/>
+    <path d="M41 172l4 4 7-8" stroke="#137337" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="64" y="162" width="68" height="8" rx="4" fill="#14181B" opacity="0.75"/>
+    <rect x="64" y="176" width="46" height="6" rx="3" fill="#14181B" opacity="0.3"/>
+  </g>
+  <g>
+    <rect x="424" y="96" width="118" height="44" rx="22" fill="#FFFFFF" stroke="#E7E6E3" stroke-width="1.5"/>
+    <circle cx="448" cy="118" r="10" fill="#2270D0" opacity="0.15"/>
+    <path d="M443 120l4-6 4 4 5-7" stroke="#2270D0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="466" y="108" width="62" height="8" rx="4" fill="#14181B" opacity="0.75"/>
+    <rect x="466" y="122" width="40" height="6" rx="3" fill="#14181B" opacity="0.3"/>
+  </g>
+</svg>
