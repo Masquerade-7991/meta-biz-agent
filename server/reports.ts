@@ -134,9 +134,22 @@ async function sendSchedule(s: ReportSchedule) {
   if (s.numbers.length) q.set('agents', s.numbers.join(','))
   if (s.team) q.set('team', s.team)
   const path = `/analytics?${q}`
-  for (const email of to) await mail.report(email, { name: s.name, workspace, period, table, path }, files)
-  trace('report.sent', { reports: s.reports.length, recipients: to.length, cadence: s.cadence })
-  return to.length
+  // One refused address must not stop the others (or make a retry email the people already served).
+  let sent = 0
+  let failure: unknown = null
+  for (const email of to) {
+    try {
+      await mail.report(email, { name: s.name, workspace, period, table, path }, files)
+      sent++
+    } catch (err) {
+      failure = err
+      console.log(`report ${s.name}: not sent to ${email}: ${err instanceof Error ? err.message : err}`)
+    }
+  }
+  // Nobody got it: say why (Send now shows it; the job retries). Some did: that's a send.
+  if (!sent && failure) throw failure
+  trace('report.sent', { reports: s.reports.length, recipients: sent, failed: to.length - sent, cadence: s.cadence })
+  return sent
 }
 
 defineJob(
@@ -152,7 +165,17 @@ defineJob(
     await schedules().updateOne({ _id: doc._id }, { $set: { lastSentAt: new Date(), nextRunAt: at } })
     return { again: at }
   },
-  { maxAttempts: 3 },
+  {
+    maxAttempts: 3,
+    // Gave up this time (e.g. every address refused): the schedule isn't over. Plan the next period,
+    // so one bad run never silently ends a schedule.
+    onDead: async (payload) => {
+      const id = String(payload.id)
+      const doc = await schedules().findOne({ _id: id as never, workspaceId: ws() })
+      if (!doc || doc.enabled === false) return
+      await plan(id, doc.cadence as Cadence, Number(doc.hour))
+    },
+  },
 )
 
 // ---- routes ----
