@@ -125,6 +125,13 @@ export const mail = {
       button: { label: 'Review invite', url: link(token) },
       note: 'This invite expires in 7 days. You can also accept or decline it from the workspace menu in Helo.ai.',
     }),
+  escalated: (to: string, t: { number: number; level: number; reason: string; customer: string; subject: string }) =>
+    send(to, `Ticket #${t.number} escalated to level ${t.level}`, {
+      heading: `Ticket #${t.number} needs attention`,
+      lines: [`${t.customer}: “${t.subject}”`, `It reached escalation level ${t.level} (${t.reason.toLowerCase()}).`],
+      button: { label: 'Open the ticket', url: `${appUrl}/tickets?n=${t.number}` },
+      note: 'You get this because of the escalation rules in Settings › Support desk.',
+    }),
   memberLeft: (to: string, member: string, workspace: string) =>
     send(to, `${member} left ${workspace}`, { heading: `${member} left ${workspace}`, lines: [`${member} left the workspace. Their open tickets stay assigned to them until you reassign them.`] }),
   memberJoined: (to: string, member: string, workspace: string) =>

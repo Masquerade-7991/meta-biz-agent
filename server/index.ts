@@ -10,6 +10,7 @@ import { startJobs } from './jobs.ts'
 import { startBilling } from './billing.ts'
 import { startHealth } from './health.ts'
 import { reprocessWebhooks } from './inbox.ts'
+import { escalateAll } from './supportOps.ts'
 import { agentUpstream, env, upstream } from './upstream.ts'
 
 // One stray failure (an unanswered Meta call, a dropped database socket) shouldn't take the whole
@@ -30,5 +31,7 @@ if (await ready()) {
   if (env('JOBS') !== 'off') startJobs()
   // Webhook deliveries stored but not processed are tried again every 5 minutes.
   setInterval(() => void reprocessWebhooks().catch(() => 0), 5 * 60_000).unref()
+  // Tickets running out of time move up the escalation matrix (supportOps.ts).
+  if (env('JOBS') !== 'off') setInterval(() => void escalateAll().catch(() => 0), 60_000).unref()
   if (env('COLLECTORS') !== 'off') startCollectors()
 } else if (!env('MONGODB_URI')) console.log('No MONGODB_URI: running without a database (store routes return 503)')

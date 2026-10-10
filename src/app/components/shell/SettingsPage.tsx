@@ -12,6 +12,9 @@ import { useAuth } from '@/app/auth/AuthContext'
 import { Field, FormError } from '@/app/auth/AuthLayout'
 import { CannedResponsesSettings } from './CannedResponsesSettings'
 import { SupportSettingsTab } from './SupportSettings'
+import { TeamsSettings } from './TeamsSettings'
+import { RoutingRulesSettings } from './RoutingRulesSettings'
+import { EscalationSettings } from './EscalationSettings'
 import { BillingSettingsTab } from './BillingSettings'
 import { ContactFieldsSettings } from './ContactFieldsSettings'
 import { authApi, type Invite, type Member } from '@/app/auth/api'
@@ -22,7 +25,7 @@ import { WhatsAppSettings } from './WhatsAppSettings'
 import { assignableRoles, can, canSetRole, roleLabel, ROLES, type Role } from '@/app/lib/permissions'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
 
-export type SettingsTab = 'profile' | 'whatsapp' | 'billing' | 'members' | 'canned' | 'support' | 'fields'
+export type SettingsTab = 'profile' | 'whatsapp' | 'billing' | 'members' | 'canned' | 'support' | 'fields' | 'teams' | 'routing' | 'escalation'
 
 
 const days = (from: string, to = Date.now()) => Math.round((to - Date.parse(from)) / 86_400_000)
@@ -368,6 +371,9 @@ const SETTINGS_GROUPS: { label: string; items: { id: SettingsTab; label: string 
     label: 'Support desk',
     items: [
       { id: 'support', label: 'Hours & response targets' },
+      { id: 'teams', label: 'Teams & people' },
+      { id: 'routing', label: 'Routing rules' },
+      { id: 'escalation', label: 'Escalation' },
       { id: 'canned', label: 'Canned responses' },
       { id: 'fields', label: 'Contact fields' },
     ],
@@ -437,6 +443,15 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
         </TabsContent>
         <TabsContent value="support">
           <SupportSettingsTab />
+        </TabsContent>
+        <TabsContent value="teams">
+          <TeamsSettings />
+        </TabsContent>
+        <TabsContent value="routing">
+          <RoutingRulesSettings />
+        </TabsContent>
+        <TabsContent value="escalation">
+          <EscalationSettings />
         </TabsContent>
         <TabsContent value="fields">
           <ContactFieldsSettings />

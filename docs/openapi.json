@@ -4324,6 +4324,27 @@
               "description": "Subject, name or number."
             },
             "description": "Subject, name or number."
+          },
+          {
+            "name": "team",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "A team id, or `none` for tickets in no team."
+            },
+            "description": "A team id, or `none` for tickets in no team."
+          },
+          {
+            "name": "escalated",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "const": "1",
+              "description": "Only tickets that reached an escalation level."
+            },
+            "description": "Only tickets that reached an escalation level."
           }
         ],
         "responses": {
@@ -4506,6 +4527,12 @@
                               "string",
                               "null"
                             ]
+                          },
+                          "teamId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         }
                       }
@@ -4655,6 +4682,13 @@
                       "string",
                       "null"
                     ]
+                  },
+                  "teamId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Move to a team (supervisor+)."
                   },
                   "subject": {
                     "type": "string"
@@ -4817,6 +4851,550 @@
         }
       }
     },
+    "/api/support/teams": {
+      "get": {
+        "operationId": "listTeams",
+        "tags": [
+          "Tickets & support"
+        ],
+        "summary": "Teams",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nTeams kept in support settings before teams had their own list move over on the first read, keeping their ids.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Team"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createTeam",
+        "tags": [
+          "Tickets & support"
+        ],
+        "summary": "Create a team",
+        "description": "**Who can call:** Admin or above (`settings.manage`).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Team"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Team"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Give the team a name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/support/teams/{id}": {
+      "put": {
+        "operationId": "updateTeam",
+        "tags": [
+          "Tickets & support"
+        ],
+        "summary": "Change a team",
+        "description": "**Who can call:** Admin or above (`settings.manage`).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Record id (MongoDB ObjectId).",
+              "pattern": "^[a-f0-9]{24}$"
+            },
+            "description": "Record id (MongoDB ObjectId)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Team"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Team"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Give the team a name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "That team no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteTeam",
+        "tags": [
+          "Tickets & support"
+        ],
+        "summary": "Delete a team",
+        "description": "**Who can call:** Admin or above (`settings.manage`).\n\nIts tickets leave the team’s queue and stay with whoever has them.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Record id (MongoDB ObjectId).",
+              "pattern": "^[a-f0-9]{24}$"
+            },
+            "description": "Record id (MongoDB ObjectId)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "That team no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The rule “X” sends tickets to this team. Change the rule first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/support/agents": {
+      "get": {
+        "operationId": "listAgents",
+        "tags": [
+          "Tickets & support"
+        ],
+        "summary": "People and how they take work",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nEvery member with skills, open-ticket limit, availability, open tickets now and teams.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AgentProfile"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/support/agents/{userId}": {
+      "put": {
+        "operationId": "updateAgent",
+        "tags": [
+          "Tickets & support"
+        ],
+        "summary": "Change someone’s skills, limit or availability",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nAnyone sets their own availability; supervisors and up set anyone’s. Skills and limit need `settings.manage`.",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Member user id (UUID).",
+              "format": "uuid"
+            },
+            "description": "Member user id (UUID)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "availability": {
+                    "type": "string",
+                    "enum": [
+                      "online",
+                      "away",
+                      "offline"
+                    ]
+                  },
+                  "skills": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "maxOpen": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "description": "1–500, or null for no limit."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Availability must be online, away or offline. / The limit must be between 1 and 500…",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "description": "Not allowed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "That person isn’t in this workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/support/rules": {
+      "get": {
+        "operationId": "getRules",
+        "tags": [
+          "Tickets & support"
+        ],
+        "summary": "Routing rules",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nChecked top to bottom when a ticket opens; the first match decides. Otherwise the default routing in support settings applies.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Rule"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "saveRules",
+        "tags": [
+          "Tickets & support"
+        ],
+        "summary": "Replace the routing rules",
+        "description": "**Who can call:** Admin or above (`settings.manage`).\n\nThe whole ordered list (50 at most).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Rule"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Rule"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "“X” needs at least one action. / “X” sends tickets to a team that no longer exists. / …",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/support/escalation": {
+      "get": {
+        "operationId": "getEscalation",
+        "tags": [
+          "Tickets & support"
+        ],
+        "summary": "Escalation matrix",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nOff until saved with enabled: true. When on, open tickets are checked every minute.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationMatrix"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "saveEscalation",
+        "tags": [
+          "Tickets & support"
+        ],
+        "summary": "Save the escalation matrix",
+        "description": "**Who can call:** Admin or above (`settings.manage`).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EscalationMatrix"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EscalationMatrix"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "urgent level 1: fire between 25% and 500% of the target. / … does nothing: notify someone, move the ticket or raise its priority.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
     "/api/support/settings": {
       "get": {
         "operationId": "getSupportSettings",
@@ -4876,7 +5454,7 @@
             }
           },
           "400": {
-            "description": "X isn’t a time zone we recognise. / Check the hours for mon: closing must be after opening (HH:MM). / Check the urgent targets… / Every team needs a name. / Pick who gets every new ticket.",
+            "description": "X isn’t a time zone we recognise. / Check the hours for mon: closing must be after opening (HH:MM). / Check the urgent targets… / Pick who gets every new ticket.",
             "content": {
               "application/json": {
                 "schema": {
@@ -13673,6 +14251,46 @@
               }
             }
           },
+          "teamId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The team whose queue it’s in (routing rules, escalation, or moved by hand)."
+          },
+          "escalationLevel": {
+            "type": "integer",
+            "description": "0 = not escalated; 1–3 = the escalation matrix level reached."
+          },
+          "escalations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "type": "integer"
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "notify": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "User ids alerted."
+                },
+                "teamId": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Each level reached, in order."
+          },
           "sample": {
             "type": "boolean"
           }
@@ -13695,6 +14313,214 @@
           "resolution",
           "csat",
           "sla"
+        ]
+      },
+      "Team": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "Up to 60 characters."
+          },
+          "description": {
+            "type": "string"
+          },
+          "leadId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Hears about the team’s escalations."
+          },
+          "memberIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "assign": {
+            "type": "string",
+            "enum": [
+              "round_robin",
+              "least_busy",
+              "queue"
+            ],
+            "description": "How new tickets are handed out inside the team. `queue` picks nobody."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "leadId",
+          "memberIds",
+          "assign"
+        ]
+      },
+      "AgentProfile": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxOpen": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Open tickets after which they get no new ones; null = no limit."
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "online",
+              "away",
+              "offline"
+            ],
+            "description": "Only online people get new tickets."
+          },
+          "open": {
+            "type": "integer",
+            "description": "Open tickets assigned now."
+          },
+          "teamIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "userId",
+          "name",
+          "skills",
+          "maxOpen",
+          "availability",
+          "open",
+          "teamIds"
+        ]
+      },
+      "Rule": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "match": {
+            "type": "string",
+            "enum": [
+              "all",
+              "any"
+            ],
+            "description": "Every condition, or one of them. No conditions = always."
+          },
+          "when": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Conditions: {field: \"keyword\", any: string[]} · {field: \"contactTag\", any: string[]} · {field: \"source\", in: [\"handoff\"|\"takeover\"|\"reply\"|\"manual\"]} · {field: \"priority\", in: [...]} · {field: \"hours\", is: \"open\"|\"closed\"} · {field: \"number\", in: string[]}."
+          },
+          "then": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Actions: {do: \"assignTeam\", teamId, skill?} · {do: \"assignUser\", userId} · {do: \"leaveUnassigned\"} · {do: \"setPriority\", priority} · {do: \"addTags\", tags}."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "enabled",
+          "match",
+          "when",
+          "then"
+        ]
+      },
+      "EscalationMatrix": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "levels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/EscalationLevel"
+              }
+            },
+            "description": "Per priority (urgent, high, normal, low): up to three levels, fired in order."
+          }
+        },
+        "required": [
+          "enabled",
+          "levels"
+        ]
+      },
+      "EscalationLevel": {
+        "type": "object",
+        "properties": {
+          "clock": {
+            "type": "string",
+            "enum": [
+              "first_response",
+              "resolution"
+            ]
+          },
+          "percent": {
+            "type": "integer",
+            "description": "Share of the target used when the level fires: 75 = three quarters in, 100 = breach, 150 = half again past it. 25–500."
+          },
+          "notify": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Any of assignee, team_lead, supervisors, admins (owners and admins)."
+          },
+          "email": {
+            "type": "boolean",
+            "description": "Also email them, not just the bell."
+          },
+          "reassignTeamId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Move the ticket to this team (it picks someone its usual way)."
+          },
+          "raisePriority": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "clock",
+          "percent",
+          "notify",
+          "email",
+          "reassignTeamId",
+          "raisePriority"
         ]
       },
       "SupportSettings": {

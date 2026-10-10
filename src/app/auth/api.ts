@@ -56,6 +56,8 @@ let demoMembers: Member[] = [
   { userId: 'demo-3', name: 'Arjun Das', email: 'arjun@example.com', role: 'agent', joinedAt: new Date(Date.now() - 3 * 86_400_000).toISOString() },
 ]
 let demoInvites: Invite[] = []
+/** The demo workspace's people, for other dummy areas (teams, routing). */
+export const demoMemberList = () => demoMembers
 
 // The demo person's own workspaces and invites, kept in this browser so a switch survives the reload.
 const DEMO_KEY = storageKey('helo-demo-account')

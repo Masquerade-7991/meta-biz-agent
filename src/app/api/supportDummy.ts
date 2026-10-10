@@ -9,7 +9,23 @@ import { interactiveError, interactiveText, type InteractiveReply } from '../inb
 import type { NumberDetail, WaNumber } from './numbers'
 import { automationErrors, displayNameError, profileErrors, type Automation, type Profile } from '../whatsapp/profileRules'
 import type { CannedResponse, ChatDetail, ChatFilter, ChatMessage, ChatSummary, SavedView } from './inbox'
-import type { Priority, SupportSettings, Ticket } from './tickets'
+import type { AgentRow, Priority, SupportSettings, Ticket } from './tickets'
+import { demoMemberList } from '../auth/api'
+import {
+  applyRule,
+  DEFAULT_MATRIX,
+  describeLevel,
+  firstMatch,
+  parseMatrix,
+  parseRules,
+  parseTeam,
+  pickFromPool,
+  raise,
+  type AgentProfile,
+  type EscalationMatrix,
+  type Rule,
+  type Team,
+} from '../support/routing'
 import type { Contact, FieldDef, Segment } from './contacts'
 import type { Broadcast, BroadcastDetail, WaTemplate } from './broadcasts'
 import type { WaAccount } from './whatsapp'
@@ -252,14 +268,62 @@ function ticketsNow(): Ticket[] {
   }
   return tickets
 }
+// ---- teams, people, rules, escalation (dummy) ----
+let demoTeams: Team[] = [
+  { id: 'team-billing', name: 'Billing', description: 'Refunds, invoices and payments', leadId: 'demo-2', memberIds: ['demo-2', 'demo-3'], assign: 'least_busy' },
+  { id: 'team-care', name: 'Customer care', description: 'Orders, delivery and everything else', leadId: 'demo', memberIds: ['demo', 'demo-3'], assign: 'round_robin' },
+]
+const demoProfiles = new Map<string, Pick<AgentProfile, 'skills' | 'maxOpen' | 'availability'>>([
+  ['demo', { skills: ['english'], maxOpen: null, availability: 'online' }],
+  ['demo-2', { skills: ['english', 'hindi'], maxOpen: 8, availability: 'online' }],
+  ['demo-3', { skills: ['hindi'], maxOpen: 5, availability: 'away' }],
+])
+let demoRules: Rule[] = [
+  {
+    id: 'r-billing',
+    name: 'Refunds and payments go to Billing',
+    enabled: true,
+    match: 'any',
+    when: [{ field: 'keyword', any: ['refund', 'payment', 'invoice', 'charged'] }],
+    then: [{ do: 'assignTeam', teamId: 'team-billing' }, { do: 'addTags', tags: ['billing'] }],
+  },
+  { id: 'r-vip', name: 'VIP customers jump the queue', enabled: true, match: 'all', when: [{ field: 'contactTag', any: ['vip'] }], then: [{ do: 'setPriority', priority: 'high' }] },
+]
+let demoMatrix: EscalationMatrix = { ...DEFAULT_MATRIX, enabled: true }
+const profileOf = (id: string) => demoProfiles.get(id) ?? { skills: [], maxOpen: null, availability: 'online' as const }
+let demoTurn = 0
+
+/** Same decision as the server's routeTicket, on the demo's people and minutes. */
+function demoRoute(c: Chat, source: Ticket['source'], priority: Priority, text: string) {
+  const facts = { source, priority, text, contactTags: c.tags, open: true, phoneNumberId: null }
+  const rule = firstMatch(demoRules, facts)
+  const a = applyRule(rule, facts)
+  const open = new Map<string, number>()
+  for (const t of tickets ?? []) if (t.status !== 'resolved' && t.assigneeId) open.set(t.assigneeId, (open.get(t.assigneeId) ?? 0) + 1)
+  const profiles = new Map(demoMemberList().map((m) => [m.userId, profileOf(m.userId)]))
+  let teamId: string | null = null
+  let assigneeId: string | null = c.assigneeId
+  if (a.target.kind === 'team') {
+    const team = demoTeams.find((t) => t.id === (a.target as { teamId: string }).teamId)
+    if (team) {
+      teamId = team.id
+      assigneeId ??= pickFromPool(team.memberIds, team.assign, profiles, open, demoTurn++, a.target.skill)
+    }
+  } else if (a.target.kind === 'user') assigneeId ??= a.target.userId
+  return { priority: a.priority, tags: a.tags, teamId, assigneeId, rule: rule?.name ?? null }
+}
+
 function ensureTicket(c: Chat, source: Ticket['source'], priority: Priority = 'normal'): Ticket {
   const list = tickets ?? ticketsNow()
   const open = list.find((t) => t.phone === c.phone && t.status !== 'resolved')
   if (open) return open
   const words = c.messages.filter((m) => m.author === 'customer' && m.body).at(-1)?.body ?? `Chat with +${c.phone}`
   const at = c.messages.find((m) => m.author === 'customer')?.at ?? new Date().toISOString()
-  const t: Ticket = { id: `t${nextNumber}`, number: nextNumber++, phone: c.phone, name: c.name, subject: words.slice(0, 120), status: 'open', priority, assigneeId: c.assigneeId, tags: [], source, createdAt: at, updatedAt: at, firstRespondedAt: null, resolvedAt: null, resolution: null, csat: null, sla: { kind: 'firstResponse', at: null, breached: false }, sample: true }
+  const r = demoRoute(c, source, priority, words)
+  const t: Ticket = { id: `t${nextNumber}`, number: nextNumber++, phone: c.phone, name: c.name, subject: words.slice(0, 120), status: 'open', priority: r.priority, assigneeId: r.assigneeId, teamId: r.teamId, escalationLevel: 0, escalations: [], tags: r.tags, source, createdAt: at, updatedAt: at, firstRespondedAt: null, resolvedAt: null, resolution: null, csat: null, sla: { kind: 'firstResponse', at: null, breached: false }, sample: true }
   list.unshift(t)
+  if (r.assigneeId && !c.assigneeId) c.assigneeId = r.assigneeId
+  if (r.rule && tickets) push(c, { direction: 'out', author: 'system', kind: 'event', body: `Ticket #${t.number} routed by the rule “${r.rule}”.` })
   return t
 }
 
@@ -274,6 +338,8 @@ export async function dummyTickets<T>(method: string, path: string, body: unknow
       .filter((t) => (p('status') === 'all' ? true : p('status') ? t.status === p('status') : t.status !== 'resolved'))
       .filter((t) => (p('assignee') === 'me' ? t.assigneeId === ME.id : p('assignee') === 'none' ? !t.assigneeId : true))
       .filter((t) => !p('priority') || t.priority === p('priority'))
+      .filter((t) => (p('team') === 'none' ? !t.teamId : !p('team') || t.teamId === p('team')))
+      .filter((t) => p('escalated') !== '1' || (t.escalationLevel ?? 0) > 0)
       .filter((t) => !p('phone') || t.phone === p('phone'))
       .filter((t) => !q || `${t.number} ${t.subject} ${t.name ?? ''} ${t.phone}`.toLowerCase().includes(q))
       .map(withSla) as T
@@ -322,16 +388,116 @@ export async function dummyTickets<T>(method: string, path: string, body: unknow
     demoReminders = demoReminders.map((r) => (u.pathname.includes(`reminder:${r.id}/`) ? { ...r, dismissed: true } : r))
     return { ok: true } as T
   }
+  const ops = dummySupportOps(method, u.pathname, b, list)
+  if (ops !== undefined) return ops as T
   if (u.pathname === '/api/support/notifications')
-    return demoReminders
+    return [
+      ...list
+        .filter((t) => t.status !== 'resolved' && t.escalations?.some((e) => e.notify.includes(ME.id)))
+        .map((t) => {
+          const e = t.escalations!.filter((x) => x.notify.includes(ME.id)).at(-1)!
+          return { id: `esc:${t.number}:${e.level}`, kind: 'escalated', text: `#${t.number} ${t.name ?? t.phone} escalated to level ${e.level}: ${e.reason.toLowerCase()}`, at: e.at, number: t.number, phone: t.phone }
+        }),
+      ...demoReminders
       .filter((r) => !r.dismissed && Date.parse(r.dueAt) <= Date.now())
-      .map((r) => ({ id: `reminder:${r.id}`, kind: 'reminder', text: `${r.note} · ${load().find((c) => c.phone === r.phone)?.name || r.phone}`, at: r.dueAt, phone: r.phone })) as T
+      .map((r) => ({ id: `reminder:${r.id}`, kind: 'reminder', text: `${r.note} · ${load().find((c) => c.phone === r.phone)?.name || r.phone}`, at: r.dueAt, phone: r.phone })),
+    ] as T
   if (u.pathname === '/api/support/analytics') {
     const days = Number(u.searchParams.get('days') ?? 7)
     const series = Array.from({ length: days }, (_, i) => ({ date: new Date(Date.now() - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10), created: (i * 7) % 5, resolved: (i * 5) % 4 }))
     return { days, timezone: settings.hours.timezone, series, created: series.reduce((n, x) => n + x.created, 0), resolved: series.reduce((n, x) => n + x.resolved, 0), open: list.filter((t) => t.status !== 'resolved').length, medianFirstReplyMin: 18, medianResolveMin: 260, slaFirstReplyMet: 0.92, slaResolveMet: 0.81, csat: { responses: 24, average: 2.6, good: 17, okay: 5, bad: 2 }, chats: { total: 140, aiOnly: 118, withTeam: 22 }, people: [{ name: ME.name, resolved: 14, open: 2, medianFirstReplyMin: 12 }], broadcasts: { sent: 320, read: 211, replied: 38 } } as T
   }
   throw new MetaError(404, 'Not found', path)
+}
+
+function dummySupportOps(method: string, path: string, b: Record<string, unknown>, list: Ticket[]): unknown {
+  const bad = (err: unknown): never => {
+    throw new MetaError(400, 'Check the details', err instanceof Error ? err.message : String(err))
+  }
+  const members = new Set(demoMemberList().map((m) => m.userId))
+  if (path === '/api/support/teams' && method === 'GET') return demoTeams
+  if (path === '/api/support/teams' && method === 'POST') {
+    let t: Omit<Team, 'id'>
+    try {
+      t = parseTeam(b, members)
+    } catch (err) {
+      return bad(err)
+    }
+    const team = { id: `team-${Date.now()}`, ...t }
+    demoTeams = [...demoTeams, team]
+    return team
+  }
+  const tm = path.match(/^\/api\/support\/teams\/([^/]+)$/)
+  if (tm) {
+    if (method === 'DELETE') {
+      const used = demoRules.find((r) => r.then.some((a) => a.do === 'assignTeam' && a.teamId === tm[1]))
+      if (used) throw new MetaError(409, 'Already exists', `The rule “${used.name}” sends tickets to this team. Change the rule first.`)
+      demoTeams = demoTeams.filter((t) => t.id !== tm[1])
+      return { ok: true }
+    }
+    let t: Omit<Team, 'id'>
+    try {
+      t = parseTeam(b, members)
+    } catch (err) {
+      return bad(err)
+    }
+    demoTeams = demoTeams.map((x) => (x.id === tm[1] ? { id: x.id, ...t } : x))
+    return { id: tm[1], ...t }
+  }
+  if (path === '/api/support/agents' && method === 'GET')
+    return demoMemberList().map(
+      (m): AgentRow => ({
+        userId: m.userId,
+        name: m.name,
+        ...profileOf(m.userId),
+        open: list.filter((t) => t.status !== 'resolved' && t.assigneeId === m.userId).length,
+        teamIds: demoTeams.filter((t) => t.memberIds.includes(m.userId)).map((t) => t.id),
+      }),
+    )
+  const am = path.match(/^\/api\/support\/agents\/([^/]+)$/)
+  if (am) {
+    const cur = profileOf(am[1])
+    demoProfiles.set(am[1], {
+      skills: Array.isArray(b.skills) ? b.skills.map((x) => String(x).trim().toLowerCase()).filter(Boolean) : cur.skills,
+      maxOpen: b.maxOpen === undefined ? cur.maxOpen : b.maxOpen === null || b.maxOpen === '' ? null : Number(b.maxOpen),
+      availability: (b.availability as AgentProfile['availability']) ?? cur.availability,
+    })
+    return { ok: true }
+  }
+  if (path === '/api/support/rules') {
+    if (method === 'PUT')
+      try {
+        demoRules = parseRules(b as unknown, { teams: new Set(demoTeams.map((t) => t.id)), members })
+      } catch (err) {
+        return bad(err)
+      }
+    return demoRules
+  }
+  if (path === '/api/support/escalation') {
+    if (method === 'PUT')
+      try {
+        demoMatrix = parseMatrix(b, new Set(demoTeams.map((t) => t.id)))
+      } catch (err) {
+        return bad(err)
+      }
+    return demoMatrix
+  }
+  // Demo controls: the oldest open ticket moves up one level, as if its clock ran out.
+  if (path === '/api/support/demo/escalate') {
+    const t = [...list].reverse().find((x) => x.status !== 'resolved' && (demoMatrix.levels[x.priority][(x.escalationLevel ?? 0)] ?? null))
+    if (!t) throw new MetaError(404, 'Not found', 'No open ticket has a further escalation level. Add levels in Settings › Escalation, or open a ticket from the Inbox.')
+    const next = (t.escalationLevel ?? 0) + 1
+    const level = demoMatrix.levels[t.priority][next - 1]
+    if (level.raisePriority) t.priority = raise(t.priority)
+    if (level.reassignTeamId) t.teamId = level.reassignTeamId
+    const notify = [ME.id] // the demo person sees every escalation
+    t.escalationLevel = next
+    t.escalations = [...(t.escalations ?? []), { level: next, at: new Date().toISOString(), reason: describeLevel(level), notify }]
+    const c = load().find((x) => x.phone === t.phone)
+    if (c) push(c, { direction: 'out', author: 'system', kind: 'event', body: `Ticket #${t.number} escalated to level ${next}: ${describeLevel(level).toLowerCase()}.` })
+    return { number: t.number, level: next }
+  }
+  return undefined
 }
 
 // ---- contacts (dummy) ----

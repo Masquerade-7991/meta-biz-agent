@@ -112,7 +112,56 @@ export const schemas: Record<string, Schema> = {
     'resolution*': 'string?',
     'csat*': { anyOf: [o({ score: { type: 'integer', enum: [1, 2, 3] }, label: 'string', at: 'date-time' }), { type: 'null' }] },
     'sla*': o({ kind: d('firstResponse|resolve|done', 'Which response target is running.'), at: 'date-time?', breached: 'boolean' }),
+    teamId: d('string?', 'The team whose queue it’s in (routing rules, escalation, or moved by hand).'),
+    escalationLevel: d('integer', '0 = not escalated; 1–3 = the escalation matrix level reached.'),
+    escalations: d({ type: 'array', items: o({ level: 'integer', at: 'date-time', reason: 'string', notify: d('string[]', 'User ids alerted.'), teamId: 'string' }) }, 'Each level reached, in order.'),
     sample: 'boolean',
+  }),
+  Team: o({
+    'id*': 'string',
+    'name*': d('string', 'Up to 60 characters.'),
+    'description*': 'string',
+    'leadId*': d('string?', 'Hears about the team’s escalations.'),
+    'memberIds*': 'string[]',
+    'assign*': d('round_robin|least_busy|queue', 'How new tickets are handed out inside the team. `queue` picks nobody.'),
+  }),
+  AgentProfile: o({
+    'userId*': 'string',
+    'name*': 'string',
+    'skills*': 'string[]',
+    'maxOpen*': d('integer?', 'Open tickets after which they get no new ones; null = no limit.'),
+    'availability*': d('online|away|offline', 'Only online people get new tickets.'),
+    'open*': d('integer', 'Open tickets assigned now.'),
+    'teamIds*': 'string[]',
+  }),
+  Rule: o({
+    'id*': 'string',
+    'name*': 'string',
+    'enabled*': 'boolean',
+    'match*': d('all|any', 'Every condition, or one of them. No conditions = always.'),
+    'when*': d(
+      { type: 'array', items: { type: 'object' } },
+      'Conditions: {field: "keyword", any: string[]} · {field: "contactTag", any: string[]} · {field: "source", in: ["handoff"|"takeover"|"reply"|"manual"]} · {field: "priority", in: [...]} · {field: "hours", is: "open"|"closed"} · {field: "number", in: string[]}.',
+    ),
+    'then*': d(
+      { type: 'array', items: { type: 'object' } },
+      'Actions: {do: "assignTeam", teamId, skill?} · {do: "assignUser", userId} · {do: "leaveUnassigned"} · {do: "setPriority", priority} · {do: "addTags", tags}.',
+    ),
+  }),
+  EscalationMatrix: o({
+    'enabled*': 'boolean',
+    'levels*': d(
+      { type: 'object', additionalProperties: { type: 'array', items: { $ref: '#/components/schemas/EscalationLevel' } } },
+      'Per priority (urgent, high, normal, low): up to three levels, fired in order.',
+    ),
+  }),
+  EscalationLevel: o({
+    'clock*': 'first_response|resolution',
+    'percent*': d('integer', 'Share of the target used when the level fires: 75 = three quarters in, 100 = breach, 150 = half again past it. 25–500.'),
+    'notify*': d('string[]', 'Any of assignee, team_lead, supervisors, admins (owners and admins).'),
+    'email*': d('boolean', 'Also email them, not just the bell.'),
+    'reassignTeamId*': d('string?', 'Move the ticket to this team (it picks someone its usual way).'),
+    'raisePriority*': 'boolean',
   }),
   SupportSettings: o({
     'hours*': o({
