@@ -13,7 +13,7 @@ import { dismissAlert, openAlerts } from './alerts.ts'
 import { dismissReminder, dueReminders } from './followups.ts'
 import { addBusinessMinutes, DAYS, DEFAULT_HOURS, isOpen, type Hours } from './businessHours.ts'
 import { contactNames } from './contacts.ts'
-import { addMessage, conversations, sendInteractive, sendText, setControl, type Actor } from './inbox.ts'
+import { addMessage, conversations, currentNumber, sendInteractive, sendText, setControl, type Actor } from './inbox.ts'
 import { can, mayAssign } from '../src/app/lib/permissions.ts'
 import { getTeams, routeTicket, supportOpsRoute } from './supportOps.ts'
 
@@ -148,6 +148,7 @@ export async function ensureTicket(phone: string, source: 'handoff' | 'takeover'
     firstResponseDueAt: addBusinessMinutes(now, s.sla[routed.priority].firstResponse, s.hours),
     resolveDueAt: addBusinessMinutes(now, s.sla[routed.priority].resolve, s.hours),
     escalationLevel: 0,
+    phoneNumberId: (conv?.phoneNumberId as string | undefined) ?? currentNumber(),
     firstRespondedAt: null,
     resolvedAt: null,
     resolution: null,

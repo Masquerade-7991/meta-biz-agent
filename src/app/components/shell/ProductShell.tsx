@@ -32,7 +32,7 @@ const InboxPage = lazy(() => import('@/app/pages/InboxPage').then((m) => ({ defa
 const TicketsPage = lazy(() => import('@/app/pages/TicketsPage').then((m) => ({ default: m.TicketsPage })))
 const ContactsPage = lazy(() => import('@/app/pages/ContactsPage').then((m) => ({ default: m.ContactsPage })))
 const BroadcastsPage = lazy(() => import('@/app/pages/BroadcastsPage').then((m) => ({ default: m.BroadcastsPage })))
-const SupportAnalyticsPage = lazy(() => import('@/app/pages/SupportAnalyticsPage').then((m) => ({ default: m.SupportAnalyticsPage })))
+const AnalyticsDashboard = lazy(() => import('@/app/analytics/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard })))
 const WhatsAppPage = lazy(() => import('@/app/pages/WhatsAppPage').then((m) => ({ default: m.WhatsAppPage })))
 const AgentsListPage = lazy(() => import('./AgentsListPage').then((m) => ({ default: m.AgentsListPage })))
 const SettingsPage = lazy(() => import('./SettingsPage').then((m) => ({ default: m.SettingsPage })))
@@ -115,7 +115,7 @@ export function ProductShell({
           <WhatsAppPage />
         )
       case 'analytics':
-        return <SupportAnalyticsPage />
+        return <AnalyticsDashboard />
       case 'ai-agents':
         return (
           <AgentsListPage

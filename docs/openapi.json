@@ -34,6 +34,10 @@
       "description": "Tickets, response targets, business hours, routing and team analytics."
     },
     {
+      "name": "Analytics",
+      "description": "All agents or some: conversations, the team, cost, and the logs behind each chart."
+    },
+    {
       "name": "Contacts",
       "description": "Contacts, custom fields, tags, segments and CSV import."
     },
@@ -5670,6 +5674,306 @@
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/analytics/overview": {
+      "get": {
+        "operationId": "getAnalyticsOverview",
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Everything on the Analytics page",
+        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\nHeadline numbers with the same-length period before, a series per day, customer messages by weekday and hour, per agent, people, teams, escalations, tools (Meta’s insights) and consumption: WhatsApp spend by category, the Business Agent’s usage, service replies against the 1,000 free per number each month, and the budget. Rows stored before numbers were stamped count as the default number.",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "First day (YYYY-MM-DD) in the support hours’ time zone. Default: 29 days before `to`."
+            },
+            "description": "First day (YYYY-MM-DD) in the support hours’ time zone. Default: 29 days before `to`."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Last day, inclusive. Default: today. At most 366 days in all."
+            },
+            "description": "Last day, inclusive. Default: today. At most 366 days in all."
+          },
+          {
+            "name": "numbers",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated WhatsApp number ids (one agent per number). Default: all. Ids not in this workspace are ignored."
+            },
+            "description": "Comma-separated WhatsApp number ids (one agent per number). Default: all. Ids not in this workspace are ignored."
+          },
+          {
+            "name": "team",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Ticket figures for one team (`none` = tickets in no team)."
+            },
+            "description": "Ticket figures for one team (`none` = tickets in no team)."
+          },
+          {
+            "name": "person",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Ticket figures for one person (`none` = unassigned)."
+            },
+            "description": "Ticket figures for one person (`none` = unassigned)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "range": {
+                      "type": "object"
+                    },
+                    "currency": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "kpis": {
+                      "type": "object"
+                    },
+                    "series": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "heatmap": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "byAgent": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "consumption": {
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "range",
+                    "currency",
+                    "agents",
+                    "kpis",
+                    "series",
+                    "heatmap",
+                    "byAgent",
+                    "consumption"
+                  ],
+                  "description": "See src/app/analytics/types.ts `Overview` for every field."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "from and to must be dates (YYYY-MM-DD), from not after to. / Pick 366 days or fewer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "description": "Analytics are for supervisors, admins and owners.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/analytics/logs/{kind}": {
+      "get": {
+        "operationId": "getAnalyticsLog",
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Rows behind the charts",
+        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\n`kind`: tickets, handovers, escalations, charges (one row per message status with pricing) or agent_usage (per hour). Newest first; columns say how to show each field.",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "First day (YYYY-MM-DD) in the support hours’ time zone. Default: 29 days before `to`."
+            },
+            "description": "First day (YYYY-MM-DD) in the support hours’ time zone. Default: 29 days before `to`."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Last day, inclusive. Default: today. At most 366 days in all."
+            },
+            "description": "Last day, inclusive. Default: today. At most 366 days in all."
+          },
+          {
+            "name": "numbers",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated WhatsApp number ids (one agent per number). Default: all. Ids not in this workspace are ignored."
+            },
+            "description": "Comma-separated WhatsApp number ids (one agent per number). Default: all. Ids not in this workspace are ignored."
+          },
+          {
+            "name": "team",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Ticket figures for one team (`none` = tickets in no team)."
+            },
+            "description": "Ticket figures for one team (`none` = tickets in no team)."
+          },
+          {
+            "name": "person",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Ticket figures for one person (`none` = unassigned)."
+            },
+            "description": "Ticket figures for one person (`none` = unassigned)."
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Rows to skip. Default 0."
+            },
+            "description": "Rows to skip. Default 0."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "1–200. Default 50."
+            },
+            "description": "1–200. Default 50."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "columns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "{key, label, numeric?}"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "columns",
+                    "rows",
+                    "total"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "No log called X.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "503": {
             "$ref": "#/components/responses/DatabaseUnavailable"

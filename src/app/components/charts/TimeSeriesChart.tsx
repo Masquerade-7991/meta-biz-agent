@@ -6,7 +6,7 @@ import { ChartLegend, ChartTooltip } from './ChartTooltip'
  * Lines, bars, areas or a mix over a shared x axis (usually days). Stacks by `stack` id,
  * puts `right` series on a second axis, and can draw a target line (e.g. an SLA goal).
  */
-export function TimeSeriesChart<T extends Record<string, unknown>>({
+export function TimeSeriesChart<T extends object>({
   data,
   x = 'date',
   series,
@@ -15,6 +15,7 @@ export function TimeSeriesChart<T extends Record<string, unknown>>({
   xFormat = shortDate,
   yFormat = compact,
   rightFormat,
+  domain,
   label,
 }: {
   data: T[]
@@ -25,6 +26,8 @@ export function TimeSeriesChart<T extends Record<string, unknown>>({
   xFormat?: (v: string) => string
   yFormat?: (v: number) => string
   rightFormat?: (v: number) => string
+  /** Fixed left-axis range, e.g. [0, 1] for rates. */
+  domain?: [number, number]
   /** Read out to screen readers in place of the drawing. */
   label: string
 }) {
@@ -37,7 +40,7 @@ export function TimeSeriesChart<T extends Record<string, unknown>>({
           <ComposedChart data={data} margin={{ top: 8, right: hasRight ? 0 : 8, bottom: 0, left: -12 }}>
             <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
             <XAxis dataKey={x} tick={AXIS_TICK} tickLine={false} axisLine={false} tickFormatter={(v) => xFormat(String(v))} minTickGap={16} />
-            <YAxis yAxisId="l" tick={AXIS_TICK} tickLine={false} axisLine={false} tickFormatter={yFormat} width={48} allowDecimals={false} />
+            <YAxis yAxisId="l" tick={AXIS_TICK} tickLine={false} axisLine={false} tickFormatter={yFormat} width={56} allowDecimals={!!domain} domain={domain ?? [0, (max: number) => (target && !target.right ? Math.max(max, target.value * 1.1) : max)]} />
             {hasRight && <YAxis yAxisId="r" orientation="right" tick={AXIS_TICK} tickLine={false} axisLine={false} tickFormatter={rightFormat ?? yFormat} width={44} />}
             <Tooltip cursor={{ fill: 'var(--muted)', opacity: 0.5 }} content={<ChartTooltip series={colored} labelFormat={xFormat} />} />
             {target && <ReferenceLine yAxisId={target.right ? 'r' : 'l'} y={target.value} stroke="var(--muted-foreground)" strokeDasharray="4 4" label={{ value: target.label, position: 'insideTopRight', ...AXIS_TICK }} />}

@@ -5,7 +5,7 @@ export function Heatmap({ cells, label }: { cells: number[][]; label: string }) 
   const max = Math.max(1, ...cells.flat())
   return (
     <figure className="space-y-2 overflow-x-auto">
-      <div role="img" aria-label={label} className="grid min-w-xl grid-cols-[2.5rem_repeat(24,minmax(0,1fr))] gap-0.5 text-[0.625rem] text-muted-foreground">
+      <div role="img" aria-label={label} className="grid min-w-md grid-cols-[2.5rem_repeat(24,minmax(0,1fr))] gap-0.5 text-[0.625rem] text-muted-foreground">
         <span />
         {Array.from({ length: 24 }, (_, h) => (
           <span key={h} className="text-center">

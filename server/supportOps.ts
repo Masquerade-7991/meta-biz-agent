@@ -5,7 +5,6 @@ import type http from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { HttpError, type Obj, obj, readJson } from './http.ts'
 import { col, db, withWorkspace, ws } from './db.ts'
-import { currentAssets } from './context.ts'
 import { assetsFor } from './accounts.ts'
 import { trace } from './trace.ts'
 import { isOpen } from './businessHours.ts'
@@ -33,7 +32,7 @@ import {
   type TicketSource,
 } from '../src/app/support/routing.ts'
 import type { Actor } from './inbox.ts'
-import { addMessage, conversations } from './inbox.ts'
+import { addMessage, conversations, currentNumber } from './inbox.ts'
 import { getSettings } from './tickets.ts'
 
 const teamsCol = () => col('teams')
@@ -130,7 +129,7 @@ export async function routeTicket(input: { phone: string; source: TicketSource; 
     text: input.text,
     contactTags: (contact?.tags as string[]) ?? [],
     open: isOpen(new Date(), s.hours),
-    phoneNumberId: currentAssets()?.phoneNumberId ?? null,
+    phoneNumberId: currentNumber(),
   }
   const rule = firstMatch(await getRules(), facts)
   const a = applyRule(rule, facts)

@@ -4,6 +4,7 @@
 // customer's own words (same wamid, so the placeholder fills in), echoes of the agent's replies,
 // delivery ticks and handovers. Replies from people go out through the Cloud API send endpoint.
 import type http from 'node:http'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { ObjectId } from 'mongodb'
 import { HttpError, type Obj, type Titles, arr, digits, obj, readJson, serveJson, str } from './http.ts'
 import { col, db, dbOffReason, needMetaAssets, ownsMetaAssets, withWorkspace, ws } from './db.ts'
@@ -39,6 +40,12 @@ const fromSeconds = (v: unknown) => (Number(v) > 0 ? new Date(Number(v) * 1000) 
 const DAY = 86_400_000
 
 export const conversations = () => col('conversations')
+
+/** The WhatsApp number a piece of chat work is for: the number a webhook event arrived on, else the
+ *  workspace's default. Stamped on messages, conversations and tickets so analytics can split by agent.
+ *  Rows from before this was stamped have none and count as the default number. */
+const numberScope = new AsyncLocalStorage<string>()
+export const currentNumber = () => numberScope.getStore() || currentAssets()?.phoneNumberId || null
 const messages = () => col('messages')
 const contacts = () => col('contacts')
 
@@ -97,7 +104,8 @@ export async function ensureConversation(phone: string, name?: string, sample = 
  *  True when this brought something new (a new message, or a placeholder's words): Meta's retries
  *  and repeats answer false, so callers run their side effects once. */
 export async function addMessage(m: Msg): Promise<boolean> {
-  const doc = { ...m, workspaceId: ws(), createdAt: new Date() }
+  const number = currentNumber()
+  const doc = { ...m, workspaceId: ws(), createdAt: new Date(), ...(number && { phoneNumberId: number }) }
   if (m.waMessageId || m.turnId) {
     const key = m.waMessageId ? { waMessageId: m.waMessageId } : { turnId: m.turnId }
     // Text, when known, always wins: it fills a placeholder (body null) made from a turn.
@@ -115,6 +123,8 @@ export async function addMessage(m: Msg): Promise<boolean> {
     {
       $max: { lastMessageAt: m.at, ...(inbound && { lastInboundAt: m.at }) },
       ...(inbound && fresh && { $inc: { unread: 1 } }),
+      // The number the customer last wrote to: replies and tickets belong to it.
+      ...(inbound && number && { $set: { phoneNumberId: number } }),
     },
   )
   trace('message.added', { direction: m.direction, author: m.author, kind: m.kind }, { entity: 'conversation', id: m.phone })
@@ -338,7 +348,8 @@ export async function processWebhook(payload: unknown) {
       const value = obj(c.value)
       const phoneId = str(obj(value.metadata).phone_number_id)
       if (phoneId && !mine?.has(phoneId)) continue
-      await processChange(String(c.field), value)
+      if (phoneId) await numberScope.run(phoneId, () => processChange(String(c.field), value))
+      else await processChange(String(c.field), value)
     }
 }
 
