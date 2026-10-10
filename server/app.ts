@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { allow, getCached, invalidatePhone, putCached, ttlFor } from './cache.ts'
 import { getSession, handleAuth } from './auth.ts'
 import { handleAnalytics } from './analytics.ts'
+import { handleReports } from './reports.ts'
 import { db, dbOffReason, initDb, NO_META_ASSETS, withWorkspace } from './db.ts'
 import { logApiCall, record, resourceOf, splitPhone } from './record.ts'
 import { handleStore } from './store.ts'
@@ -203,6 +204,7 @@ export async function handle(req: http.IncomingMessage, res: http.ServerResponse
     else if (await handleInbox(req, res, me)) return
     else if (await handleTickets(req, res, me)) return
     else if (await handleAnalytics(req, res, me)) return
+    else if (await handleReports(req, res, me)) return
     else if (await handleContacts(req, res, me)) return
     else if (await handleAssist(req, res, me)) return
     else if (await handleBroadcasts(req, res, me)) return

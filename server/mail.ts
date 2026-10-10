@@ -21,11 +21,17 @@ const RED = '#ED1C24'
 const TAGLINE = 'Helo.ai · Conversations personalised for billions with AI'
 
 /** One layout for every email: red brand band, logo, heading, body, optional button, note, partner footer. */
-function layout(o: { heading: string; lines: string[]; button?: { label: string; url: string }; note?: string }) {
+function layout(o: { heading: string; lines: string[]; button?: { label: string; url: string }; note?: string; table?: { head: string[]; rows: string[][] } }) {
   const button = o.button
     ? `<p style="margin:28px 0"><a href="${esc(o.button.url)}" style="background:${RED};color:#fff;text-decoration:none;padding:14px 28px;border-radius:999px;font-weight:600;display:inline-block">${esc(o.button.label)}</a></p>
        <p style="color:#676E73;font-size:13px;margin:0 0 4px">Or paste this link into your browser:</p>
        <p style="font-size:13px;word-break:break-all;margin:0"><a href="${esc(o.button.url)}" style="color:${RED}">${esc(o.button.url)}</a></p>`
+    : ''
+  const table = o.table
+    ? `<table role="presentation" style="width:100%;border-collapse:collapse;margin:8px 0 4px;font-size:14px">
+         <tr>${o.table.head.map((h, i) => `<th style="text-align:${i ? 'right' : 'left'};color:#676E73;font-weight:500;padding:6px 0;border-bottom:1px solid #ECE7E6">${esc(h)}</th>`).join('')}</tr>
+         ${o.table.rows.map((r) => `<tr>${r.map((c, i) => `<td style="text-align:${i ? 'right' : 'left'};padding:7px 0;border-bottom:1px solid #F2EFEE${i ? ';font-variant-numeric:tabular-nums' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}
+       </table>`
     : ''
   const html = `<!doctype html><html><body style="margin:0;background:#F7F7F8;font-family:Inter,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:#14181B">
   <div style="max-width:520px;margin:0 auto;padding:32px 16px">
@@ -33,6 +39,7 @@ function layout(o: { heading: string; lines: string[]; button?: { label: string;
       <img src="cid:helo-logo" alt="Helo.ai" width="120" height="60" style="display:block;margin-bottom:24px">
       <h1 style="font-size:22px;font-weight:700;letter-spacing:-0.01em;margin:0 0 16px">${esc(o.heading)}</h1>
       ${o.lines.map((l) => `<p style="font-size:15px;line-height:22px;margin:0 0 12px">${esc(l)}</p>`).join('')}
+      ${table}
       ${button}
       ${o.note ? `<p style="background:#FDF3F1;color:#676E73;font-size:13px;line-height:19px;border-radius:8px;padding:12px 14px;margin:24px 0 0">${esc(o.note)}</p>` : ''}
     </div>
@@ -42,14 +49,14 @@ function layout(o: { heading: string; lines: string[]; button?: { label: string;
       <a href="https://www.helo.ai" style="color:#676E73;font-size:12px">www.helo.ai</a>
     </div>
   </div></body></html>`
-  const text = [o.heading, '', ...o.lines, ...(o.button ? ['', `${o.button.label}: ${o.button.url}`] : []), ...(o.note ? ['', o.note] : []), '', '—', TAGLINE, 'https://www.helo.ai'].join('\n')
+  const text = [o.heading, '', ...o.lines, ...(o.table ? ['', ...[o.table.head, ...o.table.rows].map((r) => r.join('  ·  '))] : []), ...(o.button ? ['', `${o.button.label}: ${o.button.url}`] : []), ...(o.note ? ['', o.note] : []), '', '—', TAGLINE, 'https://www.helo.ai'].join('\n')
   return { html, text }
 }
 
-async function send(to: string, subject: string, body: Parameters<typeof layout>[0]) {
+async function send(to: string, subject: string, body: Parameters<typeof layout>[0], files: { filename: string; content: string; contentType: string }[] = []) {
   const { html, text } = layout(body)
   if (!transport) {
-    console.log(`\n[mail → ${to}] ${subject}\n${text}\n`)
+    console.log(`\n[mail → ${to}] ${subject}\n${text}\n${files.map((f) => `(attached: ${f.filename}, ${f.content.length} bytes)`).join('\n')}\n`)
     return
   }
   try {
@@ -62,6 +69,7 @@ async function send(to: string, subject: string, body: Parameters<typeof layout>
       attachments: [
         { filename: 'helo-logo.png', content: logo, cid: 'helo-logo' },
         { filename: 'meta-partner.png', content: badge, cid: 'meta-partner' },
+        ...files,
       ],
     })
   } catch (err) {
@@ -132,6 +140,20 @@ export const mail = {
       button: { label: 'Open the ticket', url: `${appUrl}/tickets?n=${t.number}` },
       note: 'You get this because of the escalation rules in Settings › Support desk.',
     }),
+  /** A scheduled report: headline numbers in the email, each report attached as CSV. */
+  report: (to: string, r: { name: string; workspace: string; period: string; table: { head: string[]; rows: string[][] }; path: string }, files: { filename: string; content: string }[]) =>
+    send(
+      to,
+      `${r.name}: ${r.period}`,
+      {
+        heading: r.name,
+        lines: [`${r.workspace} · ${r.period}`],
+        table: r.table,
+        button: { label: 'Open Analytics', url: `${appUrl}${r.path}` },
+        note: files.length ? `The full figures are attached as CSV (${files.map((f) => f.filename).join(', ')}). They open in Excel or Google Sheets.` : undefined,
+      },
+      files.map((f) => ({ ...f, contentType: 'text/csv; charset=utf-8' })),
+    ),
   memberLeft: (to: string, member: string, workspace: string) =>
     send(to, `${member} left ${workspace}`, { heading: `${member} left ${workspace}`, lines: [`${member} left the workspace. Their open tickets stay assigned to them until you reassign them.`] }),
   memberJoined: (to: string, member: string, workspace: string) =>

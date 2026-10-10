@@ -189,7 +189,7 @@ async function period(f: AnalyticsFilter, tz: string, from: string, to: string):
 const kpi = (value: number | null, prev: number | null): Kpi => ({ value, prev })
 const ratio = (a: number, b: number) => (b ? a / b : null)
 
-async function overview(f: AnalyticsFilter): Promise<Overview> {
+export async function overview(f: AnalyticsFilter): Promise<Overview> {
   const s = await getSettings()
   const tz = s.hours.timezone
   const n = daysBetween(f.from, f.to)

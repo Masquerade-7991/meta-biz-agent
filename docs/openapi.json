@@ -35,7 +35,7 @@
     },
     {
       "name": "Analytics",
-      "description": "All agents or some: conversations, the team, cost, and the logs behind each chart."
+      "description": "All agents or some: conversations, the team, cost, the logs behind each chart, and reports (CSV downloads and scheduled emails)."
     },
     {
       "name": "Contacts",
@@ -5967,6 +5967,584 @@
           },
           "404": {
             "description": "No log called X.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/reports": {
+      "get": {
+        "operationId": "listReports",
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Reports you can download or schedule",
+        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\nEach with an id, title, description and whether it comes from the overview or a log.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/reports/{id}.csv": {
+      "get": {
+        "operationId": "downloadReport",
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Download a report as CSV",
+        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\nUTF-8 with a byte-order mark so Excel reads it right; cells that start with = + - @ are quoted as text. Logs give up to 50,000 rows. Answers text/csv as an attachment.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Record id (MongoDB ObjectId).",
+              "pattern": "^[a-f0-9]{24}$"
+            },
+            "description": "Record id (MongoDB ObjectId)."
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "First day (YYYY-MM-DD) in the support hours’ time zone. Default: 29 days before `to`."
+            },
+            "description": "First day (YYYY-MM-DD) in the support hours’ time zone. Default: 29 days before `to`."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Last day, inclusive. Default: today. At most 366 days in all."
+            },
+            "description": "Last day, inclusive. Default: today. At most 366 days in all."
+          },
+          {
+            "name": "numbers",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated WhatsApp number ids (one agent per number). Default: all. Ids not in this workspace are ignored."
+            },
+            "description": "Comma-separated WhatsApp number ids (one agent per number). Default: all. Ids not in this workspace are ignored."
+          },
+          {
+            "name": "team",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Ticket figures for one team (`none` = tickets in no team)."
+            },
+            "description": "Ticket figures for one team (`none` = tickets in no team)."
+          },
+          {
+            "name": "person",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Ticket figures for one person (`none` = unassigned)."
+            },
+            "description": "Ticket figures for one person (`none` = unassigned)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "No report called X.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/reports/schedules": {
+      "get": {
+        "operationId": "listReportSchedules",
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Scheduled report emails",
+        "description": "**Who can call:** Supervisor or above (`reports.view`).",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createReportSchedule",
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Schedule a report email",
+        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\n20 per workspace at most. The email carries the headline numbers; each report is attached as CSV.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Up to 80 characters."
+                  },
+                  "reports": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Report ids from GET /api/reports."
+                  },
+                  "cadence": {
+                    "type": "string",
+                    "enum": [
+                      "daily",
+                      "weekly",
+                      "monthly"
+                    ],
+                    "description": "daily: yesterday · weekly: Mondays, the last 7 days · monthly: the 1st, last month."
+                  },
+                  "hour": {
+                    "type": "integer",
+                    "description": "0–23, in the support hours’ time zone."
+                  },
+                  "numbers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "WhatsApp number ids; empty = all agents."
+                  },
+                  "team": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "userIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Workspace members to email."
+                  },
+                  "emails": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Anyone else (needs settings.manage)."
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name",
+                  "reports",
+                  "cadence",
+                  "hour",
+                  "userIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Give the schedule a name. / Pick at least one report. / Add at least one person to send it to. / X isn’t an email address.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "description": "Only owners and admins send reports outside the workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/reports/schedules/{id}": {
+      "put": {
+        "operationId": "updateReportSchedule",
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Change a schedule",
+        "description": "**Who can call:** Supervisor or above (`reports.view`).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Record id (MongoDB ObjectId).",
+              "pattern": "^[a-f0-9]{24}$"
+            },
+            "description": "Record id (MongoDB ObjectId)."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Up to 80 characters."
+                  },
+                  "reports": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Report ids from GET /api/reports."
+                  },
+                  "cadence": {
+                    "type": "string",
+                    "enum": [
+                      "daily",
+                      "weekly",
+                      "monthly"
+                    ],
+                    "description": "daily: yesterday · weekly: Mondays, the last 7 days · monthly: the 1st, last month."
+                  },
+                  "hour": {
+                    "type": "integer",
+                    "description": "0–23, in the support hours’ time zone."
+                  },
+                  "numbers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "WhatsApp number ids; empty = all agents."
+                  },
+                  "team": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "userIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Workspace members to email."
+                  },
+                  "emails": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Anyone else (needs settings.manage)."
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name",
+                  "reports",
+                  "cadence",
+                  "hour",
+                  "userIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Give the schedule a name. / Pick at least one report. / Add at least one person to send it to. / X isn’t an email address.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "description": "Only owners and admins send reports outside the workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "That schedule no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteReportSchedule",
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Delete a schedule",
+        "description": "**Who can call:** Supervisor or above (`reports.view`).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Record id (MongoDB ObjectId).",
+              "pattern": "^[a-f0-9]{24}$"
+            },
+            "description": "Record id (MongoDB ObjectId)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "That schedule no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/reports/schedules/{id}/send": {
+      "post": {
+        "operationId": "sendReportSchedule",
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Send a schedule now",
+        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\nCovers the period its cadence would; doesn’t change when it next goes out.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Record id (MongoDB ObjectId).",
+              "pattern": "^[a-f0-9]{24}$"
+            },
+            "description": "Record id (MongoDB ObjectId)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sent": {
+                      "type": "integer",
+                      "description": "People emailed."
+                    }
+                  },
+                  "required": [
+                    "sent"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "That schedule no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Email not sent.",
             "content": {
               "application/json": {
                 "schema": {

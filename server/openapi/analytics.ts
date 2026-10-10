@@ -35,3 +35,46 @@ export const analytics = area('Analytics', {
     },
   },
 })
+
+const SCHEDULE = o({
+  'name*': d('string', 'Up to 80 characters.'),
+  'reports*': d('string[]', 'Report ids from GET /api/reports.'),
+  'cadence*': d('daily|weekly|monthly', 'daily: yesterday · weekly: Mondays, the last 7 days · monthly: the 1st, last month.'),
+  'hour*': d('integer', '0–23, in the support hours’ time zone.'),
+  numbers: d('string[]', 'WhatsApp number ids; empty = all agents.'),
+  team: 'string?',
+  'userIds*': d('string[]', 'Workspace members to email.'),
+  emails: d('string[]', 'Anyone else (needs settings.manage).'),
+  enabled: 'boolean',
+})
+const SCHEDULE_ERRORS = {
+  400: 'Give the schedule a name. / Pick at least one report. / Add at least one person to send it to. / X isn’t an email address.',
+  403: 'Only owners and admins send reports outside the workspace.',
+}
+
+export const reports = area('Analytics', {
+  '/api/reports': {
+    get: { id: 'listReports', summary: 'Reports you can download or schedule', description: 'Each with an id, title, description and whether it comes from the overview or a log.', who: WHO, ok: 'object[]' },
+  },
+  '/api/reports/{id}.csv': {
+    get: {
+      id: 'downloadReport',
+      summary: 'Download a report as CSV',
+      description: 'UTF-8 with a byte-order mark so Excel reads it right; cells that start with = + - @ are quoted as text. Logs give up to 50,000 rows. Answers text/csv as an attachment.',
+      who: WHO,
+      query: FILTER,
+      errors: { 404: 'No report called X.' },
+    },
+  },
+  '/api/reports/schedules': {
+    get: { id: 'listReportSchedules', summary: 'Scheduled report emails', who: WHO, ok: 'object[]' },
+    post: { id: 'createReportSchedule', summary: 'Schedule a report email', description: '20 per workspace at most. The email carries the headline numbers; each report is attached as CSV.', who: WHO, body: SCHEDULE, ok: 'object', errors: SCHEDULE_ERRORS },
+  },
+  '/api/reports/schedules/{id}': {
+    put: { id: 'updateReportSchedule', summary: 'Change a schedule', who: WHO, body: SCHEDULE, ok: 'object', errors: { ...SCHEDULE_ERRORS, 404: 'That schedule no longer exists.' } },
+    delete: { id: 'deleteReportSchedule', summary: 'Delete a schedule', who: WHO, errors: { 404: 'That schedule no longer exists.' } },
+  },
+  '/api/reports/schedules/{id}/send': {
+    post: { id: 'sendReportSchedule', summary: 'Send a schedule now', description: 'Covers the period its cadence would; doesn’t change when it next goes out.', who: WHO, ok: o({ 'sent*': d('integer', 'People emailed.') }), errors: { 404: 'That schedule no longer exists.', 502: 'Email not sent.' } },
+  },
+})

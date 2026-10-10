@@ -13,7 +13,7 @@ import { store } from './store.ts'
 import { assist, billing } from './workspace.ts'
 import { whatsapp } from './whatsapp.ts'
 import { meta } from './meta.ts'
-import { analytics } from './analytics.ts'
+import { analytics, reports } from './analytics.ts'
 
 const error = (description: string) => ({ description, content: { 'application/json': { schema: ref('Error') } } })
 
@@ -37,7 +37,7 @@ export const openapi = {
     { name: 'Accounts & workspace', description: 'Sign-up, login, your account, and the workspace’s people.' },
     { name: 'Inbox', description: 'Customer chats: reading, replying, assigning, taking over from the AI agent, canned responses.' },
     { name: 'Tickets & support', description: 'Tickets, response targets, business hours, routing and team analytics.' },
-    { name: 'Analytics', description: 'All agents or some: conversations, the team, cost, and the logs behind each chart.' },
+    { name: 'Analytics', description: 'All agents or some: conversations, the team, cost, the logs behind each chart, and reports (CSV downloads and scheduled emails).' },
     { name: 'Contacts', description: 'Contacts, custom fields, tags, segments and CSV import.' },
     { name: 'Broadcasts & templates', description: 'WhatsApp message templates and template broadcasts.' },
     { name: 'WhatsApp', description: 'Connected accounts (Embedded Signup), numbers, profiles and health.' },
@@ -51,7 +51,7 @@ export const openapi = {
       externalDocs: { description: 'Meta Business Agent reference', url: 'https://developers.facebook.com/documentation/meta-business-agent' },
     },
   ],
-  paths: { ...infra, ...auth, ...inbox, ...tickets, ...analytics, ...contacts, ...broadcasts, ...whatsapp, ...billing, ...assist, ...store, ...meta },
+  paths: { ...infra, ...auth, ...inbox, ...tickets, ...analytics, ...reports, ...contacts, ...broadcasts, ...whatsapp, ...billing, ...assist, ...store, ...meta },
   components: {
     securitySchemes: {
       session: { type: 'apiKey', in: 'cookie', name: 'sid', description: 'Set by POST /api/auth/login. HttpOnly, so the browser sends it for you.' },
