@@ -23,6 +23,8 @@ import { resetDummyWhatsApp } from '@/app/api/supportDummy'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
+import { listStoredAgents } from '@/app/api/store'
+import { useWizard } from '@/app/wizard/WizardContext'
 
 interface Snapshot {
   number: { id: string; display: string; name: string } | null
@@ -203,6 +205,19 @@ function GetStarted({
   )
 }
 
+/** One line about something unfinished or wrong, above the dashboard. */
+function Notice({ title, children, action, tone }: { title: string; children: ReactNode; action?: ReactNode; tone?: 'warning' }) {
+  return (
+    <section className={cn('flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4', tone === 'warning' ? 'border-warning/50 bg-warning/10' : 'border-border bg-card')}>
+      <div className="min-w-0 space-y-0.5">
+        <p className="font-semibold">{title}</p>
+        <p className="text-sm text-muted-foreground">{children}</p>
+      </div>
+      {action}
+    </section>
+  )
+}
+
 /** The agent's status in the console's words, from what Meta reports. */
 function AgentPill({ agent }: { agent: AgentOnNumber }) {
   const s = AGENT_STATUS[agentStatusOf({ activated: agent.enabled, stopped: false, audienceMode: agent.audience === 'EVERYONE' ? 'everyone' : 'allowlisted' })]
@@ -216,7 +231,7 @@ const QUALITY: Record<string, { label: string; tone: Tone }> = {
 }
 
 /** Once set up, Home is what needs attention today: open chats and tickets, the agent, the number. */
-function AtAGlance({ agent, chats: loadChats, onNavigate }: { agent: AgentOnNumber; chats: () => Promise<ChatSummary[]>; onNavigate: (id: NavId) => void }) {
+function AtAGlance({ agent, draftName, chats: loadChats, onNavigate }: { agent: AgentOnNumber | null; draftName: string; chats: () => Promise<ChatSummary[]>; onNavigate: (id: NavId) => void }) {
   // tickets null: they couldn't be loaded, so no count is shown (rather than a reassuring 0).
   const [data, setData] = useState<{ unread: number; chats: number; tickets: number | null; overdue: number; quality: string | null } | null>(null)
   useEffect(() => {
@@ -247,7 +262,13 @@ function AtAGlance({ agent, chats: loadChats, onNavigate }: { agent: AgentOnNumb
       ),
       urgent: !!data?.overdue,
     },
-    { id: 'ai-agents', icon: Bot, label: 'AI agent', value: <AgentPill agent={agent} />, note: agent.enabled ? 'Answering customers' : 'Not answering yet' },
+    {
+      id: 'ai-agents',
+      icon: Bot,
+      label: 'AI agent',
+      value: agent ? <AgentPill agent={agent} /> : <StatusPill tone={AGENT_STATUS.draft.tone}>{draftName ? AGENT_STATUS.draft.label : 'Not built'}</StatusPill>,
+      note: agent?.enabled ? 'Answering customers' : draftName ? `“${draftName}” isn’t live yet` : 'Not answering yet',
+    },
     { id: 'whatsapp', icon: Smartphone, label: 'WhatsApp number', value: q ? <StatusPill tone={q.tone}>{q.label}</StatusPill> : '—', note: 'Quality rating from Meta' },
   ]
   return (
@@ -484,6 +505,10 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
   const { me } = useAuth()
   const navigate = useNavigate()
   const [snap, setSnap] = useState<Snapshot | null>(null)
+  // Signs this isn't a first visit: agents saved in the console (any number), and chats.
+  const [history, setHistory] = useState<{ agents: number; chats: number }>({ agents: 0, chats: 0 })
+  const { state } = useWizard()
+  const draftName = state.identity.agentName.trim()
   const [accounts, setAccounts] = useState<WaAccount[]>([])
   const [config, setConfig] = useState<SignupConfig | null>(null)
   // At a glance and Recent conversations both show chats: one request between them.
@@ -513,19 +538,46 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
   useEffect(() => {
     let cancelled = false
     setError(null)
-    Promise.all([listAccounts().then(async (a) => [a, await loadSnapshot(a)] as const), getSignupConfig().catch(() => null)]).then(
-      ([[a, s], c]) => {
+    Promise.all([
+      listAccounts().then(async (a) => [a, await loadSnapshot(a)] as const),
+      getSignupConfig().catch(() => null),
+      listStoredAgents().catch(() => null),
+      loadChats(),
+    ]).then(
+      ([[a, s], c, stored, chats]) => {
         if (cancelled) return
         setSnap(s)
         setAccounts(a)
         setConfig(c)
+        setHistory({ agents: stored?.length ?? 0, chats: chats.length })
       },
       (err) => !cancelled && setError(errorText(err)),
     )
     return () => {
       cancelled = true
     }
-  }, [attempt])
+  }, [attempt, loadChats])
+
+  const account = accounts[0]
+  const billed = !!account && billingDone(account)
+  // Home is the dashboard once WhatsApp is connected and this isn't a first visit: an agent exists on
+  // Meta or in the console (even a draft with just a name), or customers have already written.
+  // A first visit gets the setup guide; anything unfinished shows as a note above the dashboard.
+  const returning = !!snap && !!account && (!!snap.agent || history.agents > 0 || !!draftName || history.chats > 0)
+  const getStarted = snap && (
+    <GetStarted
+      onCreateAgent={() => navigate('/agents?new')}
+      snap={snap}
+      accounts={accounts}
+      config={config}
+      onNavigate={onNavigate}
+      onAccountChange={(a) => {
+        setAccounts((prev) => [...prev.filter((x) => x.wabaId !== a.wabaId), a])
+        // A newly connected number changes what the rest of Home shows (its agent).
+        if (!accounts.some((x) => x.wabaId === a.wabaId)) setAttempt((n) => n + 1)
+      }}
+    />
+  )
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-8 px-4 py-6 sm:px-8 sm:py-8">
@@ -544,41 +596,47 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
         <PageLoader context="home" />
       ) : (
         <>
-          {snap.agent && accounts[0] && billingDone(accounts[0]) && (
+          {returning ? (
             <>
-              <AtAGlance agent={snap.agent} chats={loadChats} onNavigate={onNavigate} />
+              {snap.lookupError && (
+                <Notice tone="warning" title="Couldn’t reach your AI agent" action={<Button variant="outline" size="sm" onClick={() => setAttempt((n) => n + 1)}>Try again</Button>}>
+                  {snap.lookupError}
+                </Notice>
+              )}
+              {!billed ? (
+                getStarted
+              ) : (
+                !snap.agent &&
+                !snap.lookupError && (
+                  <Notice
+                    title={draftName ? `“${draftName}” isn’t live yet` : 'Build your AI agent'}
+                    action={
+                      <Button size="sm" onClick={() => (draftName ? navigate('/agents') : navigate('/agents?new'))}>
+                        <Bot className="size-4" />
+                        {draftName ? 'Continue setting it up' : 'Build agent'}
+                      </Button>
+                    }
+                  >
+                    {draftName ? 'Finish its setup, test it, then publish to start answering customers.' : 'Name it, give it your business details and FAQs, test it, then publish.'}
+                  </Notice>
+                )
+              )}
+              <AtAGlance agent={snap.agent} draftName={draftName} chats={loadChats} onNavigate={onNavigate} />
               <div className="grid items-start gap-6 lg:grid-cols-3">
                 <div className="lg:col-span-2">
                   <RecentChats chats={loadChats} onOpenChat={onOpenChat} onNavigate={onNavigate} />
                 </div>
-                <QuickActions hasAgent onNavigate={(id, tab) => (tab ? onOpenSettings(tab) : onNavigate(id))} />
+                <QuickActions hasAgent={!!snap.agent || !!draftName} onNavigate={(id, tab) => (tab ? onOpenSettings(tab) : onNavigate(id))} />
               </div>
               {/* The team's numbers are for people who read reports; everyone else has the tiles above. */}
               {can(me?.role, 'reports.view') && <ThisWeek onNavigate={onNavigate} />}
             </>
-          )}
-          {!snap.agent && snap.lookupError && (
-            <div className="rounded-lg border border-warning/50 p-6 text-sm">
-              <p className="font-semibold">Couldn&rsquo;t reach your AI agent</p>
-              <p className="mt-1 text-muted-foreground">{snap.lookupError}</p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={() => setAttempt((n) => n + 1)}>
-                Try again
-              </Button>
-            </div>
-          )}
-          {!snap.lookupError && !(snap.agent && accounts[0] && billingDone(accounts[0])) && (
-        <GetStarted
-          onCreateAgent={() => navigate('/agents?new')}
-          snap={snap}
-          accounts={accounts}
-          config={config}
-          onNavigate={onNavigate}
-          onAccountChange={(a) => {
-            setAccounts((prev) => [...prev.filter((x) => x.wabaId !== a.wabaId), a])
-            // A newly connected number changes what the rest of Home shows (its agent).
-            if (!accounts.some((x) => x.wabaId === a.wabaId)) setAttempt((n) => n + 1)
-          }}
-        />
+          ) : snap.lookupError ? (
+            <Notice tone="warning" title="Couldn’t reach your AI agent" action={<Button variant="outline" size="sm" onClick={() => setAttempt((n) => n + 1)}>Try again</Button>}>
+              {snap.lookupError}
+            </Notice>
+          ) : (
+            getStarted
           )}
         </>
       )}
