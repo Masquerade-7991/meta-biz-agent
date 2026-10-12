@@ -38,11 +38,13 @@ test('hosted link only: owners get Meta’s signup page for each kind of number;
   assert.equal(extras(owner.json.links.coexistence).featureType, 'whatsapp_business_app_onboarding')
   assert.equal(extras(owner.json.links.new).featureType, undefined)
   assert.equal(new URL(owner.json.links.new).searchParams.get('config_id'), '222')
+  assert.equal(owner.json.link, LINK, 'Connect opens the link exactly as configured')
   assert.equal(owner.json.appId, undefined)
 
   const agent = await hosted.api(hw.agent, 'GET', '/api/whatsapp/config')
   assert.equal(agent.json.mode, 'hosted')
   assert.equal(agent.json.links, undefined, 'only owners connect, so only they get the link')
+  assert.equal(agent.json.link, undefined)
 })
 
 test('hosted link only: the console can’t finish a connection itself, and says so plainly', async () => {

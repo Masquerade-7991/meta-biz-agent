@@ -39,7 +39,8 @@ export interface SignupConfig {
   appId?: string
   configId?: string
   sdkVersion?: string
-  /** hosted, owners only: Meta's signup page for each flow. */
+  /** hosted, owners only: Meta's signup page as configured (what Connect opens), and for each flow. */
+  link?: string
   links?: Record<Flow, string>
 }
 export type Billing = 'partner_credit' | 'own'

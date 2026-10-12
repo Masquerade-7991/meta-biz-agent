@@ -227,7 +227,8 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       mode,
       partnerCredit: !!c.creditLineId,
       ...(owner && mode === 'sdk' && { appId: c.appId, configId: c.configId, sdkVersion: c.sdkVersion }),
-      ...(owner && mode === 'hosted' && { links }),
+      // The link exactly as configured: the console opens it in the same tab.
+      ...(owner && mode === 'hosted' && { link: env('EMBEDDED_SIGNUP_LINK'), links }),
     }
   }
   if (path === '/api/whatsapp/accounts' && m === 'GET') {

@@ -43,6 +43,7 @@ export const whatsapp = area('WhatsApp', {
         appId: 'string',
         configId: 'string',
         sdkVersion: 'string',
+        link: d('string', 'Meta’s signup page exactly as EMBEDDED_SIGNUP_LINK sets it: Connect opens it in the same tab.'),
         links: d(o({ 'new*': 'string', 'coexistence*': 'string' }), 'Meta’s signup page for a new number and for a WhatsApp Business app number (built from EMBEDDED_SIGNUP_LINK).'),
       }),
     },

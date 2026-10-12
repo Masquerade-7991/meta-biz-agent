@@ -8389,6 +8389,10 @@
                     "sdkVersion": {
                       "type": "string"
                     },
+                    "link": {
+                      "type": "string",
+                      "description": "Meta’s signup page exactly as EMBEDDED_SIGNUP_LINK sets it: Connect opens it in the same tab."
+                    },
                     "links": {
                       "type": "object",
                       "properties": {
