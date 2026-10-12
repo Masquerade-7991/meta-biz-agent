@@ -1,0 +1,15 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { createOpenAPI } from 'fumadocs-openapi/server';
+
+// The console's spec (npm run docs:openapi at the repo root writes it). Tag names are already
+// readable ("AI help", "WhatsApp"); without x-displayName Fumadocs re-splits them ("A I help").
+export const openapi = createOpenAPI({
+  input: {
+    console: async () => {
+      const doc = JSON.parse(await readFile(path.resolve(process.cwd(), '../docs/openapi.json'), 'utf8'));
+      for (const tag of doc.tags ?? []) tag['x-displayName'] ??= tag.name;
+      return doc;
+    },
+  },
+});

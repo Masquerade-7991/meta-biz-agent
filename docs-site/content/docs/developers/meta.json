@@ -1,0 +1,7 @@
+{
+  "title": "Developers",
+  "description": "Building the console",
+  "root": true,
+  "icon": "Code",
+  "pages": ["index", "running-locally", "meta-rules", "webhooks", "support-platform", "testing", "---Reference---", "api"]
+}

@@ -1,0 +1,7 @@
+{
+  "title": "Guide",
+  "description": "Using the console",
+  "root": true,
+  "icon": "BookOpen",
+  "pages": ["index", "connect-number", "build-agent", "---Support desk---", "inbox", "tickets", "contacts", "broadcasts", "analytics", "---Workspace---", "settings"]
+}

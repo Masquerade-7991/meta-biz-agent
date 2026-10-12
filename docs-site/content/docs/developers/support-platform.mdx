@@ -1,0 +1,63 @@
+---
+title: Support platform
+description: The server modules behind Inbox, Tickets, Contacts, Broadcasts and Analytics, and their rules.
+---
+
+## Modules
+
+| Module | Owns |
+| --- | --- |
+| `inbox.ts` | Chats, replies, thread control, canned responses and macros, the webhook, AI assist |
+| `tickets.ts` | Tickets, response targets (SLA), satisfaction, support settings, notifications |
+| `supportOps.ts` | Teams, people's skills, limits and availability, routing rules, the escalation matrix and its minute sweep |
+| `contacts.ts` | Contacts, fields, segments, CSV import |
+| `broadcasts.ts` | Templates, broadcasts, the send worker |
+| `analytics.ts` / `reports.ts` | The Analytics page, CSV downloads, scheduled report emails |
+
+All of them are workspace-scoped. Sending needs `ownsMetaAssets()`.
+
+## Model
+
+There is one conversation per customer phone. A ticket is one issue inside it. It opens on a handoff, a take-over, a team reply, or the customer writing again.
+
+## Ticket lifecycle
+
+The rules are in `src/app/support/ticketRules.ts`, shared with dummy mode:
+
+- Handing the chat back to the AI resolves its ticket, with no rating question.
+- A customer writing reopens a ticket resolved in the last 3 days. Later than that, a new ticket opens (`source: customer`), unless the AI holds the chat.
+- Waiting on the customer pauses the deadlines (`pausedAt` / `pausedMs`). The dues shift on resume, and nothing escalates while paused.
+- Reopening restarts deadlines from `clockStartAt`, and escalation from level 0.
+- The database allows one open ticket per chat (`one_open_ticket_per_chat`).
+- Bulk changes answer `{done, failed[]}`.
+- A member leaving or being removed unassigns their work (`cleanUpMember`).
+
+## Routing and escalation
+
+The decisions are pure and shared (`src/app/support/routing.ts`):
+
+- The first matching rule wins. Otherwise the default routing in support settings applies.
+- Only available people under their limit get tickets.
+- Escalation levels fire in order, once each (`escalationLevel`). They alert by bell, and optionally by email.
+
+Business-hours maths is in `server/businessHours.ts`.
+
+## Activity log
+
+Record actions with `trace(kind, data, {entity, id}, changes)`, where `changes` is `{field: [before, after]}`, built by `diff()`.
+
+- Auth routes run outside a workspace, so they use `traceIn`.
+- Sentences and areas are in `src/app/activity/activityText.ts`. Add a case there for a new kind.
+- Events are kept 2 years and served by `GET /api/activity[.csv]`.
+
+## Analytics definitions
+
+- **Conversation:** has a message from the customer, the AI or the team.
+- **AI alone:** the AI answered and nobody from the team wrote.
+- **No reply:** neither the AI nor the team answered.
+
+Rows carry `phoneNumberId`. Rows without one count as the default number. WhatsApp spend is per account and per UTC day, so cost per resolved conversation shows only for all agents.
+
+## Sample data
+
+Rows with `sample: true` are stored but never sent to Meta. Tests send only to sample contacts.

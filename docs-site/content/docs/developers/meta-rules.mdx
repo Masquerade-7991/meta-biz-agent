@@ -1,0 +1,60 @@
+---
+title: Meta wiring rules
+description: How the console talks to Meta, and the details that are easy to get wrong.
+---
+
+## The rules
+
+- **One place for Meta calls:** everything goes through `src/app/api/meta.ts`.
+- **Meta is the source of truth.** An agent loads from Meta when opened (`hydrateFromMeta`, merged by `metaId`). Per-row actions call Meta first and update local state only after Meta accepts. New list types need a `metaId`.
+- **Keep the failure hooks:** `consumeForcedFailure()` goes before each real call, so Demo controls can force errors.
+- **Check Meta's reference before wiring an endpoint:** developers.facebook.com/documentation/meta-business-agent. Its `llms.txt` lists every page. Don't guess.
+
+## Easy to get wrong
+
+<Accordions>
+<Accordion title="Paths and versions">
+- Paths mix `agent_config/...` (underscores) with `agent-ui-skills` and `agent-eval` (hyphens).
+- Thread control has its own path and needs `X-API-Version: 1.0.0`.
+- Agent usage (`business_agent_insights`) takes **no** `X-API-Version` header.
+</Accordion>
+<Accordion title="Names Meta accepts">
+- Connector and tool names: letters, numbers and underscores only. Meta answers a bare 400 otherwise, even though its docs show spaces.
+- Skill and rich-reply titles: lowercase letters, numbers and hyphens, with no hyphen at either end (`skillTitle`). The console keeps the readable name, and refuses two names that slug to the same title.
+- Tool value names may be anything, but must be unique across path, query, headers and body together.
+</Accordion>
+<Accordion title="Settings">
+- Settings `PUT` is partial.
+- Safety & handoff never sends `rollout` or `ai_audience`. Publish owns them (`setRollout`). Re-sending them made Meta refuse the save or flip a live agent.
+- Several response fields are JSON-encoded strings. Settings GET returns a one-item list.
+</Accordion>
+<Accordion title="Connectors and tools">
+- A connector `PUT` without `auth_config` keeps the saved keys. `upsertApiKey` replaces all of them. Keys never stay in the browser (`stripConnectionSecrets`).
+- A tool run can answer `status: "success"` with the failure inside `output`. Read it with `readToolRun`.
+- `agent_test` doesn't report tool calls. Its conversation turns do, about a second after the reply (`testTools.ts`).
+- All tool request building goes through `src/app/wizard/toolRequest.ts`.
+- Body params have no per-param `required` flag. Use `body.required`.
+</Accordion>
+<Accordion title="Websites">
+- Meta answers `completed` with `pages_crawled: 0` even when the agent learned from the site, so never show 0 pages as a fact.
+- A `PUT` with the same URL queues a fresh read.
+</Accordion>
+<Accordion title="Rate limits">
+Meta's 429 is per app and token, and shared with other systems. The relay shares identical in-flight reads and retries a read once. Settings reads run two at a time.
+</Accordion>
+<Accordion title="Tokens">
+When Meta answers 401, the server token is dead. The relay turns it into a 502 ("Meta refused the access token") so the console doesn't sign the user out. Replace the token. A system user token doesn't expire with a password change.
+</Accordion>
+</Accordions>
+
+## Connecting numbers
+
+New numbers come in through **Embedded Signup v4**, always through `ConnectNumberButton`. `GET /api/whatsapp/config` gives the mode:
+
+| Mode | Needs | What Connect does |
+| --- | --- | --- |
+| `sdk` | ES config id, app id and secret, encryption key | Opens Meta's window with the JS SDK. `POST /api/whatsapp/connect` finishes the setup. |
+| `hosted` | `EMBEDDED_SIGNUP_LINK` | Sends the current tab to Meta's hosted signup. Meta's Cross-Origin-Opener-Policy would cut a pop-up off from the console anyway. Helo.ai completes the connection on its side. |
+| `none` | nothing | "Talk to Helo.ai". Setting names are never shown to customers. |
+
+Customer tokens and PINs are stored only sealed (AES-256-GCM, `server/crypto.ts`).

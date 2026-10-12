@@ -1,0 +1,63 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+@import 'fumadocs-openapi/css/preset.css';
+
+/* Helo.ai tokens (the console's src/styles/theme.css): neutral greys, hairline borders, the Helo blue
+   for actions and focus. Helo red stays on the logo only. */
+@theme {
+  --color-fd-background: #ffffff;
+  --color-fd-foreground: #1c1b19;
+  --color-fd-muted: #f4f4f2;
+  --color-fd-muted-foreground: #62625f;
+  --color-fd-popover: #ffffff;
+  --color-fd-popover-foreground: #1c1b19;
+  --color-fd-card: #fafaf9;
+  --color-fd-card-foreground: #1c1b19;
+  --color-fd-border: #e7e6e3;
+  --color-fd-primary: #2270d0;
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-secondary: #f4f4f2;
+  --color-fd-secondary-foreground: #1c1b19;
+  --color-fd-accent: #eef4fc;
+  --color-fd-accent-foreground: #1d64bd;
+  --color-fd-ring: #2270d0;
+}
+
+.dark {
+  --color-fd-background: #121315;
+  --color-fd-foreground: #ececea;
+  --color-fd-muted: #1f2023;
+  --color-fd-muted-foreground: #a3a39e;
+  --color-fd-popover: #1b1c1f;
+  --color-fd-popover-foreground: #ececea;
+  --color-fd-card: #17181b;
+  --color-fd-card-foreground: #ececea;
+  --color-fd-border: #2a2b2f;
+  --color-fd-primary: #4c93ea;
+  --color-fd-primary-foreground: #0b1220;
+  --color-fd-secondary: #232427;
+  --color-fd-secondary-foreground: #ececea;
+  --color-fd-accent: #1a2a40;
+  --color-fd-accent-foreground: #8fbcf5;
+  --color-fd-ring: #4c93ea;
+}
+
+.dark #nd-sidebar {
+  --color-fd-muted: #1f2023;
+  --color-fd-secondary: #232427;
+  --color-fd-muted-foreground: #b4b4af;
+}
+
+:root {
+  --radius: 10px;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}

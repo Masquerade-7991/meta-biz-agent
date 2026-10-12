@@ -1,0 +1,44 @@
+---
+title: Webhooks and the protected account
+description: How events arrive without touching the business's own setup.
+---
+
+## Listening, not owning
+
+Events arrive through a separate **listening** Meta app, subscribed to the business's WhatsApp Business account alongside the business's own app. Meta sends each subscribed app its own copy, so the business's webhook is untouched.
+
+Never set `override_callback_uri` or `webhook_configuration`, and never call `subscribed_apps` POST or DELETE for it.
+
+## The protected account
+
+The `.env` account, and any IDs in `PROTECTED_IDS`, can't have these changed:
+
+- subscriptions;
+- callback;
+- registration;
+- PIN;
+- codes;
+- coexistence sync;
+- credit line.
+
+`callUpstream` refuses those calls for everything, both the relay and the modules (`server/protect.ts`, covered by `protect.test.ts`). Connect, Retry, Disconnect and billing refuse it too, and the UI hides those controls.
+
+On the protected number, the console never messages customers on its own, so there's no away message and no satisfaction question. People still send by clicking.
+
+## The receiver
+
+`handleWebhook` in `server/inbox.ts`:
+
+1. Checks the signature against any app in `WEBHOOK_APP_SECRETS`. If none are set, it answers 503 so Meta retries.
+2. Stores the delivery as sent in `webhook_inbox`. The id is the body's sha256, so retries are stored once.
+3. Processes it, then answers.
+
+Failures are retried after each delivery, every 5 minutes locally, and by the daily cron. Side effects run once per new message. Statuses only move forward. Pricing goes to `message_charges`.
+
+## Kept for good
+
+`messages`, `conversations`, `conversation_traces`, `test_conversations`, `whatsapp_webhooks` and `webhook_inbox` have no expiry.
+
+## Owners only
+
+**Settings › WhatsApp** (accounts, webhook status, apps receiving events) needs `whatsapp.manage`. The first list of subscribed apps seen is kept as a baseline. After an intended change, owners can mark the new list as expected.

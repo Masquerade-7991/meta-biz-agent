@@ -1,0 +1,53 @@
+---
+title: Running locally
+description: The two processes, the settings they read, and working when the upstream is down.
+---
+
+## Two processes
+
+```bash
+npm install
+npm run dev          # Vite, the console
+npm run dev:server   # the API server on :8787 (Vite proxies /api to it)
+```
+
+**Dummy mode** needs neither a server nor a login. Open it from the flask button in the console.
+
+## Settings
+
+Settings go in `.env` at the repository root. Never commit or share their values.
+
+| Area | Keys |
+| --- | --- |
+| Database | `MONGODB_URI`, `MONGODB_DB` |
+| Upstream | `UPSTREAM`, `BASE_URL_1`, `BASE_URL_2`, `AGENT_BASE_URL`, `GRAPH_BASE_URL`, `BEARER_TOKEN` / `META_TOKEN` |
+| The first workspace's account | `BUSINESS_ID`, `WABA_ID`, `PHONE_NUMBER_ID`, `PHONE_NUMBER`, and their names |
+| Embedded Signup | `EMBEDDED_SIGNUP_LINK` (hosted); or `META_ES_CONFIG_ID`, `META_APP_ID` / `META_APP_SECRET` (or `APP_ID` / `APP_SECRET`) and `TOKEN_ENCRYPTION_KEY` (full); optionally `WA_CREDIT_LINE_ID`, `WA_CREDIT_CURRENCY` |
+| Webhooks | `WEBHOOK_APP_SECRETS`, `WEBHOOK_VERIFY_TOKEN`, `PROTECTED_IDS` |
+| Email | `SMTP_USER`, `SMTP_PASS` (a Gmail App password). Without `SMTP_PASS`, emails, including sign-in links, print to the server log. |
+| AI writing help | `ANTHROPIC_API_KEY` |
+| Background work | `COLLECTORS=off`, `JOBS=off` |
+
+## The upstream
+
+By default, Meta calls go to Helo.ai's server (`BASE_URL_2`), which holds the Meta credentials. It is VPN-only and started by hand each day, so it's often unreachable. That's expected.
+
+`UPSTREAM=meta` calls Meta directly with the server's own token.
+
+To test wiring while the upstream is down, point the server at a throwaway local stand-in:
+
+```bash
+BASE_URL_2=http://localhost:<port> node server/index.ts
+```
+
+## A second, isolated server
+
+For experiments, run another copy on its own port and database, with background work off:
+
+```bash
+SERVER_PORT=8797 MONGODB_DB=<name>_test COLLECTORS=off JOBS=off SMTP_PASS= node server/index.ts
+```
+
+## Deploying
+
+Pushing to `main` deploys to Vercel. The API runs as one function (`api/server.mjs`, bundled by `scripts/bundle-server.mjs`), and a daily cron calls `/api/cron`. Run the checks in [Testing](/docs/developers/testing) first.

@@ -1,0 +1,22 @@
+---
+title: Overview
+description: The console's own API, generated from docs/openapi.json.
+---
+
+These pages are generated from the console's OpenAPI 3.1 spec (`docs/openapi.json`), one page per area. They update whenever the docs site is rebuilt.
+
+## Signing in
+
+Every route except the public ones needs the session cookie `sid`, set by `POST /api/auth/login` or an emailed sign-in link. Routes also need finished setup and a workspace.
+
+## Roles
+
+Owner › Admin › Supervisor › Agent. Each route says the lowest role that may call it.
+
+## Errors
+
+Errors are `{title, detail, status}`. Every response has an `x-trace-id` header. Owners and admins can look up what a request did with `GET /api/trace/{id}`.
+
+## Same origin only
+
+There's no CORS. The console and the API share a host. To try requests with your own session, use the Swagger UI at `/api/docs` in a running console, which is for members only.

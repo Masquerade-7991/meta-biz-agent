@@ -1,0 +1,34 @@
+---
+title: Testing and checks
+description: What to run before pushing to main, which deploys.
+---
+
+## Before every push
+
+```bash
+npm run build      # type-checks src/ and server/, then builds
+npm run lint       # oxlint, 0 warnings
+npm run lint:tw    # Tailwind classes and conflicts
+npm test           # every *.test.ts
+npm run test:e2e   # journeys against a throwaway database and a fake Meta (~3 min, needs MongoDB)
+```
+
+## Also available
+
+| Command | What it does |
+| --- | --- |
+| `npm run test:evals` | Replays the AI-feature cases. |
+| `npm run test:ui` | Opens every page in a browser and checks it. |
+| `npm run docs:openapi` | Rewrites `docs/openapi.json` from `server/openapi/*`. |
+
+## End-to-end harness
+
+`tests/e2e/harness.ts` starts the server on its own port with a fake Meta, and creates a throwaway `meta_agent_e2e_*` database. The database is always dropped afterwards. Seed workspaces with `stack.seed.workspace()`, and call routes as a member with `stack.api(member, method, path, body)`.
+
+## Known bugs
+
+A test for a known, unfixed bug is marked `todo` with its QA id from `tests/QA_REPORT.md`. Remove the flag when it's fixed.
+
+## API spec
+
+Every `/api` route is described in `server/openapi/*` (OpenAPI 3.1). `server/openapi.test.ts` fails when a route is missing. After changing a route, run `npm run docs:openapi`. The [API reference](/docs/developers/api) on this site is built from that file.
