@@ -1,0 +1,87 @@
+---
+title: Test your agent
+description: Chat with your agent, replay past test chats, and run Meta's evaluations before customers see it.
+---
+
+Find out how the agent behaves before you switch it on for customers.
+
+Testing is free and doesn't message any real customer. It works even while the agent is off.
+
+## Before you start
+
+- At least some knowledge or a skill. Without them the console shows "Your agent has nothing to go on yet. Add knowledge or a skill first, then test it here."
+
+## The test chat
+
+Open **Test & Eval** and stay on the **Chat** tab.
+
+![The Test and Eval section with a test chat beside a panel showing what happened behind the scenes](/screens/studio-test.webp)
+
+<Steps>
+<Step>
+### Ask something
+Type a question as a customer would, or tap one of the **Try asking** suggestions, such as "What do you sell?", "Can I talk to a person?" or "Where is my order?".
+</Step>
+<Step>
+### Look behind the scenes
+The panel beside the chat shows what happened for the selected reply. If a tool ran, you see it here; if not, there is a link to Connections.
+</Step>
+<Step>
+### Start over when you like
+**New conversation** clears the chat so the agent starts fresh.
+</Step>
+</Steps>
+
+You can send up to 500 test messages an hour on each number. Test chats are not billed.
+
+<small>Source: [Meta — Testing your agent](https://developers.facebook.com/documentation/meta-business-agent/reference/operate/agent-test)</small>
+
+### Past test conversations
+
+Press **History** to open earlier test chats, each with its first message, date and number of messages. Open one to read it; **Back to testing** returns you to a live chat.
+
+### Try it from anywhere
+
+You don't have to open Test & Eval each time. **Try it** at the top of every studio section opens a quick chat panel ("Try your agent"). It uses the same free test, so you can check a change right after making it. It adds a note when a person on your team would take over, or when Meta's agent couldn't answer. The full chat, checks and details stay in Test & Eval. **Start a new conversation** (the arrow icon) clears the panel.
+
+## Standard checks
+
+The **Standard checks** tab sends common situations to your real agent for you: a question from your FAQ, something outside what you sell, asking for a person, and a configured action if you have one.
+
+Press **Run standard checks**. Each situation is marked **Answered** or **Check this**. Open one to see what was sent and how the agent replied. **Check this** doesn't always mean a problem: it means the reply deserves a look.
+
+## Evaluation
+
+The **Evaluation** tab runs scored scenarios against your agent, with Meta playing a simulated customer.
+
+<Steps>
+<Step>
+### Pull the cases
+Press **Pull eval cases**. Meta generates the scenarios from the business category set on your WhatsApp Business account. Meta doesn't let you write your own scenarios yet.
+</Step>
+<Step>
+### Start one
+Open a card to see how many turns it runs and what the agent must do to pass. Press **Start eval**. The card moves through "Simulating the conversation", "Scoring the conversation" and "Finding patterns".
+</Step>
+<Step>
+### Read the result
+You get a score out of 5, what went well, the top reasons for any failure, and where the agent struggled. **View full conversation** shows the whole simulated chat.
+</Step>
+</Steps>
+
+<small>Source: [Meta — Agent evaluation](https://developers.facebook.com/documentation/meta-business-agent/reference/operate/agent-eval)</small>
+
+## Good to know
+
+- Test each language you have enabled. Meta says English is where the agent is strongest.
+- Sending a test message marks "Try it in Test & Eval" as done on the Go live checklist.
+
+## If something goes wrong
+
+| Message | What it means |
+| --- | --- |
+| **The agent didn't answer** | Meta's side had an error. Send the message again. |
+| **Couldn't reach the agent** | The console couldn't connect. Try again in a moment. |
+| **Testing is temporarily at capacity across the platform. Try again later.** | The shared limit was hit. Wait and retry. |
+| **Evaluation failed.** | The scenario didn't complete. Start it again. |
+| **Meta has no eval cases for this number yet.** | Nothing to run for this number yet. |

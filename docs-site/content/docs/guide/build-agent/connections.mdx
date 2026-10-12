@@ -1,0 +1,96 @@
+---
+title: Connections
+description: Let the agent look things up and take actions in your own systems, such as your store or booking tool.
+---
+
+Connect a system that has an API, so the agent can check an order or stock level instead of only answering from its knowledge.
+
+![The Connections section listing a connection and its tools](/screens/studio-connections.webp)
+
+## Before you start
+
+- The system's web address (starting with `https://`) and a key or credentials. You may want your developer nearby. The dialog has **Copy a checklist for your developer** to send them exactly what to find.
+- The system must be reachable on the public internet over HTTPS.
+
+The **Connections** section has three tabs: **Your systems**, **Ready-made** and **Business events**. Ready-made one-click connections to popular tools are on the way; until then, use **Your systems** for anything with an API.
+
+## How it fits together
+
+- A **connection** is one system, such as your online store.
+- A **tool** is one request the agent can make to it, such as "look up an order".
+
+## Steps
+
+<Steps>
+<Step>
+### Connect a system
+Press **Connect a system**.
+
+- **Name**: letters, numbers and underscores only, for example `Shopify_store`.
+- **What is it for?** One sentence. The agent reads it to decide when this system can help.
+- **Connection type**: **API (HTTP)**, where you add each request the agent can make, or **MCP server**, where the server lists its own tools.
+- **Base web address**: the part every request starts with, including any version. It must start with `https://`.
+</Step>
+<Step>
+### Choose how it signs in
+- **Access key**: a key or token. Choose whether it is sent in a header or as a parameter, then name it exactly as the system's documents say (for example `X-Shopify-Access-Token`). Paste the key; add a prefix if the system needs one.
+- **Client credentials**: an OAuth sign-in with a token address, client ID and secret, and optional scopes.
+- **None**: public systems only. Anyone can call such a system without a key, so use it only for public information.
+</Step>
+<Step>
+### Create the connection
+Press **Create connection**.
+</Step>
+<Step>
+### Add a tool
+Open the connection and press **Add tool**. For an MCP server, press **Refresh tools** instead and the server lists them.
+
+- **Name**: letters, numbers and underscores, for example `search_products`.
+- **When should the agent use it?** Be specific: when to use it, what it needs and what it returns.
+- **Example customer question** (optional) appears in Test & Eval so you can try the tool with one tap.
+- **The request**: the method, and the path after the base address. Put changing parts in curly brackets, like `/orders/{order_id}`.
+- **Values it sends**: for each value, choose where it goes (path, query, header or body), its type, and where it comes from: the agent fills it from the chat, it is always the same, or it is the customer's WhatsApp number.
+</Step>
+<Step>
+### Test it
+Press **Test** next to a tool, fill in sample values and run it. It sends the real request with your saved key. It doesn't message any customer. You see whether it worked, how long it took, and the answer.
+</Step>
+</Steps>
+
+## Keys
+
+- A saved key is never shown again. The edit form shows only the last characters, for example "Saved key ends in ...".
+- Keys live with Meta, not in your browser.
+- Editing a connection without changing its sign-in leaves the saved keys alone. If you change the sign-in method, you must enter every key again.
+
+## Connection status
+
+| Status | Meaning |
+| --- | --- |
+| **Working** | Recent calls succeeded. |
+| **Failing** | Recent calls failed. Choose **See errors**. |
+| **Not tested yet** | Test a tool to check it works. |
+
+Other notes under the status: "Not connected yet: it needs its key", and "The system stopped accepting the key". Some systems, such as Shopify, issue tokens that expire after about a day. Open the connection's menu for **Errors and stats**, **Edit connection** or **Delete connection**. Deleting a connection removes its tools, and the agent stops using them straight away.
+
+**Errors and stats** shows the last 7 days. Meta keeps only failed calls, so successful chats count in the totals but not in the list.
+
+<small>Source: [Meta — Connectors](https://developers.facebook.com/documentation/meta-business-agent/reference/configure/connectors)</small>
+
+## Good to know
+
+- Names must be unique, and can use only letters, numbers and underscores. No spaces.
+- Many similar tools make it harder for the agent to pick the right one. Fewer, clearly described tools work better.
+- A tool can show success while the other system reported a failure. The test result shows what the system actually answered.
+
+## If something goes wrong
+
+| Message | What to do |
+| --- | --- |
+| **Use only letters, numbers and underscores, e.g. Shopify_store.** | Rename it without spaces or dashes. |
+| **Use a full https:// address** | The address must start with `https://`. |
+| **Something with this name already exists here. Choose another name.** | Pick a different name. |
+| **Meta didn't accept the connection...** | Check the name, that the address starts with `https://`, and that every key is filled in. |
+| **Enter this key again: changing sign-in sends every key afresh.** | Re-enter all keys. |
+| **Save the connection first.** | A tool can only be tested once its connection is saved. |
+| **Couldn't run the test** | Read the detail shown. A 401 or 403 means the key is wrong or expired; update it. A 5xx means the other system had an error. |

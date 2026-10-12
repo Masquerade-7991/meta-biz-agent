@@ -1,54 +1,169 @@
 ---
 title: Connect a WhatsApp number
-description: Bring your number into Helo.ai through Meta's own signup.
+description: Bring your number into Helo.ai through Meta's own signup, and what to do after.
 ---
 
-Connecting a number is done by the workspace **owner**. Click **Connect a number** on Home, on the WhatsApp page, or in **Settings › WhatsApp**.
+Connecting links your WhatsApp number to your workspace so your AI agent and team can answer customers on it.
 
-## What happens
+## Before you start
+
+- **Role:** only a workspace **owner** can connect numbers. For everyone else the **Connect a number** button is greyed out with "Only owners connect numbers."
+- **A Facebook login** with admin access to your business on Meta.
+- **The number.** Either a new number that can receive a text or call and isn't on WhatsApp yet, or the phone that has your WhatsApp Business app.
+- **Payment.** Decide who pays Meta for messages: Helo.ai on your invoice (when offered), or you directly.
+
+<small>Source: [Meta — phone numbers](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/phone-numbers)</small>
+
+## Steps
+
+Click **Connect a number** on Home, on the WhatsApp page, or in **Settings › WhatsApp**.
+
+![The Connect a WhatsApp number dialog with the choice of number, billing and what gets connected](/screens/connect-number.webp)
 
 <Steps>
 <Step>
 
-**Meta's signup opens.** You sign in to Facebook and go through Meta's own WhatsApp signup. It's Meta's page, not ours, so your login stays with Meta.
+**Choose the number.** Pick **A new number** (Meta checks it by text or call) or **My WhatsApp Business app number** (you keep using the app, and your contacts and recent chats sync here).
 
 </Step>
 <Step>
 
-**You pick or create the assets.** That means your business portfolio, a WhatsApp Business account, and the phone number. You can use a brand-new number, or a number you already use in the WhatsApp Business app. That app keeps working.
+**Choose who pays Meta** for messages, when the dialog asks: **Through Helo.ai** (on your Helo.ai invoice) or **I'll pay Meta myself** (you add a payment method afterwards).
 
 </Step>
 <Step>
 
-**You grant permissions.** This lets Helo.ai manage messaging for that account on your behalf.
+**Check "What gets connected".** The dialog shows how Meta's pieces land in Helo.ai (see below).
 
 </Step>
 <Step>
 
-**Helo.ai finishes the setup.** It registers the number, subscribes it to messages, and reads its details. Each step shows as done, waiting on you, or failed with a **Retry** button.
+**Click Open Meta's signup.** Depending on your setup, Meta's signup opens in a window or in this tab. It takes about 5 minutes. Finish it in Meta's pages. If it opens in a window, this page updates by itself; allow pop-ups for the site.
+
+</Step>
+<Step>
+
+**Helo.ai finishes the connection.** You see each setup step as it runs (see [Setup steps](#setup-steps)). When it's done you see **WhatsApp connected**, and for a new number your **two-step PIN**.
 
 </Step>
 </Steps>
 
-## How your assets map into Helo.ai
+If Meta's signup opens in this tab, Helo.ai completes the connection on its side after you finish, and the number appears in your workspace.
+
+### How Meta's pieces land in Helo.ai
 
 | From Meta | Lands in Helo.ai as |
 | --- | --- |
 | Business portfolio | The business behind your workspace |
-| WhatsApp Business account | The account your workspace sends and receives through |
-| Phone number | The number your AI agent and team answer on |
-| Permissions you grant | What Helo.ai may do for that account, and nothing more |
+| WhatsApp Business account | An account in **Settings › WhatsApp**. Its access is stored encrypted. Messages reach Helo.ai through a listening app, and your own webhook stays as it is. |
+| Phone number | A number on the WhatsApp page. A new number is registered with a PIN Helo.ai keeps for you and can run one AI agent. A Business app number keeps working on your phone. |
+| Permissions you grant | Helo.ai manages the account and sends messages for you. Meta never shares your login or payment details. |
 
-The console shows this map before you start, then again afterwards with the details Meta reported.
+After you connect, the same map shows the details Meta reported.
 
-## Billing
+## What Meta's signup asks you
 
-Meta charges for WhatsApp conversations. Either Helo.ai bills you, or you pay Meta directly. If you pay Meta directly, the billing step shows **Waiting on you**. Add a payment method in WhatsApp Manager, then click **I've added it**.
+In Meta's own screens you will:
 
-## Your PIN
+1. Sign in with Facebook and accept the terms.
+2. Choose or create your business portfolio and WhatsApp Business account.
+3. Add the phone number and choose how to get the code (text or call), then enter it.
+4. Enter the display name for the number.
+5. Review the permissions you give Helo.ai, then finish.
 
-Registering a number sets a six-digit PIN for it. Owners can see it in **Settings › WhatsApp**. Keep it safe. Meta asks for it if you ever move the number.
+This is Meta's page, not ours, so your login stays with Meta. Meta shows it in many languages.
 
-<Callout type="info">
-Some setups open Meta's signup in the same tab. When you finish there, Helo.ai completes the connection on its side, and the number appears in your workspace.
-</Callout>
+<small>Source: [Meta — Embedded Signup overview](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/overview), [Meta — default flow](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/default-flow)</small>
+
+## Using your WhatsApp Business app number
+
+This is called **coexistence**. In Meta's signup you choose to connect your existing Business app account, enter your number, and copy the code shown. Then you open the message from Meta in the app and confirm the connection, agree (or not) to share chat history, and paste the code back. You need a recent version of the Business app (2.24.17 or newer).
+
+| | |
+| --- | --- |
+| **Keeps working** | One-to-one chats in the app. Messages sync both ways. Supported linked devices. Editing and revoking messages in one-to-one chats. |
+| **Syncs to Helo.ai** | All your contacts that have a WhatsApp number, and about 6 months of one-to-one chat history. Groups don't sync. |
+| **Doesn't work alongside the API** | Groups, disappearing and view-once messages, live location, broadcast lists (they become read-only), voice and video calls, catalog, orders and status, the app's greeting, away message, quick replies and labels, and channels. |
+
+Good to know:
+
+- Messages you send from the app stay free. Messages sent through Helo.ai follow the usual WhatsApp message prices.
+- If you decline to share chat history, the old chats aren't brought over.
+- Chats and contacts must be brought over within 24 hours of connecting. If that time passes, the step shows as too late to retry. Your number still works; only the old chats stay on your phone.
+- If you don't open the Business app on your phone for about 14 days, Meta disconnects the number. To disconnect on purpose, use the app: Settings, Account, Business Platform, Disconnect Account.
+
+<small>Source: [Meta — onboarding WhatsApp Business app users](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users)</small>
+
+## Setup steps
+
+After Meta's signup, Helo.ai runs these steps. Each shows one state:
+
+| Step | What it does |
+| --- | --- |
+| Secure access to your account | Gets access to your account from Meta |
+| Connect your WhatsApp account to Helo.ai | Subscribes the account so messages reach you |
+| Register your number | Turns on messaging for the number (new numbers) |
+| Bring over your chats and contacts | Syncs contacts and history (Business app numbers) |
+| Read your business details | Reads your profile and number details |
+| Set up billing | Billing through Helo.ai, or your own payment method in Meta |
+
+| State | Meaning |
+| --- | --- |
+| Done (tick) | Finished |
+| Waiting on you (clock) | Needs something from you, usually a payment method |
+| Failed (cross) | Didn't finish. Click **Retry the failed steps** |
+| Too late to retry (cross) | Meta's time for the step passed. There's no Retry |
+
+If billing is waiting on you, click **Add a payment method** to open WhatsApp Manager, add one, then click **I've added it**. Meta bills your business for messages, so the number can't message customers until a payment method is in place.
+
+## After connecting
+
+### The WhatsApp page
+
+![The WhatsApp page listing numbers with status, quality and daily limit](/screens/whatsapp.webp)
+
+The WhatsApp page lists your numbers with **Status**, **Quality** and **Daily limit**. Open a number for its tabs: Profile, Display name, Ice breakers, Security, Blocked and Activity.
+
+### Display name
+
+Your display name is what customers see in the chat list and at the top of chats. Meta reviews it, and the Display name tab shows the result: approved, in review, declined or expired. Names that aren't clearly your business tend to be declined. After an approval, Meta may require the number to be registered again within 14 days.
+
+<small>Source: [Meta — display names](https://developers.facebook.com/documentation/business-messaging/whatsapp/display-names)</small>
+
+### Business verification and the badge
+
+Verifying your business with Meta, in your business portfolio settings, raises how many people you can message and lets you register more numbers. Meta may ask for documents such as a business licence. Meta also offers an official business account badge (a blue checkmark) to eligible, verified businesses whose number has been registered for at least 30 days. It isn't available to numbers that also use the Business app.
+
+<small>Source: [Meta — messaging limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/messaging-limits), [Meta — official business accounts](https://developers.facebook.com/documentation/business-messaging/whatsapp/official-business-accounts)</small>
+
+### Two-step verification PIN
+
+A new number is registered with a six-digit PIN. The PIN is shown once when you connect, and owners can show it again on the number's **Security** tab with **Show the current PIN**. Meta asks for it when a number is registered again. If you forget a PIN you set yourself, reset it in WhatsApp Manager (Phone numbers, Settings, Two-step verification, Change PIN). It can't be turned off.
+
+<small>Source: [Meta — two-step verification](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/two-step-verification)</small>
+
+### Payment
+
+Meta bills per template message you send, and your payment method is managed in WhatsApp Manager and Meta's Billing Hub. Messaging limits are set for your whole business portfolio, not per number. See [Broadcasts](/docs/guide/broadcasts) for how limits and quality affect what you can send.
+
+<small>Source: [Meta — pricing](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing), [Meta — messaging limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/messaging-limits)</small>
+
+## Good to know
+
+- One connection, one workspace: a WhatsApp account already connected to another workspace can't be connected again.
+- A number can run one AI agent.
+
+## If something goes wrong
+
+| You see | What to do |
+| --- | --- |
+| Only owners connect numbers. | Ask a workspace owner to connect it. |
+| Connecting numbers from the console isn't switched on for this workspace yet. | Talk to your Helo.ai contact. |
+| Too many signup attempts. Try again in an hour. | Wait, then try again. |
+| Meta didn't accept the signup … Please run the signup again. | Click **Open again** and repeat Meta's signup. |
+| The signup didn't return a WhatsApp account and number. | Run the signup again and finish every screen. |
+| Meta connected the WhatsApp account but no phone number. | Add a number to the account in WhatsApp Manager, then connect again. |
+| This WhatsApp account is already connected to another workspace. | Disconnect it there first. |
+| Nothing was connected (you left Meta's signup) | Click **Open again**. |
+| A step shows Failed | Click **Retry the failed steps**. |
+| Meta allows 24 hours after signup to bring chats over, and that time has passed. | Your number works. Only old chats stay on your phone. |

@@ -1,28 +1,169 @@
 ---
 title: Settings
-description: Your workspace, your support desk, and your profile.
+description: Manage your workspace, WhatsApp accounts, support desk rules and your own profile.
 ---
+
+Settings has three groups: the workspace and its people, the rules of your support desk, and your own account. Which tabs you see depends on your role.
+
+## Before you start
+
+| Role | What it can change in Settings |
+| --- | --- |
+| Owner | Everything, including WhatsApp accounts, billing and other owners. |
+| Admin | People (except owners), support rules, contact fields and shared canned responses. Can see Billing and Activity. |
+| Supervisor | Their own profile. Support desk rules are changed by admins and owners. |
+| Agent | Their own profile. |
+
+If a link points to a tab your role can't open, you land on **Profile** instead.
 
 ## Workspace
 
-| Setting | Who | What it's for |
+| Tab | Who | What it's for |
 | --- | --- | --- |
-| **Members** | Admins and owners | Invite people, change roles, remove members. |
-| **Activity** | Admins and owners | Who changed what and when, kept for 2 years. Filter it, or download a CSV. |
-| **Billing** | Owners | How you pay for WhatsApp messages. |
-| **WhatsApp** | Owners | Connected accounts and numbers, their setup steps, how they map, and the number's PIN. |
+| **Members** | Everyone sees the list; admins and owners change it | Invite people, change roles, remove members. |
+| **Activity** | Admins and owners | Who changed what and when. |
+| **Billing** | Admins and owners see it; owners change the budget | What WhatsApp charged this month and a budget alert. |
+| **WhatsApp** | Owners | Connected accounts and numbers, their setup steps and live events. |
+
+### Members and roles
+
+![Settings › Members with the invite form and the member list](/screens/settings-members.webp)
+
+<Steps>
+<Step>
+Open **Settings › Members**.
+</Step>
+<Step>
+Under **Invite people**, type the email address, pick a role and click **Send invite**.
+</Step>
+<Step>
+The person gets an email with a link that works for 7 days. If they already use Helo.ai they keep their other workspaces and accept the invite inside the app.
+</Step>
+</Steps>
+
+The four roles, from most to least access:
+
+- **Owner:** everything, including WhatsApp accounts, billing and other owners.
+- **Admin:** runs the workspace: people, AI agents, settings and broadcasts. Can't change owners.
+- **Supervisor:** leads the team: sees every chat, reassigns tickets, sends broadcasts and reads reports.
+- **Agent:** answers customers: chats, tickets and contacts.
+
+Every workspace needs at least one owner. You can't remove yourself, and the only owner can't leave until someone else is made an owner. A person who leaves or is removed has their open work unassigned and is no longer given new tickets.
+
+### Activity log
+
+![Settings › Activity with filters and the list of recorded actions](/screens/settings-activity.webp)
+
+The log records who did what in the workspace and what the system did on its own: ticket changes, AI agent edits, members, settings and more. It is kept for two years.
+
+- Filter by **Person** (or **The system**), by **Area** and by a **From** and **To** date.
+- Click **Download CSV** to save what the filters show.
+- When someone reports an error with a reference, paste the 8 letters and numbers after "Reference:" into **Error reference** to find what happened. Routine plumbing such as messages and background jobs only shows when you look up a reference.
+
+Each ticket also shows its own history.
+
+### Billing
+
+**Billing** shows what WhatsApp charged since the 1st of the month, from Meta's own figures, plus message counts by category and the AI agent's usage.
+
+An optional **Monthly budget** emails the owners and notifies them at 80% and 100%. Messages keep sending; the budget only alerts you. Details of how Meta prices messages are under [Broadcasts and templates](/docs/guide/broadcasts) and [Analytics and reports](/docs/guide/analytics).
+
+### WhatsApp
+
+Owners see every connected account here: its numbers, whether it is **Connected** or **Needs attention**, how it is billed, and its setup steps. Use **Connect a number** to add one (see [Connect a WhatsApp number](/docs/guide/connect-number)).
+
+- **Setup steps** show what happened when the number was connected, with a tick for each step that finished. If a step failed you get **Retry the failed steps**. If billing is waiting on you, add a payment method in Meta's WhatsApp Manager and click **I've added it**.
+- **How this account maps to Helo.ai** shows how your Meta business, WhatsApp account and number are linked to your workspace.
+- **Live events** shows how WhatsApp delivers customers' messages and delivery ticks to the console, and which other apps also receive them.
+- **Disconnect** stops Helo.ai sending and receiving on that account's numbers. The account stays yours and you can connect it again.
+- Accounts managed by Helo.ai show **Managed by Helo.ai**: the console reads them and configures the AI agent, but never changes their webhooks, registration, PIN or billing.
+
+Each number's quality rating (High, Medium or Low), daily limit for new conversations and display name status appear on the **WhatsApp** page, with a **Check now** button. Quality drops when customers block or report you.
+
+<small>Source: [Meta — messaging limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/messaging-limits), [Meta — display names](https://developers.facebook.com/documentation/business-messaging/whatsapp/display-names)</small>
 
 ## Support desk
 
-| Setting | What it's for |
+The support desk settings are changed by admins and owners.
+
+### Hours and response targets
+
+![Settings › Hours & response targets](/screens/settings-hours.webp)
+
+- **Business hours:** the time zone and the opening hours for each day. Response-time targets only count while you are open.
+- **Away message:** sent to customers outside hours. Leave it empty to send nothing.
+- **Response targets:** for each priority (Urgent, High, Normal, Low), how long a ticket can wait for its first reply and for resolution, in business-time minutes. Resolution must be at least as long as first reply. Tickets show a countdown and the bell warns before time runs out.
+- **Default routing:** who gets a new ticket when no routing rule decides. People set to away or offline are skipped.
+- **Customer feedback:** after a ticket is resolved, ask the customer how it went with three WhatsApp buttons (Good, Okay, Bad). You can change the question.
+- **Who sees which chats:** supervisors, admins and owners always see every chat. You can limit agents to their own.
+
+On a number the console only listens to (one managed by Helo.ai), the away message and feedback question are not sent.
+
+### Teams and people
+
+Create a team for each kind of work, such as Billing or Orders, with a team lead. Under **People**, set each person's:
+
+- **Status:** online, away or offline. Only available people get new tickets.
+- **Open limit:** the number of open tickets after which they get no more (1 to 500, or empty for no limit).
+- **Skills:** short labels such as `hindi`, so a rule can pick a Hindi speaker.
+
+A team can't be deleted while a routing rule sends tickets to it. Change the rule first.
+
+### Routing rules
+
+![Settings › Routing rules](/screens/settings-routing.webp)
+
+When a ticket opens, the rules are checked from the top. **The first rule that matches decides; the rest are skipped.** If none matches, the default routing applies. Someone already looking after the chat keeps it.
+
+- A rule has conditions (for example when the customer writes, why the ticket opened, contact tags, whether the team is working) and actions (for example assign to a team, a person or a skill, add tags).
+- A rule with no conditions catches every ticket that reaches it, so keep specific rules above general ones. Use the arrows to reorder.
+- Only available people under their open limit are given tickets.
+- **Try it** shows which rule a new ticket would meet, using the saved rules.
+
+### Escalation
+
+![Settings › Escalation matrix](/screens/settings-escalation.webp)
+
+As a ticket uses up its response targets it moves up one **level** at a time, up to three levels per priority. Levels fire in order and only once each per ticket, after the level before.
+
+For each level you choose:
+
+- the clock (first reply or resolution) and the percent of the target at which it fires (100% is the breach);
+- who is alerted: the assignee, the team lead, supervisors, or admins and owners;
+- whether to **Also email them** as well as the bell;
+- optionally move the ticket to another team or **Raise priority**.
+
+Open tickets are checked every minute, and times count business hours. If you turn escalation off, tickets still show as overdue but nobody is alerted. A level must do something: alert someone, move the ticket or raise its priority.
+
+### Canned responses
+
+Saved replies that your team inserts in the Inbox by typing the shortcut, such as `/refund`. Shortcuts use letters, numbers, `-` and `_`. A response can also change the ticket after it is sent: wait on the customer, resolve it, or add tags. Admins and owners manage the shared ones.
+
+### Contact fields
+
+Extra fields on every contact, such as City. Choose a name and a type (text, number, date or a choice list). Fields can fill template placeholders in a broadcast. Only admins and owners change them.
+
+## Profile
+
+**Profile** is the same for everyone:
+
+- **Your name:** shown to your workspace and in invite emails.
+- **Email:** to change it, you enter your current password and we send a confirmation link to the new address.
+- **Password:** at least 8 characters. Changing it logs you out on every other device.
+
+Switch light and dark mode with the toggle in the top bar. The workspace switcher at the top of the sidebar moves you between workspaces if you belong to several.
+
+## If something goes wrong
+
+| What you see | What to do |
 | --- | --- |
-| **Hours & response targets** | Business hours, targets for first reply and resolving, and the satisfaction question. |
-| **Teams & people** | Teams, each person's skills, how many tickets they can hold, and whether they're available. |
-| **Routing rules** | Who gets a new ticket. The first matching rule wins. Otherwise the default routing applies. Only available people under their limit get tickets. |
-| **Escalation** | Who is alerted, in order, when a ticket's target is at risk. Alerts go to the bell and optionally by email. |
-| **Canned responses** | Saved replies for the Inbox. |
-| **Contact fields** | Custom fields on contacts. |
+| **Your role doesn't allow this. Ask an owner or admin.** | Ask an admin or owner to make the change or raise your role. |
+| **This person is already in this workspace** or **already invited** | Resend the invite from the Members list instead of creating another. |
+| **A workspace needs at least one owner** | Make someone else an owner before demoting or removing the last one. |
+| **This invite was revoked, has expired or was already answered** | Ask an admin to send a new one. |
+| **Check the hours for …: closing must be after opening** | Fix the times for that day. |
+| **Check the … targets: both above zero, and resolution at least as long as first response** | Raise the resolution time or lower the first reply time. |
+| **The rule … sends tickets to this team. Change the rule first.** | Edit the routing rule, then delete the team. |
+| **… is already used by …** (canned response) | Pick a different shortcut. |
 
-## You
-
-**Profile:** your name, email and password. Switch light or dark mode with the toggle in the top bar.
+More fixes are in [Troubleshooting](/docs/guide/troubleshooting).

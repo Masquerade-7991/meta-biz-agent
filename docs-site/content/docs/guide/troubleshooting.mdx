@@ -1,0 +1,242 @@
+---
+title: Troubleshooting
+description: What the console's messages mean, why they appear and how to fix them.
+---
+
+Find the message you see, learn why it appears, and what to do. Messages are shown here as the console words them.
+
+## Before you start
+
+If a message includes a **Reference** of 8 letters and numbers, keep it. An owner or admin can paste it into **Error reference** in **Settings › Activity** to see what happened, and Helo.ai support can use it too.
+
+## Signing in and access
+
+<Accordions>
+<Accordion title="This link has expired or was already used.">
+**Why:** sign-in, verification and password-reset links work once and for a limited time. Opening one twice, or opening an old email, fails.
+
+**Do:** go back to the log-in screen and ask for a new link (**Resend link**, or **Email me a reset link**). Use the newest email.
+</Accordion>
+<Accordion title="Email or password is incorrect.">
+**Do:** check the email you were invited with and retype the password. If you've forgotten it, use the reset link option on the log-in screen.
+</Accordion>
+<Accordion title="This invite was revoked, has expired or was already answered.">
+**Why:** invites last 7 days, and an admin may have withdrawn it.
+
+**Do:** ask an admin or owner to send a new invite from **Settings › Members**.
+</Accordion>
+<Accordion title="Your role doesn't allow this. Ask an owner or admin.">
+**Why:** each role can only do some things. Agents answer customers. Supervisors also send broadcasts and read reports. Admins run the workspace. Owners also manage WhatsApp accounts and billing.
+
+**Do:** ask an owner or admin to do it, or to change your role in **Settings › Members**.
+</Accordion>
+<Accordion title="A page or settings tab is missing">
+**Why:** pages you can't use are hidden. **Analytics** and **Reports** need supervisor or above. **Activity** and **Billing** need admin or above. **WhatsApp** in Settings is for owners only.
+
+**Do:** ask an owner or admin if you need access.
+</Accordion>
+</Accordions>
+
+## Connecting a WhatsApp number
+
+<Accordions>
+<Accordion title="Only owners connect numbers.">
+**Why:** connecting a number changes your WhatsApp account, so only owners can.
+
+**Do:** ask a workspace owner to do it. See [Connect a WhatsApp number](/docs/guide/connect-number).
+</Accordion>
+<Accordion title="Needs attention (on a WhatsApp account)">
+**Why:** one of the setup steps failed or ran out of time. The failed step is shown with a red mark and a reason underneath. The steps are: secure access to your account, connect your WhatsApp account to Helo.ai, register your number, bring over your chats and contacts, read your business details, and set up billing.
+
+**Do:** as an owner, open **Settings › WhatsApp** and click **Retry the failed steps**. If a step says **Too late to retry**, connect the number again.
+</Accordion>
+<Accordion title="Waiting on you: add a payment method in WhatsApp Manager.">
+**Why:** Meta bills your business for messages, and the number can't message customers until a payment method exists.
+
+**Do:** click **Add a payment method**, add one in Meta, come back and click **I've added it**.
+</Accordion>
+<Accordion title="This WhatsApp account is already connected to another workspace.">
+**Why:** an account can belong to only one workspace.
+
+**Do:** disconnect it from the other workspace first, or use that workspace.
+</Accordion>
+<Accordion title="Too many signup attempts. Try again in an hour.">
+**Do:** wait an hour, then connect again.
+</Accordion>
+<Accordion title="The signup didn't return a WhatsApp account and number. Please run it again.">
+**Why:** the Meta window closed before the end, or a step in it wasn't finished.
+
+**Do:** connect again and follow Meta's steps through to the final screen.
+</Accordion>
+<Accordion title="Connecting numbers from the console isn't switched on for this workspace yet. Talk to Helo.ai.">
+**Do:** contact Helo.ai. They will turn it on or finish the connection for you.
+</Accordion>
+<Accordion title="Meta refused the access token">
+**Why:** the access that lets Helo.ai talk to your WhatsApp account has expired or was withdrawn. Meta answered that it didn't accept it.
+
+**Do:** tell your workspace owner. Reconnect the account in **Settings › WhatsApp**, or ask Helo.ai to replace the access.
+</Accordion>
+<Accordion title="A number shows as disconnected, or messages stop arriving">
+**Why:** the account may have been disconnected here, or removed on Meta's side. A number can also be disconnected if it is moved off the platform.
+
+**Do:** open **Settings › WhatsApp** and check the account. If you disconnected it, connect it again. Otherwise check the account in Meta's WhatsApp Manager.
+</Accordion>
+</Accordions>
+
+## Chats and replies
+
+<Accordions>
+<Accordion title="Reply window closed">
+**Why:** WhatsApp only allows free-form replies for 24 hours after the customer's last message. Each new customer message restarts the 24 hours.
+
+**Do:** send an approved template with **Send template**. When the customer replies, you can chat freely again. A chat can't be sent a satisfaction question after the window has closed either.
+
+<small>Source: [Meta — send messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages)</small>
+</Accordion>
+<Accordion title="WhatsApp only allows free replies within 24 hours of the customer's last message. Send a template instead.">
+Same as above: use **Send template** in the chat.
+</Accordion>
+<Accordion title="This chat is assigned to someone else.">
+**Why:** another team member owns this ticket, and agents can't take over someone else's work.
+
+**Do:** ask them to hand it over, or ask a supervisor, admin or owner to reassign it. Agents can take unassigned chats.
+</Accordion>
+<Accordion title="This chat already has an open ticket (#…). Continue there.">
+**Why:** a chat has only one open ticket at a time.
+
+**Do:** open the ticket named in the message and continue there.
+</Accordion>
+<Accordion title="WhatsApp couldn't deliver a reply to this customer">
+The message is added to the chat when WhatsApp refuses a reply. The reason follows, with an error number.
+
+| Reason shown | Plain meaning | What to do |
+| --- | --- | --- |
+| It's more than 24 hours since the customer last wrote | The reply window closed. | Send a template. |
+| The number isn't on WhatsApp, or their app is too old | The customer can't receive it. | Check the number; ask them to update WhatsApp. |
+| The customer turned off marketing messages from you | They opted out of marketing. | Don't send marketing. Utility messages can still reach them. |
+| This is a Meta test number | Test numbers can only message a handful of verified recipients. | Add the recipient in the Meta app, or use a real number. |
+| Your WhatsApp account needs attention | Billing, policy or registration problem. | Fix it in WhatsApp Manager, then try again. |
+| WhatsApp asked to slow down or was unavailable | Temporary. | Try again in a few minutes. |
+</Accordion>
+<Accordion title="The AI agent couldn't suggest a reply this time. Try again.">
+**Do:** try again. If it repeats, quote the error reference to Helo.ai.
+</Accordion>
+</Accordions>
+
+## Templates
+
+<Accordions>
+<Accordion title="Rejected, with a reason on the card">
+**Why:** Meta reviewed the template and declined it. Common causes are mistakes in placeholders, a message that starts or ends with a placeholder, requests for sensitive details, or wording that breaks policy.
+
+**Do:** edit the wording, give a real example for every placeholder and submit again. See [Broadcasts and templates](/docs/guide/broadcasts).
+
+<small>Source: [Meta — template review](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-review)</small>
+</Accordion>
+<Accordion title="Template … is paused; only approved templates can be sent.">
+**Why:** Meta paused it because recipients rated it poorly. A template reaching low quality is paused for 3 hours the first time and 6 hours the second; the third time it is disabled. Paused templates can't be sent, and the console only offers approved ones.
+
+**Do:** wait for the pause to end or unpause it in Meta's WhatsApp Manager. Review the wording and who you send it to, and send it only to people who want it.
+
+<small>Source: [Meta — template pausing](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-pausing)</small>
+</Accordion>
+<Accordion title="Template names use lowercase letters, numbers and underscores only">
+**Do:** rename it, for example `order_update`.
+</Accordion>
+<Accordion title="Add an example for {{1}} so Meta can review the template.">
+**Do:** type a sample value for every placeholder in the examples area.
+</Accordion>
+<Accordion title="Supervisors, admins and owners create templates.">
+**Do:** ask someone with that role. Only admins and owners can delete templates.
+</Accordion>
+</Accordions>
+
+## Broadcasts
+
+<Accordions>
+<Accordion title="Nobody to send to: the segment has no contacts who accept messages.">
+**Why:** the segment is empty, or everyone in it opted out.
+
+**Do:** choose another segment or **All contacts**. See [Contacts](/docs/guide/contacts).
+</Accordion>
+<Accordion title="Pick a time in the future.">
+**Do:** choose a later time, or send now.
+</Accordion>
+<Accordion title="This broadcast is already being sent. It shows in the list in a moment.">
+**Why:** you clicked twice or a request was repeated. Only one broadcast was created.
+
+**Do:** wait and check the list.
+</Accordion>
+<Accordion title="What didn't go out (inside a broadcast)">
+Open the broadcast to see failures grouped by reason. Common ones:
+
+| Reason | Meaning | What happens |
+| --- | --- | --- |
+| Meta's daily marketing limit for this person | The person already got many marketing messages from businesses. | Tried again after 24 hours, up to twice. |
+| Turned off marketing messages from you in WhatsApp | They opted out of marketing. | Not retried. They can turn it back on from your chat. |
+| Not on WhatsApp, or their app is too old | They can't receive it. | Not retried. |
+| Test number: this recipient isn't verified for it | Meta test numbers only reach a few verified phones. | Add the phone in Meta's app or use a real number. |
+| Template problem (paused, not approved or wrong values) | The template can't be used right now. | Check it in **Broadcasts › Templates**. |
+| Your WhatsApp account needs attention | Billing, policy or registration. | Fix it in WhatsApp Manager and send again. |
+| Sent too fast; WhatsApp asked to slow down | Throttling. | Retried automatically after a short wait. |
+| WhatsApp was unavailable | Temporary. | Retried automatically. |
+| Opted out of your broadcasts | Skipped by the console. | Nothing to do. |
+| Hides their phone number | The customer uses a WhatsApp username. | Normal messages still reach them. |
+
+A broadcast shows "Trying again" and a time when a retry is waiting.
+
+<small>Source: [Meta — per-user marketing limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/per-user-limits), [Meta — message statuses](https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/status)</small>
+</Accordion>
+<Accordion title="Delivered and read numbers are lower than expected">
+**Why:** delivery and read ticks arrive from WhatsApp afterwards, and a person who is in the chat doesn't always produce a separate delivered tick. Numbers catch up over time.
+
+**Do:** check again later.
+</Accordion>
+</Accordions>
+
+## Contacts and imports
+
+<Accordions>
+<Accordion title="Skipped rows after a CSV import">
+After an import the console says how many contacts were added, updated and skipped, and lists each skipped row as **Row N: reason**.
+
+| Reason | Fix |
+| --- | --- |
+| Looks like a local number. Add the country code, like +91 … | Put the country code in front of the number. |
+| Phone must be 8 to 15 digits, country code first | Correct the number. |
+| That email address doesn't look right | Fix or remove the email. |
+| … must be a number / a date / one of: … | Match the contact field's type. |
+| … is already a contact | The number is already in your list; the row is skipped. |
+
+Fix the rows in your file and import again. Rows already added won't be duplicated.
+</Accordion>
+<Accordion title="Supervisors, admins and owners import contacts.">
+**Do:** ask someone with that role. Only admins and owners change contact fields.
+</Accordion>
+</Accordions>
+
+## Reports and settings
+
+<Accordions>
+<Accordion title="Couldn't download … / The report couldn't be built. Please try again.">
+**Do:** try again. If it keeps failing, give Helo.ai the error reference.
+</Accordion>
+<Accordion title="Nobody to send it to: everyone on this schedule has left the workspace.">
+**Do:** edit the scheduled report and add a recipient.
+</Accordion>
+<Accordion title="A workspace needs at least one owner.">
+**Do:** make someone else an owner first. Only owners can make or change owners.
+</Accordion>
+<Accordion title="You can't remove yourself. / You're the only owner.">
+**Do:** ask another admin or owner to remove you, or make another owner before you leave.
+</Accordion>
+<Accordion title="Customers aren't getting an away message or satisfaction question">
+**Why:** on a number that Helo.ai manages for you, the console only listens and never messages customers by itself. People still send replies by clicking send.
+
+**Do:** nothing is wrong. On your own numbers, check the settings under **Settings › Hours & response targets**.
+</Accordion>
+</Accordions>
+
+## Still stuck?
+
+Contact Helo.ai support with the screen you were on, what you clicked, the exact message and any **Reference** shown.

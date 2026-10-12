@@ -1,0 +1,87 @@
+---
+title: Safety and handoff
+description: Decide how strictly the agent sticks to your knowledge, what it avoids, and how it passes a chat to your team.
+---
+
+Set the agent's limits and its hand-over behaviour before real customers reach it.
+
+![The Safety and handoff section](/screens/studio-safety.webp)
+
+## Before you start
+
+- Know who on your team will pick up handed-over chats. See [Inbox](/docs/guide/inbox) and the support settings.
+
+## Steps
+
+All of this page is saved together with **Save**.
+
+<Steps>
+<Step>
+### Choose how it answers
+Under **How your agent answers**:
+
+- **Only from my knowledge**: answers from what you've given it, and hands over when it doesn't know.
+- **Can chat naturally**: small talk and general help within its role, still based on your knowledge.
+
+For a business where wrong answers are costly, start with "Only from my knowledge".
+</Step>
+<Step>
+### Add words it never says
+Type a word or phrase and press Enter (up to 50 phrases, 60 characters each). Capital letters don't matter: "cheap" also covers "Cheap". The console may offer related forms, such as "Also add: ...?" with **Add both** or **Dismiss**.
+
+When the agent's reply would contain one of these phrases, Meta withholds that reply.
+</Step>
+<Step>
+### Add topics it stays away from
+Topics are broader than words: the agent politely declines anything on them. For example, "Competitors' prices". Up to 20 topics.
+</Step>
+<Step>
+### Choose the handoff message
+Under **Handing over to your team**, pick **What it says when it hands over**:
+
+- **Meta's standard message (in the customer's language)**.
+- **Let the agent write it, to fit the chat**.
+- **My own message**: write it yourself (up to 300 characters). A custom message can't be saved empty. It is sent exactly as written, in one language. If your agent speaks several languages, the console warns you that Meta's standard message matches the customer's language instead.
+</Step>
+<Step>
+### Decide on follow-ups
+Switch on **Check in when a customer goes quiet** to have the agent send one short message. Choose how long to wait in **After**, and whether to use Meta's standard message or **My own message** (up to 300 characters).
+
+This follow-up is charged like any other message the agent sends.
+</Step>
+<Step>
+### Save
+Press **Save**.
+</Step>
+</Steps>
+
+<small>Source: [Meta — Business Agent settings](https://developers.facebook.com/documentation/meta-business-agent/reference/onboard/agent-settings)</small>
+
+## When does the agent hand over?
+
+The agent hands a chat to your team when it is unsure, when something seems wrong, or when the customer asks for a person. Meta decides these triggers; you can't switch them on or off. What you control is the message the customer sees.
+
+To add your own rules, press **Add your own handoff rules**. It opens a new skill in [Abilities](/docs/guide/build-agent/abilities) pre-filled with a sensible starting text that you can adapt. Press **Who receives handed-over chats** to go to the support settings.
+
+<small>Source: [Meta — Business Agent capabilities](https://developers.facebook.com/documentation/meta-business-agent/capabilities)</small>
+
+## What happens after a handoff
+
+The chat moves to your team in the Inbox, and a ticket opens for it. While your team holds the chat, the agent stays quiet. Anyone on your team who replies from the Inbox takes over the chat; you can give it back to the AI when the issue is done, which resolves the ticket. See [Inbox](/docs/guide/inbox) and [Tickets](/docs/guide/tickets).
+
+## Always on
+
+Whatever you choose, the agent never claims to be human when asked, never shares one customer's details with another, and never gives medical, legal or financial advice as fact.
+
+## Good to know
+
+- Longer follow-ups and longer answers cost more, because Meta bills agent messages by the amount of text.
+
+## If something goes wrong
+
+| Message | What to do |
+| --- | --- |
+| **Write the handoff message, or pick another option.** | You chose "My own message" but left it empty. |
+| **Write the follow-up message, or use Meta's standard one.** | Same, for the follow-up. |
+| **You already have this word or phrase.** | It is already in the list. |
+| **Your changes weren't saved. Nothing has been lost.** | Press retry on the banner. |

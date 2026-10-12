@@ -1,7 +1,44 @@
 ---
 title: Getting started
-description: Sign in, find your way around, and bring your team.
+description: What Helo.ai is, what you need before connecting WhatsApp, and how to find your way around the console.
 ---
+
+This page gets you from a new account to knowing where everything is, and what to prepare before you connect a WhatsApp number.
+
+## What Helo.ai is
+
+Helo.ai is a console for running customer support on WhatsApp. It does two jobs:
+
+- **Sets up your AI agent.** The agent that answers customers on WhatsApp is run by Meta. Helo.ai is where you tell it who you are, what it knows and what it may do. See [Build your AI agent](/docs/guide/build-agent).
+- **Runs the support desk.** Chats, tickets, contacts, broadcasts and reports for your human team, in one place. When the agent hands a chat over, your team picks it up here.
+
+Your WhatsApp account stays yours. It lives in Meta's tools, and you can always open it in WhatsApp Manager.
+
+## Which WhatsApp you are connecting
+
+Meta has two products, and they behave differently.
+
+| | WhatsApp Business app | WhatsApp Business Platform |
+| --- | --- | --- |
+| What it is | The app on your phone | The programmable service Helo.ai connects to |
+| Best for | One person answering a few chats | Teams, automation, AI agents, broadcasts |
+| Works with Helo.ai | Yes, as a number you keep using next to Helo.ai (coexistence) | Yes |
+
+If your number is on the Business app today, you can keep the app and connect the same number to Helo.ai. Some app features don't work alongside it. [Connect a WhatsApp number](/docs/guide/connect-number) lists them.
+
+## Before you connect a number
+
+Have these ready. The person connecting needs to be the workspace **owner**.
+
+- **A Facebook login with admin access to your business on Meta.** Meta's signup asks for it.
+- **A business portfolio** (Meta's name for your business account), or the details to create one during signup.
+- **A phone number.** For a new number, it must be able to receive a text message or call to get a code, and must not already be used on WhatsApp. For the Business app route, you need the phone with the app on it.
+- **A display name** for the number that matches your business. Meta reviews it. Names that are generic, slogans or personal names tend to be declined.
+- **A way to pay Meta**, unless Helo.ai bills you for it. Meta charges for the messages you send, and you add a payment method in WhatsApp Manager.
+
+<small>Source: [Meta — phone numbers](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/phone-numbers), [Meta — display names](https://developers.facebook.com/documentation/business-messaging/whatsapp/display-names)</small>
+
+Then follow [Connect a WhatsApp number](/docs/guide/connect-number).
 
 ## Sign in
 
@@ -11,7 +48,9 @@ Open the console and enter your email. You can sign in with your password, or as
 
 Everything in Helo.ai lives in a **workspace**: its WhatsApp number, AI agents, chats, tickets, contacts and team. You can belong to several workspaces. Switch between them from the workspace name at the top of the sidebar.
 
-When someone invites you to another workspace, the invitation shows up in the console. Accept it while signed in with the invited email. The emailed link alone doesn't add you.
+### Invitations
+
+Owners and admins invite people from **Settings › Members** (see [Settings](/docs/guide/settings)). When someone invites you to another workspace, the invitation shows up in the console. Accept it while signed in with the invited email. The emailed link alone doesn't add you.
 
 ## Finding your way around
 
@@ -23,9 +62,13 @@ The sidebar has three groups:
 | Automate & grow | AI Agents, Broadcasts, Analytics, Reports |
 | Setup | WhatsApp, Settings |
 
-Press <kbd>⌘</kbd> <kbd>K</kbd> (or <kbd>Ctrl</kbd> <kbd>K</kbd>) to jump to any page, setting or quick action.
+Press <kbd>⌘</kbd> <kbd>K</kbd> (or <kbd>Ctrl</kbd> <kbd>K</kbd>) to jump to any page, setting or quick action. The top bar also has search, a light and dark theme switch, help and notifications.
 
-**Home** walks a new workspace through setup: connect a number, then build an agent. Once you've started, Home becomes your dashboard. It shows the last 7 days at a glance, quick links, and the tickets that need you. Anything left unfinished shows as a note at the top.
+### Home
+
+**Home** walks a new workspace through setup: connect a number, then build an agent. Once you've started, Home becomes your dashboard. It shows the last 7 days at a glance, quick links and the tickets that need you. Anything left unfinished shows as a note at the top.
+
+![Home dashboard with the last 7 days, quick links and tickets that need attention](/screens/home.webp)
 
 ## Who can do what
 
@@ -38,8 +81,16 @@ Every member has one role. Pages and buttons you can't use are hidden.
 | **Supervisor** | Leads the team: sees every chat, reassigns tickets, sends broadcasts and reads reports. |
 | **Agent** | Answers customers: chats, tickets and contacts. |
 
-Invite people from **Settings › Members**.
+Only owners connect or disconnect WhatsApp numbers.
 
 ## Try it without a number
 
 **Dummy mode** opens the whole console with sample data and no sign-in. It's a safe way to explore or give a demo. Nothing in dummy mode reaches WhatsApp.
+
+## Next steps
+
+<Cards>
+<Card title="Connect a WhatsApp number" href="/docs/guide/connect-number">Bring your number in through Meta's signup.</Card>
+<Card title="Build your AI agent" href="/docs/guide/build-agent">Teach it your business and go live.</Card>
+<Card title="Glossary" href="/docs/guide/glossary">Plain definitions of the terms you'll meet.</Card>
+</Cards>

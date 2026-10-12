@@ -1,18 +1,29 @@
 ---
 title: Tickets
-description: One ticket per customer issue, with response targets and a full history.
+description: One ticket per customer issue, with response targets, escalation and a full history.
 ---
 
+Tickets turn a chat into a tracked issue with an owner, a priority and deadlines, so nothing waits unanswered.
+
+![The Tickets list with views, filters, due times and bulk actions](/screens/tickets.webp)
+
 A chat holds the whole conversation with a customer. A **ticket** is one issue inside it. A chat has at most one open ticket.
+
+## Before you start
+
+- Everyone on the team can see and work tickets. Moving a ticket that belongs to someone else needs a supervisor, admin or owner. Agents can assign tickets to themselves or hand their own back to nobody.
+- Response targets and escalation are set by an admin under **Settings**. See [Settings](/docs/guide/settings).
 
 ## When a ticket opens
 
 - The AI hands the chat over.
-- Someone on your team takes over or replies.
+- Someone on your team takes over or replies in the [Inbox](/docs/guide/inbox).
 - The customer writes again after their last issue was resolved (see below).
 - You create one yourself.
 
-## Status
+To create one, open a chat, then in the details panel select **Create ticket**. Give it a **Subject** (leave it empty to use the customer's last message) and a **Priority**. Routing rules pick who gets it, unless the chat already has someone.
+
+## Status and priority
 
 | Status | Meaning |
 | --- | --- |
@@ -25,20 +36,78 @@ Priorities are **Urgent**, **High**, **Normal** and **Low**.
 ## When the customer writes again
 
 - **Waiting on customer:** the ticket goes back to **Open** and the clock resumes where it stopped.
-- **Resolved in the last 3 days:** the same ticket reopens. Its deadlines and escalation start again.
+- **Resolved in the last 3 days:** the same ticket reopens. Its deadlines and escalation start again from the beginning.
 - **Resolved earlier than that:** a new ticket opens.
 - **The AI is holding the chat:** nothing opens. The AI answers.
 
+Handing a chat back to the AI resolves its ticket, without a rating question.
+
+## Work the list
+
+Pick a view across the top: **Open**, **Overdue**, **Escalated**, **Waiting on customer**, **Resolved** or **All**. Then narrow it:
+
+- **Search** by number, subject or customer.
+- **Assignee:** **Anyone**, **Assigned to me**, **Unassigned**, or a person.
+- **Priority**, **Team** and tag.
+- **Sort:** **Due soonest** (the default for work still to do) or **Newest** (the default for **Resolved** and **All**).
+
+Your filters are kept in the page address, so you can copy the link and a colleague sees the same list. Links from [Analytics](/docs/guide/analytics) and emails open filtered the same way. The list refreshes by itself and loads 100 tickets at a time.
+
+### The Due column
+
+| You see | Meaning |
+| --- | --- |
+| **First reply due in 25m** | No reply has gone out yet; this is the time left to the first-reply target. |
+| **Resolve due in 3h** | The first reply is done; this is the time left to the resolution target. |
+| **First reply overdue by 10m** (red) | The target passed. |
+| **Paused: waiting on customer** | The clock is stopped until the customer writes. |
+| **Met** | Resolved on time. |
+| **Resolved late** | Resolved after the target. |
+
+The time turns darker when under 30 minutes are left. Targets count business hours only, set in **Settings › Hours & response targets**.
+
+### Bulk actions
+
+Tick tickets (or the box in the header for all on screen) and a bar appears: **Assign to…**, **Set priority…**, **Move to team…** and **Resolve**. The console tells you what happened, for example "3 tickets reassigned; 1 couldn't be." and lists the reasons. The tickets that failed stay selected so you can fix and retry them.
+
+## Open a ticket
+
+![A ticket's side panel with status, assignee, tags, escalations and history](/screens/ticket-sheet.webp)
+
+Select a row to open the side panel. From there:
+
+- Edit the **Subject**, **Status** (**Open** or **Waiting on customer**), **Priority**, assignee, team and **Tags**.
+- See how it started, from "The AI agent handed the chat over" to "Created by hand".
+- Read **Escalations** (which levels fired) and **History**: who did what, and when, including the before and after of each change.
+- Select **Open chat** to jump to the conversation.
+- Select **Resolve**, or **Reopen** on a resolved ticket.
+
+## Resolve a ticket
+
+**Resolve** opens a short dialog:
+
+| Option | What it does |
+| --- | --- |
+| **What fixed it (optional)** | A note kept on the ticket and shown under **How it was resolved**. |
+| **Ask the customer how we did** | Sends **Good**, **Okay** and **Bad** buttons on WhatsApp, if your workspace asks for ratings. Not possible once the 24-hour reply window is closed. |
+| **Hand the chat back to the AI agent** | The agent answers the customer's next message. Turn it off to keep the chat with your team. |
+
+When several tickets are resolved together, ratings go only to customers who wrote in the last 24 hours.
+
+If your workspace asks for ratings, the customer's answer is saved on the ticket and shown beside it in the chat's ticket list. Customers can answer for up to 3 days after you ask.
+
 ## Response targets and escalation
 
-Targets for the first reply and for resolving are set in **Settings › Hours & response targets**. They count business hours only. Each ticket shows how long is left.
+Targets for the first reply and for resolving are set in **Settings › Hours & response targets**. When a target is at risk, **escalation** alerts the people you chose, in the order you set, once per level, by bell and optionally email. Set it up in **Settings › Escalation**. Reopening a ticket restarts the deadlines and escalation from the first level.
 
-When a target is at risk, **escalation** alerts the people you chose, in the order you set, once per level. Set this up in **Settings › Escalation**.
-
-## Working with many tickets
-
-- Filter, search and sort the list. The filters are kept in the address, so you can share a view.
-- Select several tickets to assign, change priority or resolve them together. If some couldn't be changed, the console tells you which ones and why.
-- Open a ticket in the side panel to see its full history: who did what, and when.
-
+<Callout type="info">
 When someone leaves the workspace, their open tickets are unassigned, and nothing new is routed to them.
+</Callout>
+
+## If something goes wrong
+
+| What you see | What to do |
+| --- | --- |
+| "No tickets match these filters." | Select **Clear filters**. |
+| Part of a bulk change failed | Read the reasons in the message, fix them (often a permission), and run it again on the tickets still selected. |
+| **Ask the customer how we did** is greyed out | The 24-hour reply window is closed, so a rating question can't be sent. |

@@ -1,0 +1,85 @@
+---
+title: Identity and personality
+description: Tell the agent what its job is, how it should sound, and which languages it speaks.
+---
+
+Give your agent a name, a job description and a voice, so every conversation starts from the right place.
+
+![The Identity section with the About and Personality tabs](/screens/studio-identity.webp)
+
+Identity has two tabs: **About** and **Personality**. Both use **Save**.
+
+## Before you start
+
+- An agent open in the studio. See [Build your AI agent](/docs/guide/build-agent).
+- Business details such as your hours and policies live in [Knowledge](/docs/guide/build-agent/knowledge), under **Business details**, not here.
+
+## Steps
+
+<Steps>
+<Step>
+### Name the agent
+Type a name in **Agent name** (up to 60 characters), for example "Aria". The name is only for you. Customers never see it, unless you tick the option on the Personality tab to have the agent introduce itself by name.
+</Step>
+<Step>
+### Describe what it does
+Under **What does this agent do for customers?** write a short description (up to 250 characters), for example "Helps customers track orders, browse products, and start a return."
+
+Write it as a description of the job, not as instructions to the agent. Plain English works best. If your text reads like a command, a warning appears and asks you to rephrase it.
+</Step>
+<Step>
+### Get help writing it, if you want
+Press **Need ideas?** for:
+
+- **Write it for me**, which drafts a description for you to edit.
+- **Improve my wording**, which tidies what you have written.
+- **Suggest for ... businesses**, when your business category is known.
+- **Start from an example**, such as an online store or a booking business, or a neutral starting point.
+- **Draft from a document**. You upload a `.txt`, `.pdf` or `.docx` file (under 5 MB) and Helo.ai suggests a description from it.
+
+If you already have text, the console asks before it replaces it. Anything drafted from a document is marked "Suggested from your document, please review and edit".
+</Step>
+<Step>
+### Set the personality
+Open the **Personality** tab and choose the options below.
+</Step>
+<Step>
+### Save
+Press **Save**. Use **Try it** to see the new voice straight away.
+</Step>
+</Steps>
+
+## The Personality tab
+
+| Option | Choices | Notes |
+| --- | --- | --- |
+| **Tone** | Professional, Enthusiastic, Informal, Custom | Custom lets you describe the voice in your own words (up to 250 characters), such as "Friendly and reassuring, like a helpful neighbour." Choose Custom without writing anything and the standard professional tone is used. |
+| **Emoji use** | Never, Sparingly, Freely | |
+| **Introduces itself** | A tick box | The agent says "I'm (name)" when a conversation starts. |
+| **Answer length** | Concise, Standard, Detailed | Longer answers cost slightly more per message, because Meta charges for the amount of text the agent writes. For most businesses, Concise or Standard reads best on WhatsApp. |
+| **Default language** | A list of languages | The language the agent uses unless a customer writes in another language you have added. |
+| **Match customer's language automatically** | A switch | When on, you can pick **Additional languages**. |
+| **Allow natural mixed-language replies** | A tick box | For customers who mix languages, such as Hinglish. Needs language matching on. |
+
+Words the agent must never say are set under [Safety and handoff](/docs/guide/build-agent/safety-handoff), not here.
+
+## Good to know
+
+- The agent answers in the language of the customer's message, falling back to your business's main language. Meta says English is where the agent is strongest. Test each language you care about before going live.
+- Everything on this page shapes every conversation. If you want a special rule for one situation, such as warranty questions, use a [skill](/docs/guide/build-agent/abilities) instead.
+
+<small>Source: [Meta — Business Agent capabilities](https://developers.facebook.com/documentation/meta-business-agent/capabilities)</small>
+
+## If something goes wrong
+
+| Message | What it means and what to do |
+| --- | --- |
+| **This looks like an instruction rather than a name / description** | Rephrase it as a plain name or a plain description of the job. |
+| **We could not find enough in this document to suggest a description** | Write the description yourself, or start from an example. |
+| **Use a .txt, .pdf, or .docx file.** | Convert the document to one of those types. |
+| **This file is too large. Please choose a smaller document, under 5MB.** | Upload a shorter file. To give the agent a big document to learn from, add it under Knowledge instead. |
+| **We could not save your changes. Nothing has been lost.** | Press the retry button on the banner. |
+
+<Callout type="info">
+**Draft from a document** only fills the description box. It does not give the agent access to the document. To let the agent use a document as a reference, upload it under [Knowledge](/docs/guide/build-agent/knowledge).
+</Callout>

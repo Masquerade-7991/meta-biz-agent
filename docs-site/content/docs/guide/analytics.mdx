@@ -1,47 +1,149 @@
 ---
 title: Analytics and reports
-description: How your AI agent and team are doing, and what each number means.
+description: See how your AI agent and team are doing, what it costs, and what each number means.
 ---
 
-**Analytics** and **Reports** are for supervisors and above.
+Analytics shows how conversations were handled, how fast your team answers and what WhatsApp costs. Reports turn the same numbers into downloads and emails.
 
-## Analytics tabs
+## Before you start
+
+- **Role:** supervisors, admins and owners can open **Analytics** and **Reports**. Agents don't see them.
+- **Some data needs time.** Delivery ticks, message prices and the AI agent's own usage arrive from Meta after the fact, so recent hours can look incomplete.
+
+## Read the Analytics page
+
+Open **Analytics** in the sidebar.
+
+![The Analytics overview with filters, key figures and charts](/screens/analytics.webp)
+
+Use the bar at the top to narrow what you see:
+
+- **Period:** Last 7 days, Last 30 days, Last 90 days, This month, or a custom range.
+- **Agents:** all, or one or more. Each agent answers on its own WhatsApp number.
+- **Team** and **Person:** these narrow the ticket figures only.
+
+Every figure is compared with the period just before it, of the same length. Days follow your business hours' time zone, set in **Settings › Hours & response targets**.
+
+### The tabs
 
 | Tab | What it shows |
 | --- | --- |
-| Overview | Conversations, how they were handled, and the trend against the period before. |
-| AI agent | How much the AI handled alone, and how often it handed over. |
-| Human support | Tickets opened and resolved, first-reply times, resolving on time, satisfaction. |
-| Consumption | WhatsApp message and Business Agent costs. |
-| Broadcasts | Sent, delivered, read and replied. |
-| Logs | Individual tickets, handovers and escalations. |
+| Overview | Conversations, how they were handled, satisfaction, first reply time, spend, and agents side by side. |
+| AI agent | How much the AI finished alone, handovers per day, how tickets opened, questions it couldn't answer, and how often each tool worked. |
+| Human support | Tickets opened and resolved, first reply and resolution times, escalations, when customers write, satisfaction, and teams and people. |
+| Consumption | Spend per day, by message category, and the AI agent's usage. |
+| Broadcasts | Sent, delivered, read, replied and failed, with the funnel from sent to replied. |
+| Logs | The individual tickets, handovers and escalations behind the numbers. |
 
-Filter by date range and by agent. Each figure compares with the period just before.
+Click a figure that has a link to open the matching list, for example the tickets behind "Resolved on time".
 
-## What the numbers mean
+### What the numbers mean
 
-- **Conversation:** a chat where the customer, the AI or your team sent at least one message in the period.
-- **AI alone:** the AI answered and nobody from your team wrote.
+- **Conversation:** a chat where the customer, the AI or your team sent at least one message in the period. System notes alone don't count.
+- **Handled by AI alone:** the AI answered and nobody from your team wrote. Chats nobody answered don't count as handled.
 - **With the team:** someone from your team wrote.
 - **No reply:** neither the AI nor your team answered.
-- **Handed over:** the AI passed the chat to your team.
-- **Resolved on time:** resolved within its response target.
-- **Satisfaction:** customers' ratings (Good, Okay or Bad) after a ticket is resolved.
+- **Handover:** the AI passed the chat to your team.
+- **Handover rate:** handovers out of all conversations.
+- **Tickets resolved:** tickets resolved in the period out of tickets opened in it.
+- **Typical first reply:** the median. Half of first replies were faster.
+- **Resolved on time:** tickets resolved within their resolution target.
+- **Customer satisfaction:** Good answers, with Okay counting half, out of all answers to the feedback question.
+- **Replied (broadcasts):** customers who wrote back within 3 days of the broadcast.
 
-WhatsApp spend comes from Meta for the whole account, one day at a time in UTC. That's why cost per resolved conversation only shows when you look at all agents together.
+Read containment and satisfaction together: letting the AI handle more only helps while customers stay happy.
+
+<Callout type="info">
+**Questions the AI couldn't answer** (AI agent tab) lists what customers asked that the agent answered with its fallback or handed over. Add the top ones to your agent's knowledge. See [Build your AI agent](/docs/guide/build-agent).
+</Callout>
+
+## Consumption and cost
+
+The **Consumption** tab adds up what messaging costs you.
+
+| Figure | Where it comes from |
+| --- | --- |
+| WhatsApp messages | Meta's billing data for the whole WhatsApp account, one day at a time in UTC. |
+| Meta Business Agent | Meta's usage report for your AI agent: billable replies, tokens and cost. |
+| By message category | Marketing, utility and other categories, as Meta priced each delivered message. |
+
+Two things follow from how Meta reports spend:
+
+- **Spend is per account and per UTC day, not per number or per local day.** That is why cost per resolved conversation only shows when you look at all agents together. Filtering to one agent would divide the whole account's spend by a part of its conversations.
+- **The AI agent's usage appears once the agent has a payment method in Meta.** Until then the tab says Meta reports usage once a payment method is added. That is a state, not an error.
+
+Meta bills its AI agent per token rather than per conversation. The charge covers both the AI's work and delivery of the message.
+
+<small>Source: [Meta — pricing](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing), [Meta — non-template message pricing](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages)</small>
+
+Meta's rates, and the date they change, are on Meta's own rate card. They change only on the first day of January, April, July or October. The **Billing** settings page shows this month's total, an optional monthly budget and the AI usage. A budget only alerts you (owners get a notification and an email at 80% and 100%); it never stops messages.
 
 ## Reports
 
-Download any report as a CSV, print it, or have it emailed on a schedule. The reports are:
+Open **Reports** in the sidebar. Each report is a card with a **CSV** button, and the summary reports also have a **PDF** button.
 
-- Business review;
-- Day by day;
-- Agent performance;
-- Team members;
-- Teams;
-- Consumption and cost;
-- Ticket log;
-- Handover log;
-- Escalation log;
-- Message charges;
-- Agent usage by hour.
+![The Reports page with download buttons and scheduled emails](/screens/reports.webp)
+
+| Report | What it covers |
+| --- | --- |
+| Business review | The headline numbers against the period before: conversations, containment, satisfaction, speed, escalations and spend. |
+| Day by day | Every day in the period: conversations, AI alone, handovers, tickets, response times, satisfaction and spend. |
+| Agent performance | Each AI agent side by side. |
+| Team members | Resolved and open tickets, first reply, satisfaction and escalations per person. |
+| Teams | Opened, resolved, on-time share and escalations per team. |
+| Consumption and cost | Spend by message category, the Business Agent's usage and free service replies per number. |
+| Ticket log | Every ticket opened in the period with its team, assignee, timings, target, escalation and satisfaction. |
+| Handover log | Every chat handed to a person: how, to whom and how fast they replied. |
+| Escalation log | Every escalation level reached, why and who was alerted. |
+| Message charges | One row per message status Meta priced: category, pricing type and whether it was billable. |
+| Agent usage by hour | The Business Agent's billable replies, tokens and cost, hour by hour. |
+
+The reports use the filters you set on the Analytics page. The **Export** menu on Analytics offers the most-used ones without leaving the page.
+
+### Download a CSV
+
+Click **CSV** on a report. The file opens in Excel or Google Sheets.
+
+### Print or save as PDF
+
+Click **PDF**. A print-ready page opens in a new tab. In the print dialog, choose **Save as PDF**.
+
+### Email reports on a schedule
+
+<Steps>
+<Step>
+On **Reports**, under **Scheduled emails**, click **New schedule**.
+</Step>
+<Step>
+Name it, then choose **How often**: daily, weekly or monthly, and **At** which hour.
+</Step>
+<Step>
+Tick the **Reports to attach**, and choose **Covering** which agents and team.
+</Step>
+<Step>
+Under **Send to**, tick colleagues, and add other email addresses if needed. Only owners and admins can send to addresses outside the workspace. A schedule can have up to 25 recipients.
+</Step>
+<Step>
+Save. The email has the headline numbers in the body and each report attached as a CSV.
+</Step>
+</Steps>
+
+When it goes out:
+
+- **Daily** schedules send the day before's figures every day.
+- **Weekly** schedules go out on Mondays and cover the previous 7 days.
+- **Monthly** schedules go out on the 1st and cover the previous month.
+- Times follow your business hours' time zone.
+
+A schedule has a **Send now** button for a test, and can be paused without deleting it. A workspace can have up to 20 schedules.
+
+## If something goes wrong
+
+| What you see | What to do |
+| --- | --- |
+| **Reports are for supervisors, admins and owners** | Ask an admin to change your role in **Settings › Members**. |
+| **Couldn't download** a report | Try again. If it repeats, quote the error reference to Helo.ai support. |
+| **Only owners and admins send reports outside the workspace** | Remove outside addresses, or ask an admin to set up the schedule. |
+| **Nobody to send it to: everyone on this schedule has left the workspace** | Edit the schedule and add someone. |
+| Cost per resolved conversation is missing | Clear the agent filter so all agents are included. |
+| Agent cost is empty | Add a payment method for the AI agent in Meta. |
