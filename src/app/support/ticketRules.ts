@@ -25,9 +25,9 @@ export function customerWrites(latest: { status: string; resolvedAt?: Date | str
 /** How long the response clocks were paused, after waiting on the customer from `pausedAt` until `now`. */
 export const pausedFor = (pausedAt: Date | string | null | undefined, now: number) => (pausedAt ? Math.max(0, now - +new Date(pausedAt)) : 0)
 
-/** Due dates move later by the time spent waiting on the customer. */
 /** The last instant a Date can hold: deadlines with no open hours at all ("never") stay there. */
 const NEVER = 8.64e15
+/** Due dates move later by the time spent waiting on the customer. */
 export function shiftDues<T extends { firstResponseDueAt: Date | string; resolveDueAt: Date | string }>(t: T, ms: number) {
   const later = (d: Date | string) => new Date(Math.min(NEVER, +new Date(d) + ms))
   return { firstResponseDueAt: later(t.firstResponseDueAt), resolveDueAt: later(t.resolveDueAt) }
