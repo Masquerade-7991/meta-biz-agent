@@ -8,13 +8,16 @@ import { env } from './upstream.ts'
 import type { Assets } from './context.ts'
 import { addProtected } from './protect.ts'
 
-export type StepState = { state: 'done' | 'failed' | 'skipped'; at: Date; error?: string }
+/** waiting: on the business (its own payment method); expired: Meta's time for it passed (coexistence sync). */
+export type StepState = { state: 'done' | 'failed' | 'skipped' | 'waiting' | 'expired'; at: Date; error?: string }
 export interface Account {
   workspaceId: string
   wabaId: string
   wabaName: string
   businessId: string
   phoneNumbers: { id: string; display: string; verifiedName: string; /** A Meta test number: it can only message up to 5 verified recipients. */ sandbox?: boolean }[]
+  /** The number signed up (registered with the PIN, or synced). Meta's list order can change. */
+  primaryNumberId?: string
   /** env: the server's own WABA from .env; signup / coexistence: connected through Embedded Signup. */
   source: 'env' | 'signup' | 'coexistence'
   /** The customer's business token, sealed (crypto.ts); null for the env account. */

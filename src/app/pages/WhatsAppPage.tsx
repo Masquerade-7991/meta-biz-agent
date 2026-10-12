@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronRight, Loader2, Plus, RefreshCw } from 'lucide-react'
+import { ChevronRight, Loader2, RefreshCw, Smartphone } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
-import { PageContainer } from '@/app/components/ui/page'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog'
+import { EmptyState, PageContainer } from '@/app/components/ui/page'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table'
@@ -10,8 +9,7 @@ import { FormError } from '@/app/auth/AuthLayout'
 import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
 import { listNumbers, type WaNumber } from '@/app/api/numbers'
-import { getSignupConfig, type SignupConfig } from '@/app/api/whatsapp'
-import { ConnectWhatsApp } from '@/app/whatsapp/ConnectWhatsApp'
+import { ConnectNumberButton } from '@/app/whatsapp/ConnectNumberDialog'
 import { NumberAvatar, NumberPage } from '@/app/whatsapp/NumberPage'
 import { statusHelp } from '@/app/whatsapp/profileRules'
 import { can } from '@/app/lib/permissions'
@@ -30,15 +28,13 @@ const readAccount = () => {
 }
 
 /** The workspace's numbers the way WhatsApp Manager shows them: pick the WhatsApp Business account,
- *  see its phone numbers, open one for its profile, name and settings. None shows how to connect one. */
+ *  see its phone numbers, open one for its profile, name and settings. With none yet, how to connect one. */
 export function WhatsAppPage() {
   const { me } = useAuth()
   const [rows, setRows] = useState<WaNumber[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
-  const [config, setConfig] = useState<SignupConfig | null>(null)
-  const [connecting, setConnecting] = useState(false)
 
   const load = useCallback((refresh = false) => {
     setRefreshing(refresh)
@@ -72,9 +68,6 @@ export function WhatsAppPage() {
     }
   }
   const shown = account ? (rows ?? []).filter((n) => n.wabaId === account.id) : []
-  useEffect(() => {
-    if (rows?.length === 0 || connecting) getSignupConfig().then(setConfig, () => {})
-  }, [rows, connecting])
 
   return (
     <PageContainer>
@@ -111,16 +104,13 @@ export function WhatsAppPage() {
               )}
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => load(true)} disabled={refreshing}>
-                {refreshing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-                Refresh from WhatsApp
-              </Button>
-              {can(me?.role, 'whatsapp.manage') && (
-                <Button onClick={() => setConnecting(true)}>
-                  <Plus className="size-4" />
-                  Connect a number
+              {!!rows?.length && (
+                <Button variant="outline" onClick={() => load(true)} disabled={refreshing}>
+                  {refreshing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                  Refresh from WhatsApp
                 </Button>
               )}
+              {can(me?.role, 'whatsapp.manage') && !!rows?.length && <ConnectNumberButton onConnected={() => load(true)} />}
             </div>
           </div>
           {error ? (
@@ -133,9 +123,12 @@ export function WhatsAppPage() {
           ) : !rows ? (
             <PageLoader context="whatsapp" />
           ) : rows.length === 0 ? (
-            <div className="rounded-lg border border-border p-6">
-              <ConnectWhatsApp config={config} isOwner={can(me?.role, 'whatsapp.manage')} workspaceName={me?.workspace?.name ?? 'this workspace'} variant="compact" onConnected={() => load(true)} />
-            </div>
+            <EmptyState
+              icon={Smartphone}
+              title="No WhatsApp number yet"
+              description="Your AI agent, inbox and broadcasts all run on your own WhatsApp number. Connect it with Meta in about 5 minutes: a new number, or the one on your WhatsApp Business app."
+              action={can(me?.role, 'whatsapp.manage') ? <ConnectNumberButton onConnected={() => load(true)} /> : <span className="text-sm text-muted-foreground">Ask an owner of {me?.workspace?.name ?? 'this workspace'} to connect one.</span>}
+            />
           ) : (
             <div className="space-y-2">
               <h2 className="text-base font-semibold">
@@ -197,25 +190,6 @@ export function WhatsAppPage() {
           )}
         </div>
       )}
-      {/* Connecting happens here, not in Settings: this page is the one place for numbers. */}
-      <Dialog open={connecting} onOpenChange={setConnecting}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Connect a WhatsApp number</DialogTitle>
-            <DialogDescription>Log in with Facebook and pick your business, WhatsApp account and number. About 5 minutes.</DialogDescription>
-          </DialogHeader>
-          <ConnectWhatsApp
-            config={config}
-            isOwner={can(me?.role, 'whatsapp.manage')}
-            workspaceName={me?.workspace?.name ?? 'this workspace'}
-            variant="compact"
-            onConnected={() => {
-              setConnecting(false)
-              load(true)
-            }}
-          />
-        </DialogContent>
-      </Dialog>
     </PageContainer>
   )
 }

@@ -5,9 +5,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/app/com
 import type { Flow } from '@/app/api/whatsapp'
 import { cn } from '@/app/lib/utils'
 
-// A stand-in for Meta's Embedded Signup window, for when the real one can't open (Meta settings not
-// on the server yet) and for dummy-mode demos. It only shows the journey: it has no input fields, so
-// it never asks for or collects anything, and it's labelled as a preview throughout.
+// A stand-in for Meta's Embedded Signup window in Dummy mode. It only shows the journey: it has no
+// input fields, so it never asks for or collects anything, and it's labelled as a demo throughout.
 
 const META_BLUE = '#0866ff'
 const STEPS: Record<Flow, { title: string; body: string }[]> = {
@@ -112,16 +111,15 @@ function StepVisual({ flow, i }: { flow: Flow; i: number }) {
 }
 
 /**
- * Meta's signup journey as a preview window. `demo` (dummy mode) finishes by connecting a demo
- * account in this browser; `preview` (server not set up yet) only shows the steps and says what's
- * missing for the real window.
+ * Meta's signup journey, simulated for Dummy mode: the same steps with sample data and nothing to
+ * type. Finish hands back to the connect dialog, which shows what was connected; Close is leaving.
  */
-export function SignupWindow({ flow, mode, missing, onDone, onClose }: { flow: Flow; mode: 'demo' | 'preview'; missing?: string[]; onDone?: () => void; onClose: () => void }) {
+export function SignupWindow({ flow, onDone, onClose }: { flow: Flow; onDone: () => void; onClose: (step: string) => void }) {
   const steps = STEPS[flow]
   const [i, setI] = useState(0)
-  const done = i >= steps.length
+  const leave = () => onClose(steps[i].title)
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <Dialog open onOpenChange={(o) => !o && leave()}>
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-104" style={{ fontFamily: '-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
         {/* Window bar: says plainly that this isn't Meta's real window. */}
         <div className="flex items-center gap-2 border-b border-[#dadde1] bg-[#f0f2f5] px-4 py-2.5">
@@ -129,55 +127,31 @@ export function SignupWindow({ flow, mode, missing, onDone, onClose }: { flow: F
             <MessageCircle className="size-3.5" />
           </span>
           <DialogTitle className="text-[14px] font-semibold text-[#1c2b33]">WhatsApp Business signup</DialogTitle>
-          <span className="ml-auto rounded bg-[#ffe8a3] px-1.5 py-0.5 text-[11px] font-semibold text-[#5c4300]">Preview</span>
+          <span className="ml-auto rounded bg-[#ffe8a3] px-1.5 py-0.5 text-[11px] font-semibold text-[#5c4300]">Demo</span>
         </div>
-        <DialogDescription className="sr-only">A preview of Meta&rsquo;s signup steps. Nothing is entered or connected here.</DialogDescription>
+        <DialogDescription className="sr-only">A demo of Meta&rsquo;s signup steps with sample data. Nothing is entered here.</DialogDescription>
         <div className="space-y-4 bg-white px-5 py-5">
-          {!done ? (
-            <>
-              <div className="flex gap-1" aria-label={`Step ${i + 1} of ${steps.length}`}>
-                {steps.map((_, j) => (
-                  <span key={j} className="h-1 flex-1 rounded-full" style={{ background: j <= i ? META_BLUE : '#e4e6eb' }} />
-                ))}
-              </div>
-              <div className="space-y-1">
-                <p className="text-[17px] font-semibold text-[#1c2b33]">{steps[i].title}</p>
-                <p className="text-[13px] text-[#65676b]">{steps[i].body}</p>
-              </div>
-              <StepVisual flow={flow} i={i} />
-            </>
-          ) : (
-            <div className="space-y-3 py-2 text-center">
-              <span className="mx-auto flex size-12 items-center justify-center rounded-full" style={{ background: mode === 'demo' ? '#e6f4ea' : '#fff4d6' }}>
-                {mode === 'demo' ? <Check className="size-6 text-[#31a24c]" /> : <Lock className="size-6 text-[#8a6100]" />}
-              </span>
-              <p className="text-[17px] font-semibold text-[#1c2b33]">{mode === 'demo' ? 'Demo number connected' : 'That’s the whole journey'}</p>
-              <p className="text-[13px] text-[#65676b]">
-                {mode === 'demo'
-                  ? 'In the demo, a sample number is added to this browser only.'
-                  : `Nothing was connected: this was a preview. Meta’s real window opens here once Helo.ai finishes its Meta setup${missing?.length ? ` (still needed: ${missing.join(', ')})` : ''}.`}
-              </p>
-            </div>
-          )}
+          <div className="flex gap-1" aria-label={`Step ${i + 1} of ${steps.length}`}>
+            {steps.map((_, j) => (
+              <span key={j} className="h-1 flex-1 rounded-full" style={{ background: j <= i ? META_BLUE : '#e4e6eb' }} />
+            ))}
+          </div>
+          <div className="space-y-1">
+            <p className="text-[17px] font-semibold text-[#1c2b33]">{steps[i].title}</p>
+            <p className="text-[13px] text-[#65676b]">{steps[i].body}</p>
+          </div>
+          <StepVisual flow={flow} i={i} />
           <p className="flex items-center gap-1.5 text-[11px] text-[#8a8d91]">
-            <Lock className="size-3" /> Preview with sample data. Meta&rsquo;s real window asks for your details, never this page.
+            <Lock className="size-3" /> Demo with sample data. Meta&rsquo;s real window asks for your details, never this page.
           </p>
         </div>
         <div className="flex justify-between gap-2 border-t border-[#dadde1] bg-[#f7f8fa] px-5 py-3">
-          <Button variant="ghost" size="sm" onClick={done ? onClose : i === 0 ? onClose : () => setI(i - 1)}>
-            {done || i === 0 ? 'Close' : 'Back'}
+          <Button variant="ghost" size="sm" onClick={i === 0 ? leave : () => setI(i - 1)}>
+            {i === 0 ? 'Close' : 'Back'}
           </Button>
-          {!done ? (
-            <Button size="sm" style={{ background: META_BLUE }} onClick={() => setI(i + 1)}>
-              {i === steps.length - 1 ? 'Finish' : 'Next'} <ChevronRight className="size-4" />
-            </Button>
-          ) : (
-            mode === 'demo' && (
-              <Button size="sm" onClick={onDone}>
-                Continue
-              </Button>
-            )
-          )}
+          <Button size="sm" style={{ background: META_BLUE }} onClick={() => (i === steps.length - 1 ? onDone() : setI(i + 1))}>
+            {i === steps.length - 1 ? 'Finish' : 'Next'} <ChevronRight className="size-4" />
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

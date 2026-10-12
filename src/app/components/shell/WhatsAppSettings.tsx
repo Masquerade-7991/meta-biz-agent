@@ -9,7 +9,9 @@ import { FormError } from '@/app/auth/AuthLayout'
 import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
 import { disconnectAccount, listAccounts, revealPin, type WaAccount } from '@/app/api/whatsapp'
-import { AccountSteps } from '@/app/whatsapp/ConnectWhatsApp'
+import { AccountSteps } from '@/app/whatsapp/AccountSteps'
+import { AssetMap } from '@/app/whatsapp/AssetMap'
+import { ConnectNumberButton } from '@/app/whatsapp/ConnectNumberDialog'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
 import { SettingsSection } from './SettingsSection'
 import { WebhookStatusCard } from '@/app/whatsapp/WebhookStatusCard'
@@ -17,7 +19,7 @@ import { can } from '@/app/lib/permissions'
 
 const SOURCE: Record<WaAccount['source'], string> = { env: 'Set up by Helo.ai', signup: 'Connected with Embedded Signup', coexistence: 'WhatsApp Business app number' }
 
-function AccountCard({ a, isOwner, onChange, onRemove }: { a: WaAccount; isOwner: boolean; onChange: (a: WaAccount) => void; onRemove: () => void }) {
+function AccountCard({ a, isOwner, workspace, onChange, onRemove }: { a: WaAccount; isOwner: boolean; workspace: string; onChange: (a: WaAccount) => void; onRemove: () => void }) {
   const [pin, setPin] = useState<string | null>(null)
   return (
     <li className="space-y-3 rounded-lg border border-border p-4">
@@ -54,6 +56,15 @@ function AccountCard({ a, isOwner, onChange, onRemove }: { a: WaAccount; isOwner
         ))}
       </ul>
       {!a.protected && <AccountSteps account={a} canEdit={isOwner} onChange={onChange} />}
+      <details className="group text-sm">
+        <summary className="cursor-pointer text-muted-foreground hover:text-foreground">How this account maps to Helo.ai</summary>
+        <AssetMap
+          className="mt-2"
+          flow={a.source === 'coexistence' ? 'coexistence' : 'new'}
+          workspace={workspace}
+          assets={{ businessId: a.businessId || undefined, wabaId: a.wabaId, phoneNumberId: a.primaryNumberId ?? a.phoneNumbers[0]?.id }}
+        />
+      </details>
       {isOwner && (a.hasPin || a.canDisconnect) && (
         <div className="flex flex-wrap items-center gap-2">
           {a.hasPin &&
@@ -93,24 +104,27 @@ export function WhatsAppSettings({ onManageNumbers }: { onManageNumbers?: () => 
 
   return (
     <div>
-      <SettingsSection wide title="WhatsApp account" description="Billing, PIN and disconnecting. Numbers, their profiles and connecting a new one are on the WhatsApp page.">
-        {onManageNumbers && can(me?.role, 'numbers.view') && (
-          <Button variant="outline" size="sm" className="mb-3" onClick={onManageNumbers}>
-            {rows?.length ? 'Manage numbers on the WhatsApp page' : 'Connect a number on the WhatsApp page'} &rarr;
-          </Button>
-        )}
+      <SettingsSection wide title="WhatsApp account" description="Each connected account: how it's set up, billing, its PIN, and disconnecting. Numbers' profiles and names are on the WhatsApp page.">
+        <div className="mb-3 flex flex-wrap gap-2">
+          <ConnectNumberButton size="sm" onConnected={upsert} />
+          {onManageNumbers && can(me?.role, 'numbers.view') && !!rows?.length && (
+            <Button variant="outline" size="sm" onClick={onManageNumbers}>
+              Manage numbers on the WhatsApp page &rarr;
+            </Button>
+          )}
+        </div>
         {error ? (
           <FormError>{error}</FormError>
         ) : !rows ? (
           <PageLoader context="whatsapp" className="min-h-[30vh] py-10" />
         ) : rows.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground text-sm">
-            No WhatsApp number connected yet.
+            No WhatsApp number connected yet. Connect one to start: it takes about 5 minutes with Meta.
           </p>
         ) : (
           <ul className="space-y-3">
             {rows.map((a) => (
-              <AccountCard key={a.wabaId} a={a} isOwner={isOwner} onChange={upsert} onRemove={() => setRemoving(a)} />
+              <AccountCard key={a.wabaId} a={a} isOwner={isOwner} workspace={me?.workspace?.name ?? 'this workspace'} onChange={upsert} onRemove={() => setRemoving(a)} />
             ))}
           </ul>
         )}

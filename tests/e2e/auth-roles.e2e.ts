@@ -147,6 +147,8 @@ test('two owners demoting each other at the same moment never leave the workspac
     ])
     const owners = await s.db.collection('memberships').countDocuments({ workspaceId: w2.id, role: 'owner' })
     assert.ok(owners >= 1, `round ${round}: ${x.status}/${y.status} left ${owners} owners`)
-    assert.ok([x.status, y.status].every((st) => st === 200 || st === 400 || st === 409), `${x.status} ${y.status}`)
+    // At the same moment: one wins and the other is undone (409) or refused as the last owner (400).
+    // One after the other: the second person is already an admin, who can't change an owner (403).
+    assert.ok([x.status, y.status].every((st) => [200, 400, 403, 409].includes(st)), `${x.status} ${y.status}`)
   }
 })

@@ -94,7 +94,10 @@ async function storedPin(id: string): Promise<string | null> {
   const n = await numbers().findOne({ workspaceId: ws(), id }, { projection: { pinEnc: 1 } })
   if (n?.pinEnc) return open(String(n.pinEnc), key)
   // Numbers connected through Embedded Signup got their PIN on the account.
-  const a = await accounts().findOne({ workspaceId: ws(), 'phoneNumbers.0.id': id }, { projection: { pinEnc: 1 } })
+  const a = await accounts().findOne(
+    { workspaceId: ws(), $or: [{ primaryNumberId: id }, { primaryNumberId: { $exists: false }, 'phoneNumbers.0.id': id }] },
+    { projection: { pinEnc: 1 } },
+  )
   return a?.pinEnc ? open(a.pinEnc, key) : null
 }
 async function keepPin(id: string, pin: string) {

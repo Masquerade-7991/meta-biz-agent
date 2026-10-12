@@ -19,6 +19,7 @@ import { enqueue } from './jobs.ts'
 import { isProtected } from './protect.ts'
 import { queueNumbersSync } from './numbers.ts'
 import { can } from '../src/app/lib/permissions.ts'
+import { hostedLinks } from '../src/app/whatsapp/signupLink.ts'
 
 type Step = keyof Account['steps']
 // The app is the console's own Meta app; APP_ID / APP_SECRET (also used to check webhook
@@ -32,13 +33,31 @@ const cfg = () => ({
   sdkVersion: env('META_SDK_VERSION') || 'v23.0',
   graph: (env('GRAPH_BASE_URL') || 'https://graph.facebook.com/v23.0').replace(/\/+$/, ''),
 })
-/** Signup works only when every piece is in place; the browser is told why not otherwise. */
+/** The full signup (the console finishes the connection) needs every piece; owners never see the names. */
 function missing() {
   const c = cfg()
   return [!c.appId && 'META_APP_ID', !c.configId && 'META_ES_CONFIG_ID', !c.appSecret && 'META_APP_SECRET', !tokenKey() && 'TOKEN_ENCRYPTION_KEY'].filter(Boolean) as string[]
 }
 
+/** How connecting works on this server: the full signup (sdk), Meta's hosted signup link only (hosted:
+ *  Meta's real flow opens, Helo.ai completes the connection on its side), or neither (none). */
+function signupMode() {
+  const links = hostedLinks(env('EMBEDDED_SIGNUP_LINK'))
+  return { mode: !missing().length ? ('sdk' as const) : links ? ('hosted' as const) : ('none' as const), links }
+}
+let reported = false
+/** Once per process: what the full signup still needs, for whoever runs the server (never shown to customers). */
+function reportMissing() {
+  if (reported) return
+  reported = true
+  const gaps = missing()
+  if (gaps.length) console.log(`Embedded Signup: the full flow needs ${gaps.join(', ')}; ${signupMode().links ? 'using EMBEDDED_SIGNUP_LINK (Meta’s hosted signup)' : 'no EMBEDDED_SIGNUP_LINK either'}.`)
+}
+
 const now = (): StepState => ({ state: 'done', at: new Date() })
+const PAY_YOURSELF = 'Add a payment method in WhatsApp Manager, then confirm here.'
+/** The business pays Meta itself: waiting on it, not a failure. */
+const ownBilling = (confirmed: boolean): StepState => (confirmed ? now() : { state: 'waiting', at: new Date(), error: PAY_YOURSELF })
 const failed = (err: unknown): StepState => ({ state: 'failed', at: new Date(), error: err instanceof Error ? err.message : String(err) })
 
 /** Runs `fn` as the business: Meta calls naming its WABA or number use its own token. */
@@ -68,7 +87,7 @@ async function finish(a: Account & { _id?: unknown }, token: string, flow: 'new'
   const c = cfg()
   const steps = { ...a.steps }
   const billing = { ...a.billing }
-  const todo = (s: Step) => steps[s]?.state !== 'done' && steps[s]?.state !== 'skipped'
+  const todo = (s: Step) => !['done', 'skipped', 'expired'].includes(steps[s]?.state ?? '')
   const run = async (s: Step, fn: () => Promise<unknown>) => {
     if (!todo(s)) return
     try {
@@ -78,7 +97,7 @@ async function finish(a: Account & { _id?: unknown }, token: string, flow: 'new'
       steps[s] = failed(err)
     }
   }
-  const phoneId = a.phoneNumbers[0]?.id
+  const phoneId = a.primaryNumberId ?? a.phoneNumbers[0]?.id
   await asBusiness(a, token, async () => {
     await run('subscribe', () => metaJson('graph', 'POST', `/${a.wabaId}/subscribed_apps`))
     if (flow === 'coexistence') steps.register ??= { state: 'skipped', at: new Date() }
@@ -94,6 +113,9 @@ async function finish(a: Account & { _id?: unknown }, token: string, flow: 'new'
         await metaJson('graph', 'POST', `/${phoneId}/smb_app_data`, { messaging_product: 'whatsapp', sync_type: 'history' })
       })
     else steps.sync ??= { state: 'skipped', at: new Date() }
+    // Past Meta's 24 hours a retry can't work: say so instead of offering one.
+    if (steps.sync?.state === 'failed' && Date.now() - +new Date(a.createdAt) > 24 * 3_600_000)
+      steps.sync = { state: 'expired', at: new Date(), error: 'Meta allows 24 hours after signup to bring chats over, and that time has passed. Your number works; only the old chats stay on your phone.' }
     await run('details', async () => {
       const w = await metaJson('graph', 'GET', `/${a.wabaId}?fields=name`)
       const nums = await metaJson('graph', 'GET', `/${a.wabaId}/phone_numbers?fields=id,display_phone_number,verified_name`)
@@ -110,9 +132,9 @@ async function finish(a: Account & { _id?: unknown }, token: string, flow: 'new'
     })
   else if (todo('billing')) {
     // The business adds its own payment method in WhatsApp Manager; it tells us when it's done.
-    steps.billing = billing.state === 'confirmed' ? now() : { state: 'failed', at: new Date(), error: 'Add a payment method in WhatsApp Manager, then confirm here.' }
+    steps.billing = ownBilling(billing.state === 'confirmed')
   }
-  if (steps.billing?.state === 'failed' && billing.mode === 'partner_credit') billing.state = 'failed'
+  if (steps.billing?.state === 'failed' && billing.mode === 'partner_credit') Object.assign(billing, { state: 'failed', error: steps.billing.error })
   return { ...a, steps, billing }
 }
 
@@ -130,14 +152,16 @@ const flowOf = (a: Account) => (a.source === 'coexistence' ? 'coexistence' : 'ne
 function view(a: Account) {
   const { tokenEnc: _t, pinEnc, workspaceId: _w, ...rest } = a as Account & { _id?: unknown }
   delete (rest as { _id?: unknown })._id
-  const steps = Object.fromEntries(Object.entries(a.steps).map(([k, v]) => [k, v]))
-  return { ...rest, steps, hasPin: !!pinEnc, protected: isManaged(a), canDisconnect: !isManaged(a), needsAttention: Object.values(a.steps).some((s) => s?.state === 'failed') }
+  // Accounts saved before "waiting" existed stored the business's own billing as a failure.
+  const steps = Object.fromEntries(Object.entries(a.steps).map(([k, v]) => [k, k === 'billing' && a.billing.mode === 'own' && v?.state === 'failed' && v.error === PAY_YOURSELF ? { ...v, state: 'waiting' } : v]))
+  // Waiting on the business's own payment method is a next step, not a problem.
+  return { ...rest, steps, hasPin: !!pinEnc, protected: isManaged(a), canDisconnect: !isManaged(a), needsAttention: Object.values(steps).some((s) => s?.state === 'failed' || s?.state === 'expired') }
 }
 
 async function connect(b: Obj, me: Actor) {
   if (!can(me.role, 'whatsapp.manage')) throw new HttpError(403, 'Only workspace owners can connect WhatsApp accounts.')
-  const gaps = missing()
-  if (gaps.length) throw new HttpError(503, `Embedded Signup isn’t set up on this server yet (missing ${gaps.join(', ')}).`)
+  reportMissing()
+  if (missing().length) throw new HttpError(503, 'Connecting numbers from the console isn’t switched on for this workspace yet. Talk to Helo.ai.')
   if (!allow(`wa-connect|${ws()}`, 10)) throw new HttpError(429, 'Too many signup attempts. Try again in an hour.')
   const code = str(b.code)
   const wabaId = String(b.wabaId ?? '').replace(/\D/g, '')
@@ -147,21 +171,26 @@ async function connect(b: Obj, me: Actor) {
   if (isProtected(wabaId) || isProtected(phoneId)) throw new HttpError(403, MANAGED)
   const flow = b.flow === 'coexistence' ? 'coexistence' : 'new'
   const mode = b.billing === 'partner_credit' && cfg().creditLineId ? 'partner_credit' : 'own'
-  // The code expires 30 seconds after signup, so it's exchanged before anything else.
-  const token = await exchangeCode(code)
+  // Before the code is spent: another workspace's account can't be taken over.
   const existing = await accounts().findOne({ wabaId })
   if (existing && existing.workspaceId !== ws()) throw new HttpError(409, 'This WhatsApp account is already connected to another workspace.')
+  // The code expires 30 seconds after signup, so it's exchanged before anything else that talks to Meta.
+  const token = await exchangeCode(code)
   const pin = flow === 'new' ? String(randomInt(0, 1_000_000)).padStart(6, '0') : undefined
   const key = tokenKey()!
-  const base: Account = existing ?? {
+  // Connecting again: the number and billing chosen now win (the steps run again from the start).
+  const base: Account = existing
+    ? { ...existing, primaryNumberId: phoneId, phoneNumbers: existing.phoneNumbers.some((n) => n.id === phoneId) ? existing.phoneNumbers : [...existing.phoneNumbers, { id: phoneId, display: '', verifiedName: '' }], ...(existing.billing.mode !== mode && { billing: { mode, state: 'pending' as const } }) }
+    : {
     workspaceId: ws(),
     wabaId,
     wabaName: `WhatsApp account ${wabaId}`,
     businessId: String(b.businessId ?? '').replace(/\D/g, ''),
     phoneNumbers: [{ id: phoneId, display: '', verifiedName: '' }],
+    primaryNumberId: phoneId,
     source: flow === 'coexistence' ? 'coexistence' : 'signup',
     tokenEnc: null,
-    billing: { mode, state: mode === 'partner_credit' ? 'pending' : 'pending' },
+    billing: { mode, state: 'pending' },
     steps: {},
     connectedBy: me._id,
     createdAt: new Date(),
@@ -189,9 +218,17 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   const m = req.method ?? 'GET'
   let seg: RegExpMatchArray | null
   if (path === '/api/whatsapp/config' && m === 'GET') {
+    reportMissing()
     const c = cfg()
-    const gaps = missing()
-    return { ready: !gaps.length, missing: gaps, appId: c.appId || null, configId: c.configId || null, sdkVersion: c.sdkVersion, partnerCredit: !!c.creditLineId }
+    const { mode, links } = signupMode()
+    // What opens Meta's signup is for owners, who are the only ones who connect numbers.
+    const owner = can(me.role, 'whatsapp.manage')
+    return {
+      mode,
+      partnerCredit: !!c.creditLineId,
+      ...(owner && mode === 'sdk' && { appId: c.appId, configId: c.configId, sdkVersion: c.sdkVersion }),
+      ...(owner && mode === 'hosted' && { links }),
+    }
   }
   if (path === '/api/whatsapp/accounts' && m === 'GET') {
     const list = await accounts().find({ workspaceId: ws() }).sort({ createdAt: 1 }).toArray()
@@ -230,7 +267,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       const b = obj(await readJson(req))
       if (b.mode === 'own') {
         const billing = { mode: 'own' as const, state: b.confirmed === true ? ('confirmed' as const) : ('pending' as const) }
-        const steps = { ...a.steps, billing: billing.state === 'confirmed' ? now() : { state: 'failed' as const, at: new Date(), error: 'Add a payment method in WhatsApp Manager, then confirm here.' } }
+        const steps = { ...a.steps, billing: ownBilling(billing.state === 'confirmed') }
         await accounts().updateOne({ workspaceId: ws(), wabaId: a.wabaId }, { $set: { billing, steps } })
         return view({ ...a, billing, steps })
       }

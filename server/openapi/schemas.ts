@@ -385,9 +385,10 @@ export const schemas: Record<string, Schema> = {
     'businessId*': 'string',
     'phoneNumbers*': { type: 'array', items: o({ id: 'string', display: 'string', verifiedName: 'string', sandbox: d('boolean', 'A Meta test number: it can only message up to 5 verified recipients.') }) },
     'source*': d('env|signup|coexistence', '`env`: the server’s own number from .env.'),
+    primaryNumberId: d('string', 'The number signed up: the one the PIN belongs to.'),
     'billing*': o({ mode: 'partner_credit|own', state: 'shared|pending|confirmed|failed', error: 'string' }),
     'steps*': d(
-      { type: 'object', additionalProperties: o({ state: 'done|failed|skipped', at: 'date-time', error: 'string' }) },
+      { type: 'object', additionalProperties: o({ state: d('done|failed|skipped|waiting|expired', 'waiting: on the business (its own payment method); expired: Meta’s 24 hours for the chat sync passed, so no retry.'), at: 'date-time', error: 'string' }) },
       'Signup steps (exchange, subscribe, register, billing, sync, details) and how each went.',
     ),
     'hasPin*': 'boolean',

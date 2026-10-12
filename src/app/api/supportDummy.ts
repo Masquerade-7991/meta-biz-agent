@@ -764,7 +764,7 @@ export async function dummyWhatsApp<T>(method: string, path: string, body: unkno
     return waAccounts.flatMap((a) =>
       a.phoneNumbers.map((n) => ({ phoneNumberId: n.id, display: n.display, name: n.verifiedName, quality: 'GREEN', nameStatus: 'APPROVED', status: 'CONNECTED', limit: 'TIER_2K', limitLabel: '2,000', checkedAt: new Date().toISOString() })),
     ) as T
-  if (u.pathname === '/api/whatsapp/config') return { ready: true, missing: [], appId: 'demo', configId: 'demo', sdkVersion: 'v23.0', partnerCredit: true } as T
+  if (u.pathname === '/api/whatsapp/config') return { mode: 'sdk', partnerCredit: true, appId: 'demo', configId: 'demo', sdkVersion: 'v23.0' } as T
   if (u.pathname === '/api/whatsapp/accounts' && method === 'GET') return waAccounts as T
   if (u.pathname === '/api/whatsapp/connect') {
     const now = new Date().toISOString()
@@ -784,11 +784,12 @@ export async function dummyWhatsApp<T>(method: string, path: string, body: unkno
         register: coexist ? { state: 'skipped', at: now } : done,
         sync: coexist ? done : { state: 'skipped', at: now },
         details: done,
-        billing: own ? { state: 'failed', at: now, error: 'Add a payment method in WhatsApp Manager, then confirm here.' } : done,
+        billing: own ? { state: 'waiting', at: now, error: 'Add a payment method in WhatsApp Manager, then confirm here.' } : done,
       },
+      primaryNumberId: b.phoneNumberId,
       hasPin: !coexist,
       canDisconnect: true,
-      needsAttention: own,
+      needsAttention: false,
       createdAt: now,
     }
     waAccounts = [...waAccounts.filter((a) => a.wabaId !== account.wabaId), account]
@@ -803,7 +804,7 @@ export async function dummyWhatsApp<T>(method: string, path: string, body: unkno
   }
   if (m[2] === 'billing') {
     const confirmed = (body as { confirmed?: boolean }).confirmed === true || b.mode === 'partner_credit'
-    Object.assign(acc, { billing: { mode: b.mode, state: b.mode === 'partner_credit' ? 'shared' : confirmed ? 'confirmed' : 'pending' }, needsAttention: !confirmed })
+    Object.assign(acc, { billing: { mode: b.mode, state: b.mode === 'partner_credit' ? 'shared' : confirmed ? 'confirmed' : 'pending' }, needsAttention: false })
     acc.steps.billing = confirmed ? { state: 'done', at: new Date().toISOString() } : acc.steps.billing
     return acc as T
   }

@@ -4,7 +4,8 @@ import { dummyWhatsApp } from './supportDummy'
 
 export type StepName = 'exchange' | 'subscribe' | 'register' | 'billing' | 'sync' | 'details'
 export interface Step {
-  state: 'done' | 'failed' | 'skipped'
+  /** waiting: on the business (its own payment method); expired: Meta's time for it passed. */
+  state: 'done' | 'failed' | 'skipped' | 'waiting' | 'expired'
   at: string
   error?: string
 }
@@ -14,6 +15,8 @@ export interface WaAccount {
   businessId: string
   phoneNumbers: { id: string; display: string; verifiedName: string; /** A Meta test number: replies reach only up to 5 verified recipients. */ sandbox?: boolean }[]
   source: 'env' | 'signup' | 'coexistence'
+  /** The number signed up (the one the PIN belongs to). */
+  primaryNumberId?: string
   billing: { mode: 'partner_credit' | 'own'; state: 'shared' | 'pending' | 'confirmed' | 'failed'; error?: string }
   steps: Partial<Record<StepName, Step>>
   hasPin: boolean
@@ -23,14 +26,21 @@ export interface WaAccount {
   needsAttention: boolean
   createdAt: string
 }
+/**
+ * How connecting works on this server: `sdk`, the full signup (Meta's window, then the console
+ * finishes the connection); `hosted`, Meta's hosted signup link only (Meta's real flow opens and
+ * Helo.ai completes the connection on its side); `none`, not switched on.
+ */
 export interface SignupConfig {
-  ready: boolean
-  missing: string[]
-  appId: string | null
-  configId: string | null
-  sdkVersion: string
+  mode: 'sdk' | 'hosted' | 'none'
   /** Helo.ai's credit line can pay for this business's conversations. */
   partnerCredit: boolean
+  /** sdk, owners only. */
+  appId?: string
+  configId?: string
+  sdkVersion?: string
+  /** hosted, owners only: Meta's signup page for each flow. */
+  links?: Record<Flow, string>
 }
 export type Billing = 'partner_credit' | 'own'
 export type Flow = 'new' | 'coexistence'
@@ -46,7 +56,6 @@ export const setBilling = (wabaId: string, b: { mode: Billing; confirmed?: boole
 export const disconnectAccount = (wabaId: string) => call<{ ok: true }>(`/api/whatsapp/accounts/${wabaId}`, 'DELETE')
 export const revealPin = (wabaId: string) => call<{ pin: string }>(`/api/whatsapp/accounts/${wabaId}/pin`)
 
-/** Where a business adds its own payment method for WhatsApp conversations. */
 /** Quality and limits per number, from Meta (server/health.ts). */
 export interface NumberHealth {
   phoneNumberId: string
@@ -90,6 +99,7 @@ export interface WebhookStatus {
 export const getWebhookStatus = () => call<WebhookStatus>('/api/whatsapp/webhook-status')
 /** Owner: the apps Meta lists now become the expected list (after an app was added or removed on purpose). */
 export const resetWebhookBaseline = () => call<WebhookStatus>('/api/whatsapp/webhook-status/baseline', 'POST', {})
+/** Where a business adds its own payment method for WhatsApp conversations. */
 export const PAYMENT_URL = 'https://business.facebook.com/wa/manage/home/'
 export const STEP_LABEL: Record<StepName, string> = {
   exchange: 'Secure access to your account',

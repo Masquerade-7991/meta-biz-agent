@@ -16,8 +16,9 @@ import { errorDetail, errorText, getAgentOnNumber, type AgentOnNumber } from '@/
 import { can } from '@/app/lib/permissions'
 import type { NavId } from '@/app/nav'
 import type { SettingsTab } from '@/app/components/shell/SettingsPage'
-import { getSignupConfig, listAccounts, type SignupConfig, type WaAccount } from '@/app/api/whatsapp'
-import { AccountSteps, ConnectWhatsApp } from '@/app/whatsapp/ConnectWhatsApp'
+import { listAccounts, type WaAccount } from '@/app/api/whatsapp'
+import { AccountSteps } from '@/app/whatsapp/AccountSteps'
+import { ConnectNumberButton } from '@/app/whatsapp/ConnectNumberDialog'
 import { isDummyMode } from '@/app/api/dummy'
 import { resetDummyWhatsApp } from '@/app/api/supportDummy'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
@@ -113,7 +114,6 @@ const link = 'text-primary underline-offset-4 hover:underline'
 function GetStarted({
   snap,
   accounts,
-  config,
   onNavigate,
   onAccountChange,
   onCreateAgent,
@@ -121,7 +121,6 @@ function GetStarted({
   onCreateAgent: () => void
   snap: Snapshot
   accounts: WaAccount[]
-  config: SignupConfig | null
   onNavigate: (id: NavId) => void
   onAccountChange: (a: WaAccount) => void
 }) {
@@ -151,26 +150,26 @@ function GetStarted({
                     Manage numbers &rarr;
                   </button>
                 )}
-                {manage && (
-                  <button type="button" className={link} onClick={() => onNavigate('whatsapp')}>
-                    Add another number
-                  </button>
-                )}
+                {manage && <ConnectNumberButton variant="link" size="sm" label="Add another number" className="h-auto p-0" onConnected={onAccountChange} />}
               </span>
             )
           }
           action={
             <div className="pt-2">
               {connected ? (
-                <AccountSteps account={account} canEdit={can(me?.role, 'billing.manage')} onChange={onAccountChange} />
+                <AccountSteps account={account} canEdit={manage} onChange={onAccountChange} />
+              ) : manage ? (
+                <ConnectNumberButton size="lg" label="Connect WhatsApp" onConnected={onAccountChange} />
               ) : (
-                <ConnectWhatsApp config={config} isOwner={manage} workspaceName={me?.workspace?.name ?? 'this workspace'} variant="hero" onConnected={onAccountChange} />
+                <p className="rounded-md bg-muted px-3 py-2.5 text-sm text-muted-foreground">Ask an owner of {me?.workspace?.name ?? 'this workspace'} to connect a WhatsApp number. Only owners can connect accounts.</p>
               )}
             </div>
           }
         >
           {connected
-            ? 'Finish billing so your number can send messages.'
+            ? account.needsAttention
+              ? 'Some setup steps didn’t finish. Retry them below.'
+              : 'Add a payment method so your number can send messages.'
             : 'Your AI agent, inbox and broadcasts all run on your own WhatsApp number. Connect it with Facebook in a few minutes, right here.'}
         </Step>
         <Step
@@ -510,7 +509,6 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
   const { state } = useWizard()
   const draftName = state.identity.agentName.trim()
   const [accounts, setAccounts] = useState<WaAccount[]>([])
-  const [config, setConfig] = useState<SignupConfig | null>(null)
   // At a glance and Recent conversations both show chats: one request between them.
   const chatsRequest = useRef<Promise<ChatSummary[]> | null>(null)
   const loadChats = useCallback(() => (chatsRequest.current ??= listChats().catch(() => [])), [])
@@ -540,15 +538,13 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
     setError(null)
     Promise.all([
       listAccounts().then(async (a) => [a, await loadSnapshot(a)] as const),
-      getSignupConfig().catch(() => null),
       listStoredAgents().catch(() => null),
       loadChats(),
     ]).then(
-      ([[a, s], c, stored, chats]) => {
+      ([[a, s], stored, chats]) => {
         if (cancelled) return
         setSnap(s)
         setAccounts(a)
-        setConfig(c)
         setHistory({ agents: stored?.length ?? 0, chats: chats.length })
       },
       (err) => !cancelled && setError(errorText(err)),
@@ -569,7 +565,6 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
       onCreateAgent={() => navigate('/agents?new')}
       snap={snap}
       accounts={accounts}
-      config={config}
       onNavigate={onNavigate}
       onAccountChange={(a) => {
         setAccounts((prev) => [...prev.filter((x) => x.wabaId !== a.wabaId), a])

@@ -32,9 +32,19 @@ export const whatsapp = area('WhatsApp', {
   '/api/whatsapp/config': {
     get: {
       id: 'signupConfig',
-      summary: 'Is Embedded Signup available',
-      description: 'What the browser needs to start Meta’s Embedded Signup, and which server settings are missing if not (META_APP_ID, META_ES_CONFIG_ID, META_APP_SECRET, TOKEN_ENCRYPTION_KEY).',
-      ok: o({ 'ready*': 'boolean', 'missing*': 'string[]', 'appId*': 'string?', 'configId*': 'string?', 'sdkVersion*': 'string', 'partnerCredit*': d('boolean', 'Billing through Helo.ai is offered.') }),
+      summary: 'How connecting a number works here',
+      description: [
+        '`mode`: `sdk` is the full Embedded Signup (needs META_ES_CONFIG_ID, the app id and secret, and TOKEN_ENCRYPTION_KEY): Meta’s window, then POST /connect finishes the connection. `hosted` is Meta’s hosted signup link only (EMBEDDED_SIGNUP_LINK): Meta’s real flow opens in its own window, which Meta keeps apart from the console (Cross-Origin-Opener-Policy), and Helo.ai completes the connection on its side. `none`: neither is set up.',
+        'The ids that open Meta’s signup (`appId`/`configId`/`sdkVersion`, or `links`) go to owners only. What the server is missing is never sent; it’s logged once on the server.',
+      ].join('\n\n'),
+      ok: o({
+        'mode*': 'sdk|hosted|none',
+        'partnerCredit*': d('boolean', 'Billing through Helo.ai is offered.'),
+        appId: 'string',
+        configId: 'string',
+        sdkVersion: 'string',
+        links: d(o({ 'new*': 'string', 'coexistence*': 'string' }), 'Meta’s signup page for a new number and for a WhatsApp Business app number (built from EMBEDDED_SIGNUP_LINK).'),
+      }),
     },
   },
   '/api/whatsapp/accounts': {
@@ -59,9 +69,9 @@ export const whatsapp = area('WhatsApp', {
       errors: {
         400: 'The signup didn’t return a WhatsApp account and number. Please run it again. / Meta didn’t accept the signup (…).',
         403: 'Only workspace owners can connect WhatsApp accounts.',
-        409: 'This WhatsApp account is already connected to another workspace.',
+        409: 'This WhatsApp account is already connected to another workspace. (Checked before the code is used.)',
         429: 'Too many signup attempts. Try again in an hour.',
-        503: 'Embedded Signup isn’t set up on this server yet (missing META_APP_ID, …).',
+        503: 'Connecting numbers from the console isn’t switched on for this workspace yet. Talk to Helo.ai.',
       },
     },
   },
