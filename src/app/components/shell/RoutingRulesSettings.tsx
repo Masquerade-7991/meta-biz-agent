@@ -26,6 +26,7 @@ const SOURCES: { id: TicketSource; label: string }[] = [
   { id: 'takeover', label: 'Someone took over' },
   { id: 'reply', label: 'Team replied' },
   { id: 'manual', label: 'Created by hand' },
+  { id: 'customer', label: 'Customer wrote again' },
 ]
 type Field = Exclude<Condition['field'], 'number'>
 const FIELDS: { id: Field; label: string }[] = [

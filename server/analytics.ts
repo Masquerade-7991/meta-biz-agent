@@ -71,9 +71,15 @@ async function agentList() {
   return nums.map((n) => ({ id: n.id, label: names.get(n.id) || n.verifiedName || n.display || 'WhatsApp number' }))
 }
 
+/** Per chat: did the team write (team), did the AI answer (ai). */
+const CHAT_KIND = { team: { $max: { $cond: [{ $eq: ['$author', 'agent'] }, 1, 0] } }, ai: { $max: { $cond: [{ $eq: ['$author', 'ai'] }, 1, 0] } } }
+
 interface Period {
   conversations: number
   aiOnly: number
+  noReply: number
+  /** Handovers for the chosen agents, whatever the team or person filter (the rate's numerator). */
+  handoffsAll: number
   ticketsOpened: number
   ticketsResolved: number
   resolvedOnTime: number
@@ -103,15 +109,20 @@ async function period(f: AnalyticsFilter, tz: string, from: string, to: string):
   const inRange = (d: unknown) => !!d && +(d as Date) >= +start && +(d as Date) < +end
   const mins = (a: unknown, b: unknown) => (+(b as Date) - +(a as Date)) / 60_000
 
-  // Chats: a chat counts on each day it had messages; with the team if a person wrote that day.
+  // Chats: a chat counts on each day someone (customer, AI or team) wrote in it; with the team if a
+  // person wrote that day, AI alone if only the AI answered, no reply if nobody did.
   const chatDays = await col('messages')
     .aggregate([
-      { $match: { workspaceId: ws(), at: { $gte: start, $lt: end }, kind: { $ne: 'note' }, ...byNumber(f) } },
-      { $group: { _id: { day: { $dateToString: { format: '%Y-%m-%d', date: '$at', timezone: tz } }, phone: '$phone' }, team: { $max: { $cond: [{ $eq: ['$author', 'agent'] }, 1, 0] } } } },
+      { $match: { workspaceId: ws(), at: { $gte: start, $lt: end }, kind: { $ne: 'note' }, author: { $in: ['customer', 'ai', 'agent'] }, ...byNumber(f) } },
+      { $group: { _id: { day: { $dateToString: { format: '%Y-%m-%d', date: '$at', timezone: tz } }, phone: '$phone' }, ...CHAT_KIND } },
     ])
     .toArray()
-  const chats = new Map<string, number>()
-  for (const r of chatDays) chats.set(String(r._id.phone), Math.max(chats.get(String(r._id.phone)) ?? 0, Number(r.team)))
+  const chats = new Map<string, { team: number; ai: number }>()
+  for (const r of chatDays) {
+    const c = chats.get(String(r._id.phone)) ?? { team: 0, ai: 0 }
+    chats.set(String(r._id.phone), { team: Math.max(c.team, Number(r.team)), ai: Math.max(c.ai, Number(r.ai)) })
+  }
+  const handoffsAll = await col('tickets').countDocuments({ workspaceId: ws(), source: 'handoff', createdAt: { $gte: start, $lt: end }, ...byNumber(f) })
 
   const tickets = await ticketRows(f, start, end)
   const opened = tickets.filter((t) => inRange(t.createdAt))
@@ -131,7 +142,9 @@ async function period(f: AnalyticsFilter, tz: string, from: string, to: string):
 
   const totals: Period = {
     conversations: chats.size,
-    aiOnly: [...chats.values()].filter((x) => !x).length,
+    aiOnly: [...chats.values()].filter((x) => x.ai && !x.team).length,
+    noReply: [...chats.values()].filter((x) => !x.ai && !x.team).length,
+    handoffsAll,
     ticketsOpened: opened.length,
     ticketsResolved: resolved.length,
     resolvedOnTime: resolved.filter((t) => +t.resolvedAt <= +t.resolveDueAt).length,
@@ -167,19 +180,21 @@ async function period(f: AnalyticsFilter, tz: string, from: string, to: string):
     const dayEnd = +dayStart(addDays(date, 1), tz)
     const c = chatsByDay.get(date) ?? []
     const team = c.filter((r) => r.team).length
+    const aiOnly = c.filter((r) => r.ai && !r.team).length
     const res = resolvedBy.get(date) ?? []
     const rd = res.filter((t) => t.csat)
     const sc = (n: number) => rd.filter((t) => Number(obj(t.csat).score) === n).length
     return {
       date,
       conversations: c.length,
-      aiOnly: c.length - team,
+      aiOnly,
       withTeam: team,
+      noReply: c.length - team - aiOnly,
       handoffs: (openedBy.get(date) ?? []).filter((t) => t.source === 'handoff').length,
       ticketsOpened: openedBy.get(date)?.length ?? 0,
       ticketsResolved: res.length,
       backlog: tickets.filter((t) => +t.createdAt < dayEnd && (!t.resolvedAt || +t.resolvedAt >= dayEnd)).length,
-      containment: c.length ? (c.length - team) / c.length : null,
+      containment: c.length ? aiOnly / c.length : null,
       slaMet: res.length ? res.filter((t) => +t.resolvedAt <= +t.resolveDueAt).length / res.length : null,
       medianFirstReplyMin: median((respondedBy.get(date) ?? []).map((t) => mins(t.createdAt, t.firstRespondedAt))),
       csatGood: sc(3),
@@ -219,11 +234,12 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
   // Per agent (number): chats, AI alone, handoffs, satisfaction, cost, service replies.
   const perChat = await col('messages')
     .aggregate([
-      { $match: { workspaceId: ws(), at: { $gte: start, $lt: end }, kind: { $ne: 'note' } } },
-      { $group: { _id: { n: '$phoneNumberId', phone: '$phone' }, team: { $max: { $cond: [{ $eq: ['$author', 'agent'] }, 1, 0] } } } },
+      { $match: { workspaceId: ws(), at: { $gte: start, $lt: end }, kind: { $ne: 'note' }, author: { $in: ['customer', 'ai', 'agent'] } } },
+      { $group: { _id: { n: '$phoneNumberId', phone: '$phone' }, ...CHAT_KIND } },
     ])
     .toArray()
-  const allTickets = await ticketRows({ ...f, numbers: [] }, start, end)
+  const allTickets = await ticketRows({ ...f, numbers: [], team: null, person: null }, start, end)
+  const inRange = (d: unknown) => !!d && +(d as Date) >= +start && +(d as Date) < +end
   const agentCost = await col('agent_usage').aggregate([{ $match: { workspaceId: ws(), start: { $gte: start, $lt: end } } }, { $group: { _id: '$phoneNumberId', cost: { $sum: '$cost' } } }]).toArray()
   const monthStart = dayStart(isoDay(new Date(), tz).slice(0, 8) + '01', tz)
   const service = await col('message_charges')
@@ -238,15 +254,15 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
     .filter((a) => !f.numbers.length || f.numbers.includes(a.id))
     .map((a) => {
       const chats = perChat.filter((r) => numberOf(r._id.n) === a.id)
-      const team = chats.filter((r) => r.team).length
+      const aiOnly = chats.filter((r) => r.ai && !r.team).length
       const ts = allTickets.filter((t) => numberOf(t.phoneNumberId) === a.id)
-      const rated = ts.filter((t) => t.csat && +(t.resolvedAt as Date) >= +start)
+      const rated = ts.filter((t) => t.csat && inRange(t.resolvedAt))
       const sc = (k: number) => rated.filter((t) => Number(obj(t.csat).score) === k).length
       return {
         id: a.id,
         label: a.label,
         conversations: chats.length,
-        containment: ratio(chats.length - team, chats.length),
+        containment: ratio(aiOnly, chats.length),
         handoffs: ts.filter((t) => t.source === 'handoff' && +(t.createdAt as Date) >= +start).length,
         csat: csatScore(sc(3), sc(2), sc(1)),
         agentCost: Number(agentCost.find((r) => String(r._id) === a.id)?.cost ?? 0),
@@ -257,7 +273,6 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
   // People and teams (ticket metrics, honouring the team/person filter).
   const tk = cur.tickets
   const users = new Map((await col('users').find({ _id: { $in: [...new Set(tk.map((t) => t.assigneeId).filter(Boolean))] } as never }).toArray()).map((u) => [String(u._id), String(u.name ?? 'Someone')]))
-  const inRange = (d: unknown) => !!d && +(d as Date) >= +start && +(d as Date) < +end
   const groupBy = (key: (t: Obj) => string | null) => {
     const m = new Map<string, Obj[]>()
     for (const t of tk) {
@@ -295,7 +310,7 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
   })
   const levels = new Map<number, number>()
   for (const t of tk) for (const e of (t.escalations as Obj[] | undefined) ?? []) if (inRange(e.at)) levels.set(Number(e.level), (levels.get(Number(e.level)) ?? 0) + 1)
-  const SOURCE: Record<string, string> = { handoff: 'AI handed over', takeover: 'Someone took over', reply: 'Team replied', manual: 'Created by hand' }
+  const SOURCE: Record<string, string> = { handoff: 'AI handed over', takeover: 'Someone took over', reply: 'Team replied', manual: 'Created by hand', customer: 'Customer wrote again' }
   const sources = new Map<string, number>()
   for (const t of tk) if (inRange(t.createdAt)) sources.set(SOURCE[String(t.source)] ?? 'Other', (sources.get(SOURCE[String(t.source)] ?? 'Other') ?? 0) + 1)
 
@@ -353,10 +368,12 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
   const overdue = openTickets.filter((t) => +(t.firstRespondedAt ? t.resolveDueAt : t.firstResponseDueAt) < now).length
   const available = await col('memberships').countDocuments({ workspaceId: ws(), $or: [{ availability: 'online' }, { availability: { $exists: false } }] })
   const csatOf = (p: Period) => csatScore(p.csat.good, p.csat.okay, p.csat.bad)
+  const spendWholeAccount = f.numbers.length > 0 && agents.some((a) => !f.numbers.includes(a.id))
 
   return {
     range: { from: f.from, to: f.to, days: n, timezone: tz, prevFrom, prevTo },
     currency: (billing?.currency as string | undefined) ?? null,
+    spendWholeAccount,
     agents,
     kpis: {
       conversations: kpi(cur.conversations, prev.conversations),
@@ -371,7 +388,11 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
       slaMet: kpi(ratio(cur.resolvedOnTime, cur.ticketsResolved), ratio(prev.resolvedOnTime, prev.ticketsResolved)),
       escalations: kpi(cur.escalations, prev.escalations),
       spend: kpi(cur.spend + cur.agentCost, prev.spend + prev.agentCost),
-      costPerResolved: kpi(ratio(cur.spend + cur.agentCost, cur.ticketsResolved + cur.aiOnly), ratio(prev.spend + prev.agentCost, prev.ticketsResolved + prev.aiOnly)),
+      // Spend covers the whole account; per resolved conversation it only means something for all agents together.
+      costPerResolved: spendWholeAccount
+        ? kpi(null, null)
+        : kpi(ratio(cur.spend + cur.agentCost, cur.ticketsResolved + cur.aiOnly), ratio(prev.spend + prev.agentCost, prev.ticketsResolved + prev.aiOnly)),
+      handoffRate: kpi(ratio(cur.handoffsAll, cur.conversations), ratio(prev.handoffsAll, prev.conversations)),
       openNow: openTickets.length,
       overdueNow: overdue,
       peopleAvailable: available,

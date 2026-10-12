@@ -9,15 +9,19 @@ export const tickets = area('Tickets & support', {
     get: {
       id: 'listTickets',
       summary: 'List tickets',
-      description: `500 at most. ${SCOPE}`,
+      description: `\`limit\` rows (100 by default, 1,000 at most): ask for more to load more. A ticket waiting on the customer has \`sla.kind: paused\` (no clock runs). ${SCOPE}`,
       query: {
         status: d('open|pending|resolved|all', 'Default: open and pending.'),
-        assignee: d('me|none', 'Mine, or unassigned.'),
+        assignee: d('string', '`me`, `none` (unassigned) or a member’s id.'),
         priority: 'urgent|high|normal|low',
         phone: 'string',
-        q: d('string', 'Subject, name or number.'),
+        q: d('string', 'Searched in the database: ticket number, subject, phone, or contact name.'),
         team: d('string', 'A team id, or `none` for tickets in no team.'),
         escalated: d('1', 'Only tickets that reached an escalation level.'),
+        breached: d('1', 'Only open tickets past their current deadline.'),
+        tag: 'string',
+        sort: d('due|new', 'due: the current deadline soonest first, tickets with no running clock last. Default new (newest first).'),
+        limit: d('integer', '1–1,000. Default 100.'),
       },
       ok: 'Ticket[]',
     },
@@ -34,14 +38,14 @@ export const tickets = area('Tickets & support', {
     post: {
       id: 'bulkTickets',
       summary: 'Change many tickets at once',
-      description: 'Up to 200 ticket numbers. Each change is checked as if made one by one; ones you can’t change are skipped.',
+      description: 'Up to 200 ticket numbers. Each change is checked as if made one by one; ones that can’t change (already resolved, someone else’s) are listed with the reason, and the rest still change.',
       body: {
         oneOf: [
-          o({ 'numbers*': 'integer[]', 'action*': 'resolve', askFeedback: d('boolean', 'Send the satisfaction question.'), handBack: d('boolean', 'Give the chat back to the AI agent.') }),
+          o({ 'numbers*': 'integer[]', 'action*': 'resolve', askFeedback: d('boolean', 'Send the satisfaction question.'), handBack: d('boolean', 'Give the chat back to the AI agent.'), resolution: 'string' }),
           o({ 'numbers*': 'integer[]', 'patch*': o({ status: 'open|pending', priority: 'urgent|high|normal|low', assigneeId: 'string?', teamId: 'string?' }) }),
         ],
       },
-      ok: o({ 'ok*': 'boolean', 'count*': 'integer' }),
+      ok: o({ 'done*': d('integer', 'Tickets changed.'), 'failed*': d('object[]', '{number, reason} for each ticket that couldn’t change.') }),
     },
   },
   '/api/tickets/{n}': {
@@ -49,11 +53,11 @@ export const tickets = area('Tickets & support', {
     patch: {
       id: 'updateTicket',
       summary: 'Change a ticket',
-      description: `Moving it to someone else needs \`tickets.reassign\` (supervisor+). ${SCOPE}`,
+      description: `Moving it to someone else needs \`tickets.reassign\` (supervisor+). Waiting on the customer (pending) pauses the deadlines; back to open moves them later by the time waited. Reopening a resolved ticket restarts its deadlines from now and its escalations from level 0. ${SCOPE}`,
       body: o({ status: d('open|pending', 'Use /resolve to close.'), priority: 'urgent|high|normal|low', assigneeId: 'string?', teamId: d('string?', 'Move to a team (supervisor+).'), subject: 'string', tags: 'string[]' }),
       ok: 'Ticket',
       errors: {
-        400: 'Use Resolve to close a ticket. / Priority must be urgent, high, normal or low. / That person isn’t in this workspace.',
+        400: 'Use Resolve to close a ticket. / Priority must be urgent, high, normal or low. / That person isn’t in this workspace. / Give the ticket a subject.',
         403: 'Only supervisors, admins and owners move work that belongs to someone else.',
         404: GONE(),
         409: 'This chat already has an open ticket (#n). Continue there.',
@@ -66,7 +70,7 @@ export const tickets = area('Tickets & support', {
       summary: 'Resolve a ticket',
       body: o({ resolution: d('string', 'What was done.'), askFeedback: d('boolean', 'Send the satisfaction question (if enabled).'), handBack: d('boolean', 'Give the chat back to the AI agent.') }),
       ok: 'Ticket',
-      errors: { 400: 'Ticket #n is already resolved.', 404: GONE() },
+      errors: { 404: GONE(), 409: 'Ticket #n is already resolved.' },
     },
   },
   '/api/support/teams': {
@@ -145,15 +149,5 @@ export const tickets = area('Tickets & support', {
   },
   '/api/support/notifications/alert:{key}/dismiss': {
     post: { id: 'dismissAlert', summary: 'Dismiss an alert', params: { key: d('string', 'The alert’s key (URL-encoded).') } },
-  },
-  '/api/support/analytics': {
-    get: {
-      id: 'supportAnalytics',
-      summary: 'Team analytics',
-      description: 'Tickets created and resolved, reply and resolve times, response targets met, satisfaction, AI-only vs team chats, per-person numbers, broadcast replies.',
-      query: { days: { type: 'integer', enum: [7, 30, 90], default: 7 } },
-      ok: 'SupportAnalytics',
-      errors: { 400: 'days must be 7, 30 or 90.' },
-    },
   },
 })

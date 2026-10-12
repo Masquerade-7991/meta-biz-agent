@@ -15,6 +15,7 @@ import { can } from '@/app/lib/permissions'
 
 const SETTINGS: { tab: string; label: string }[] = [
   { tab: 'members', label: 'Members' },
+  { tab: 'activity', label: 'Activity log' },
   { tab: 'billing', label: 'Billing' },
   { tab: 'whatsapp', label: 'WhatsApp settings' },
   { tab: 'support', label: 'Hours & response targets' },
@@ -106,7 +107,7 @@ export function CommandPalette() {
           </CommandGroup>
         )}
         <CommandGroup heading="Settings">
-          {SETTINGS.filter((s) => (s.tab !== 'billing' || can(me.role, 'billing.view')) && (s.tab !== 'whatsapp' || can(me.role, 'whatsapp.manage'))).map((s) => (
+          {SETTINGS.filter((s) => (s.tab !== 'billing' || can(me.role, 'billing.view')) && (s.tab !== 'whatsapp' || can(me.role, 'whatsapp.manage')) && (s.tab !== 'activity' || can(me.role, 'traces.read'))).map((s) => (
             <CommandItem key={s.tab} value={`settings ${s.label}`} onSelect={() => go(pathFor('settings', s.tab))}>
               <Settings />
               {s.label}

@@ -7,7 +7,7 @@ import { col, db, dbOffReason, ws } from './db.ts'
 import { env } from './upstream.ts'
 import { currentAssets } from './context.ts'
 import { isProtected } from './protect.ts'
-import { trace } from './trace.ts'
+import { diff, trace } from './trace.ts'
 import { customerLabel, isBsuid, parseCustomerKey } from '../src/app/lib/customer.ts'
 import { dismissAlert, openAlerts } from './alerts.ts'
 import { dismissReminder, dueReminders } from './followups.ts'
@@ -16,6 +16,8 @@ import { contactNames } from './contacts.ts'
 import { addMessage, conversations, currentNumber, sendInteractive, sendText, setControl, type Actor } from './inbox.ts'
 import { can, mayAssign } from '../src/app/lib/permissions.ts'
 import { getTeams, routeTicket, supportOpsRoute } from './supportOps.ts'
+import { customerWrites, pausedFor, shiftDues } from '../src/app/support/ticketRules.ts'
+import type { TicketSource } from '../src/app/support/routing.ts'
 
 export const PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const
 export type Priority = (typeof PRIORITIES)[number]
@@ -118,9 +120,20 @@ function parseSettings(b: Obj, members: Set<string>, teamIds: Set<string>, legac
 
 // ---- lifecycle hooks (called by inbox.ts) ----
 const OPEN = { $in: ['open', 'pending'] }
+const ref = (number: unknown) => ({ entity: 'ticket', id: String(number) })
+/** The last moment Date can hold: what addBusinessMinutes answers when no business hours are ever open. */
+const NEVER = 8.64e15
+
+/** Response deadlines for a priority: business time counted from when the clock started (the ticket
+ *  opened or reopened), plus any time spent waiting on the customer. */
+export function duesFrom(start: Date, priority: Priority, s: SupportSettings, pausedMs = 0) {
+  const at = (minutes: number) => new Date(Math.min(NEVER, +addBusinessMinutes(start, minutes, s.hours) + pausedMs))
+  return { firstResponseDueAt: at(s.sla[priority].firstResponse), resolveDueAt: at(s.sla[priority].resolve) }
+}
+const clockStart = (t: Obj) => (t.clockStartAt ?? t.createdAt) as Date
 
 /** Gives the chat an open ticket if it has none. `source` says why it moved to people. */
-export async function ensureTicket(phone: string, source: 'handoff' | 'takeover' | 'reply' | 'manual', opts: { subject?: string; priority?: Priority; sample?: boolean } = {}) {
+export async function ensureTicket(phone: string, source: TicketSource, opts: { subject?: string; priority?: Priority; sample?: boolean } = {}) {
   const existing = await tickets().findOne({ workspaceId: ws(), phone, status: OPEN })
   if (existing) return existing
   const s = await getSettings()
@@ -145,8 +158,10 @@ export async function ensureTicket(phone: string, source: 'handoff' | 'takeover'
     source,
     createdAt: now,
     updatedAt: now,
-    firstResponseDueAt: addBusinessMinutes(now, s.sla[routed.priority].firstResponse, s.hours),
-    resolveDueAt: addBusinessMinutes(now, s.sla[routed.priority].resolve, s.hours),
+    clockStartAt: now,
+    pausedAt: null,
+    pausedMs: 0,
+    ...duesFrom(now, routed.priority, s),
     escalationLevel: 0,
     phoneNumberId: (conv?.phoneNumberId as string | undefined) ?? currentNumber(),
     firstRespondedAt: null,
@@ -155,8 +170,18 @@ export async function ensureTicket(phone: string, source: 'handoff' | 'takeover'
     csat: null,
     ...((opts.sample ?? conv?.sample) && { sample: true }),
   }
-  await tickets().insertOne(doc)
-  trace('ticket.created', { number: doc.number, source, priority: doc.priority, assigned: !!assigneeId, rule: routed.rule }, { entity: 'ticket', id: String(doc.number) })
+  try {
+    await tickets().insertOne(doc)
+  } catch (err) {
+    // Two events for one chat at the same moment (e.g. a handoff and a reply): the database keeps
+    // one open ticket per chat, and the second caller gets the first one's ticket.
+    if ((err as { code?: number }).code === 11000) {
+      const other = await tickets().findOne({ workspaceId: ws(), phone, status: OPEN })
+      if (other) return other
+    }
+    throw err
+  }
+  trace('ticket.created', { number: doc.number, source, priority: doc.priority, assigned: !!assigneeId, rule: routed.rule }, ref(doc.number))
   if (routed.rule) await addMessage({ phone, direction: 'out', author: 'system', kind: 'event', body: `Ticket #${doc.number} routed by the rule “${routed.rule}”.`, at: now })
   if (assigneeId && !conv?.assigneeId) await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { assigneeId } })
   return doc
@@ -170,18 +195,61 @@ export async function onAgentReply(phone: string) {
  *  so no away message and no satisfaction question. People still reply when they choose to. */
 const listenOnly = () => isProtected(currentAssets()?.wabaId)
 
-/** A customer wrote: reopen a pending ticket, take a CSAT answer, and send the away message if the team is off. */
+/** Back from waiting on the customer: the clocks run again, later by the time they were paused. */
+function resumeSet(t: Obj, now: Date): Obj {
+  const waited = pausedFor(t.pausedAt as Date | null, +now)
+  return { status: 'open', pausedAt: null, pausedMs: Number(t.pausedMs ?? 0) + waited, ...shiftDues(t as { firstResponseDueAt: Date; resolveDueAt: Date }, waited), updatedAt: now }
+}
+
+/** A resolved ticket open again: fresh deadlines from now, escalations start over, and it waits for a
+ *  first reply again. The earlier rating stays in its history (the activity log). */
+async function reopenSet(t: Obj, status: 'open' | 'pending', now: Date): Promise<Obj> {
+  const other = await tickets().findOne({ workspaceId: ws(), phone: t.phone, status: OPEN, _id: { $ne: t._id as never } })
+  // One open ticket per chat: a newer one (e.g. a later handoff) already carries the conversation.
+  if (other) throw new HttpError(409, `This chat already has an open ticket (#${other.number}). Continue there.`)
+  const s = await getSettings()
+  return {
+    status,
+    resolvedAt: null,
+    resolution: null,
+    clockStartAt: now,
+    pausedAt: status === 'pending' ? now : null,
+    pausedMs: 0,
+    ...duesFrom(now, t.priority as Priority, s),
+    firstRespondedAt: null,
+    escalationLevel: 0,
+    csatRequestedAt: null,
+    updatedAt: now,
+  }
+}
+
+/** A customer wrote: take a rating answer, move their ticket (ticketRules.ts customerWrites), and send
+ *  the away message if the team is off. */
 export async function onCustomerMessage(phone: string, body: string, owner: 'ai' | 'human', sample: boolean) {
   const now = new Date()
-  await tickets().updateOne({ workspaceId: ws(), phone, status: 'pending' }, { $set: { status: 'open', updatedAt: now } })
   const choice = CSAT.find((c) => c.title.toLowerCase() === body.trim().toLowerCase() || c.id === body)
   if (choice) {
     const asked = await tickets().findOne({ workspaceId: ws(), phone, status: 'resolved', csat: null, csatRequestedAt: { $gte: new Date(now.getTime() - 3 * 86_400_000) } }, { sort: { resolvedAt: -1 } })
     if (asked) {
       await tickets().updateOne({ _id: asked._id }, { $set: { csat: { score: choice.score, label: choice.title, at: now } } })
+      trace('ticket.rated', { number: asked.number, score: choice.score, label: choice.title }, ref(asked.number))
       return
     }
   }
+  const latest = await tickets().findOne({ workspaceId: ws(), phone }, { sort: { createdAt: -1 } })
+  const next = customerWrites(latest as { status: string; resolvedAt?: Date } | null, owner, +now)
+  if (next === 'resume' && latest) {
+    await tickets().updateOne({ _id: latest._id, status: 'pending' }, { $set: resumeSet(latest, now) })
+    trace('ticket.updated', { number: latest.number, reason: 'customer' }, ref(latest.number), { status: ['pending', 'open'] })
+  }
+  if (next === 'reopen' && latest) {
+    const set = await reopenSet(latest, 'open', now).catch(() => null)
+    if (set && (await tickets().updateOne({ _id: latest._id, status: 'resolved' }, { $set: set }).catch(() => null))?.modifiedCount) {
+      trace('ticket.reopened', { number: latest.number, reason: 'customer' }, ref(latest.number))
+      await addMessage({ phone, direction: 'out', author: 'system', kind: 'event', body: `Ticket #${latest.number} reopened: the customer wrote again.`, at: now })
+    }
+  }
+  if (next === 'new') await ensureTicket(phone, 'customer', { sample })
   if (owner !== 'human' || listenOnly()) return
   const s = await getSettings()
   const conv = await conversations().findOne({ workspaceId: ws(), phone })
@@ -190,9 +258,21 @@ export async function onCustomerMessage(phone: string, body: string, owner: 'ai'
   await sendText(phone, s.awayMessage, { author: 'system', sample })
 }
 
+/** The chat went back to the AI agent: its open ticket is done (no rating question; the AI is talking now). */
+export async function closeOnRelease(phone: string) {
+  const now = new Date()
+  const t = await tickets().findOneAndUpdate(
+    { workspaceId: ws(), phone, status: OPEN },
+    { $set: { status: 'resolved', resolvedAt: now, updatedAt: now, pausedAt: null, resolution: 'Handed back to the AI agent.' } },
+  )
+  if (t) trace('ticket.resolved', { number: t.number, reason: 'handed_back' }, ref(t.number))
+}
+
 // ---- views ----
 function slaState(t: Obj, now = Date.now()) {
   if (t.status === 'resolved') return { kind: 'done' as const, at: null, breached: !!t.resolvedAt && +(t.resolvedAt as Date) > +(t.resolveDueAt as Date) }
+  // Waiting on the customer: the clocks stop until they write back.
+  if (t.status === 'pending') return { kind: 'paused' as const, at: null, breached: false }
   const target = t.firstRespondedAt ? 'resolve' : 'firstResponse'
   const due = (target === 'resolve' ? t.resolveDueAt : t.firstResponseDueAt) as Date
   return { kind: target, at: due, breached: +due < now }
@@ -202,53 +282,79 @@ const out = (t: Obj, names: Map<string, string>) => {
   return { id: String(_id), ...rest, name: names.get(String(t.phone)) ?? null, sla: slaState(t) }
 }
 
+const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const PAGE = 100
+const MAX_ROWS = 1000
+
+/** The list: filters in the query, searched in the database (number, subject, phone, contact name),
+ *  sorted by what's due soonest or newest, `limit` rows (Load more asks for more). */
 async function list(u: URL, me: Actor) {
   const p = (k: string) => u.searchParams.get(k) ?? ''
   const where: Obj = { workspaceId: ws() }
   if (STATUSES.includes(p('status') as never)) where.status = p('status')
   else if (p('status') !== 'all') where.status = OPEN
   if (p('assignee') === 'me') where.assigneeId = me._id
-  if (p('assignee') === 'none') where.assigneeId = null
+  else if (p('assignee') === 'none') where.assigneeId = null
+  else if (/^[0-9a-f-]{36}$/.test(p('assignee'))) where.assigneeId = p('assignee')
   if (PRIORITIES.includes(p('priority') as never)) where.priority = p('priority')
   if (p('team') === 'none') where.teamId = null
   else if (p('team')) where.teamId = p('team')
   if (p('escalated') === '1') where.escalationLevel = { $gt: 0 }
+  if (p('tag')) where.tags = p('tag').toLowerCase()
   if (p('phone')) where.phone = parseCustomerKey(p('phone'))
+  const q = p('q').trim()
+  if (q) {
+    const re = { $regex: escRe(q), $options: 'i' }
+    const byName = await col('contacts').find({ workspaceId: ws(), name: re }, { projection: { phone: 1 } }).limit(200).toArray()
+    where.$or = [{ subject: re }, { phone: { $regex: escRe(q.replace(/\D/g, '') || q) } }, { phone: { $in: byName.map((c) => c.phone) } }, ...(/^\d+$/.test(q) ? [{ number: Number(q) }] : [])]
+  }
   const scope = await scopeFor(me)
   if (scope) where.$and = [scope]
-  const rows = await tickets().find(where).sort({ createdAt: -1 }).limit(500).toArray()
+  const limit = Math.min(MAX_ROWS, Math.max(1, Number(p('limit')) || PAGE))
+  const now = new Date()
+  const rows = await tickets()
+    .aggregate([
+      { $match: where },
+      // The deadline that matters now: the first reply until there is one, then resolving.
+      { $addFields: { dueAt: { $cond: [{ $eq: ['$status', 'open'] }, { $cond: [{ $gt: ['$firstRespondedAt', null] }, '$resolveDueAt', '$firstResponseDueAt'] }, null] } } },
+      ...(p('breached') === '1' ? [{ $match: { dueAt: { $lt: now } } }] : []),
+      // Due soonest: overdue first, tickets with no running clock (waiting, resolved) last; ties newest first.
+      { $addFields: { noClock: { $eq: ['$dueAt', null] } } },
+      { $sort: p('sort') === 'due' ? { noClock: 1, dueAt: 1, createdAt: -1 } : { createdAt: -1 } },
+      { $limit: limit },
+      { $project: { dueAt: 0, noClock: 0 } },
+    ])
+    .toArray()
   const names = await contactNames(rows.map((r) => String(r.phone)))
-  const q = p('q').toLowerCase()
-  return rows
-    .filter((r) => !q || String(r.number).includes(q) || String(r.subject).toLowerCase().includes(q) || (names.get(String(r.phone)) ?? '').toLowerCase().includes(q) || String(r.phone).includes(q))
-    .map((r) => out(r, names))
+  return rows.map((r) => out(r, names))
 }
+
+/** The fields people see change, for the activity log. */
+const SHOWN = ['status', 'priority', 'assigneeId', 'teamId', 'subject', 'tags'] as const
+const shown = (o: Obj) => Object.fromEntries(SHOWN.filter((k) => k in o).map((k) => [k, o[k]]))
 
 async function update(number: number, b: Obj, me: Actor) {
   const t = await tickets().findOne({ workspaceId: ws(), number })
   if (!t) throw new HttpError(404, `Ticket #${number} doesn’t exist.`)
-  const set: Obj = { updatedAt: new Date() }
-  if (b.status !== undefined) {
-    if (!['open', 'pending'].includes(String(b.status))) throw new HttpError(400, 'Use Resolve to close a ticket.')
-    set.status = b.status
-    if (t.status === 'resolved') {
-      // One open ticket per chat: a newer one (e.g. a later handoff) already carries the conversation.
-      const other = await tickets().findOne({ workspaceId: ws(), phone: t.phone, status: OPEN, _id: { $ne: t._id } })
-      if (other) throw new HttpError(409, `This chat already has an open ticket (#${other.number}). Continue there.`)
-      Object.assign(set, { resolvedAt: null, resolution: null })
-    }
-  }
-  if (b.priority !== undefined) {
-    if (!PRIORITIES.includes(b.priority as Priority)) throw new HttpError(400, 'Priority must be urgent, high, normal or low.')
-    const s = await getSettings()
-    // New targets count from when the ticket was opened.
-    Object.assign(set, {
-      priority: b.priority,
-      firstResponseDueAt: addBusinessMinutes(t.createdAt as Date, s.sla[b.priority as Priority].firstResponse, s.hours),
-      resolveDueAt: addBusinessMinutes(t.createdAt as Date, s.sla[b.priority as Priority].resolve, s.hours),
-    })
-  }
   await needInScope(me, t.assigneeId)
+  const now = new Date()
+  const set: Obj = { updatedAt: now }
+  let reopened = false
+  if (b.status !== undefined && b.status !== t.status) {
+    if (!['open', 'pending'].includes(String(b.status))) throw new HttpError(400, 'Use Resolve to close a ticket.')
+    if (t.status === 'resolved') {
+      Object.assign(set, await reopenSet(t, b.status as 'open' | 'pending', now))
+      reopened = true
+    } else if (b.status === 'pending') Object.assign(set, { status: 'pending', pausedAt: now })
+    else Object.assign(set, resumeSet(t, now))
+  }
+  if (b.priority !== undefined && b.priority !== t.priority) {
+    if (!PRIORITIES.includes(b.priority as Priority)) throw new HttpError(400, 'Priority must be urgent, high, normal or low.')
+    // New targets count from when the clock started, plus any time spent waiting on the customer.
+    if (!reopened) Object.assign(set, duesFrom(clockStart(t), b.priority as Priority, await getSettings(), Number(t.pausedMs ?? 0)))
+    else Object.assign(set, duesFrom(now, b.priority as Priority, await getSettings()))
+    set.priority = b.priority
+  }
   if (b.assigneeId !== undefined) {
     const id = b.assigneeId === null ? null : String(b.assigneeId)
     needCanAssign(me, id, t.assigneeId)
@@ -259,30 +365,40 @@ async function update(number: number, b: Obj, me: Actor) {
   if (b.teamId !== undefined) {
     if (!can(me.role, 'tickets.reassign')) throw new HttpError(403, 'Only supervisors, admins and owners move tickets between teams.')
     const id = b.teamId === null ? null : String(b.teamId)
-    if (id && !(await getTeams()).some((t) => t.id === id)) throw new HttpError(400, 'That team no longer exists.')
+    if (id && !(await getTeams()).some((x) => x.id === id)) throw new HttpError(400, 'That team no longer exists.')
     set.teamId = id
   }
-  if (typeof b.subject === 'string' && b.subject.trim()) set.subject = b.subject.trim().slice(0, 120)
-  if (Array.isArray(b.tags)) set.tags = b.tags.map((x) => String(x).trim().toLowerCase()).filter(Boolean).slice(0, 20)
+  if (b.subject !== undefined) {
+    const subject = String(b.subject ?? '').trim().slice(0, 120)
+    if (!subject) throw new HttpError(400, 'Give the ticket a subject.')
+    set.subject = subject
+  }
+  if (Array.isArray(b.tags)) set.tags = [...new Set(b.tags.map((x) => String(x).trim().toLowerCase()).filter(Boolean))].slice(0, 20)
   await tickets().updateOne({ _id: t._id }, { $set: set })
-  trace('ticket.updated', { number, fields: Object.keys(set).filter((k) => k !== 'updatedAt') }, { entity: 'ticket', id: String(number) })
-  void me
+  const changes = diff(shown(t), shown(set))
+  if (reopened) trace('ticket.reopened', { number }, ref(number))
+  else if (changes) trace('ticket.updated', { number }, ref(number), changes)
   return one(number)
 }
 
 async function resolve(number: number, b: Obj, me: Actor) {
   const t = await tickets().findOne({ workspaceId: ws(), number })
   if (!t) throw new HttpError(404, `Ticket #${number} doesn’t exist.`)
-  if (t.status === 'resolved') throw new HttpError(400, `Ticket #${number} is already resolved.`)
+  if (t.status === 'resolved') throw new HttpError(409, `Ticket #${number} is already resolved.`)
   await needInScope(me, t.assigneeId)
   const now = new Date()
   const s = await getSettings()
   const conv = await conversations().findOne({ workspaceId: ws(), phone: t.phone })
   const windowOpen = !!conv?.lastInboundAt && now.getTime() - +conv.lastInboundAt < 86_400_000
   const askCsat = b.askFeedback !== false && s.csat.enabled && windowOpen && !listenOnly()
-  await tickets().updateOne({ _id: t._id }, { $set: { status: 'resolved', resolvedAt: now, updatedAt: now, resolution: String(b.resolution ?? '').trim().slice(0, 2000) || null, ...(askCsat && { csatRequestedAt: now }) } })
+  const r = await tickets().updateOne(
+    { _id: t._id, status: OPEN },
+    { $set: { status: 'resolved', resolvedAt: now, updatedAt: now, pausedAt: null, resolution: String(b.resolution ?? '').trim().slice(0, 2000) || null, ...(askCsat && { csatRequestedAt: now }) } },
+  )
+  // Someone else resolved it a moment ago (two people, or a hand-back): nothing more to do.
+  if (!r.modifiedCount) throw new HttpError(409, `Ticket #${number} is already resolved.`)
   await addMessage({ phone: String(t.phone), direction: 'out', author: 'system', kind: 'event', body: `${me.name} resolved ticket #${number}.`, at: now })
-  trace('ticket.resolved', { number, askCsat, handBack: b.handBack !== false }, { entity: 'ticket', id: String(number) })
+  trace('ticket.resolved', { number, askCsat, handBack: b.handBack !== false }, ref(number))
   if (askCsat) await sendInteractive(String(t.phone), s.csat.question, CSAT, { sample: !!conv?.sample })
   // A number-hidden customer can't be handed back yet (thread control needs a phone number).
   if (b.handBack !== false && conv?.owner === 'human' && !isBsuid(String(t.phone))) await setControl(me, String(t.phone), 'release')
@@ -298,7 +414,13 @@ async function one(number: number) {
 /** The bell: what needs this person now, newest first. */
 async function notifications(me: Actor) {
   const now = Date.now()
-  const open = await tickets().find({ workspaceId: ws(), status: OPEN, $or: [{ assigneeId: me._id }, { assigneeId: null }] }).sort({ createdAt: -1 }).limit(100).toArray()
+  // Yours, and nobody's: an unassigned ticket in a team concerns only that team's people.
+  const myTeams = (await getTeams()).filter((t) => t.memberIds.includes(me._id)).map((t) => t.id)
+  const open = await tickets()
+    .find({ workspaceId: ws(), status: OPEN, $or: [{ assigneeId: me._id }, { assigneeId: null, teamId: { $in: [null, ...myTeams] } }] })
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .toArray()
   const names = await contactNames(open.map((t) => String(t.phone)))
   const items = open.flatMap((t) => {
     const who = names.get(String(t.phone)) || customerLabel(String(t.phone))
@@ -325,62 +447,6 @@ async function notifications(me: Actor) {
   return [...alerts, ...(await dueReminders(me._id)), ...items.sort((a, z) => +z.at - +a.at)].slice(0, 30)
 }
 
-// ---- support analytics ----
-const median = (xs: number[]) => {
-  if (!xs.length) return null
-  const s = [...xs].sort((a, z) => a - z)
-  return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2
-}
-/** The team's numbers for the last `days` days, by day in the workspace's time zone. */
-async function analytics(days: number) {
-  const s = await getSettings()
-  const since = new Date(Date.now() - days * 86_400_000)
-  const day = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: s.hours.timezone }).format(d)
-  const all = await tickets().find({ workspaceId: ws(), $or: [{ createdAt: { $gte: since } }, { resolvedAt: { $gte: since } }] }).toArray()
-  const created = all.filter((t) => +t.createdAt >= +since)
-  const resolved = all.filter((t) => t.resolvedAt && +t.resolvedAt >= +since)
-  const responded = all.filter((t) => t.firstRespondedAt && +t.firstRespondedAt >= +since)
-  const dates = Array.from({ length: days }, (_, i) => day(new Date(Date.now() - (days - 1 - i) * 86_400_000)))
-  const count = (rows: Obj[], k: string) => {
-    const m = new Map<string, number>()
-    for (const r of rows) m.set(day(r[k] as Date), (m.get(day(r[k] as Date)) ?? 0) + 1)
-    return m
-  }
-  const c = count(created, 'createdAt')
-  const r = count(resolved, 'resolvedAt')
-  const mins = (a: unknown, b: unknown) => (+(b as Date) - +(a as Date)) / 60_000
-  const csat = resolved.filter((t) => t.csat).map((t) => Number(obj(t.csat).score))
-  const people = new Map((await col('users').find({ _id: { $in: [...new Set(all.map((t) => t.assigneeId).filter(Boolean))] } as never }).toArray()).map((u) => [String(u._id), String(u.name ?? 'Someone')]))
-  const byPerson = new Map<string, { name: string; resolved: number; open: number; firstReply: number[] }>()
-  for (const t of all) {
-    const id = String(t.assigneeId ?? 'none')
-    const row = byPerson.get(id) ?? { name: t.assigneeId ? (people.get(id) ?? 'Someone') : 'Unassigned', resolved: 0, open: 0, firstReply: [] }
-    if (t.status === 'resolved' && t.resolvedAt && +t.resolvedAt >= +since) row.resolved++
-    if (t.status !== 'resolved') row.open++
-    if (t.firstRespondedAt && +t.firstRespondedAt >= +since) row.firstReply.push(mins(t.createdAt, t.firstRespondedAt))
-    byPerson.set(id, row)
-  }
-  // Chats in range: answered by the AI alone, or with someone from the team.
-  const touched = await col('messages').aggregate([{ $match: { workspaceId: ws(), at: { $gte: since }, kind: { $ne: 'note' } } }, { $group: { _id: '$phone', team: { $max: { $cond: [{ $eq: ['$author', 'agent'] }, 1, 0] } } } }]).toArray()
-  const sent = await col('broadcast_recipients').aggregate([{ $match: { workspaceId: ws(), sentAt: { $gte: since } } }, { $group: { _id: null, sent: { $sum: 1 }, read: { $sum: { $cond: [{ $eq: ['$status', 'read'] }, 1, 0] } }, replied: { $sum: { $cond: [{ $ifNull: ['$repliedAt', false] }, 1, 0] } } } }]).toArray()
-  return {
-    days,
-    timezone: s.hours.timezone,
-    series: dates.map((d) => ({ date: d, created: c.get(d) ?? 0, resolved: r.get(d) ?? 0 })),
-    created: created.length,
-    resolved: resolved.length,
-    open: await tickets().countDocuments({ workspaceId: ws(), status: OPEN }),
-    medianFirstReplyMin: median(responded.map((t) => mins(t.createdAt, t.firstRespondedAt))),
-    medianResolveMin: median(resolved.map((t) => mins(t.createdAt, t.resolvedAt))),
-    slaFirstReplyMet: responded.length ? responded.filter((t) => +t.firstRespondedAt <= +t.firstResponseDueAt).length / responded.length : null,
-    slaResolveMet: resolved.length ? resolved.filter((t) => +t.resolvedAt <= +t.resolveDueAt).length / resolved.length : null,
-    csat: { responses: csat.length, average: csat.length ? csat.reduce((a, z) => a + z, 0) / csat.length : null, good: csat.filter((x) => x === 3).length, okay: csat.filter((x) => x === 2).length, bad: csat.filter((x) => x === 1).length },
-    chats: { total: touched.length, aiOnly: touched.filter((x) => !x.team).length, withTeam: touched.filter((x) => x.team).length },
-    people: [...byPerson.values()].map((p) => ({ name: p.name, resolved: p.resolved, open: p.open, medianFirstReplyMin: median(p.firstReply) })).sort((a, z) => z.resolved - a.resolved),
-    broadcasts: { sent: Number(sent[0]?.sent ?? 0), read: Number(sent[0]?.read ?? 0), replied: Number(sent[0]?.replied ?? 0) },
-  }
-}
-
 // ---- routes ----
 async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unknown> {
   const path = u.pathname
@@ -398,12 +464,19 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   }
   if (path === '/api/tickets/bulk' && m === 'POST') {
     const b = obj(await readJson(req))
-    const numbers = (Array.isArray(b.numbers) ? b.numbers : []).map(Number).filter(Number.isInteger).slice(0, 200)
+    const numbers = [...new Set((Array.isArray(b.numbers) ? b.numbers : []).map(Number).filter(Number.isInteger))].slice(0, 200)
+    // Each ticket on its own: one that can't change (already resolved, someone else's) is reported, the rest still go.
+    const failed: { number: number; reason: string }[] = []
     for (const n of numbers) {
-      if (b.action === 'resolve') await resolve(n, { askFeedback: b.askFeedback, handBack: b.handBack }, me).catch(() => null)
-      else await update(n, obj(b.patch), me)
+      try {
+        if (b.action === 'resolve') await resolve(n, { askFeedback: b.askFeedback, handBack: b.handBack, resolution: b.resolution }, me)
+        else await update(n, obj(b.patch), me)
+      } catch (err) {
+        if (!(err instanceof HttpError)) throw err
+        failed.push({ number: n, reason: err.message })
+      }
     }
-    return { ok: true, count: numbers.length }
+    return { done: numbers.length - failed.length, failed }
   }
   if ((seg = path.match(/^\/api\/tickets\/(\d+)(\/resolve)?$/))) {
     const n = Number(seg[1])
@@ -417,9 +490,10 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     if (!can(me.role, 'settings.manage')) throw new HttpError(403, 'Only owners and admins can change support settings.')
     const members = new Set((await col('memberships').find({ workspaceId: ws() }).toArray()).map((x) => String(x.userId)))
     const teamIds = new Set((await getTeams()).map((t) => t.id))
-    const settings = parseSettings(obj(await readJson(req)), members, teamIds, (await getSettings()).teams)
+    const before = await getSettings()
+    const settings = parseSettings(obj(await readJson(req)), members, teamIds, before.teams)
     await settingsCol().updateOne({ workspaceId: ws() }, { $set: { settings, updatedAt: new Date(), updatedBy: me._id } }, { upsert: true })
-    trace('settings.updated', { area: 'support' })
+    trace('settings.updated', { area: 'support' }, undefined, diff(before as unknown as Obj, settings as unknown as Obj))
     return { ...settings, aiSummary: !!env('ANTHROPIC_API_KEY'), listenOnly: listenOnly() }
   }
   if (path === '/api/support/notifications' && m === 'GET') return notifications(me)
@@ -430,11 +504,6 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   if ((seg = path.match(/^\/api\/support\/notifications\/alert:(.+)\/dismiss$/)) && m === 'POST') {
     await dismissAlert(decodeURIComponent(seg[1]), me._id)
     return { ok: true }
-  }
-  if (path === '/api/support/analytics' && m === 'GET') {
-    const days = Number(u.searchParams.get('days') ?? 7)
-    if (![7, 30, 90].includes(days)) throw new HttpError(400, 'days must be 7, 30 or 90.')
-    return analytics(days)
   }
   const ops = await supportOpsRoute(req, u, me)
   if (ops !== undefined) return ops

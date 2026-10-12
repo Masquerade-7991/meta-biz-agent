@@ -213,6 +213,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       await asBusiness(a, tokenOf(a), () => metaJson('graph', 'DELETE', `/${a.wabaId}/subscribed_apps`)).catch(() => null)
       await accounts().deleteOne({ workspaceId: ws(), wabaId: a.wabaId })
       forgetAssets(ws())
+      trace('whatsapp.disconnected', { wabaId: a.wabaId, name: a.wabaName })
       return { ok: true }
     }
     if (seg[2] === 'retry' && m === 'POST') {
@@ -221,6 +222,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       const done = await finish(a, tokenOf(a), flowOf(a), a.pinEnc && key ? open(a.pinEnc, key) : undefined)
       await accounts().updateOne({ _id: (a as Account & { _id: unknown })._id as never }, { $set: { steps: done.steps, billing: done.billing, wabaName: done.wabaName, phoneNumbers: done.phoneNumbers } })
       forgetAssets(ws())
+      trace('whatsapp.retried', { wabaId: a.wabaId })
       return view(done)
     }
     if (seg[2] === 'billing' && m === 'POST') {

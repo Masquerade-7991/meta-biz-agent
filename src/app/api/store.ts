@@ -173,6 +173,8 @@ export interface AuditRow {
   resourceId: string | null
   status: number | string
   summary: Record<string, string | number | boolean>
+  /** Who made the change; null for changes recorded before people were. */
+  by?: string | null
 }
 export const listAudit = (limit = 50) => storeFetch<AuditRow[]>('/api/store/audit' + q({ phone: phone(), limit }))
 

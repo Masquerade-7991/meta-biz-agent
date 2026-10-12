@@ -39,6 +39,8 @@ import {
   sendAgentEvent,
   } from '@/app/api/meta'
 import { listAgentEvents, listAudit, ms, type AuditRow } from '@/app/api/store'
+import { activityText } from '@/app/activity/activityText'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
 
 // ==================================================================================
 // QUALITY CHECKS
@@ -403,16 +405,14 @@ function InboundEventsSection({
 
 type TestEvent = { to: string; type: string; description: string; payload: string }
 
-/** Precomputes each turn's display time in one pass: the turn's own timestamp when Meta actually
- *  returned one, otherwise `~` plus the last turn that did have one — never an invented time,
- *  since `timestamp` is documented as present only "if available." */
+/** The agent's changes as sentences, newest first, with who made each one. */
 function ChangeHistorySection({ rows }: { rows: AuditRow[] }) {
   return (
     <section className="space-y-3">
       <div>
         <h3>Change history</h3>
         <p className="mt-1 text-muted-foreground text-sm">
-          Every change this console sent to Meta for this agent, newest first.
+          Every change this console sent to Meta for this agent, newest first. The whole workspace&rsquo;s activity is in Settings &rsaquo; Activity.
         </p>
       </div>
       {rows.length === 0 ? (
@@ -425,30 +425,18 @@ function ChangeHistorySection({ rows }: { rows: AuditRow[] }) {
             <thead className="bg-muted text-muted-foreground text-xs">
               <tr>
                 <th className="px-3 py-2 font-medium">When</th>
-                <th className="px-3 py-2 font-medium">Action</th>
-                <th className="px-3 py-2 font-medium">Resource</th>
-                <th className="px-3 py-2 font-medium">Details</th>
+                <th className="px-3 py-2 font-medium">What changed</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, i) => {
-                const failed = Number(r.status) >= 400
-                return (
-                  <tr key={i} className="border-t border-border align-top">
-                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{formatFullTimestamp(ms(r.at))}</td>
-                    <td className={cn('px-3 py-2 capitalize', failed && 'text-destructive')}>
-                      {r.action}
-                      {failed && ` (failed, ${r.status})`}
-                    </td>
-                    <td className="px-3 py-2">{r.resource}</td>
-                    <td className="px-3 py-2 wrap-break-word text-muted-foreground">
-                      {Object.entries(r.summary ?? {})
-                        .map(([k, v]) => `${k}: ${v}`)
-                        .join(', ')}
-                    </td>
-                  </tr>
-                )
-              })}
+              {rows.map((r, i) => (
+                <tr key={i} className="border-t border-border align-top">
+                  <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{formatFullTimestamp(ms(r.at))}</td>
+                  <td className="px-3 py-2">
+                    {activityText({ id: String(i), at: '', kind: `agent.${r.action}`, userId: null, actor: r.by ?? 'Someone', entity: null, entityId: null, data: { resource: r.resource, ...r.summary }, traceId: null })}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -544,8 +532,8 @@ export function ActivityPage() {
   const { state, patch, setSection } = useWizard()
 
   const exitTo = useExitWizard()
-  // From the server's store; null when it has no database.
-  const [audit, setAudit] = useState<AuditRow[] | null>(null)
+  // From the server's store: undefined while loading, null when it has no database.
+  const [audit, setAudit] = useState<AuditRow[] | null | undefined>(undefined)
   useEffect(() => {
     listAudit().then(setAudit, () => setAudit([]))
   }, [])
@@ -680,7 +668,7 @@ export function ActivityPage() {
           Open Inbox
         </Button>
       </p>
-      {audit && <ChangeHistorySection rows={audit} />}
+      {audit === undefined ? <PageLoader context="agent" /> : audit && <ChangeHistorySection rows={audit} />}
     </div>
   )
 }

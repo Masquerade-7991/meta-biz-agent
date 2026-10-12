@@ -5,6 +5,7 @@ import type http from 'node:http'
 import { ObjectId } from 'mongodb'
 import { HttpError, type Obj, type Titles, digits, obj, readJson, serveJson } from './http.ts'
 import { col, db, dbOffReason, ws } from './db.ts'
+import { trace } from './trace.ts'
 import type { Actor } from './inbox.ts'
 import { can } from '../src/app/lib/permissions.ts'
 
@@ -116,13 +117,17 @@ async function save(b: Obj, phone?: string) {
   }
   if (doc.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(doc.email))) throw new HttpError(400, 'That email address doesn’t look right.')
   if (phone) {
-    const r = await contacts().findOneAndUpdate({ workspaceId: ws(), phone: p }, { $set: doc }, { returnDocument: 'after' })
+    const r = await contacts().findOneAndUpdate({ workspaceId: ws(), phone: p }, { $set: doc }, { returnDocument: 'before' })
     if (!r) throw new HttpError(404, 'That contact no longer exists.')
-    return out(r)
+    // Which details changed, not their values: the activity log keeps no customer details.
+    const fields = ['name', 'email', 'tags', 'fields', 'optedOut'].filter((k) => JSON.stringify(r[k] ?? null) !== JSON.stringify(doc[k] ?? null))
+    if (fields.length) trace('contact.updated', { fields }, { entity: 'contact', id: p })
+    return out({ ...r, ...doc })
   }
   if (await contacts().findOne({ workspaceId: ws(), phone: p })) throw new HttpError(409, `+${p} is already a contact.`)
   const full = { ...doc, workspaceId: ws(), phone: p, source: 'manual', createdAt: new Date() }
   await contacts().insertOne(full)
+  trace('contact.created', {}, { entity: 'contact', id: p })
   return out(full)
 }
 
@@ -154,6 +159,7 @@ async function importRows(b: Obj) {
       skipped.push({ row: i + 2, reason: err instanceof HttpError ? err.message : 'Couldn’t read this row.' })
     }
   }
+  trace('contact.imported', { added, updated, skipped: skipped.length })
   return { added, updated, skipped: skipped.slice(0, 100), skippedCount: skipped.length }
 }
 
@@ -187,6 +193,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       return { key, label, type, ...(options && { options }) }
     })
     await col('contact_fields').updateOne({ workspaceId: ws() }, { $set: { fields, updatedAt: new Date() } }, { upsert: true })
+    trace('settings.updated', { area: 'contact_fields', count: fields.length })
     return fields
   }
   if (path === '/api/contacts/segments' && m === 'GET')
@@ -219,6 +226,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       if (!can(me.role, 'contacts.manage')) throw new HttpError(403, 'Supervisors, admins and owners delete contacts.')
       // Deleting a contact removes everything we hold about them: chat, messages and tickets.
       for (const name of ['contacts', 'conversations', 'messages', 'tickets', 'presence']) await col(name).deleteMany({ workspaceId: ws(), phone })
+      trace('contact.deleted', {}, { entity: 'contact', id: phone })
       return { ok: true }
     }
   }

@@ -9,8 +9,14 @@ export interface Slice {
 }
 
 /** Share of a whole, with the total in the middle and a legend that carries the numbers. */
-export function Donut({ slices, total, totalLabel = 'Total', format = compact, label, size = 168 }: { slices: Slice[]; total?: string; totalLabel?: string; format?: (v: number) => string; label: string; size?: number }) {
+export function Donut({ slices, total, totalLabel = 'Total', format = compact, label, size = 168, empty = 'Nothing in these dates.' }: { slices: Slice[]; total?: string; totalLabel?: string; format?: (v: number) => string; label: string; size?: number; empty?: string }) {
   const sum = slices.reduce((a, s) => a + s.value, 0)
+  if (!sum)
+    return (
+      <p className="flex items-center justify-center rounded-md bg-muted/40 text-center text-sm text-muted-foreground" style={{ height: size }}>
+        {empty}
+      </p>
+    )
   const colored = slices.map((s, i) => ({ ...s, key: s.label, color: s.color ?? colorAt(i) }))
   const series: Series[] = colored.map((s) => ({ key: s.key, label: s.label, color: s.color, format }))
   return (

@@ -8,11 +8,11 @@ import { col, db, dbOffReason, ws } from './db.ts'
 import { currentAssets } from './context.ts'
 import { defineJob, enqueue } from './jobs.ts'
 import { mail } from './mail.ts'
-import { trace } from './trace.ts'
+import { diff, trace } from './trace.ts'
 import { getSettings } from './tickets.ts'
 import { dayStart, logPage, overview, parseFilter } from './analytics.ts'
 import { can } from '../src/app/lib/permissions.ts'
-import { isoDay, type AnalyticsFilter, type LogPage } from '../src/app/analytics/types.ts'
+import { isoDay, type AnalyticsFilter, type LogPage, type Overview } from '../src/app/analytics/types.ts'
 import {
   isLogReport,
   isReport,
@@ -32,15 +32,16 @@ const schedules = () => col('report_schedules')
 const MAX_LOG_ROWS = 50_000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-/** One report's CSV for a filter. Logs are read in pages up to 50,000 rows. */
-export async function reportCsv(id: ReportId, f: AnalyticsFilter) {
+/** One report's CSV for a filter. Logs are read in pages up to 50,000 rows. `o`: the overview
+ *  already built for this filter (an email with several reports builds it once). */
+export async function reportCsv(id: ReportId, f: AnalyticsFilter, o?: Overview) {
   if (isLogReport(id)) {
     const first: LogPage = await logPage(id, f, 0, 1000)
     const rows = [...first.rows]
     for (let skip = 1000; skip < Math.min(first.total, MAX_LOG_ROWS); skip += 1000) rows.push(...(await logPage(id, f, skip, 1000)).rows)
     return tableCsv(reportTable(id, null, { ...first, rows }))
   }
-  return tableCsv(reportTable(id, await overview(f), null))
+  return tableCsv(reportTable(id, o ?? (await overview(f)), null))
 }
 
 // ---- schedules ----
@@ -57,6 +58,8 @@ const out = (s: Obj): ReportSchedule => ({
   enabled: s.enabled !== false,
   lastSentAt: s.lastSentAt ? (s.lastSentAt as Date).toISOString() : null,
   nextRunAt: s.nextRunAt ? (s.nextRunAt as Date).toISOString() : null,
+  lastError: (s.lastError as string | null) ?? null,
+  lastFailedAt: s.lastFailedAt ? (s.lastFailedAt as Date).toISOString() : null,
 })
 
 async function parseSchedule(b: Obj, me: Actor) {
@@ -99,19 +102,34 @@ async function plan(id: string, cadence: Cadence, hour: number) {
   return at
 }
 
-/** Builds and emails one schedule now. Returns how many people it went to. */
+/** Builds and emails one schedule now (on time, or Send now), and records how it went on the schedule.
+ *  Returns how many people it went to. */
 async function sendSchedule(s: ReportSchedule) {
+  const where = { _id: s.id as never, workspaceId: ws() }
+  try {
+    const r = await buildAndSend(s)
+    const problem = [r.failed && `${r.failed} of ${r.failed + r.sent} addresses refused it`, r.dropped && `${r.dropped} recipient${r.dropped === 1 ? ' is' : 's are'} no longer in the workspace and ${r.dropped === 1 ? 'was' : 'were'} skipped`].filter(Boolean).join('; ')
+    await schedules().updateOne(where, { $set: { lastSentAt: new Date(), ...(problem ? { lastError: problem, lastFailedAt: new Date() } : { lastError: null }) } })
+    return r.sent
+  } catch (err) {
+    await schedules().updateOne(where, { $set: { lastError: err instanceof Error ? err.message.slice(0, 300) : String(err), lastFailedAt: new Date() } })
+    throw err
+  }
+}
+
+async function buildAndSend(s: ReportSchedule) {
   const settings = await getSettings()
   const tz = settings.hours.timezone
   const range = scheduleRange(s.cadence, isoDay(new Date(), tz))
   const f: AnalyticsFilter = { ...range, numbers: s.numbers, team: s.team, person: null }
   const o = await overview(f)
   const files = []
-  for (const id of s.reports) files.push({ filename: reportFile(id, range.from, range.to), content: await reportCsv(id, f) })
+  for (const id of s.reports) files.push({ filename: reportFile(id, range.from, range.to), content: await reportCsv(id, f, o) })
   const k = o.kpis
   const p = (v: number | null) => (v == null ? '–' : `${Math.round(v * 100)}%`)
   const n = (v: number | null) => (v == null ? '–' : new Intl.NumberFormat('en').format(Math.round(v)))
   const m = (v: number | null) => (v == null ? '–' : `${Math.round(v)} min`)
+  const money = (v: number | null) => (v == null ? '–' : o.currency ? new Intl.NumberFormat('en', { style: 'currency', currency: o.currency }).format(v) : new Intl.NumberFormat('en', { maximumFractionDigits: 2 }).format(v))
   const table = {
     head: ['', 'This period', 'Before'],
     rows: [
@@ -122,10 +140,13 @@ async function sendSchedule(s: ReportSchedule) {
       ['Median first reply', m(k.medianFirstReplyMin.value), m(k.medianFirstReplyMin.prev)],
       ['Resolved on time', p(k.slaMet.value), p(k.slaMet.prev)],
       ['Escalations', n(k.escalations.value), n(k.escalations.prev)],
-      [`Spend${o.currency ? ` (${o.currency})` : ''}`, n(k.spend.value), n(k.spend.prev)],
+      ['Spend', money(k.spend.value), money(k.spend.prev)],
     ],
   }
-  const users = await col('users').find({ _id: { $in: s.userIds } as never }).toArray()
+  // Only people still in the workspace: someone who left stops getting its numbers.
+  const members = new Set((await col('memberships').find({ workspaceId: ws(), userId: { $in: s.userIds } }).toArray()).map((x) => String(x.userId)))
+  const dropped = s.userIds.filter((id) => !members.has(id)).length
+  const users = await col('users').find({ _id: { $in: [...members] } as never }).toArray()
   const to = [...new Set([...users.map((u) => String(u.email)), ...s.emails])]
   const workspace = String((await col('workspaces').findOne({ _id: ws() as never }))?.name ?? 'Your workspace')
   const fmt = (d: string) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
@@ -148,8 +169,9 @@ async function sendSchedule(s: ReportSchedule) {
   }
   // Nobody got it: say why (Send now shows it; the job retries). Some did: that's a send.
   if (!sent && failure) throw failure
-  trace('report.sent', { reports: s.reports.length, recipients: sent, failed: to.length - sent, cadence: s.cadence })
-  return sent
+  if (!to.length) throw new HttpError(400, 'Nobody to send it to: everyone on this schedule has left the workspace. Add someone.')
+  trace('report.sent', { reports: s.reports.length, recipients: sent, failed: to.length - sent, dropped, cadence: s.cadence })
+  return { sent, failed: to.length - sent, dropped }
 }
 
 defineJob(
@@ -162,7 +184,7 @@ defineJob(
     if (doc.nextRunAt && +(doc.nextRunAt as Date) - Date.now() > 60_000) return { again: doc.nextRunAt as Date }
     await sendSchedule(s)
     const at = await nextRun(s.cadence, s.hour, new Date(Date.now() + 60_000))
-    await schedules().updateOne({ _id: doc._id }, { $set: { lastSentAt: new Date(), nextRunAt: at } })
+    await schedules().updateOne({ _id: doc._id }, { $set: { nextRunAt: at } })
     return { again: at }
   },
   {
@@ -193,7 +215,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     const id = randomUUID()
     await schedules().insertOne({ _id: id as never, workspaceId: ws(), ...b, createdBy: me._id, createdAt: new Date() })
     if (b.enabled) await plan(id, b.cadence, b.hour)
-    trace('report.scheduled', { cadence: b.cadence, reports: b.reports.length })
+    trace('report.scheduled', { name: b.name, cadence: b.cadence, reports: b.reports.length }, { entity: 'report_schedule', id })
     return out((await schedules().findOne({ _id: id as never }))!)
   }
   if ((seg = path.match(/^\/api\/reports\/schedules\/([0-9a-f-]{36})(\/send)?$/))) {
@@ -204,12 +226,14 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     if (m === 'PUT') {
       const b = await parseSchedule(obj(await readJson(req)), me)
       await schedules().updateOne(where, { $set: { ...b, updatedAt: new Date() } })
+      trace('report.schedule_updated', { name: b.name }, { entity: 'report_schedule', id: seg[1] }, diff(doc, b))
       if (b.enabled) await plan(seg[1], b.cadence, b.hour)
       else await schedules().updateOne(where, { $set: { nextRunAt: null } })
       return out((await schedules().findOne(where))!)
     }
     if (m === 'DELETE') {
       await schedules().deleteOne(where)
+      trace('report.schedule_deleted', { name: doc.name ?? null }, { entity: 'report_schedule', id: seg[1] })
       await col('jobs').deleteMany({ workspaceId: ws(), key: `report:${seg[1]}`, status: 'queued' })
       return { ok: true }
     }

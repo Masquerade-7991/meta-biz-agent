@@ -83,3 +83,39 @@ export const reports = area('Analytics', {
     post: { id: 'sendReportSchedule', params: SCHEDULE_ID, summary: 'Send a schedule now', description: 'Covers the period its cadence would; doesn’t change when it next goes out.', who: WHO, ok: o({ 'sent*': d('integer', 'People emailed.') }), errors: { 404: 'That schedule no longer exists.', 502: 'Email not sent.' } },
   },
 })
+
+const ACTIVITY_FILTER = {
+  entity: d('ticket|agent|number', 'One item’s history. Readable by anyone who can see the item (a restricted agent: only their own or unassigned tickets; a number: supervisors and up). Without it, the whole workspace’s log: owners and admins.'),
+  entityId: d('string', 'The ticket number, or the number id (`PHONE_NUMBER_ID` = the workspace’s default number).'),
+  area: d('tickets|chats|agent|people|contacts|broadcasts|reports|settings|whatsapp', 'One area. Default: all of them.'),
+  userId: d('string', 'One person, or `system` for what happened on its own (webhooks, timers, the AI agent).'),
+  from: d('string', 'From this date (YYYY-MM-DD) or time (ISO).'),
+  to: d('string', 'Up to and including this date, or up to this time.'),
+  ref: d('string', 'An error reference (the 8 characters after “Reference:”): everything behind that error, including plumbing events the areas leave out.'),
+}
+export const activity = area('Workspace', {
+  '/api/activity': {
+    get: {
+      id: 'listActivity',
+      summary: 'Activity log',
+      description: 'Who did what, newest first, 50 at a time: kind, who, the item, and for edits each changed field as [before, after]. Kept two years. `names` maps the people (and `team:<id>` teams) named in the changes. Sentences for each kind are in src/app/activity/activityText.ts.',
+      who: { text: 'Any member for one ticket, the AI agent or a number they can see; owners and admins for the whole workspace.' },
+      query: { ...ACTIVITY_FILTER, before: d('string', 'The id of the last row seen, for the next page.') },
+      ok: o({ 'events*': d('object[]', '{id, at, kind, userId, actor, entity, entityId, data, changes?, traceId}'), 'more*': 'boolean', 'names*': 'object' }),
+      errors: { 403: 'Only owners and admins see the workspace’s activity.', 404: 'That ticket no longer exists.' },
+    },
+  },
+  '/api/activity.csv': {
+    get: {
+      id: 'downloadActivity',
+      summary: 'Download the activity log as CSV',
+      description: 'The same filters, up to 10,000 rows: when (UTC), who, what (as a sentence), the item and the error reference.',
+      who: { text: 'As GET /api/activity.' },
+      query: ACTIVITY_FILTER,
+      ok: 'string',
+      okType: 'text/csv',
+      okDescription: 'The log as a CSV attachment.',
+      errors: { 403: 'Only owners and admins see the workspace’s activity.' },
+    },
+  },
+})

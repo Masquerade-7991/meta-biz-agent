@@ -13,12 +13,13 @@ import type http from 'node:http'
 import { promisify } from 'node:util'
 import { ObjectId } from 'mongodb'
 import { allow } from './cache.ts'
-import { col, db, dbOffReason } from './db.ts'
+import { col, db, dbOffReason, withWorkspace } from './db.ts'
 import { appUrl, mail } from './mail.ts'
 import { HttpError, readJson, serveJson, type Titles } from './http.ts'
 import { migrateEnvAccount } from './accounts.ts'
 import { can, canSetRole, isRole, roleLabel, type Action, type Role } from '../src/app/lib/permissions.ts'
-import { trace } from './trace.ts'
+import { traceIn } from './trace.ts'
+import { cleanUpMember } from './supportOps.ts'
 
 type Obj = Record<string, unknown>
 type Purpose = 'signup' | 'invite' | 'reset' | 'email_change'
@@ -317,6 +318,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     // Start in the workspace they were most recently added to, and stay there.
     const start = await sessionFor(user._id)
     await startSession(res, user._id, start?.workspace?._id)
+    if (start?.workspace) traceIn(start.workspace._id, user._id, 'member.logged_in', {}, { entity: 'member', id: user._id })
     return me(start!)
   }
   if (path === '/api/auth/logout' && m === 'POST') {
@@ -378,7 +380,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     const id = typeof body.workspaceId === 'string' ? body.workspaceId : ''
     if (!(await memberships().findOne({ userId: x.user._id, workspaceId: id }))) throw new HttpError(404, 'You’re not a member of that workspace.')
     await sessions().updateOne({ tokenHash: x.sessionHash }, { $set: { workspaceId: id } })
-    trace('workspace.switched', {})
+    traceIn(id, x.user._id, 'member.switched_in', {}, { entity: 'member', id: x.user._id })
     return me((await sessionFor(x.user._id, id))!)
   }
 
@@ -392,7 +394,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     if (!w) throw new HttpError(410, 'This workspace no longer exists.')
     if (seg[2] === 'decline') {
       await links().updateOne({ tokenHash: inv.tokenHash, ...live() }, { $set: { revokedAt: new Date(), declinedAt: new Date() } })
-      trace('member.invite_declined', {})
+      traceIn(w._id, x.user._id, 'member.invite_declined', { email: x.user.email }, { entity: 'member', id: x.user._id })
       return me((await sessionFor(x.user._id, x.workspace?._id))!)
     }
     await consumeLink(inv)
@@ -401,7 +403,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     await sessions().updateOne({ tokenHash: x.sessionHash }, { $set: { workspaceId: w._id } })
     const inviter = inv.invitedBy ? await users().findOne({ _id: inv.invitedBy }) : null
     if (inviter) await mail.memberJoined(inviter.email, x.user.name, w.name).catch(() => {})
-    trace('member.joined', { role: inv.role ?? 'agent' })
+    traceIn(w._id, x.user._id, 'member.joined', { role: inv.role ?? 'agent', name: x.user.name }, { entity: 'member', id: x.user._id })
     return me((await sessionFor(x.user._id, w._id))!)
   }
 
@@ -421,7 +423,8 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     await sessions().updateMany({ userId: x.user._id, workspaceId: x.workspace._id }, { $unset: { workspaceId: '' } })
     const owners = await memberships().find({ workspaceId: x.workspace._id, role: 'owner' }).toArray()
     for (const o of await users().find({ _id: { $in: owners.map((mm) => mm.userId) } }).toArray()) await mail.memberLeft(o.email, x.user.name, x.workspace.name).catch(() => {})
-    trace('member.left', {})
+    traceIn(x.workspace._id, x.user._id, 'member.left', { name: x.user.name }, { entity: 'member', id: x.user._id })
+    await withWorkspace(x.workspace._id, () => cleanUpMember(x.user._id, x.user.name), null, { userId: x.user._id })
     return me((await sessionFor(x.user._id))!)
   }
   if (path === '/api/workspace/members' && m === 'GET') {
@@ -452,7 +455,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
       throw new HttpError(409, 'This person is already invited. Resend the invite from the list.')
     const send = existing?.passwordHash ? mail.inviteExisting : mail.invite
     await mailLink({ email: e, purpose: 'invite', workspaceId: x.workspace._id, invitedBy: x.user._id, role }, (t) => send(e, t, x.user.name, x.workspace.name))
-    trace('member.invited', { role })
+    traceIn(x.workspace._id, x.user._id, 'member.invited', { role, email: e })
     return { ok: true }
   }
   if ((seg = path.match(/^\/api\/workspace\/invites\/([a-f0-9]{24})(\/resend)?$/))) {
@@ -461,6 +464,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     if (!inv) throw new HttpError(404, 'This invite was already accepted, revoked or has expired.')
     if (m === 'DELETE' && !seg[2]) {
       await links().updateOne({ tokenHash: inv.tokenHash }, { $set: { revokedAt: new Date() } })
+      traceIn(x.workspace._id, x.user._id, 'member.invite_revoked', { email: inv.email })
       return { ok: true }
     }
     if (m === 'POST' && seg[2]) {
@@ -482,6 +486,8 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
       await memberships().deleteOne({ workspaceId: x.workspace._id, userId: target.userId })
       // Their other workspaces stay open; sessions working in this one fall back to another.
       await sessions().updateMany({ userId: target.userId, workspaceId: x.workspace._id }, { $unset: { workspaceId: '' } })
+      traceIn(x.workspace._id, x.user._id, 'member.removed', { name: person.name, email: person.email }, { entity: 'member', id: target.userId })
+      await withWorkspace(x.workspace._id, () => cleanUpMember(target.userId, person.name), null, { userId: x.user._id })
       await mail.removed(person.email, x.workspace.name)
       return { ok: true }
     }
@@ -492,7 +498,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
       if (!canSetRole(x.role, target.role, role)) throw new HttpError(403, 'Only owners can make someone an owner or change an owner’s role.')
       if (target.role === 'owner' && (await ownersLeft(x.workspace._id, target.userId)) === 0) throw new HttpError(400, 'A workspace needs at least one owner.')
       await memberships().updateOne({ workspaceId: x.workspace._id, userId: target.userId }, { $set: { role } })
-      trace('member.role_changed', { from: target.role, to: role })
+      traceIn(x.workspace._id, x.user._id, 'member.role_changed', { name: person.name }, { entity: 'member', id: target.userId }, { role: [target.role, role] })
       await mail.roleChanged(person.email, x.workspace.name, role)
       return { ok: true }
     }

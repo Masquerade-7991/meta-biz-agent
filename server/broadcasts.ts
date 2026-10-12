@@ -322,12 +322,16 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   if (path === '/api/broadcasts/templates' && m === 'GET') return listTemplates()
   if (path === '/api/broadcasts/templates' && m === 'POST') {
     if (!can(me.role, 'templates.create')) throw new HttpError(403, 'Supervisors, admins and owners create templates.')
-    return createTemplate(obj(await readJson(req)))
+    const body = obj(await readJson(req))
+    const t = await createTemplate(body)
+    trace('template.created', { name: String(body.name) }, { entity: 'template', id: String(body.name) })
+    return t
   }
   if ((seg = path.match(/^\/api\/broadcasts\/templates\/([a-z0-9_]+)$/)) && m === 'DELETE') {
     needMetaAssets()
     if (!can(me.role, 'templates.delete')) throw new HttpError(403, 'Only owners and admins can delete templates.')
     await metaJson('graph', 'DELETE', `/WABA_ID/message_templates?name=${seg[1]}`)
+    trace('template.deleted', { name: seg[1] }, { entity: 'template', id: seg[1] })
     return { ok: true }
   }
   if (path === '/api/broadcasts/send-one' && m === 'POST') {

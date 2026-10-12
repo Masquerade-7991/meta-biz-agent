@@ -2,7 +2,8 @@
 // response was sent; never throws (errors are logged) and the relay never awaits it.
 import { createHash } from 'node:crypto'
 import { col, db, ws } from './db.ts'
-import { traceId } from './context.ts'
+import { currentUserId, traceId } from './context.ts'
+import { trace as traceEvent } from './trace.ts'
 import { isConfigCollection, mirror, mirrorCollection } from './mirror.ts'
 import { stripSecrets } from './store.ts'
 import { obj, str } from './http.ts'
@@ -78,7 +79,7 @@ export function logApiCall(c: CallLog): void {
   const u = new URL(c.url)
   const { phone } = c.kind === 'meta' ? splitPhone(u.pathname) : { phone: null }
   col('api_calls')
-    .insertOne({ workspaceId: ws(), traceId: traceId(), phoneNumberId: phone, ...c, host: u.host, ...resourceOf(splitPhone(u.pathname).rest), ok: c.status >= 200 && c.status < 300 })
+    .insertOne({ workspaceId: ws(), traceId: traceId(), userId: currentUserId(), phoneNumberId: phone, ...c, host: u.host, ...resourceOf(splitPhone(u.pathname).rest), ok: c.status >= 200 && c.status < 300 })
     .catch((err) => console.log(`api_calls write failed: ${err instanceof Error ? err.message : err}`))
 }
 
@@ -106,9 +107,13 @@ async function recordAsync(x: Exchange) {
     const resourceId = r.resourceId ?? (str(res.id) ? String(res.id) : null)
     // Configuration changes keep their full contents (secrets blanked), so the log shows what changed to what.
     const data = x.kind === 'meta' && isConfigCollection(mirrorCollection(rest)) ? stripSecrets(body, true) : undefined
+    const action = actionOf(x.method, rest)
+    const summary = summarize(body)
     jobs.push(
-      col('audit_log').insertOne({ ...base, traceId: trace, at, action: actionOf(x.method, rest), ...r, resourceId, status: x.status, summary: summarize(body), ...(data ? { data } : {}) }),
+      col('audit_log').insertOne({ ...base, traceId: trace, userId: currentUserId(), at, action, ...r, resourceId, status: x.status, summary, ...(data ? { data } : {}) }),
     )
+    // Test chats and tool test runs change nothing; everything else is an AI agent change in the activity log.
+    if (action !== 'test' && action !== 'run') traceEvent(`agent.${action}`, { resource: r.resource, resourceId, phoneNumberId: phone, ...summary }, phone ? { entity: 'agent', id: phone } : undefined)
   }
   if (x.kind === 'meta' && phone) jobs.push(mirror(phone, x.method, rest, u.searchParams, body, json))
   if (x.kind === 'meta' && phone) {

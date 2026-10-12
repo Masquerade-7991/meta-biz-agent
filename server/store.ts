@@ -172,11 +172,14 @@ async function route(req: http.IncomingMessage, u: URL): Promise<unknown> {
     }
     if (path === '/api/store/audit') {
       const rows = await col('audit_log')
-        .find({ workspaceId: ws(), phoneNumberId: phoneParam(p('phone')) }, { projection: { _id: 0, workspaceId: 0 } })
+        .find({ workspaceId: ws(), phoneNumberId: phoneParam(p('phone')) }, { projection: { _id: 0, workspaceId: 0, data: 0 } })
         .sort({ at: -1 })
         .limit(intParam(p('limit'), 100, 1, 500))
         .toArray()
-      return rows
+      // Who made each change (recorded since the activity log; older rows have no one).
+      const ids = [...new Set(rows.map((r) => r.userId).filter(Boolean))]
+      const names = new Map((await col('users').find({ _id: { $in: ids } as never }, { projection: { name: 1 } }).toArray()).map((u) => [String(u._id), String(u.name ?? '')]))
+      return rows.map((r) => ({ ...r, by: r.userId ? names.get(String(r.userId)) || 'A former member' : null }))
     }
     if (path === '/api/store/eval-runs') {
       const rows = await col('eval_runs')

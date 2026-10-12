@@ -1,8 +1,12 @@
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 /** When customers write in: 7 weekdays × 24 hours, darker = busier. `cells[day][hour]`, Monday first. */
-export function Heatmap({ cells, label }: { cells: number[][]; label: string }) {
+export function Heatmap({ cells, label, empty = 'No customer messages in these dates.' }: { cells: number[][]; label: string; empty?: string }) {
   const max = Math.max(1, ...cells.flat())
+  // The busiest weekday and hour, named (not just its count).
+  let busiest = { d: -1, h: -1, v: 0 }
+  cells.forEach((row, d) => row.forEach((v, h) => v > busiest.v && (busiest = { d, h, v })))
+  if (!busiest.v) return <p className="flex h-40 items-center justify-center rounded-md bg-muted/40 text-sm text-muted-foreground">{empty}</p>
   return (
     <figure className="space-y-2 overflow-x-auto">
       <div role="img" aria-label={label} className="grid min-w-md grid-cols-[2.5rem_repeat(24,minmax(0,1fr))] gap-0.5 text-micro text-muted-foreground">
@@ -22,7 +26,9 @@ export function Heatmap({ cells, label }: { cells: number[][]; label: string }) 
           </div>
         ))}
       </div>
-      <figcaption className="text-xs text-muted-foreground">Darker means more messages. Busiest hour: {max}.</figcaption>
+      <figcaption className="text-xs text-muted-foreground">
+        Darker means more messages. Busiest: {DAYS[busiest.d]} {String(busiest.h).padStart(2, '0')}:00 ({busiest.v} message{busiest.v === 1 ? '' : 's'}).
+      </figcaption>
     </figure>
   )
 }

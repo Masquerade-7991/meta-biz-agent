@@ -62,8 +62,14 @@ const INDEXES: Record<string, IndexDescription[]> = {
   saved_views: [{ key: { workspaceId: 1, userId: 1, name: 1 }, unique: true }],
   canned_responses: [{ key: { workspaceId: 1, shortcut: 1 }, unique: true }],
   presence: [{ key: { workspaceId: 1, phone: 1, userId: 1 }, unique: true }, { key: { at: 1 }, expireAfterSeconds: 60 }],
-  // Tickets (tickets.ts): numbered per workspace; one open ticket per chat at a time.
-  tickets: [{ key: { workspaceId: 1, number: 1 }, unique: true }, { key: { workspaceId: 1, status: 1, createdAt: -1 } }, { key: { workspaceId: 1, phone: 1, status: 1 } }],
+  // Tickets (tickets.ts): numbered per workspace; one open ticket per chat at a time (the database
+  // enforces it, so two events at once can't open two).
+  tickets: [
+    { key: { workspaceId: 1, number: 1 }, unique: true },
+    { key: { workspaceId: 1, status: 1, createdAt: -1 } },
+    { key: { workspaceId: 1, phone: 1, status: 1 } },
+    { key: { workspaceId: 1, phone: 1 }, unique: true, partialFilterExpression: { status: { $in: ['open', 'pending'] } }, name: 'one_open_ticket_per_chat' },
+  ],
   support_settings: [{ key: { workspaceId: 1 }, unique: true }],
   // Webhooks, kept for good: each workspace's share of every event (whatsapp_webhooks), and every
   // delivery exactly as Meta sent it (webhook_inbox, _id = sha256 of the body, so retries store once).
@@ -122,11 +128,13 @@ const INDEXES: Record<string, IndexDescription[]> = {
     { key: { finishedAt: 1 }, expireAfterSeconds: 7 * DAY },
   ],
   // What happened, per workspace (trace.ts): one row per event, grouped by the trace it belongs to.
+  // The activity log: kept as long as the agent's change history (audit_log).
   events: [
     { key: { workspaceId: 1, at: -1 } },
     { key: { traceId: 1, at: 1 } },
     { key: { workspaceId: 1, entity: 1, entityId: 1, at: -1 } },
-    { key: { at: 1 }, expireAfterSeconds: D90 },
+    { key: { workspaceId: 1, userId: 1, at: -1 } },
+    { key: { at: 1 }, expireAfterSeconds: Y2 },
   ],
   // Every call to Meta (relay and collectors), success or failure: the relay log, kept 90 days.
   api_calls: [
@@ -135,11 +143,6 @@ const INDEXES: Record<string, IndexDescription[]> = {
     { key: { status: 1, at: -1 } },
     { key: { at: 1 }, expireAfterSeconds: D90 },
   ],
-  webhook_events: [
-    { key: { messageId: 1 }, unique: true },
-    { key: { receivedAt: 1 }, expireAfterSeconds: D90 },
-  ],
-  notifications: [{ key: { workspaceId: 1, phoneNumberId: 1, dismissedAt: 1, createdAt: -1 } }],
   metrics_daily: [{ key: { 'meta.phoneNumberId': 1, 'meta.metric': 1, ts: 1 } }],
   handoff_snapshots: [{ key: { 'meta.phoneNumberId': 1, ts: 1 } }],
   // Accounts (auth.ts). Tokens and session ids are stored as sha256 only; both expire via TTL.
@@ -200,7 +203,16 @@ async function createSchema(d: Db) {
   for (const [name, field] of Object.entries(RETIRED_UNIQUE))
     for (const ix of await d.collection(name).indexes().catch(() => []))
       if (ix.unique && ix.name && Object.keys(ix.key).join() === field) await d.collection(name).dropIndex(ix.name)
-  for (const [name, specs] of Object.entries(INDEXES)) await d.collection(name).createIndexes(specs)
+  for (const [name, specs] of Object.entries(INDEXES)) {
+    // A changed expiry can't be re-created (Mongo refuses the conflicting options); it's changed in place.
+    const have = await d.collection(name).indexes().catch(() => [])
+    for (const spec of specs) {
+      const old = spec.expireAfterSeconds === undefined ? undefined : have.find((ix) => JSON.stringify(ix.key) === JSON.stringify(spec.key))
+      if (old && old.expireAfterSeconds !== spec.expireAfterSeconds)
+        await d.command({ collMod: name, index: { keyPattern: spec.key, expireAfterSeconds: spec.expireAfterSeconds } })
+    }
+    await d.collection(name).createIndexes(specs)
+  }
   // Expiry rules that were removed above: creating indexes never drops old ones, so drop them here.
   for (const [name, field] of Object.entries(RETIRED_TTL))
     for (const ix of await d.collection(name).indexes().catch(() => []))

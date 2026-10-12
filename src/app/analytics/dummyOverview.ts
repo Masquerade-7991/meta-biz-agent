@@ -132,6 +132,7 @@ export function dummyOverview(f: AnalyticsFilter): Overview {
       conversations: c.conversations,
       aiOnly: c.aiOnly,
       withTeam: c.conversations - c.aiOnly,
+      noReply: 0,
       handoffs: c.handoffs,
       ticketsOpened: c.opened,
       ticketsResolved: c.resolved,
@@ -169,9 +170,11 @@ export function dummyOverview(f: AnalyticsFilter): Overview {
   const opened = cur.t('opened')
   const resolved = cur.t('resolved')
   const spend = cur.t('spend') + cur.t('agentCost')
+  const wholeAccount = f.numbers.length > 0 && AGENTS.some((a) => !f.numbers.includes(a.id))
   return {
     range: { from: f.from, to: f.to, days: n, timezone: 'Asia/Kolkata', prevFrom, prevTo },
     currency: 'INR',
+    spendWholeAccount: wholeAccount,
     agents: AGENTS.map(({ id, label }) => ({ id, label })),
     kpis: {
       conversations: k((x) => x.t('conversations')),
@@ -186,7 +189,8 @@ export function dummyOverview(f: AnalyticsFilter): Overview {
       slaMet: k((x) => ratio(x.t('onTime'), x.t('resolved'))),
       escalations: k((x) => x.t('escalations')),
       spend: k((x) => x.t('spend') + x.t('agentCost')),
-      costPerResolved: k((x) => ratio(x.t('spend') + x.t('agentCost'), x.t('resolved') + x.t('aiOnly'))),
+      costPerResolved: k((x) => (wholeAccount ? null : ratio(x.t('spend') + x.t('agentCost'), x.t('resolved') + x.t('aiOnly')))),
+      handoffRate: k((x) => ratio(x.t('handoffs'), x.t('conversations'))),
       openNow: series.at(-1)?.backlog ?? 0,
       overdueNow: Math.round((series.at(-1)?.backlog ?? 0) * 0.2),
       peopleAvailable: 2,

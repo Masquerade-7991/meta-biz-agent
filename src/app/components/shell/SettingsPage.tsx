@@ -17,6 +17,7 @@ import { TeamsSettings } from './TeamsSettings'
 import { RoutingRulesSettings } from './RoutingRulesSettings'
 import { EscalationSettings } from './EscalationSettings'
 import { BillingSettingsTab } from './BillingSettings'
+import { ActivitySettings } from '@/app/activity/ActivitySettings'
 import { ContactFieldsSettings } from './ContactFieldsSettings'
 import { authApi, type Invite, type Member } from '@/app/auth/api'
 import { Label } from '@/app/components/ui/label'
@@ -26,7 +27,7 @@ import { WhatsAppSettings } from './WhatsAppSettings'
 import { assignableRoles, can, canSetRole, roleLabel, ROLES, type Role } from '@/app/lib/permissions'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
 
-export type SettingsTab = 'profile' | 'whatsapp' | 'billing' | 'members' | 'canned' | 'support' | 'fields' | 'teams' | 'routing' | 'escalation'
+export type SettingsTab = 'profile' | 'whatsapp' | 'billing' | 'members' | 'activity' | 'canned' | 'support' | 'fields' | 'teams' | 'routing' | 'escalation'
 
 
 const days = (from: string, to = Date.now()) => Math.round((to - Date.parse(from)) / 86_400_000)
@@ -364,6 +365,7 @@ const SETTINGS_GROUPS: { label: string; items: { id: SettingsTab; label: string 
     label: 'Workspace',
     items: [
       { id: 'members', label: 'Members' },
+      { id: 'activity', label: 'Activity' },
       { id: 'billing', label: 'Billing' },
       { id: 'whatsapp', label: 'WhatsApp' },
     ],
@@ -387,8 +389,9 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
   const billing = can(me?.role, 'billing.view')
   // WhatsApp accounts and webhook details are the owner's alone.
   const whatsapp = can(me?.role, 'whatsapp.manage')
+  const activity = can(me?.role, 'traces.read')
   // A link (email, notification) can name a tab this role can't open; show Profile instead.
-  const shown = (tab === 'billing' && !billing) || (tab === 'whatsapp' && !whatsapp) ? 'profile' : tab
+  const shown = (tab === 'billing' && !billing) || (tab === 'whatsapp' && !whatsapp) || (tab === 'activity' && !activity) ? 'profile' : tab
   return (
     <PageContainer>
       <PageHeader title="Settings" description="Your workspace and its people, how the support desk works, and your own account." />
@@ -401,7 +404,7 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
                 <p className="hidden px-2.5 pb-1.5 text-xs font-medium text-muted-foreground md:block">{g.label}</p>
                 <ul className="contents md:block md:space-y-0.5">
                   {g.items
-                    .filter((i) => (i.id !== 'billing' || billing) && (i.id !== 'whatsapp' || whatsapp))
+                    .filter((i) => (i.id !== 'billing' || billing) && (i.id !== 'whatsapp' || whatsapp) && (i.id !== 'activity' || activity))
                     .map((i) => (
                       <li key={i.id} className="shrink-0">
                         <button
@@ -439,6 +442,11 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
         <TabsContent value="members">
           <Members />
         </TabsContent>
+        {activity && (
+          <TabsContent value="activity">
+            <ActivitySettings />
+          </TabsContent>
+        )}
         <TabsContent value="canned">
           <CannedResponsesSettings />
         </TabsContent>

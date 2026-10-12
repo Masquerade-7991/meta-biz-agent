@@ -132,6 +132,12 @@ export function ReportsPage() {
                   {s.nextRunAt ? `Next: ${new Date(s.nextRunAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}` : 'Not scheduled'}
                   {s.lastSentAt && ` · Last sent ${new Date(s.lastSentAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`}
                 </p>
+                {s.lastError && (
+                  <p className="text-meta text-destructive">
+                    {s.lastFailedAt && `${new Date(s.lastFailedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}: `}
+                    {s.lastError}
+                  </p>
+                )}
               </div>
               <div className="flex gap-1">
                 <Button
@@ -144,6 +150,7 @@ export function ReportsPage() {
                       void load()
                     } catch (err) {
                       toast.error('Couldn’t send', { description: errorDetail(err) })
+                      void load()
                     }
                   }}
                 >

@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Bot, Check, ChevronRight, Inbox, Megaphone, MessageCircle, Smartphone, Ticket, UserPlus, Users } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { listChats, type ChatSummary } from '@/app/api/inbox'
-import { getSupportAnalytics, listTickets, type SupportAnalytics } from '@/app/api/tickets'
+import { listTickets } from '@/app/api/tickets'
+import { getOverview } from '@/app/api/overview'
+import { addDays, isoDay, type Overview } from '@/app/analytics/types'
+import { dur, num, pct } from '@/app/analytics/format'
 import { getNumberHealth } from '@/app/api/whatsapp'
 import { StatusPill } from '@/app/components/ui/status'
 import { AGENT_STATUS, agentStatusOf, type Tone } from '@/app/lib/status'
@@ -193,7 +196,7 @@ function GetStarted({
             </Button>
           }
         >
-          Name it, give it your business details and FAQs, test it, then publish. Its live numbers show on the agent&rsquo;s Overview.
+          Name it, give it your business details and FAQs, test it, then publish. Its numbers then show here and in Analytics.
         </Step>
       </ol>
     </section>
@@ -214,14 +217,15 @@ const QUALITY: Record<string, { label: string; tone: Tone }> = {
 
 /** Once set up, Home is what needs attention today: open chats and tickets, the agent, the number. */
 function AtAGlance({ agent, chats: loadChats, onNavigate }: { agent: AgentOnNumber; chats: () => Promise<ChatSummary[]>; onNavigate: (id: NavId) => void }) {
-  const [data, setData] = useState<{ unread: number; chats: number; tickets: number; overdue: number; quality: string | null } | null>(null)
+  // tickets null: they couldn't be loaded, so no count is shown (rather than a reassuring 0).
+  const [data, setData] = useState<{ unread: number; chats: number; tickets: number | null; overdue: number; quality: string | null } | null>(null)
   useEffect(() => {
-    Promise.all([loadChats(), listTickets().catch(() => []), getNumberHealth().catch(() => [])]).then(([chats, tickets, health]) =>
+    Promise.all([loadChats(), listTickets({ limit: '1000' }).catch(() => null), getNumberHealth().catch(() => [])]).then(([chats, tickets, health]) =>
       setData({
         unread: chats.reduce((n, c) => n + c.unread, 0),
         chats: chats.filter((c) => c.unread > 0).length,
-        tickets: tickets.length,
-        overdue: tickets.filter((t) => t.sla.breached).length,
+        tickets: tickets?.length ?? null,
+        overdue: tickets?.filter((t) => t.sla.breached).length ?? 0,
         quality: health[0]?.quality ?? null,
       }),
     )
@@ -234,7 +238,13 @@ function AtAGlance({ agent, chats: loadChats, onNavigate }: { agent: AgentOnNumb
       icon: Ticket,
       label: 'Open tickets',
       value: data?.tickets ?? '—',
-      note: data?.overdue ? <span className="text-destructive">{data.overdue} past the response time</span> : data ? 'All within response time' : undefined,
+      note: data?.overdue ? (
+        <span className="text-destructive">{data.overdue} past the response time</span>
+      ) : data?.tickets == null ? (
+        data && 'Couldn’t load tickets'
+      ) : (
+        'All within response time'
+      ),
       urgent: !!data?.overdue,
     },
     { id: 'ai-agents', icon: Bot, label: 'AI agent', value: <AgentPill agent={agent} />, note: agent.enabled ? 'Answering customers' : 'Not answering yet' },
@@ -363,29 +373,32 @@ function QuickActions({ onNavigate, hasAgent }: { onNavigate: (id: NavId, tab?: 
   )
 }
 
-const minutes = (m: number | null) => (m == null ? '—' : m < 60 ? `${Math.round(m)}m` : `${(m / 60).toFixed(1)}h`)
-
-/** The last 7 days: how chats split between the AI and the team, and tickets opened vs resolved. */
+/** The last 7 days, counted exactly as on the Analytics page (calendar days, the same definitions):
+ *  how chats split between the AI, the team and no reply, and tickets opened vs resolved. */
 function ThisWeek({ onNavigate }: { onNavigate: (id: NavId) => void }) {
-  const [d, setD] = useState<SupportAnalytics | null | 'none'>(null)
+  const [d, setD] = useState<Overview | null | 'none'>(null)
   useEffect(() => {
-    getSupportAnalytics(7).then(setD, () => setD('none'))
+    const to = isoDay(new Date(), Intl.DateTimeFormat().resolvedOptions().timeZone)
+    getOverview({ from: addDays(to, -6), to, numbers: [], team: null, person: null }).then(setD, () => setD('none'))
   }, [])
   if (d === 'none') return null
-  const max = d ? Math.max(1, ...d.series.map((x) => Math.max(x.created, x.resolved))) : 1
-  const aiShare = d && d.chats.total ? d.chats.aiOnly / d.chats.total : null
-  const stats = d
+  const k = d?.kpis
+  const sum = (key: 'aiOnly' | 'withTeam' | 'noReply') => (d ? d.series.reduce((a, p) => a + p[key], 0) : 0)
+  const split = d ? { ai: sum('aiOnly'), team: sum('withTeam'), none: sum('noReply') } : null
+  const total = split ? split.ai + split.team + split.none : 0
+  const max = d ? Math.max(1, ...d.series.map((x) => Math.max(x.ticketsOpened, x.ticketsResolved))) : 1
+  const stats = k
     ? [
-        { label: 'Conversations', value: d.chats.total.toLocaleString() },
-        { label: 'Handled by AI alone', value: aiShare == null ? '—' : `${Math.round(aiShare * 100)}%` },
-        { label: 'Median first reply', value: minutes(d.medianFirstReplyMin) },
-        { label: 'Customer rating', value: d.csat.average == null ? '—' : `${d.csat.average.toFixed(1)} / 3` },
+        { label: 'Conversations', value: num(k.conversations.value) },
+        { label: 'Handled by AI alone', value: pct(k.containment.value) },
+        { label: 'Typical first reply', value: dur(k.medianFirstReplyMin.value) },
+        { label: 'Customer satisfaction', value: pct(k.csat.value) },
       ]
     : []
   return (
     <section className="rounded-lg border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
-        <h2 className="text-section font-semibold">This week</h2>
+        <h2 className="text-section font-semibold">Last 7 days</h2>
         <Button variant="link" size="sm" onClick={() => onNavigate('analytics')}>
           Full analytics
         </Button>
@@ -403,19 +416,25 @@ function ThisWeek({ onNavigate }: { onNavigate: (id: NavId) => void }) {
                 </div>
               ))}
             </dl>
-            {d.chats.total > 0 && (
+            {split && total > 0 && (
               <div className="space-y-1.5">
-                <div className="flex h-2 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${d.chats.aiOnly} chats by the AI alone, ${d.chats.withTeam} with your team`}>
-                  <div className="bg-primary" style={{ width: `${(d.chats.aiOnly / d.chats.total) * 100}%` }} />
-                  <div className="bg-warning" style={{ width: `${(d.chats.withTeam / d.chats.total) * 100}%` }} />
+                <div className="flex h-2 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${split.ai} chats by the AI alone, ${split.team} with your team, ${split.none} with no reply`}>
+                  <div className="bg-primary" style={{ width: `${(split.ai / total) * 100}%` }} />
+                  <div className="bg-warning" style={{ width: `${(split.team / total) * 100}%` }} />
+                  <div className="bg-destructive/60" style={{ width: `${(split.none / total) * 100}%` }} />
                 </div>
-                <p className="flex gap-4 text-xs text-muted-foreground">
+                <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1.5">
-                    <span className="size-2 rounded-full bg-primary" /> AI alone {d.chats.aiOnly}
+                    <span className="size-2 rounded-full bg-primary" /> AI alone {split.ai}
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="size-2 rounded-full bg-warning" /> With your team {d.chats.withTeam}
+                    <span className="size-2 rounded-full bg-warning" /> With your team {split.team}
                   </span>
+                  {split.none > 0 && (
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-destructive/60" /> No reply {split.none}
+                    </span>
+                  )}
                 </p>
               </div>
             )}
@@ -432,17 +451,21 @@ function ThisWeek({ onNavigate }: { onNavigate: (id: NavId) => void }) {
                 </span>
               </span>
             </p>
-            <div className="flex h-36 items-end gap-2" role="img" aria-label={`Tickets opened and resolved per day: ${d.created} opened, ${d.resolved} resolved this week`}>
-              {d.series.map((x) => (
-                <div key={x.date} className="flex flex-1 flex-col items-center gap-1.5">
-                  <div className="flex h-28 w-full items-end justify-center gap-1">
-                    <div className="w-1/3 rounded-t-sm bg-border-strong" style={{ height: `${(x.created / max) * 100}%`, minHeight: x.created ? 3 : 0 }} title={`${x.created} opened`} />
-                    <div className="w-1/3 rounded-t-sm bg-success" style={{ height: `${(x.resolved / max) * 100}%`, minHeight: x.resolved ? 3 : 0 }} title={`${x.resolved} resolved`} />
+            {d.series.every((x) => !x.ticketsOpened && !x.ticketsResolved) ? (
+              <p className="flex h-36 items-center justify-center rounded-md bg-muted/40 text-sm text-muted-foreground">No tickets in the last 7 days.</p>
+            ) : (
+              <div className="flex h-36 items-end gap-2" role="img" aria-label={`Tickets opened and resolved per day: ${k?.ticketsOpened.value ?? 0} opened, ${k?.ticketsResolved.value ?? 0} resolved in the last 7 days`}>
+                {d.series.map((x) => (
+                  <div key={x.date} className="flex flex-1 flex-col items-center gap-1.5">
+                    <div className="flex h-28 w-full items-end justify-center gap-1">
+                      <div className="w-1/3 rounded-t-sm bg-border-strong" style={{ height: `${(x.ticketsOpened / max) * 100}%`, minHeight: x.ticketsOpened ? 3 : 0 }} title={`${x.ticketsOpened} opened`} />
+                      <div className="w-1/3 rounded-t-sm bg-success" style={{ height: `${(x.ticketsResolved / max) * 100}%`, minHeight: x.ticketsResolved ? 3 : 0 }} title={`${x.ticketsResolved} resolved`} />
+                    </div>
+                    <span className="text-micro text-muted-foreground">{new Date(x.date + 'T12:00').toLocaleDateString(undefined, { weekday: 'short' })}</span>
                   </div>
-                  <span className="text-micro text-muted-foreground">{new Date(x.date + 'T12:00').toLocaleDateString(undefined, { weekday: 'short' })}</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -524,7 +547,8 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
                 </div>
                 <QuickActions hasAgent onNavigate={(id, tab) => (tab ? onOpenSettings(tab) : onNavigate(id))} />
               </div>
-              <ThisWeek onNavigate={onNavigate} />
+              {/* The team's numbers are for people who read reports; everyone else has the tiles above. */}
+              {can(me?.role, 'reports.view') && <ThisWeek onNavigate={onNavigate} />}
             </>
           )}
           {!snap.agent && snap.lookupError && (

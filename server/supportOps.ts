@@ -6,8 +6,9 @@ import { randomUUID } from 'node:crypto'
 import { HttpError, type Obj, obj, readJson } from './http.ts'
 import { col, db, withWorkspace, ws } from './db.ts'
 import { assetsFor } from './accounts.ts'
-import { trace } from './trace.ts'
-import { addBusinessMinutes, isOpen } from './businessHours.ts'
+import { diff, trace } from './trace.ts'
+import { raiseAlert } from './alerts.ts'
+import { isOpen } from './businessHours.ts'
 import { mail } from './mail.ts'
 import { customerLabel } from '../src/app/lib/customer.ts'
 import { can } from '../src/app/lib/permissions.ts'
@@ -33,7 +34,7 @@ import {
 } from '../src/app/support/routing.ts'
 import type { Actor } from './inbox.ts'
 import { addMessage, conversations, currentNumber } from './inbox.ts'
-import { getSettings } from './tickets.ts'
+import { duesFrom, getSettings } from './tickets.ts'
 
 const teamsCol = () => col('teams')
 const rulesCol = () => col('routing_rules')
@@ -110,6 +111,61 @@ async function pickInTeam(team: Team, skill?: string) {
   return pickFromPool(team.memberIds, team.assign, ps, await openCounts(), await turn(`rr:team:${team.id}`), skill)
 }
 
+// ---- people and teams leaving ----
+/** Settings that named a deleted team stop naming it: the default routing falls back to everyone,
+ *  escalation levels stop moving tickets there. */
+async function forgetTeam(teamId: string) {
+  await col('support_settings').updateOne({ workspaceId: ws(), 'settings.routing.teamId': teamId }, { $set: { 'settings.routing.teamId': null } })
+  const m = await getMatrix()
+  let changed = false
+  for (const levels of Object.values(m.levels))
+    for (const l of levels)
+      if (l.reassignTeamId === teamId) {
+        l.reassignTeamId = null
+        changed = true
+      }
+  if (changed) await matrixCol().updateOne({ workspaceId: ws() }, { $set: { matrix: m, updatedAt: new Date() } })
+}
+
+/**
+ * Someone left or was removed: nothing keeps waiting on them. Their open tickets and chats become
+ * unassigned (each ticket's history says why), they leave every team, rules that assigned to them
+ * stop doing so, and "always assign to" them falls back to round robin. Owners get one notice.
+ */
+export async function cleanUpMember(userId: string, name: string) {
+  const open = await tickets().find({ workspaceId: ws(), status: OPEN, assigneeId: userId }, { projection: { number: 1 } }).toArray()
+  await tickets().updateMany({ workspaceId: ws(), status: OPEN, assigneeId: userId }, { $set: { assigneeId: null, updatedAt: new Date() } })
+  for (const t of open) trace('ticket.updated', { number: t.number, reason: 'member_left' }, { entity: 'ticket', id: String(t.number) }, { assigneeId: [userId, null] })
+  await conversations().updateMany({ workspaceId: ws(), assigneeId: userId }, { $set: { assigneeId: null } })
+  await teamsCol().updateMany({ workspaceId: ws(), memberIds: userId }, { $pull: { memberIds: userId } as never })
+  await teamsCol().updateMany({ workspaceId: ws(), leadId: userId }, { $set: { leadId: null } })
+  const rules = await getRules()
+  let rulesChanged = 0
+  const kept = rules.map((r) => {
+    const then = r.then.filter((a) => !(a.do === 'assignUser' && a.userId === userId))
+    if (then.length === r.then.length) return r
+    rulesChanged++
+    return { ...r, then, enabled: r.enabled && then.length > 0 }
+  })
+  if (rulesChanged) await rulesCol().updateOne({ workspaceId: ws() }, { $set: { rules: kept, updatedAt: new Date() } })
+  const fixed = await col('support_settings').updateOne(
+    { workspaceId: ws(), 'settings.routing.mode': 'fixed', 'settings.routing.userId': userId },
+    { $set: { 'settings.routing.mode': 'round_robin', 'settings.routing.userId': null } },
+  )
+  if (open.length || rulesChanged || fixed.modifiedCount)
+    await raiseAlert({
+      key: `member_left:${userId}`,
+      severity: 'warning',
+      title: `${name || 'A teammate'} left the workspace`,
+      detail: [
+        open.length && `${open.length} open ticket${open.length === 1 ? ' is' : 's are'} now unassigned.`,
+        rulesChanged && `${rulesChanged} routing rule${rulesChanged === 1 ? '' : 's'} no longer assign${rulesChanged === 1 ? 's' : ''} to them.`,
+        fixed.modifiedCount && 'New tickets now go round robin instead of to them.',
+      ].filter(Boolean).join(' '),
+      target: 'members',
+    })
+}
+
 // ---- routing a new ticket ----
 export interface Routed {
   assigneeId: string | null
@@ -174,13 +230,15 @@ export async function escalateDue(now = Date.now()): Promise<number> {
   const matrix = await getMatrix()
   if (!matrix.enabled) return 0
   const teams = await getTeams()
-  const open = await tickets().find({ workspaceId: ws(), status: OPEN }).toArray()
+  // Waiting on the customer stops the clocks, so it never escalates.
+  const open = await tickets().find({ workspaceId: ws(), status: 'open' }).toArray()
   let moved = 0
   for (const t of open) {
     const levels = matrix.levels[t.priority as Priority] ?? []
     const current = Number(t.escalationLevel ?? 0)
     const clock = {
-      createdAt: +t.createdAt,
+      // A reopened ticket's clocks start at the reopen.
+      createdAt: +(t.clockStartAt ?? t.createdAt),
       firstResponseDueAt: +t.firstResponseDueAt,
       resolveDueAt: +t.resolveDueAt,
       firstRespondedAt: t.firstRespondedAt ? +t.firstRespondedAt : null,
@@ -193,13 +251,8 @@ export async function escalateDue(now = Date.now()): Promise<number> {
     if (level.raisePriority) {
       const raised = raise(t.priority as Priority)
       if (raised !== t.priority) {
-        // New targets count from when the ticket opened, the same as changing the priority by hand.
-        const s = await getSettings()
-        Object.assign(set, {
-          priority: raised,
-          firstResponseDueAt: addBusinessMinutes(t.createdAt as Date, s.sla[raised].firstResponse, s.hours),
-          resolveDueAt: addBusinessMinutes(t.createdAt as Date, s.sla[raised].resolve, s.hours),
-        })
+        // New targets count from when the clock started, the same as changing the priority by hand.
+        Object.assign(set, { priority: raised, ...duesFrom((t.clockStartAt ?? t.createdAt) as Date, raised, await getSettings(), Number(t.pausedMs ?? 0)) })
       }
     }
     let movedTo: Team | null = null
@@ -269,13 +322,15 @@ export async function supportOpsRoute(req: http.IncomingMessage, u: URL, me: Act
     }
     const id = randomUUID()
     await teamsCol().insertOne({ _id: id as never, workspaceId: ws(), ...t, createdAt: new Date() })
-    trace('team.created', { members: t.memberIds.length })
+    trace('team.created', { name: t.name, members: t.memberIds.length }, { entity: 'team', id })
     return { id, ...t }
   }
   if ((seg = path.match(/^\/api\/support\/teams\/([\w-]{1,64})$/))) {
     needManage(me)
     const where = { _id: seg[1] as never, workspaceId: ws() }
-    if (!(await teamsCol().findOne(where))) throw new HttpError(404, 'That team no longer exists.')
+    const before = await teamsCol().findOne(where)
+    if (!before) throw new HttpError(404, 'That team no longer exists.')
+    const ref = { entity: 'team', id: seg[1] }
     if (m === 'PUT') {
       let t: Omit<Team, 'id'>
       try {
@@ -284,6 +339,7 @@ export async function supportOpsRoute(req: http.IncomingMessage, u: URL, me: Act
         return bad(err)
       }
       await teamsCol().updateOne(where, { $set: { ...t, updatedAt: new Date() } })
+      trace('team.updated', { name: t.name }, ref, diff(before, t))
       return { id: seg[1], ...t }
     }
     if (m === 'DELETE') {
@@ -291,6 +347,8 @@ export async function supportOpsRoute(req: http.IncomingMessage, u: URL, me: Act
       if (used) throw new HttpError(409, `The rule “${used.name}” sends tickets to this team. Change the rule first.`)
       await teamsCol().deleteOne(where)
       await tickets().updateMany({ workspaceId: ws(), teamId: seg[1] }, { $set: { teamId: null } })
+      await forgetTeam(seg[1])
+      trace('team.deleted', { name: String(before.name) }, ref)
       return { ok: true }
     }
   }
@@ -317,8 +375,11 @@ export async function supportOpsRoute(req: http.IncomingMessage, u: URL, me: Act
         set.maxOpen = n
       }
     }
-    const r = await memberships().updateOne({ workspaceId: ws(), userId: seg[1] }, { $set: set })
-    if (!r.matchedCount) throw new HttpError(404, 'That person isn’t in this workspace.')
+    const before = await memberships().findOne({ workspaceId: ws(), userId: seg[1] })
+    if (!before) throw new HttpError(404, 'That person isn’t in this workspace.')
+    await memberships().updateOne({ workspaceId: ws(), userId: seg[1] }, { $set: set })
+    const changes = diff(before, set)
+    if (changes) trace('member.updated', {}, { entity: 'member', id: seg[1] }, changes)
     return { ok: true }
   }
 

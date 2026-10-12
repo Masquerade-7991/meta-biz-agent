@@ -6,10 +6,11 @@ export interface BarRow {
   hint?: string
 }
 
-/** Ranked horizontal bars (top questions, tools, teams). Divs, so long labels wrap instead of clipping. */
-export function BarList({ rows, format = compact, empty = 'Nothing to show for this period.', max: limit = 8 }: { rows: BarRow[]; format?: (v: number) => string; empty?: string; max?: number }) {
+/** Ranked horizontal bars (top questions, tools, teams). Divs, so long labels wrap instead of clipping.
+ *  `sorted={false}` keeps the rows' own order (levels, steps). */
+export function BarList({ rows, format = compact, empty = 'Nothing to show for this period.', max: limit = 8, sorted = true }: { rows: BarRow[]; format?: (v: number) => string; empty?: string; max?: number; sorted?: boolean }) {
   if (!rows.length) return <p className="text-sm text-muted-foreground">{empty}</p>
-  const top = [...rows].sort((a, b) => b.value - a.value).slice(0, limit)
+  const top = (sorted ? [...rows].sort((a, b) => b.value - a.value) : rows).slice(0, limit)
   const max = Math.max(1, ...top.map((r) => r.value))
   return (
     <ul className="space-y-2">

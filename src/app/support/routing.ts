@@ -4,7 +4,11 @@
 
 export const PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const
 export type Priority = (typeof PRIORITIES)[number]
-export type TicketSource = 'handoff' | 'takeover' | 'reply' | 'manual'
+/** Why a ticket opened: the AI handed over, someone took over, the team replied, someone made it, or the customer wrote again after it was resolved. */
+export type TicketSource = 'handoff' | 'takeover' | 'reply' | 'manual' | 'customer'
+export type TicketStatus = 'open' | 'pending' | 'resolved'
+export const PRIORITY_LABEL: Record<Priority, string> = { urgent: 'Urgent', high: 'High', normal: 'Normal', low: 'Low' }
+export const STATUS_LABEL: Record<TicketStatus, string> = { open: 'Open', pending: 'Waiting on customer', resolved: 'Resolved' }
 export type Availability = 'online' | 'away' | 'offline'
 
 export interface Team {
@@ -235,7 +239,7 @@ export function parseRules(v: unknown, known: { teams: Set<string>; members: Set
       const x = isObj(c) ? c : {}
       switch (x.field) {
         case 'source':
-          return { field: 'source', in: strs(x.in).filter((s): s is TicketSource => ['handoff', 'takeover', 'reply', 'manual'].includes(s)) }
+          return { field: 'source', in: strs(x.in).filter((s): s is TicketSource => ['handoff', 'takeover', 'reply', 'manual', 'customer'].includes(s)) }
         case 'priority':
           return { field: 'priority', in: strs(x.in).filter((s): s is Priority => (PRIORITIES as readonly string[]).includes(s)) }
         case 'keyword':

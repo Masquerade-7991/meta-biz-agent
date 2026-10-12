@@ -23,7 +23,7 @@ export function HandoverCard({ chat, ticket, teamName, aiSummary, onChange }: { 
   const [summary, setSummary] = useState<string | null>(null)
   if (!ticket || ticket.firstRespondedAt || chat.conversation.owner !== 'human') return null
   const mine = ticket.assigneeId === me?.user.id
-  const how = ticket.source === 'handoff' ? 'The AI agent handed this chat over' : ticket.source === 'takeover' ? 'Someone took this chat over' : 'This chat came to the team'
+  const how = ticket.source === 'handoff' ? 'The AI agent handed this chat over' : ticket.source === 'takeover' ? 'Someone took this chat over' : ticket.source === 'customer' ? 'The customer wrote again' : 'This chat came to the team'
 
   return (
     <div className="border-b border-border bg-primary/5 px-4 py-3 md:px-8">
@@ -57,7 +57,7 @@ export function HandoverCard({ chat, ticket, teamName, aiSummary, onChange }: { 
           )}
           {mine ? (
             <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
-              <Check className="size-4" /> Yours. Reply to start the clock.
+              <Check className="size-4" /> Yours. Your first reply stops the clock.
             </span>
           ) : (
             <Button

@@ -17,6 +17,7 @@ export function TimeSeriesChart<T extends object>({
   rightFormat,
   domain,
   label,
+  empty = 'Nothing in these dates.',
 }: {
   data: T[]
   x?: string
@@ -30,8 +31,16 @@ export function TimeSeriesChart<T extends object>({
   domain?: [number, number]
   /** Read out to screen readers in place of the drawing. */
   label: string
+  /** Shown instead of an empty drawing when every value is zero or missing. */
+  empty?: string
 }) {
   const colored = series.map((s, i) => ({ ...s, color: s.color ?? colorAt(i) }))
+  if (!data.some((row) => series.some((s) => Number((row as Record<string, unknown>)[s.key] ?? 0) !== 0)))
+    return (
+      <p className="flex items-center justify-center rounded-md bg-muted/40 text-center text-sm text-muted-foreground" style={{ height }}>
+        {empty}
+      </p>
+    )
   const hasRight = colored.some((s) => s.right)
   return (
     <figure className="space-y-2">

@@ -20,10 +20,13 @@ export interface Kpi {
 
 export interface DayPoint {
   date: string
-  /** Chats with any message that day. */
+  /** Chats with a message from the customer, the AI or the team that day (system notes alone don't count). */
   conversations: number
+  /** The AI answered and nobody from the team wrote. */
   aiOnly: number
   withTeam: number
+  /** Nobody answered: neither the AI (as far as Meta reports) nor the team. */
+  noReply: number
   handoffs: number
   ticketsOpened: number
   ticketsResolved: number
@@ -58,6 +61,9 @@ export interface AgentRow {
 export interface Overview {
   range: { from: string; to: string; days: number; timezone: string; prevFrom: string; prevTo: string }
   currency: string | null
+  /** Spend is reported per WhatsApp account, not per number: true when some agents are filtered out,
+   *  so spend still covers every agent and there's no honest cost per resolved conversation. */
+  spendWholeAccount: boolean
   /** The agents/numbers this workspace has, for the filter. */
   agents: { id: string; label: string }[]
   kpis: {
@@ -74,6 +80,8 @@ export interface Overview {
     escalations: Kpi
     spend: Kpi
     costPerResolved: Kpi
+    /** Handovers out of conversations, both counted for the chosen agents (team and person filters don't apply). */
+    handoffRate: Kpi
     openNow: number
     overdueNow: number
     peopleAvailable: number

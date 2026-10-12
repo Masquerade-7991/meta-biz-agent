@@ -31,6 +31,7 @@ import type { Broadcast, BroadcastDetail, WaTemplate } from './broadcasts'
 import type { WaAccount } from './whatsapp'
 import { renderTemplate } from '../broadcasts/templates'
 import { parseActions } from '../inbox/macros'
+import { customerWrites, pausedFor } from '../support/ticketRules'
 
 interface Chat {
   phone: string
@@ -217,7 +218,7 @@ export async function dummyInbox<T>(method: string, path: string, body: unknown)
       if (b.action === 'take') {
         c.assigneeId ??= ME.id
         ensureTicket(c, 'takeover')
-      }
+      } else closeOnRelease(c.phone)
       push(c, { direction: 'out', author: 'system', kind: 'event', body: b.action === 'take' ? 'You took over from the AI agent.' : 'You handed the chat back to the AI agent.' })
     }
     return detail(c) as T
@@ -239,6 +240,7 @@ export async function dummyInbox<T>(method: string, path: string, body: unknown)
     const c = list.find((x) => x.phone === b.phone) ?? list[0]
     push(c, { direction: 'in', author: 'customer', kind: 'text', body: String(b.text) })
     c.unread++
+    onCustomerWrites(c)
     return { ok: true } as T
   }
   if (u.pathname === '/api/inbox/demo') {
@@ -269,12 +271,36 @@ let settings: SupportSettings = {
   aiSummary: false,
 }
 
-/** Demo SLAs count plain minutes (the server counts business hours). */
+/** Demo SLAs count plain minutes (the server counts business hours), from when the clock started,
+ *  later by the time spent waiting on the customer. */
+const dueOf = (t: Ticket, target: 'firstResponse' | 'resolve') => Date.parse(t.clockStartAt ?? t.createdAt) + settings.sla[t.priority][target] * MIN + (t.pausedMs ?? 0)
 function withSla(t: Ticket): Ticket {
+  if (t.status === 'pending') return { ...t, sla: { kind: 'paused', at: null, breached: false } }
   const target = t.status === 'resolved' ? null : t.firstRespondedAt ? 'resolve' : 'firstResponse'
   if (!target) return { ...t, sla: { kind: 'done', at: null, breached: false } }
-  const at = new Date(Date.parse(t.createdAt) + settings.sla[t.priority][target] * MIN).toISOString()
-  return { ...t, sla: { kind: target, at, breached: Date.parse(at) < Date.now() } }
+  const at = dueOf(t, target)
+  return { ...t, sla: { kind: target, at: new Date(at).toISOString(), breached: at < Date.now() } }
+}
+const nowIso = () => new Date().toISOString()
+/** Resolved again: fresh clocks from now, a first reply is due again, escalations start over. */
+const reopen = (t: Ticket, status: 'open' | 'pending') =>
+  Object.assign(t, { status, resolvedAt: null, resolution: null, clockStartAt: nowIso(), pausedAt: status === 'pending' ? nowIso() : null, pausedMs: 0, firstRespondedAt: null, escalationLevel: 0, updatedAt: nowIso() })
+const resume = (t: Ticket) => Object.assign(t, { status: 'open', pausedMs: (t.pausedMs ?? 0) + pausedFor(t.pausedAt, Date.now()), pausedAt: null, updatedAt: nowIso() })
+/** Same as the server's closeOnRelease: back with the AI agent, its ticket is done. */
+function closeOnRelease(phone: string) {
+  const t = ticketsNow().find((x) => x.phone === phone && x.status !== 'resolved')
+  if (t) Object.assign(t, { status: 'resolved', resolvedAt: nowIso(), pausedAt: null, resolution: 'Handed back to the AI agent.' })
+}
+/** Same as the server's onCustomerMessage (ticketRules.ts customerWrites). */
+function onCustomerWrites(c: Chat) {
+  const latest = ticketsNow().filter((t) => t.phone === c.phone).sort((a, z) => z.number - a.number)[0] ?? null
+  const next = customerWrites(latest, c.owner === 'human' ? 'human' : 'ai', Date.now())
+  if (next === 'resume' && latest) resume(latest)
+  if (next === 'reopen' && latest) {
+    reopen(latest, 'open')
+    push(c, { direction: 'out', author: 'system', kind: 'event', body: `Ticket #${latest.number} reopened: the customer wrote again.` })
+  }
+  if (next === 'new') ensureTicket(c, 'customer')
 }
 function ticketsNow(): Ticket[] {
   if (!tickets) {
@@ -349,15 +375,20 @@ export async function dummyTickets<T>(method: string, path: string, body: unknow
   const p = (k: string) => u.searchParams.get(k) ?? ''
   if (u.pathname === '/api/tickets' && method === 'GET') {
     const q = p('q').toLowerCase()
+    const due = (t: Ticket) => (t.sla.at ? Date.parse(t.sla.at) : Infinity)
     return list
       .filter((t) => (p('status') === 'all' ? true : p('status') ? t.status === p('status') : t.status !== 'resolved'))
-      .filter((t) => (p('assignee') === 'me' ? t.assigneeId === ME.id : p('assignee') === 'none' ? !t.assigneeId : true))
+      .filter((t) => (p('assignee') === 'me' ? t.assigneeId === ME.id : p('assignee') === 'none' ? !t.assigneeId : !p('assignee') || t.assigneeId === p('assignee')))
+      .filter((t) => !p('tag') || t.tags.includes(p('tag')))
       .filter((t) => !p('priority') || t.priority === p('priority'))
       .filter((t) => (p('team') === 'none' ? !t.teamId : !p('team') || t.teamId === p('team')))
       .filter((t) => p('escalated') !== '1' || (t.escalationLevel ?? 0) > 0)
       .filter((t) => !p('phone') || t.phone === p('phone'))
       .filter((t) => !q || `${t.number} ${t.subject} ${t.name ?? ''} ${t.phone}`.toLowerCase().includes(q))
-      .map(withSla) as T
+      .map(withSla)
+      .filter((t) => p('breached') !== '1' || t.sla.breached)
+      .sort((a, z) => (p('sort') === 'due' ? due(a) - due(z) || z.number - a.number : z.number - a.number))
+      .slice(0, Number(p('limit')) || 100) as T
   }
   if (u.pathname === '/api/tickets' && method === 'POST') {
     const c = load().find((x) => x.phone === b.phone)
@@ -368,20 +399,24 @@ export async function dummyTickets<T>(method: string, path: string, body: unknow
     return withSla(t) as T
   }
   if (u.pathname === '/api/tickets/bulk') {
-    for (const n of (b.numbers as number[]) ?? []) {
+    const failed: { number: number; reason: string }[] = []
+    const numbers = (b.numbers as number[]) ?? []
+    for (const n of numbers) {
       const t = list.find((x) => x.number === n)
-      if (!t) continue
-      if (b.action === 'resolve') Object.assign(t, { status: 'resolved', resolvedAt: new Date().toISOString() })
-      else Object.assign(t, b.patch)
+      if (!t) failed.push({ number: n, reason: `Ticket #${n} doesn’t exist.` })
+      else if (b.action === 'resolve' && t.status === 'resolved') failed.push({ number: n, reason: `Ticket #${n} is already resolved.` })
+      else if (b.action === 'resolve') Object.assign(t, { status: 'resolved', resolvedAt: nowIso(), pausedAt: null, resolution: String(b.resolution ?? '') || null })
+      else Object.assign(t, b.patch, { updatedAt: nowIso() })
     }
-    return { ok: true, count: ((b.numbers as number[]) ?? []).length } as T
+    return { done: numbers.length - failed.length, failed } as T
   }
   const tm = u.pathname.match(/^\/api\/tickets\/(\d+)(\/resolve)?$/)
   if (tm) {
     const t = list.find((x) => x.number === Number(tm[1]))
     if (!t) throw new MetaError(404, 'Not found', `Ticket #${tm[1]} doesn’t exist.`)
     if (tm[2]) {
-      Object.assign(t, { status: 'resolved', resolvedAt: new Date().toISOString(), resolution: String(b.resolution ?? '') || null })
+      if (t.status === 'resolved') throw new MetaError(409, 'Already exists', `Ticket #${t.number} is already resolved.`)
+      Object.assign(t, { status: 'resolved', resolvedAt: nowIso(), pausedAt: null, resolution: String(b.resolution ?? '') || null })
       const c = load().find((x) => x.phone === t.phone)
       if (c) {
         push(c, { direction: 'out', author: 'system', kind: 'event', body: `You resolved ticket #${t.number}.` })
@@ -389,7 +424,17 @@ export async function dummyTickets<T>(method: string, path: string, body: unknow
         if (b.handBack !== false && !isBsuid(c.phone)) c.owner = 'ai'
       }
     } else if (method === 'PATCH') {
-      Object.assign(t, b, { updatedAt: new Date().toISOString() })
+      const { status, ...rest } = b
+      if (status && status !== t.status) {
+        if (t.status === 'resolved') {
+          const other = list.find((x) => x.phone === t.phone && x.status !== 'resolved')
+          if (other) throw new MetaError(409, 'Already exists', `This chat already has an open ticket (#${other.number}). Continue there.`)
+          reopen(t, status as 'open' | 'pending')
+        } else if (status === 'pending') Object.assign(t, { status: 'pending', pausedAt: nowIso() })
+        else resume(t)
+      }
+      if (typeof rest.subject === 'string' && !rest.subject.trim()) throw new MetaError(400, 'Check the details', 'Give the ticket a subject.')
+      Object.assign(t, rest, { updatedAt: nowIso() })
       const c = load().find((x) => x.phone === t.phone)
       if (c && 'assigneeId' in b) c.assigneeId = (b.assigneeId as string | null) ?? null
     }
@@ -417,11 +462,6 @@ export async function dummyTickets<T>(method: string, path: string, body: unknow
       .filter((r) => !r.dismissed && Date.parse(r.dueAt) <= Date.now())
       .map((r) => ({ id: `reminder:${r.id}`, kind: 'reminder', text: `${r.note} · ${load().find((c) => c.phone === r.phone)?.name || r.phone}`, at: r.dueAt, phone: r.phone })),
     ] as T
-  if (u.pathname === '/api/support/analytics') {
-    const days = Number(u.searchParams.get('days') ?? 7)
-    const series = Array.from({ length: days }, (_, i) => ({ date: new Date(Date.now() - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10), created: (i * 7) % 5, resolved: (i * 5) % 4 }))
-    return { days, timezone: settings.hours.timezone, series, created: series.reduce((n, x) => n + x.created, 0), resolved: series.reduce((n, x) => n + x.resolved, 0), open: list.filter((t) => t.status !== 'resolved').length, medianFirstReplyMin: 18, medianResolveMin: 260, slaFirstReplyMet: 0.92, slaResolveMet: 0.81, csat: { responses: 24, average: 2.6, good: 17, okay: 5, bad: 2 }, chats: { total: 140, aiOnly: 118, withTeam: 22 }, people: [{ name: ME.name, resolved: 14, open: 2, medianFirstReplyMin: 12 }], broadcasts: { sent: 320, read: 211, replied: 38 } } as T
-  }
   throw new MetaError(404, 'Not found', path)
 }
 

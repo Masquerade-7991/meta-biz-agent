@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { ChevronsUp, Star } from 'lucide-react'
@@ -7,7 +7,11 @@ import { Checkbox } from '@/app/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table'
 import { errorDetail } from '@/app/api/meta'
-import { bulkTickets, escalateDemoTicket, getTicket, listTeams, listTickets, PRIORITIES, type Team, PRIORITY_CLASS, PRIORITY_LABEL, slaText, STATUS_LABEL, type Priority, type Ticket } from '@/app/api/tickets'
+import { bulkTickets, escalateDemoTicket, listTeams, listTickets, PRIORITIES, type Team, PRIORITY_CLASS, PRIORITY_LABEL, STATUS_LABEL, type Priority, type Ticket } from '@/app/api/tickets'
+import { InlineError } from '@/app/components/wizard/RetryBanner'
+import { TicketSheet } from '@/app/tickets/TicketSheet'
+import { ResolveDialog } from '@/app/tickets/ResolveDialog'
+import { SlaCell } from '@/app/tickets/SlaCell'
 import { cn } from '@/app/lib/utils'
 import { useMembers } from '@/app/auth/useMembers'
 import { usePolling } from '@/app/lib/usePolling'
@@ -25,64 +29,70 @@ const LIVE_TICKETS = ['ticket.']
 
 const VIEWS = [
   { id: 'open', label: 'Open' },
+  { id: 'overdue', label: 'Overdue' },
   { id: 'escalated', label: 'Escalated' },
   { id: 'pending', label: 'Waiting on customer' },
   { id: 'resolved', label: 'Resolved' },
   { id: 'all', label: 'All' },
 ] as const
+type View = (typeof VIEWS)[number]['id']
+const isView = (v: string | null): v is View => VIEWS.some((x) => x.id === v)
+const PAGE = 100
+const ANY = 'any'
 
-export function SlaCell({ t }: { t: Ticket }) {
-  const due = t.sla.at ? Date.parse(t.sla.at) - Date.now() : null
-  return (
-    <span
-      className={cn('text-xs tabular-nums', t.sla.breached ? 'font-semibold text-destructive' : due !== null && due < 30 * 60_000 ? 'text-foreground' : 'text-muted-foreground')}
-    >
-      {slaText(t)}
-    </span>
-  )
-}
-
-/** Every issue handed to people: who has it, how urgent, and how long until its SLA runs out. */
+/** Every issue handed to people: who has it, how urgent, and how long until its deadline. Filters
+ *  live in the address, so a link (from Analytics, an email or a colleague) opens the same list. */
 export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => void }) {
-  const [view, setView] = useState<(typeof VIEWS)[number]['id']>('open')
-  const [assignee, setAssignee] = useState('any')
-  const [priority, setPriority] = useState('any')
-  const [team, setTeam] = useState('any')
+  const [params, setParams] = useSearchParams()
+  const get = (k: string, fallback = ANY) => params.get(k) || fallback
+  const view: View = isView(params.get('view')) ? (params.get('view') as View) : 'open'
+  const assignee = get('assignee')
+  const priority = get('priority')
+  const team = get('team')
+  const tag = params.get('tag') ?? ''
+  const q = params.get('q') ?? ''
+  // Due soonest suits work still to do; finished work reads newest first.
+  const sort = get('sort', view === 'resolved' || view === 'all' ? 'new' : 'due')
+  const linked = params.get('n')
+  const setParam = (changes: Record<string, string | null>) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        for (const [k, v] of Object.entries(changes)) if (v && v !== ANY) next.set(k, v)
+        else next.delete(k)
+        return next
+      },
+      { replace: true },
+    )
   const [teams, setTeams] = useState<Team[]>([])
   useEffect(() => {
     listTeams().then(setTeams, () => {})
   }, [])
-  // Links in emails (escalations) name a ticket: /tickets?n=1042 opens its chat.
-  const [params] = useSearchParams()
-  const linked = params.get('n')
-  const opened = useRef<string | null>(null)
-  useEffect(() => {
-    if (!linked || !/^\d+$/.test(linked) || opened.current === linked) return
-    opened.current = linked
-    getTicket(Number(linked)).then(
-      (t) => onOpenChat(t.phone),
-      (err) => toast.error(`Couldn’t open ticket #${linked}`, { description: errorDetail(err) }),
-    )
-  }, [linked, onOpenChat])
-  const [q, setQ] = useState('')
+  const [limit, setLimit] = useState(PAGE)
   const [rows, setRows] = useState<Ticket[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [picked, setPicked] = useState<Set<number>>(new Set())
+  const [bulkResolve, setBulkResolve] = useState(false)
   const members = useMembers()
   const { me } = useAuth()
   const reassign = can(me?.role, 'tickets.reassign')
   // Agents hand tickets only to themselves or back to nobody.
   const assignable = reassign ? members : members.filter((m) => m.userId === me?.user.id)
   const [busy, setBusy] = useState(false)
+  const filterKey = `${view}|${assignee}|${priority}|${team}|${tag}|${q}|${sort}`
 
   const refresh = useCallback(() => {
     listTickets({
-      status: view === 'escalated' ? 'open' : view,
+      status: view === 'escalated' || view === 'overdue' ? 'open' : view,
       escalated: view === 'escalated' ? '1' : undefined,
-      assignee: assignee === 'any' ? undefined : assignee,
-      priority: priority === 'any' ? undefined : priority,
-      team: team === 'any' ? undefined : team,
+      breached: view === 'overdue' ? '1' : undefined,
+      assignee: assignee === ANY ? undefined : assignee,
+      priority: priority === ANY ? undefined : priority,
+      team: team === ANY ? undefined : team,
+      tag: tag || undefined,
       q,
+      sort,
+      limit: String(limit),
     }).then(
       (r) => {
         setRows(r)
@@ -90,10 +100,14 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
       },
       (err) => setError(errorDetail(err)),
     )
-  }, [view, assignee, priority, team, q])
+  }, [view, assignee, priority, team, tag, q, sort, limit])
   usePolling(refresh, 15_000, [refresh], true, LIVE_TICKETS)
-  useEffect(() => setPicked(new Set()), [view, assignee, priority, team, q])
+  useEffect(() => {
+    setPicked(new Set())
+    setLimit(PAGE)
+  }, [filterKey])
   const teamName = (id?: string | null) => (id ? teams.find((x) => x.id === id)?.name : null)
+  const filtered = assignee !== ANY || priority !== ANY || team !== ANY || !!tag || !!q
 
   // Demo controls: an open ticket's clock runs out, so its next escalation level fires.
   const demo = useMemo(
@@ -124,12 +138,18 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
   const nameOf = (id: string | null) => (id ? (members.find((m) => m.userId === id)?.name ?? 'Someone') : 'Unassigned')
   const all = rows ?? []
   const allPicked = all.length > 0 && all.every((t) => picked.has(t.number))
-  async function bulk(o: Parameters<typeof bulkTickets>[1], done: string) {
+  /** Runs one change on every picked ticket and says exactly what happened. */
+  async function bulk(o: Parameters<typeof bulkTickets>[1], verb: string) {
     setBusy(true)
     try {
-      await bulkTickets([...picked], o)
-      toast.success(done)
-      setPicked(new Set())
+      const r = await bulkTickets([...picked], o)
+      const what = `${r.done} ticket${r.done === 1 ? '' : 's'} ${verb}`
+      if (!r.failed.length) toast.success(`${what}.`)
+      else
+        toast.warning(`${what}; ${r.failed.length} couldn’t be.`, {
+          description: r.failed.slice(0, 3).map((f) => f.reason).join(' ') + (r.failed.length > 3 ? ` And ${r.failed.length - 3} more.` : ''),
+        })
+      setPicked(new Set(r.failed.map((f) => f.number)))
       refresh()
     } catch (err) {
       toast.error(errorDetail(err))
@@ -143,24 +163,32 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
       <PageHeader title="Tickets" description="Chats handed to your team, with their reply and resolution deadlines." className="mb-0" />
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        <PillTabs label="Ticket status" options={VIEWS} value={view} onChange={setView} />
+        <PillTabs label="Ticket status" options={VIEWS} value={view} onChange={(v) => setParam({ view: v === 'open' ? null : v })} />
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Select value={assignee} onValueChange={setAssignee}>
-            <SelectTrigger className="h-9 w-40" aria-label="Assignee">
+          <Select value={assignee} onValueChange={(v) => setParam({ assignee: v })}>
+            <SelectTrigger className="h-9 w-44" aria-label="Assignee">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="any">Anyone</SelectItem>
+              <SelectItem value={ANY}>Anyone</SelectItem>
               <SelectItem value="me">Assigned to me</SelectItem>
               <SelectItem value="none">Unassigned</SelectItem>
+              {reassign &&
+                members
+                  .filter((m) => m.userId !== me?.user.id)
+                  .map((m) => (
+                    <SelectItem key={m.userId} value={m.userId}>
+                      {m.name || m.email}
+                    </SelectItem>
+                  ))}
             </SelectContent>
           </Select>
-          <Select value={priority} onValueChange={setPriority}>
+          <Select value={priority} onValueChange={(v) => setParam({ priority: v })}>
             <SelectTrigger className="h-9 w-36" aria-label="Priority">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="any">Any priority</SelectItem>
+              <SelectItem value={ANY}>Any priority</SelectItem>
               {PRIORITIES.map((p) => (
                 <SelectItem key={p} value={p}>
                   {PRIORITY_LABEL[p]}
@@ -169,12 +197,12 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
             </SelectContent>
           </Select>
           {teams.length > 0 && (
-            <Select value={team} onValueChange={setTeam}>
+            <Select value={team} onValueChange={(v) => setParam({ team: v })}>
               <SelectTrigger className="h-9 w-40" aria-label="Team">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="any">Any team</SelectItem>
+                <SelectItem value={ANY}>Any team</SelectItem>
                 {teams.map((t) => (
                   <SelectItem key={t.id} value={t.id}>
                     {t.name}
@@ -184,14 +212,31 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
               </SelectContent>
             </Select>
           )}
-          <SearchInput value={q} onChange={setQ} placeholder="Search tickets" label="Search tickets" className="h-9 w-56" />
+          <Select value={sort} onValueChange={(v) => setParam({ sort: v })}>
+            <SelectTrigger className="h-9 w-36" aria-label="Sort">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="due">Due soonest</SelectItem>
+              <SelectItem value="new">Newest</SelectItem>
+            </SelectContent>
+          </Select>
+          <SearchInput value={q} onChange={(v) => setParam({ q: v || null })} placeholder="Number, subject, customer" label="Search tickets" className="h-9 w-56" />
         </div>
       </div>
+      {filtered && (
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {tag && <span className="rounded bg-muted px-1.5 py-0.5">Tag: {tag}</span>}
+          <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setParam({ assignee: null, priority: null, team: null, tag: null, q: null })}>
+            Clear filters
+          </Button>
+        </p>
+      )}
 
       {picked.size > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm">
           <span className="mr-2">{picked.size} selected</span>
-          <Select onValueChange={(v) => void bulk({ patch: { assigneeId: v === 'none' ? null : v } }, 'Tickets reassigned.')} disabled={busy}>
+          <Select value="" onValueChange={(v) => void bulk({ patch: { assigneeId: v === 'none' ? null : v } }, 'reassigned')} disabled={busy}>
             <SelectTrigger className="h-8 w-40" aria-label="Assign selected">
               <SelectValue placeholder="Assign to…" />
             </SelectTrigger>
@@ -199,12 +244,12 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
               <SelectItem value="none">Unassigned</SelectItem>
               {assignable.map((m) => (
                 <SelectItem key={m.userId} value={m.userId}>
-                  {m.name}
+                  {m.name || m.email}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Select onValueChange={(v) => void bulk({ patch: { priority: v as Priority } }, 'Priority changed.')} disabled={busy}>
+          <Select value="" onValueChange={(v) => void bulk({ patch: { priority: v as Priority } }, `set to ${PRIORITY_LABEL[v as Priority].toLowerCase()}`)} disabled={busy}>
             <SelectTrigger className="h-8 w-36" aria-label="Set priority of selected">
               <SelectValue placeholder="Set priority…" />
             </SelectTrigger>
@@ -217,7 +262,7 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
             </SelectContent>
           </Select>
           {reassign && teams.length > 0 && (
-            <Select onValueChange={(v) => void bulk({ patch: { teamId: v === 'none' ? null : v } }, 'Tickets moved.')} disabled={busy}>
+            <Select value="" onValueChange={(v) => void bulk({ patch: { teamId: v === 'none' ? null : v } }, 'moved')} disabled={busy}>
               <SelectTrigger className="h-8 w-40" aria-label="Move selected to team">
                 <SelectValue placeholder="Move to team…" />
               </SelectTrigger>
@@ -232,8 +277,8 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
             </Select>
           )}
           {view !== 'resolved' && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => void bulk({ action: 'resolve' }, 'Tickets resolved.')}>
-              Resolve
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => setBulkResolve(true)}>
+              Resolve…
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={() => setPicked(new Set())}>
@@ -243,16 +288,28 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
       )}
 
       <div className="mt-4 overflow-x-auto rounded-lg border border-border">
-        {error ? (
-          <p className="p-6 text-destructive text-sm">
-            {error}
-          </p>
+        {error && !rows ? (
+          <div className="p-6">
+            <InlineError message={`Couldn’t load tickets. ${error}`} onRetry={refresh} />
+          </div>
         ) : !rows ? (
           <PageLoader context="tickets" className="min-h-[40vh]" />
         ) : rows.length === 0 ? (
           <div className="space-y-1 p-10 text-center text-muted-foreground text-sm">
-            <p>{view === 'escalated' ? 'No escalated tickets. Everything is within its targets.' : view === 'open' && assignee === 'any' && priority === 'any' && team === 'any' && !q ? 'No open tickets. The AI agent has everything covered.' : 'No tickets match.'}</p>
-            <p className="text-xs">A ticket opens when the AI agent hands a chat to your team, or when someone takes over or replies in the inbox.</p>
+            <p>
+              {filtered
+                ? 'No tickets match these filters.'
+                : view === 'overdue'
+                  ? 'Nothing is overdue. Every open ticket is within its deadline.'
+                  : view === 'escalated'
+                    ? 'No escalated tickets. Everything is within its targets.'
+                    : view === 'pending'
+                      ? 'No tickets are waiting on a customer.'
+                      : view === 'open'
+                        ? 'No open tickets. The AI agent has everything covered.'
+                        : 'No tickets yet.'}
+            </p>
+            <p className="text-xs">A ticket opens when the AI agent hands a chat to your team, when someone takes over or replies in the inbox, or when a customer writes again after it was resolved.</p>
           </div>
         ) : (
           <Table>
@@ -275,7 +332,7 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
             </TableHeader>
             <TableBody>
               {rows.map((t) => (
-                <TableRow key={t.number} className="cursor-pointer" onClick={() => onOpenChat(t.phone)}>
+                <TableRow key={t.number} className="cursor-pointer" onClick={() => setParam({ n: String(t.number) })}>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={picked.has(t.number)}
@@ -342,6 +399,24 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
           </Table>
         )}
       </div>
+      {rows && rows.length >= limit && (
+        <div className="mt-3 flex justify-center">
+          <Button variant="outline" size="sm" onClick={() => setLimit((l) => Math.min(1000, l + PAGE))} disabled={limit >= 1000}>
+            {limit >= 1000 ? 'Showing the first 1,000. Narrow the filters to see more.' : 'Load more'}
+          </Button>
+        </div>
+      )}
+      <TicketSheet number={linked && /^\d+$/.test(linked) ? Number(linked) : null} onClose={() => setParam({ n: null })} onOpenChat={onOpenChat} onChanged={refresh} />
+      {bulkResolve && (
+        <ResolveDialog
+          title={`Resolve ${picked.size} ticket${picked.size === 1 ? '' : 's'}`}
+          onClose={() => setBulkResolve(false)}
+          onResolve={async (c) => {
+            await bulk({ action: 'resolve', ...c }, 'resolved')
+            setBulkResolve(false)
+          }}
+        />
+      )}
     </PageContainer>
   )
 }

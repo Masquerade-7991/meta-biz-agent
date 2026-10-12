@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Link } from 'react-router'
 import { AlertTriangle, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
@@ -39,6 +40,8 @@ export function AnalyticsDashboard() {
   const { filter, range, set, tab } = useAnalyticsFilter()
   const [data, setData] = useState<Overview | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // A new filter keeps the old numbers on screen until the new ones arrive; this says they're coming.
+  const [loading, setLoading] = useState(false)
   const [reload, setReload] = useState(0)
   const [teams, setTeams] = useState<Team[]>([])
   const [firstReplyTarget, setFirstReplyTarget] = useState<number | null>(null)
@@ -52,10 +55,13 @@ export function AnalyticsDashboard() {
   useEffect(() => {
     let live = true
     setError(null)
-    getOverview(filter).then(
-      (d) => live && setData(d),
-      (err) => live && setError(errorDetail(err)),
-    )
+    setLoading(true)
+    getOverview(filter)
+      .then(
+        (d) => live && setData(d),
+        (err) => live && setError(errorDetail(err)),
+      )
+      .finally(() => live && setLoading(false))
     return () => {
       live = false
     }
@@ -79,6 +85,7 @@ export function AnalyticsDashboard() {
       />
       <div className="sticky top-0 z-10 -mx-4 mb-5 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-8 sm:px-8">
         <FilterBar filter={filter} range={range} agents={data?.agents ?? []} teams={teams} people={members} onChange={set} />
+        {loading && data && <div role="progressbar" aria-label="Updating" className="absolute inset-x-0 bottom-0 h-0.5 animate-pulse bg-primary" />}
       </div>
       <Tabs value={tab} onValueChange={(v) => set({ tab: v === 'overview' ? null : v })}>
         <TabsList className="mb-5 flex-wrap">
@@ -89,7 +96,12 @@ export function AnalyticsDashboard() {
           ))}
         </TabsList>
         {error ? (
-          <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</p>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+            <span>Couldn&rsquo;t load the numbers. {error}</span>
+            <Button variant="outline" size="sm" onClick={() => setReload((n) => n + 1)}>
+              Try again
+            </Button>
+          </div>
         ) : !data ? (
           <PageLoader context="analytics" className="min-h-[40vh]" />
         ) : (
@@ -137,7 +149,8 @@ function Panel({ title, description, children, className, actions }: { title: st
 const Grid = ({ children, cols = 4 }: { children: ReactNode; cols?: 2 | 3 | 4 }) => (
   <div className={cn('grid gap-3', cols === 4 ? 'sm:grid-cols-2 xl:grid-cols-4' : cols === 3 ? 'sm:grid-cols-3' : 'lg:grid-cols-2')}>{children}</div>
 )
-const trend = (d: Overview, k: keyof Overview['series'][number]) => d.series.map((p) => Number(p[k] ?? 0))
+/** A KPI's daily values; days with nothing to measure stay empty (null), not zero. */
+const trend = (d: Overview, k: keyof Overview['series'][number]) => d.series.map((p) => (p[k] == null ? null : Number(p[k])))
 
 function OverviewTab({ d }: { d: Overview }) {
   const k = d.kpis
@@ -147,22 +160,37 @@ function OverviewTab({ d }: { d: Overview }) {
   return (
     <div className="space-y-5">
       <Grid>
-        <KpiTile label="Conversations" value={num(k.conversations.value)} change={change(k.conversations)} trend={trend(d, 'conversations')} help="Chats with at least one message in the period." />
-        <KpiTile label="Handled by AI alone" value={pct(k.containment.value)} change={pointChange(k.containment)} trend={trend(d, 'containment')} help="Containment: chats the AI agent finished without anyone from the team writing." />
-        <KpiTile label="Customer satisfaction" value={pct(k.csat.value)} change={pointChange(k.csat)} help="Good answers, with Okay counting half, out of all answers to the feedback question." />
-        <KpiTile label="Tickets resolved" value={pct(k.resolutionRate.value)} sub={`${num(k.ticketsResolved.value)} of ${num(k.ticketsOpened.value)} opened`} change={pointChange(k.resolutionRate)} help="Resolution rate: tickets resolved in the period out of tickets opened in it." />
-        <KpiTile label="Typical first reply" value={dur(k.medianFirstReplyMin.value)} change={change(k.medianFirstReplyMin)} better="down" trend={trend(d, 'medianFirstReplyMin')} />
-        <KpiTile label="Resolved on time" value={pct(k.slaMet.value)} change={pointChange(k.slaMet)} help="Tickets resolved within their resolution target." />
-        <KpiTile label="Spend" value={money(k.spend.value, d.currency)} change={change(k.spend)} better="down" trend={d.series.map((p) => p.spend + p.agentCost)} help="WhatsApp messages plus the Meta Business Agent." />
-        <KpiTile label="Cost per resolved conversation" value={money(k.costPerResolved.value, d.currency)} change={change(k.costPerResolved)} better="down" help="Spend divided by chats the AI finished plus tickets the team resolved." />
+        <KpiTile label="Conversations" value={num(k.conversations.value)} change={change(k.conversations)} trend={trend(d, 'conversations')} help="Chats where the customer, the AI or the team wrote in the period. System notes alone don’t count." to="/inbox" />
+        <KpiTile label="Handled by AI alone" value={pct(k.containment.value)} unit="pts" change={pointChange(k.containment)} trend={trend(d, 'containment')} help="Containment: chats the AI agent answered without anyone from the team writing. Chats nobody answered don’t count as handled." />
+        <KpiTile label="Customer satisfaction" value={pct(k.csat.value)} unit="pts" change={pointChange(k.csat)} help="Good answers, with Okay counting half, out of all answers to the feedback question." />
+        <KpiTile label="Tickets resolved" value={pct(k.resolutionRate.value)} unit="pts" sub={`${num(k.ticketsResolved.value)} of ${num(k.ticketsOpened.value)} opened`} change={pointChange(k.resolutionRate)} help="Resolution rate: tickets resolved in the period out of tickets opened in it." to={ticketsLink({ view: 'resolved' })} />
+        <KpiTile label="Typical first reply" value={dur(k.medianFirstReplyMin.value)} change={change(k.medianFirstReplyMin)} better="down" trend={trend(d, 'medianFirstReplyMin')} help="The median: half of first replies were faster than this." />
+        <KpiTile label="Resolved on time" value={pct(k.slaMet.value)} unit="pts" change={pointChange(k.slaMet)} help="Tickets resolved within their resolution target." to={ticketsLink({ view: 'overdue' })} />
+        <KpiTile
+          label="Spend"
+          value={money(k.spend.value, d.currency)}
+          change={change(k.spend)}
+          better="down"
+          trend={d.series.map((p) => p.spend + p.agentCost)}
+          sub={d.spendWholeAccount ? 'Whole WhatsApp account' : undefined}
+          help="WhatsApp messages plus the Meta Business Agent. Meta reports message spend for the whole account, not per number."
+        />
+        <KpiTile
+          label="Cost per resolved conversation"
+          value={money(k.costPerResolved.value, d.currency)}
+          change={change(k.costPerResolved)}
+          better="down"
+          sub={d.spendWholeAccount ? 'Shown for all agents together' : undefined}
+          help="Spend divided by chats the AI finished plus tickets the team resolved. Spend is per account, so this needs every agent selected."
+        />
       </Grid>
       <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-lg bg-muted/60 px-4 py-2.5 text-sm">
-        <span>
+        <Link to={ticketsLink({})} className="hover:underline">
           Right now: <strong className="tabular-nums">{k.openNow}</strong> open tickets
-        </span>
-        <span className={cn(k.overdueNow > 0 && 'text-destructive')}>
+        </Link>
+        <Link to={ticketsLink({ view: 'overdue' })} className={cn('hover:underline', k.overdueNow > 0 && 'text-destructive')}>
           <strong className="tabular-nums">{k.overdueNow}</strong> overdue
-        </span>
+        </Link>
         <span>
           <strong className="tabular-nums">{k.peopleAvailable}</strong> people available
         </span>
@@ -175,13 +203,16 @@ function OverviewTab({ d }: { d: Overview }) {
         </p>
       )}
       <Grid cols={2}>
-        <Panel title="Conversations" description="Finished by the AI alone, or with your team.">
+        <Panel title="Conversations" description="Answered by the AI alone, with your team, or by nobody.">
           <TimeSeriesChart
             data={d.series}
-            label="Conversations per day, by the AI alone and with the team"
+            label="Conversations per day: by the AI alone, with the team, and with no reply"
+            empty="No conversations in these dates."
             series={[
               { key: 'aiOnly', label: 'AI alone', kind: 'area', stack: 'c' },
               { key: 'withTeam', label: 'With the team', kind: 'area', stack: 'c', color: 'var(--chart-4)' },
+              // Only drawn when some chat went unanswered: an empty layer would still show its edge.
+              ...(d.series.some((p) => p.noReply) ? [{ key: 'noReply', label: 'No reply', kind: 'area' as const, stack: 'c', color: 'var(--chart-3)' }] : []),
             ]}
           />
         </Panel>
@@ -255,30 +286,31 @@ function AgentTable({ d }: { d: Overview }) {
 function AiTab({ d }: { d: Overview }) {
   const k = d.kpis
   const [gaps, setGaps] = useState<Gap[] | null>(null)
+  // Unanswered questions are kept for the last 7 or 30 days, not any range: the panel says which.
+  const gapDays = d.range.days > 7 ? 30 : 7
   useEffect(() => {
-    listGaps(d.range.days > 7 ? 30 : 7).then(setGaps, () => setGaps([]))
-  }, [d.range.days])
+    listGaps(gapDays).then(setGaps, () => setGaps([]))
+  }, [gapDays])
   const aiAlone = d.series.reduce((a, p) => a + p.aiOnly, 0)
-  const handoffRate = k.conversations.value ? (k.handoffs.value ?? 0) / k.conversations.value : null
   return (
     <div className="space-y-5">
       <Grid>
         <KpiTile label="Finished by the AI" value={num(aiAlone)} trend={trend(d, 'aiOnly')} />
-        <KpiTile label="Containment" value={pct(k.containment.value)} change={pointChange(k.containment)} />
-        <KpiTile label="Handovers" value={num(k.handoffs.value)} change={change(k.handoffs)} better="down" trend={trend(d, 'handoffs')} />
-        <KpiTile label="Handover rate" value={pct(handoffRate)} better="down" help="Handovers out of all conversations." />
+        <KpiTile label="Containment" value={pct(k.containment.value)} unit="pts" change={pointChange(k.containment)} />
+        <KpiTile label="Handovers" value={num(k.handoffs.value)} change={change(k.handoffs)} better="down" trend={trend(d, 'handoffs')} to={ticketsLink({ view: 'all' })} />
+        <KpiTile label="Handover rate" value={pct(k.handoffRate.value)} unit="pts" change={pointChange(k.handoffRate)} better="down" help="Handovers out of all conversations, for the chosen agents (the team and person filters don’t apply)." />
       </Grid>
       <Grid cols={2}>
         <Panel title="Handovers per day">
-          <TimeSeriesChart data={d.series} label="Handovers per day" series={[{ key: 'handoffs', label: 'Handed over', kind: 'line', color: 'var(--chart-4)' }]} />
+          <TimeSeriesChart data={d.series} label="Handovers per day" empty="No handovers in these dates." series={[{ key: 'handoffs', label: 'Handed over', kind: 'line', color: 'var(--chart-4)' }]} />
         </Panel>
-        <Panel title="How tickets opened" description="The AI handing over, someone taking over, or a team reply.">
-          <Donut slices={d.handoffReasons.map((r) => ({ label: r.label, value: r.count }))} label="How tickets opened" totalLabel="Tickets" />
+        <Panel title="How tickets opened" description="The AI handing over, someone taking over, a team reply, or the customer writing again.">
+          <Donut slices={d.handoffReasons.map((r) => ({ label: r.label, value: r.count }))} label="How tickets opened" totalLabel="Tickets" empty="No tickets opened in these dates." />
         </Panel>
       </Grid>
       <Grid cols={2}>
-        <Panel title="Questions the AI couldn’t answer" description="Answered with the fallback or handed over. Teach the agent the top ones.">
-          {gaps === null ? <PageLoader context="analytics" className="min-h-32" /> : <BarList rows={gaps.map((g) => ({ label: g.question, value: g.count, hint: g.reason === 'handoff' ? 'handed over' : 'fallback' }))} empty="No unanswered questions in this period." />}
+        <Panel title="Questions the AI couldn’t answer" description={`The last ${gapDays} days: answered with the fallback or handed over. Teach the agent the top ones.`}>
+          {gaps === null ? <PageLoader context="analytics" className="min-h-32" /> : <BarList rows={gaps.map((g) => ({ label: g.question, value: g.count, hint: g.reason === 'handoff' ? 'handed over' : 'fallback' }))} empty={`No unanswered questions in the last ${gapDays} days.`} />}
         </Panel>
         <Panel title="Tools" description="How often each tool worked, from Meta’s insights.">
           {d.tools.length ? (
@@ -313,16 +345,17 @@ function HumanTab({ d, firstReplyTarget }: { d: Overview; firstReplyTarget: numb
   return (
     <div className="space-y-5">
       <Grid>
-        <KpiTile label="Tickets opened" value={num(k.ticketsOpened.value)} change={change(k.ticketsOpened)} better="none" trend={trend(d, 'ticketsOpened')} />
-        <KpiTile label="Typical first reply" value={dur(k.medianFirstReplyMin.value)} change={change(k.medianFirstReplyMin)} better="down" />
-        <KpiTile label="Typical time to resolve" value={dur(k.medianResolveMin.value)} change={change(k.medianResolveMin)} better="down" />
-        <KpiTile label="Escalations" value={num(k.escalations.value)} change={change(k.escalations)} better="down" trend={trend(d, 'escalations')} />
+        <KpiTile label="Tickets opened" value={num(k.ticketsOpened.value)} change={change(k.ticketsOpened)} better="none" trend={trend(d, 'ticketsOpened')} to={ticketsLink({ view: 'all' })} />
+        <KpiTile label="Typical first reply" value={dur(k.medianFirstReplyMin.value)} change={change(k.medianFirstReplyMin)} better="down" help="The median: half of first replies were faster than this." />
+        <KpiTile label="Typical time to resolve" value={dur(k.medianResolveMin.value)} change={change(k.medianResolveMin)} better="down" help="The median, from opened to resolved." />
+        <KpiTile label="Escalations" value={num(k.escalations.value)} change={change(k.escalations)} better="down" trend={trend(d, 'escalations')} to={ticketsLink({ view: 'escalated' })} />
       </Grid>
       <Grid cols={2}>
         <Panel title="Opened, resolved and still open">
           <TimeSeriesChart
             data={d.series}
             label="Tickets opened and resolved per day, and open tickets at the end of each day"
+            empty="No tickets in these dates."
             series={[
               { key: 'ticketsOpened', label: 'Opened' },
               { key: 'ticketsResolved', label: 'Resolved' },
@@ -334,6 +367,7 @@ function HumanTab({ d, firstReplyTarget }: { d: Overview; firstReplyTarget: numb
           <TimeSeriesChart
             data={d.series}
             label="Median minutes to first reply per day"
+            empty="No first replies in these dates."
             yFormat={(v) => dur(v)}
             target={firstReplyTarget ? { value: firstReplyTarget, label: 'Target' } : undefined}
             series={[{ key: 'medianFirstReplyMin', label: 'Median first reply', kind: 'line', format: (v) => dur(v) }]}
@@ -348,6 +382,7 @@ function HumanTab({ d, firstReplyTarget }: { d: Overview; firstReplyTarget: numb
           <TimeSeriesChart
             data={d.series}
             label="Satisfaction answers per day"
+            empty="No satisfaction answers in these dates."
             series={[
               { key: 'csatGood', label: 'Good', stack: 's', color: 'var(--chart-2)' },
               { key: 'csatOkay', label: 'Okay', stack: 's', color: 'var(--chart-4)' },
@@ -361,17 +396,28 @@ function HumanTab({ d, firstReplyTarget }: { d: Overview; firstReplyTarget: numb
           <SimpleTable
             head={['Team', 'Opened', 'Resolved', 'On time', 'Escalated']}
             rows={d.teams.map((t) => [t.name, num(t.opened), num(t.resolved), pct(t.slaMet), num(t.escalated)])}
+            links={d.teams.map((t) => ticketsLink({ view: 'all', team: t.id }))}
             empty="No tickets in this period."
           />
         </Panel>
-        <Panel title="Escalations by level">
-          <BarList rows={d.escalationsByLevel.map((l) => ({ label: `Level ${l.level}`, value: l.count }))} empty="Nothing escalated in this period." />
+        <Panel
+          title="Escalations by level"
+          actions={
+            d.escalationsByLevel.length ? (
+              <Link to={ticketsLink({ view: 'escalated' })} className="text-sm text-primary hover:underline">
+                See escalated tickets
+              </Link>
+            ) : undefined
+          }
+        >
+          <BarList sorted={false} rows={d.escalationsByLevel.map((l) => ({ label: `Level ${l.level}`, value: l.count }))} empty="Nothing escalated in this period." />
         </Panel>
       </Grid>
       <Panel title="People">
         <SimpleTable
           head={['Person', 'Resolved', 'Open now', 'Typical first reply', 'Satisfaction', 'Escalated']}
           rows={d.people.map((p) => [p.name, num(p.resolved), num(p.open), dur(p.medianFirstReplyMin), pct(p.csat), num(p.escalated)])}
+          links={d.people.map((p) => ticketsLink({ view: 'all', assignee: p.id }))}
           empty="No tickets in this period."
         />
       </Panel>
@@ -407,7 +453,7 @@ function ConsumptionTab({ d }: { d: Overview }) {
               { key: 'agentCost', label: 'Business Agent', kind: 'area', stack: 'm', color: 'var(--chart-4)', format: (v) => money(v, d.currency) },
             ]}
           />
-          <p className="mt-2 text-meta text-muted-foreground">WhatsApp message spend is for the whole account (Meta reports it per account, not per number).</p>
+          <p className="mt-2 text-meta text-muted-foreground">WhatsApp message spend is for the whole account (Meta reports it per account, not per number), by UTC day.</p>
         </Panel>
         <Panel title="By message category">
           <Donut slices={c.byCategory.map((x) => ({ label: titleCase(x.category), value: x.cost }))} label="Spend by message category" totalLabel="Spend" format={(v) => money(v, d.currency)} />
@@ -469,7 +515,8 @@ function BroadcastsTab({ d }: { d: Overview }) {
   )
 }
 
-function SimpleTable({ head, rows, empty }: { head: string[]; rows: (string | number)[][]; empty: string }) {
+/** `links`: where each row's first cell goes (the tickets behind it). */
+function SimpleTable({ head, rows, empty, links }: { head: string[]; rows: (string | number)[][]; empty: string; links?: string[] }) {
   if (!rows.length) return <p className="text-sm text-muted-foreground">{empty}</p>
   return (
     <div className="overflow-x-auto">
@@ -488,7 +535,13 @@ function SimpleTable({ head, rows, empty }: { head: string[]; rows: (string | nu
             <TableRow key={j} data-density-row>
               {r.map((c, i) => (
                 <TableCell key={i} className={cn(i > 0 ? 'text-right tabular-nums' : 'font-medium')}>
-                  {c}
+                  {i === 0 && links?.[j] ? (
+                    <Link to={links[j]} className="hover:underline">
+                      {c}
+                    </Link>
+                  ) : (
+                    c
+                  )}
                 </TableCell>
               ))}
             </TableRow>
@@ -505,6 +558,7 @@ function LogsTab({ filter }: { filter: ReturnType<typeof useAnalyticsFilter>['fi
   const [skip, setSkip] = useState(0)
   const [page, setPage] = useState<LogPage | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [retry, setRetry] = useState(0)
   const key = JSON.stringify(filter)
   const options = useMemo(() => LOG_KINDS.map((k) => ({ id: k, label: LOG_LABEL[k] })), [])
   useEffect(() => setSkip(0), [kind, key])
@@ -520,7 +574,7 @@ function LogsTab({ filter }: { filter: ReturnType<typeof useAnalyticsFilter>['fi
       live = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, skip, key])
+  }, [kind, skip, key, retry])
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -529,7 +583,12 @@ function LogsTab({ filter }: { filter: ReturnType<typeof useAnalyticsFilter>['fi
       </div>
       <div className="overflow-x-auto rounded-lg border border-border">
         {error ? (
-          <p className="p-6 text-sm text-destructive">{error}</p>
+          <p className="p-6 text-sm text-destructive">
+            Couldn&rsquo;t load this log. {error}{' '}
+            <button type="button" className="underline" onClick={() => setRetry((n) => n + 1)}>
+              Try again
+            </button>
+          </p>
         ) : !page ? (
           <PageLoader context="analytics" className="min-h-[30vh]" />
         ) : !page.rows.length ? (
@@ -550,7 +609,13 @@ function LogsTab({ filter }: { filter: ReturnType<typeof useAnalyticsFilter>['fi
                 <TableRow key={i} data-density-row>
                   {page.columns.map((c) => (
                     <TableCell key={c.key} className={cn('whitespace-nowrap', c.numeric && 'text-right tabular-nums')}>
-                      {r[c.key] ?? '–'}
+                      {c.key === 'ticket' && /^#\d+$/.test(String(r[c.key])) ? (
+                        <Link to={ticketsLink({ view: 'all', n: String(r[c.key]).slice(1) })} className="text-primary hover:underline">
+                          {r[c.key]}
+                        </Link>
+                      ) : (
+                        (r[c.key] ?? '–')
+                      )}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -574,6 +639,12 @@ function LogsTab({ filter }: { filter: ReturnType<typeof useAnalyticsFilter>['fi
   )
 }
 
+/** The Tickets list with these filters (the same names its address uses). */
+const ticketsLink = (p: Record<string, string>) => {
+  const q = new URLSearchParams(Object.entries(p).filter(([k, v]) => v && !(k === 'view' && v === 'open')))
+  const s = q.toString()
+  return `/tickets${s ? `?${s}` : ''}`
+}
 const titleCase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ')
 const fmtRange = (a: string, b: string) => {
   const f = (d: string) => new Date(d + 'T00:00').toLocaleDateString([], { day: 'numeric', month: 'short' })

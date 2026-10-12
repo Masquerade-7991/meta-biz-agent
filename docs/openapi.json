@@ -34,6 +34,10 @@
       "description": "Tickets, response targets, business hours, routing and team analytics."
     },
     {
+      "name": "Workspace",
+      "description": "The activity log: who did what, with before and after for every change."
+    },
+    {
       "name": "Analytics",
       "description": "All agents or some: conversations, the team, cost, the logs behind each chart, and reports (CSV downloads and scheduled emails)."
     },
@@ -4306,7 +4310,7 @@
           "Tickets & support"
         ],
         "summary": "List tickets",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\n500 at most. When agents are restricted, an agent only reaches tickets assigned to them or unassigned (403 “This chat is assigned to someone else.”).",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\n`limit` rows (100 by default, 1,000 at most): ask for more to load more. A ticket waiting on the customer has `sla.kind: paused` (no clock runs). When agents are restricted, an agent only reaches tickets assigned to them or unassigned (403 “This chat is assigned to someone else.”).",
         "parameters": [
           {
             "name": "status",
@@ -4330,13 +4334,9 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "me",
-                "none"
-              ],
-              "description": "Mine, or unassigned."
+              "description": "`me`, `none` (unassigned) or a member’s id."
             },
-            "description": "Mine, or unassigned."
+            "description": "`me`, `none` (unassigned) or a member’s id."
           },
           {
             "name": "priority",
@@ -4366,9 +4366,9 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "Subject, name or number."
+              "description": "Searched in the database: ticket number, subject, phone, or contact name."
             },
-            "description": "Subject, name or number."
+            "description": "Searched in the database: ticket number, subject, phone, or contact name."
           },
           {
             "name": "team",
@@ -4390,6 +4390,49 @@
               "description": "Only tickets that reached an escalation level."
             },
             "description": "Only tickets that reached an escalation level."
+          },
+          {
+            "name": "breached",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "const": "1",
+              "description": "Only open tickets past their current deadline."
+            },
+            "description": "Only open tickets past their current deadline."
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "due",
+                "new"
+              ],
+              "description": "due: the current deadline soonest first, tickets with no running clock last. Default new (newest first)."
+            },
+            "description": "due: the current deadline soonest first, tickets with no running clock last. Default new (newest first)."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "1–1,000. Default 100."
+            },
+            "description": "1–1,000. Default 100."
           }
         ],
         "responses": {
@@ -4505,7 +4548,7 @@
           "Tickets & support"
         ],
         "summary": "Change many tickets at once",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\nUp to 200 ticket numbers. Each change is checked as if made one by one; ones you can’t change are skipped.",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nUp to 200 ticket numbers. Each change is checked as if made one by one; ones that can’t change (already resolved, someone else’s) are listed with the reason, and the rest still change.",
         "requestBody": {
           "required": true,
           "content": {
@@ -4532,6 +4575,9 @@
                       "handBack": {
                         "type": "boolean",
                         "description": "Give the chat back to the AI agent."
+                      },
+                      "resolution": {
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -4600,16 +4646,21 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": {
-                      "type": "boolean"
+                    "done": {
+                      "type": "integer",
+                      "description": "Tickets changed."
                     },
-                    "count": {
-                      "type": "integer"
+                    "failed": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "{number, reason} for each ticket that couldn’t change."
                     }
                   },
                   "required": [
-                    "ok",
-                    "count"
+                    "done",
+                    "failed"
                   ]
                 }
               }
@@ -4685,7 +4736,7 @@
           "Tickets & support"
         ],
         "summary": "Change a ticket",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\nMoving it to someone else needs `tickets.reassign` (supervisor+). When agents are restricted, an agent only reaches tickets assigned to them or unassigned (403 “This chat is assigned to someone else.”).",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nMoving it to someone else needs `tickets.reassign` (supervisor+). Waiting on the customer (pending) pauses the deadlines; back to open moves them later by the time waited. Reopening a resolved ticket restarts its deadlines from now and its escalations from level 0. When agents are restricted, an agent only reaches tickets assigned to them or unassigned (403 “This chat is assigned to someone else.”).",
         "parameters": [
           {
             "name": "n",
@@ -4761,7 +4812,7 @@
             }
           },
           "400": {
-            "description": "Use Resolve to close a ticket. / Priority must be urgent, high, normal or low. / That person isn’t in this workspace.",
+            "description": "Use Resolve to close a ticket. / Priority must be urgent, high, normal or low. / That person isn’t in this workspace. / Give the ticket a subject.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4864,16 +4915,6 @@
               }
             }
           },
-          "400": {
-            "description": "Ticket #n is already resolved.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "401": {
             "$ref": "#/components/responses/NotLoggedIn"
           },
@@ -4882,6 +4923,16 @@
           },
           "404": {
             "description": "Ticket #n doesn’t exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Ticket #n is already resolved.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5649,63 +5700,6 @@
                   "required": [
                     "ok"
                   ]
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/NotLoggedIn"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "503": {
-            "$ref": "#/components/responses/DatabaseUnavailable"
-          }
-        }
-      }
-    },
-    "/api/support/analytics": {
-      "get": {
-        "operationId": "supportAnalytics",
-        "tags": [
-          "Tickets & support"
-        ],
-        "summary": "Team analytics",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\nTickets created and resolved, reply and resolve times, response targets met, satisfaction, AI-only vs team chats, per-person numbers, broadcast replies.",
-        "parameters": [
-          {
-            "name": "days",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "enum": [
-                7,
-                30,
-                90
-              ],
-              "default": 7
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SupportAnalytics"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "days must be 7, 30 or 90.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -6573,6 +6567,298 @@
           },
           "502": {
             "description": "Email not sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/activity": {
+      "get": {
+        "operationId": "listActivity",
+        "tags": [
+          "Workspace"
+        ],
+        "summary": "Activity log",
+        "description": "**Who can call:** Any member for one ticket, the AI agent or a number they can see; owners and admins for the whole workspace.\n\nWho did what, newest first, 50 at a time: kind, who, the item, and for edits each changed field as [before, after]. Kept two years. `names` maps the people (and `team:<id>` teams) named in the changes. Sentences for each kind are in src/app/activity/activityText.ts.",
+        "parameters": [
+          {
+            "name": "entity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ticket",
+                "agent",
+                "number"
+              ],
+              "description": "One item’s history. Readable by anyone who can see the item (a restricted agent: only their own or unassigned tickets; a number: supervisors and up). Without it, the whole workspace’s log: owners and admins."
+            },
+            "description": "One item’s history. Readable by anyone who can see the item (a restricted agent: only their own or unassigned tickets; a number: supervisors and up). Without it, the whole workspace’s log: owners and admins."
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "The ticket number, or the number id (`PHONE_NUMBER_ID` = the workspace’s default number)."
+            },
+            "description": "The ticket number, or the number id (`PHONE_NUMBER_ID` = the workspace’s default number)."
+          },
+          {
+            "name": "area",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "tickets",
+                "chats",
+                "agent",
+                "people",
+                "contacts",
+                "broadcasts",
+                "reports",
+                "settings",
+                "whatsapp"
+              ],
+              "description": "One area. Default: all of them."
+            },
+            "description": "One area. Default: all of them."
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "One person, or `system` for what happened on its own (webhooks, timers, the AI agent)."
+            },
+            "description": "One person, or `system` for what happened on its own (webhooks, timers, the AI agent)."
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "From this date (YYYY-MM-DD) or time (ISO)."
+            },
+            "description": "From this date (YYYY-MM-DD) or time (ISO)."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Up to and including this date, or up to this time."
+            },
+            "description": "Up to and including this date, or up to this time."
+          },
+          {
+            "name": "ref",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "An error reference (the 8 characters after “Reference:”): everything behind that error, including plumbing events the areas leave out."
+            },
+            "description": "An error reference (the 8 characters after “Reference:”): everything behind that error, including plumbing events the areas leave out."
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "The id of the last row seen, for the next page."
+            },
+            "description": "The id of the last row seen, for the next page."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      },
+                      "description": "{id, at, kind, userId, actor, entity, entityId, data, changes?, traceId}"
+                    },
+                    "more": {
+                      "type": "boolean"
+                    },
+                    "names": {
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "events",
+                    "more",
+                    "names"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "description": "Only owners and admins see the workspace’s activity.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "That ticket no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/activity.csv": {
+      "get": {
+        "operationId": "downloadActivity",
+        "tags": [
+          "Workspace"
+        ],
+        "summary": "Download the activity log as CSV",
+        "description": "**Who can call:** As GET /api/activity.\n\nThe same filters, up to 10,000 rows: when (UTC), who, what (as a sentence), the item and the error reference.",
+        "parameters": [
+          {
+            "name": "entity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ticket",
+                "agent",
+                "number"
+              ],
+              "description": "One item’s history. Readable by anyone who can see the item (a restricted agent: only their own or unassigned tickets; a number: supervisors and up). Without it, the whole workspace’s log: owners and admins."
+            },
+            "description": "One item’s history. Readable by anyone who can see the item (a restricted agent: only their own or unassigned tickets; a number: supervisors and up). Without it, the whole workspace’s log: owners and admins."
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "The ticket number, or the number id (`PHONE_NUMBER_ID` = the workspace’s default number)."
+            },
+            "description": "The ticket number, or the number id (`PHONE_NUMBER_ID` = the workspace’s default number)."
+          },
+          {
+            "name": "area",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "tickets",
+                "chats",
+                "agent",
+                "people",
+                "contacts",
+                "broadcasts",
+                "reports",
+                "settings",
+                "whatsapp"
+              ],
+              "description": "One area. Default: all of them."
+            },
+            "description": "One area. Default: all of them."
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "One person, or `system` for what happened on its own (webhooks, timers, the AI agent)."
+            },
+            "description": "One person, or `system` for what happened on its own (webhooks, timers, the AI agent)."
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "From this date (YYYY-MM-DD) or time (ISO)."
+            },
+            "description": "From this date (YYYY-MM-DD) or time (ISO)."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Up to and including this date, or up to this time."
+            },
+            "description": "Up to and including this date, or up to this time."
+          },
+          {
+            "name": "ref",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "An error reference (the 8 characters after “Reference:”): everything behind that error, including plumbing events the areas leave out."
+            },
+            "description": "An error reference (the 8 characters after “Reference:”): everything behind that error, including plumbing events the areas leave out."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The log as a CSV attachment.",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "description": "Only owners and admins see the workspace’s activity.",
             "content": {
               "application/json": {
                 "schema": {
@@ -15087,9 +15373,10 @@
               "handoff",
               "takeover",
               "reply",
-              "manual"
+              "manual",
+              "customer"
             ],
-            "description": "What opened it: the AI handed off, a teammate took over, a team reply, or created by hand."
+            "description": "What opened it: the AI handed off, a teammate took over, a team reply, created by hand, or the customer wrote again after it was resolved."
           },
           "createdAt": {
             "type": "string",
@@ -15154,9 +15441,10 @@
                 "enum": [
                   "firstResponse",
                   "resolve",
-                  "done"
+                  "done",
+                  "paused"
                 ],
-                "description": "Which response target is running."
+                "description": "Which response target is running; paused while waiting on the customer."
               },
               "at": {
                 "type": [
@@ -15169,6 +15457,23 @@
                 "type": "boolean"
               }
             }
+          },
+          "clockStartAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the deadlines started counting: opened, or reopened."
+          },
+          "pausedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Waiting on the customer since then."
+          },
+          "pausedMs": {
+            "type": "integer",
+            "description": "Time already spent waiting on the customer; the deadlines are this much later."
           },
           "teamId": {
             "type": [
@@ -15635,158 +15940,6 @@
           "at"
         ],
         "description": "A ticket notice, an alert (owners and admins) or one of your reminders."
-      },
-      "SupportAnalytics": {
-        "type": "object",
-        "properties": {
-          "days": {
-            "type": "integer"
-          },
-          "timezone": {
-            "type": "string"
-          },
-          "series": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "date": {
-                  "type": "string"
-                },
-                "created": {
-                  "type": "integer"
-                },
-                "resolved": {
-                  "type": "integer"
-                }
-              }
-            }
-          },
-          "created": {
-            "type": "integer"
-          },
-          "resolved": {
-            "type": "integer"
-          },
-          "open": {
-            "type": "integer"
-          },
-          "medianFirstReplyMin": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "medianResolveMin": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "slaFirstReplyMet": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "description": "Share met, 0–1."
-          },
-          "slaResolveMet": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "csat": {
-            "type": "object",
-            "properties": {
-              "responses": {
-                "type": "integer"
-              },
-              "average": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "good": {
-                "type": "integer"
-              },
-              "okay": {
-                "type": "integer"
-              },
-              "bad": {
-                "type": "integer"
-              }
-            }
-          },
-          "chats": {
-            "type": "object",
-            "properties": {
-              "total": {
-                "type": "integer"
-              },
-              "aiOnly": {
-                "type": "integer"
-              },
-              "withTeam": {
-                "type": "integer"
-              }
-            }
-          },
-          "people": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "resolved": {
-                  "type": "integer"
-                },
-                "open": {
-                  "type": "integer"
-                },
-                "medianFirstReplyMin": {
-                  "type": [
-                    "number",
-                    "null"
-                  ]
-                }
-              }
-            }
-          },
-          "broadcasts": {
-            "type": "object",
-            "properties": {
-              "sent": {
-                "type": "integer"
-              },
-              "read": {
-                "type": "integer"
-              },
-              "replied": {
-                "type": "integer"
-              }
-            }
-          }
-        },
-        "required": [
-          "days",
-          "timezone",
-          "series",
-          "created",
-          "resolved",
-          "open",
-          "medianFirstReplyMin",
-          "medianResolveMin",
-          "slaFirstReplyMet",
-          "slaResolveMet",
-          "csat",
-          "chats",
-          "people",
-          "broadcasts"
-        ]
       },
       "Contact": {
         "type": "object",

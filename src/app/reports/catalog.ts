@@ -122,6 +122,9 @@ export interface ReportSchedule {
   enabled: boolean
   lastSentAt?: string | null
   nextRunAt?: string | null
+  /** The last send that went wrong, and why (some or every address refused, nothing built). Cleared by a clean send. */
+  lastError?: string | null
+  lastFailedAt?: string | null
 }
 export const CADENCE_LABEL: Record<Cadence, string> = { daily: 'Every day (yesterday)', weekly: 'Every Monday (last 7 days)', monthly: 'On the 1st (last month)' }
 

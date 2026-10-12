@@ -24,7 +24,7 @@ import { reasonOf, undeliveredLine } from '../src/app/broadcasts/sendErrors.ts'
 import { isBsuid, NO_CONTROL_HIDDEN, parseCustomerKey, sendTarget } from '../src/app/lib/customer.ts'
 import { accounts, assetsFor, workspaceForNumber } from './accounts.ts'
 import { SAMPLE_CHATS } from '../src/app/inbox/sampleData.ts'
-import { ensureTicket, needCanAssign, needInScope, onAgentReply, onCustomerMessage, scopeFor } from './tickets.ts'
+import { closeOnRelease, ensureTicket, needCanAssign, needInScope, onAgentReply, onCustomerMessage, scopeFor } from './tickets.ts'
 import { can, type Role } from '../src/app/lib/permissions.ts'
 import { setBlocked } from './numbers.ts'
 import { recordAiUsage } from './aiUsage.ts'
@@ -686,6 +686,8 @@ export async function setControl(me: Actor, phone: string, action: 'take' | 'rel
   }
   await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { owner: action === 'take' ? 'human' : 'ai', ...(action === 'take' && !conv.assigneeId && { assigneeId: me._id }) } })
   if (action === 'take') await ensureTicket(phone, 'takeover')
+  // Back with the AI agent: its ticket is done; a new one opens if people take the chat again.
+  else await closeOnRelease(phone)
   await addMessage({
     phone,
     direction: 'out',
