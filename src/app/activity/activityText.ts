@@ -29,7 +29,7 @@ export const AREAS = {
   broadcasts: { label: 'Broadcasts & templates', kinds: ['broadcast.created', 'broadcast.started', 'broadcast.completed', 'broadcast.cancelled', 'template.'] },
   reports: { label: 'Reports', kinds: ['report.'] },
   settings: { label: 'Settings', kinds: ['settings.'] },
-  whatsapp: { label: 'WhatsApp', kinds: ['whatsapp.', 'number.quality', 'number.name_reviewed', 'number.limit_update', 'account.notice', 'alert.', 'webhook.baseline_reset'] },
+  whatsapp: { label: 'WhatsApp', kinds: ['whatsapp.', 'number.', 'account.notice', 'alert.', 'webhook.baseline_reset'] },
 } as const
 export type Area = keyof typeof AREAS
 export const isArea = (v: unknown): v is Area => typeof v === 'string' && Object.hasOwn(AREAS, v)
@@ -219,6 +219,32 @@ export function activityText(e: ActivityEvent, names: Names = {}): string {
       return `${who} disconnected the WhatsApp account ${d.name ?? ''}`.trim()
     case 'whatsapp.retried':
       return `${who} retried setting up a WhatsApp account`
+    case 'number.blocked':
+      return `${who} blocked a customer on a number`
+    case 'number.unblocked':
+      return `${who} unblocked a customer on a number`
+    case 'number.pin_viewed':
+      return `${who} viewed a number's two-step PIN`
+    case 'number.pin_changed':
+      return `${who} changed a number's two-step PIN`
+    case 'number.registered':
+      return `${who} registered a number with WhatsApp`
+    case 'number.deregistered':
+      return `${who} deregistered a number from WhatsApp`
+    case 'number.code_requested':
+      return `${who} asked WhatsApp for a verification code`
+    case 'number.verified':
+      return `${who} verified a number`
+    case 'number.name_requested':
+      return `${who} asked Meta to change a display name${d.name ? ` to “${d.name}”` : ''}`
+    case 'number.profile_updated':
+      return `${who} changed a number's business profile`
+    case 'number.photo_updated':
+      return `${who} changed a number's profile photo`
+    case 'number.automation_updated':
+      return `${who} changed a number's welcome message and ice breakers`
+    case 'template.status':
+      return `Meta ${String(d.event ?? 'updated').toLowerCase()} the template “${d.name}”${d.reason ? `: ${String(d.reason).toLowerCase().replace(/_/g, ' ')}` : ''}`
     case 'number.quality':
       return `A number's quality changed from ${d.from ?? 'unknown'} to ${d.to}`
     case 'number.name_reviewed':

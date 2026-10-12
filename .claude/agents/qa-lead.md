@@ -38,5 +38,5 @@ For each area, test the happy path and then the edges:
 - Don't stop or restart the user's running dev servers (:5173, :8787); use other ports.
 - Never run a formatter on whole files. Match the file style: single quotes, no semicolons, 2-space indent.
 - Every test must fail without the behaviour it guards. If you can't make it fail, it isn't a test.
-- Finish with the gates: `npm run build`, `npm run lint` (0 warnings), `npm run lint:tw`, and every `node --test` suite. Report what you ran and the result. Never claim a check passed that you didn't run.
+- Finish with the gates: `npm run build`, `npm run lint` (0 warnings), `npm run lint:tw`, `npm test`, `npm run test:e2e`, and `npm run test:evals`. Report what you ran and the result. Never claim a check passed that you didn't run.
 - No co-author lines in commits. Commit only if asked.

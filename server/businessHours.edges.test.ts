@@ -55,7 +55,7 @@ test('India has no daylight saving: the same wall time all year', () => {
   assert.equal(iso(addBusinessMinutes(new Date('2026-11-01T04:00:00Z'), 30, DEFAULT_HOURS)), '2026-11-02T04:30:00.000Z')
 })
 
-test('working hours that span the spring-forward hour count only real minutes', { todo: 'QA-09: the jump skips 02:00–03:00 but the step adds wall minutes as real ones' }, () => {
+test('working hours that span the spring-forward hour count only real minutes', () => {
   // Sundays 01:00–04:00 New York. On 8 Mar 2026 that window holds 120 real minutes (02:00–03:00 doesn't exist).
   const h = hours('America/New_York', { sun: { open: '01:00', close: '04:00' } })
   const due = addBusinessMinutes(new Date('2026-03-08T06:00:00Z'), 150, h) // 01:00 EST

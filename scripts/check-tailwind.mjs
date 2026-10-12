@@ -24,6 +24,8 @@ const CLASS_FNS = new Set(['cn', 'clsx', 'cx', 'cva', 'twMerge', 'twJoin'])
 
 // IntelliSense warnings reviewed and deliberately kept, as 'file:class'. Still printed, don't fail.
 const ACCEPTED = new Set([
+  // Settings' tab panels: the suggested `*:data-[…]` form emits a different (equivalent) selector
+  'src/app/components/shell/SettingsPage.tsx:[&>[data-slot=tabs-content]]:pt-0',
   // Suggested `rounded-lg` is var(--radius) = 8px at runtime (theme.css), not 4px
   'src/app/components/ui/checkbox.tsx:rounded-[4px]',
   // Suggested `*:`/`**:` forms emit a different (equivalent) selector, so the CSS isn't identical

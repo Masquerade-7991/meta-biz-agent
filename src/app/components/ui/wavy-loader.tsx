@@ -46,7 +46,7 @@ export function PageLoader({ context = 'general', label, fullscreen, className }
       aria-label={label ?? 'Loading'}
       className={cn(
         'flex flex-col items-center justify-center gap-5 text-center',
-        fullscreen ? 'fixed inset-0 z-[70] bg-background/85 backdrop-blur-sm' : 'min-h-[50vh] w-full py-16',
+        fullscreen ? 'fixed inset-0 z-70 bg-background/85 backdrop-blur-sm' : 'min-h-[50vh] w-full py-16',
         className,
       )}
     >

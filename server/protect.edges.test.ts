@@ -34,20 +34,20 @@ test('the PIN field with spacing or in the query is refused', () => {
   assert.ok(refusal('graph', 'POST', `/${PHONE}/register?pin=123456`))
 })
 
-test('a protected id named in the body (waba_id) is refused too', { todo: 'QA-03: only path and query ids are checked, so a body-borne waba_id attaches a credit line to the protected WABA' }, () => {
+test('a protected id named in the body (waba_id) is refused too', () => {
   assert.ok(refusal('graph', 'POST', '/123456789/whatsapp_credit_sharing_and_attach', `{"waba_id":"${WABA}","waba_currency":"USD"}`))
 })
 
-test('a form-encoded PIN body is refused like a JSON one', { todo: 'QA-03: RISKY_FIELD needs ? or & before pin=, a form body starts with it' }, () => {
+test('a form-encoded PIN body is refused like a JSON one', () => {
   assert.ok(refusal('graph', 'POST', `/${PHONE}`, 'pin=123456'))
 })
 
-test('a Graph batch request naming the protected account is refused', { todo: 'QA-03: POST / with batch=[{relative_url:"<WABA>/subscribed_apps"}] names no id in the path' }, () => {
+test('a Graph batch request naming the protected account is refused', () => {
   const batch = JSON.stringify({ batch: [{ method: 'POST', relative_url: `${WABA}/subscribed_apps` }] })
   assert.ok(refusal('graph', 'POST', '/', batch))
 })
 
-test('the edge name is matched whatever its case', { todo: 'QA-03: /SUBSCRIBED_APPS and /Register pass the case-sensitive pattern (needs a check of how Graph treats edge case)' }, () => {
+test('the edge name is matched whatever its case', () => {
   assert.ok(refusal('graph', 'POST', `/${WABA}/Subscribed_Apps`))
 })
 

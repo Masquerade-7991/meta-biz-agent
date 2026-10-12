@@ -9,19 +9,22 @@ export const PRESETS = [
   { id: 'mtd', label: 'This month', days: 0 },
 ] as const
 
-const today = () => new Intl.DateTimeFormat('en-CA').format(new Date())
-export const presetRange = (id: string) => {
-  const to = today()
+/** Today in the workspace's time zone (its support hours), so "today" is the business's day, not the
+ *  viewer's: someone in New York reading an Indian workspace's numbers in the evening. */
+const today = (tz?: string) => new Intl.DateTimeFormat('en-CA', tz ? { timeZone: tz } : {}).format(new Date())
+export const presetRange = (id: string, tz?: string) => {
+  const to = today(tz)
   if (id === 'mtd') return { from: to.slice(0, 8) + '01', to }
   const p = PRESETS.find((x) => x.id === id) ?? PRESETS[1]
   return { from: addDays(to, -(p.days - 1)), to }
 }
 
-/** The page's filters live in the address, so a view can be bookmarked or shared. */
-export function useAnalyticsFilter() {
+/** The page's filters live in the address, so a view can be bookmarked or shared. `tz`: the
+ *  workspace's time zone, once known (until then the browser's). */
+export function useAnalyticsFilter(tz?: string) {
   const [q, setQ] = useSearchParams()
   const filter: AnalyticsFilter = useMemo(() => {
-    const preset = presetRange(q.get('range') ?? '30')
+    const preset = presetRange(q.get('range') ?? '30', tz)
     return {
       from: q.get('from') ?? preset.from,
       to: q.get('to') ?? preset.to,
@@ -29,7 +32,7 @@ export function useAnalyticsFilter() {
       team: q.get('team'),
       person: q.get('person'),
     }
-  }, [q])
+  }, [q, tz])
   const range = q.get('from') ? 'custom' : (q.get('range') ?? '30')
   const set = useCallback(
     (patch: Record<string, string | null>) =>

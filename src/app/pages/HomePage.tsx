@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Bot, Check, ChevronRight, Inbox, Megaphone, MessageCircle, Smartphone, Ticket, UserPlus, Users } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { listChats, type ChatSummary } from '@/app/api/inbox'
-import { listTickets } from '@/app/api/tickets'
+import { getSupportSettings, listTickets } from '@/app/api/tickets'
 import { getOverview } from '@/app/api/overview'
 import { addDays, isoDay, type Overview } from '@/app/analytics/types'
 import { dur, num, pct } from '@/app/analytics/format'
@@ -378,8 +378,14 @@ function QuickActions({ onNavigate, hasAgent }: { onNavigate: (id: NavId, tab?: 
 function ThisWeek({ onNavigate }: { onNavigate: (id: NavId) => void }) {
   const [d, setD] = useState<Overview | null | 'none'>(null)
   useEffect(() => {
-    const to = isoDay(new Date(), Intl.DateTimeFormat().resolvedOptions().timeZone)
-    getOverview({ from: addDays(to, -6), to, numbers: [], team: null, person: null }).then(setD, () => setD('none'))
+    // The business's day (its support hours' time zone), as on the Analytics page.
+    getSupportSettings()
+      .then((s) => s.hours.timezone, () => Intl.DateTimeFormat().resolvedOptions().timeZone)
+      .then((tz) => {
+        const to = isoDay(new Date(), tz)
+        return getOverview({ from: addDays(to, -6), to, numbers: [], team: null, person: null })
+      })
+      .then(setD, () => setD('none'))
   }, [])
   if (d === 'none') return null
   const k = d?.kpis

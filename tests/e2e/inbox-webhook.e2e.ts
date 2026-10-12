@@ -137,14 +137,14 @@ test('an unparseable but signed body is stored and answered 200 (no retry storm)
   assert.equal(r.status, 200)
 })
 
-test('a reply goes out from the number the customer wrote to', { todo: 'QA-06: deliver() always posts to /PHONE_NUMBER_ID/messages (the workspace default number)' }, async () => {
+test('a reply goes out from the number the customer wrote to', async () => {
   const second = w.numbers[1]
   await s.webhook(inbound(second, '919800000007', 'hello second number'))
   assert.equal((await s.api(w.owner, 'POST', '/api/inbox/conversations/919800000007/messages', { text: 'hi' })).status, 200)
   assert.equal(s.fake.find('POST', /\/messages$/).at(-1)?.path, `/${second}/messages`)
 })
 
-test('a restricted agent can’t reply into someone else’s chat (nothing is sent)', { todo: 'QA-02: POST actions run before the scope check in getConversation, so the reply is sent and only then 403' }, async () => {
+test('a restricted agent can’t reply into someone else’s chat (nothing is sent)', async () => {
   await s.db.collection('support_settings').updateOne({ workspaceId: w.id }, { $set: { 'settings.restrictAgents': true } })
   await s.webhook(inbound(NUM, '919800000008', 'for the supervisor'))
   await s.api(w.supervisor, 'POST', '/api/inbox/conversations/919800000008/assign', { userId: w.supervisor.id })
@@ -158,7 +158,7 @@ test('a restricted agent can’t reply into someone else’s chat (nothing is se
   }
 })
 
-test('a teammate can’t forge a customer message into a real chat', { todo: 'QA-10: /api/inbox/demo/simulate runs the real webhook path for any member and any phone' }, async () => {
+test('a teammate can’t forge a customer message into a real chat', async () => {
   const r = await s.api(w.agent, 'POST', '/api/inbox/demo/simulate', { phone: '919800000001', text: 'I want a refund of ₹50,000' })
   assert.notEqual(r.status, 200)
 })

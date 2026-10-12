@@ -15,12 +15,12 @@ const relay = (kind: 'meta' | 'graph'): Op => ({
   description: [
     kind === 'meta'
       ? 'Forwards to Meta’s Business Agent API with the workspace’s token and `X-API-Version: 2.0.0` (`1.0.0` for thread control). Timeout 20 s (90 s for agent_test).'
-      : 'Forwards to the Graph API with the workspace’s token. Timeout 20 s.',
+      : 'Forwards a read (GET) to the Graph API with the workspace’s token. Timeout 20 s. Read-only: writes answer 403 (WhatsApp changes go through their own routes, which check owner and admin rights), and so do `?ids=` and `batch`, which would reach objects outside the path.',
     '`{path}` is the rest of Meta’s path and may contain slashes; the query string passes through. In it, the segments `PHONE_NUMBER_ID`, `WABA_ID` and `BUSINESS_ID` are replaced with the workspace’s own ids, so the browser never needs real ids. Any other 10+ digit id must belong to the workspace.',
     'Meta’s status and body come back unchanged. GET answers are cached briefly (Graph 10 min; agent settings 60 s; insight date ranges 5 min); identical reads already on their way share one Meta call; a Meta 429 on a read is retried once after Retry-After (max 10 s). Writes are never repeated.',
     'Local safety limit per number per rolling hour: 1000 calls per resource, 500 agent_test.',
   ].join('\n\n'),
-  who: { text: 'Reads: any member. Writes (POST, PUT, PATCH, DELETE): Admin or above (`agent.edit`).' },
+  who: { text: kind === 'meta' ? 'Reads: any member. Writes (POST, PUT, PATCH, DELETE): Admin or above (`agent.edit`).' : 'Any member; reads only.' },
   params: { path: d('string', 'Meta’s path, e.g. PHONE_NUMBER_ID/agent_config/faq.') },
   ok: 'any',
   okDescription: 'Meta’s answer, passed through.',

@@ -20,5 +20,5 @@ test('round-trips through toCsv', () => {
 test('maps common headers and custom fields, ignores the rest', () => {
   const { rows, mapping } = toImportRows(parseCsv('Mobile Number,Full Name,Email,Tags,City,Notes\n+91 99000 00101,Priya,p@x.com,"vip, billing",Pune,skip me'), [{ key: 'city', label: 'City' }])
   assert.deepEqual(mapping, ['phone', 'name', 'email', 'tags', 'field:city', null])
-  assert.deepEqual(rows[0], { phone: '+91 99000 00101', name: 'Priya', email: 'p@x.com', tags: 'vip, billing', fields: { city: 'Pune' } })
+  assert.deepEqual(rows[0], { phone: '+91 99000 00101', name: 'Priya', email: 'p@x.com', tags: 'vip, billing', fields: { city: 'Pune' }, line: 2 })
 })

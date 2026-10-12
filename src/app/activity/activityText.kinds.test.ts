@@ -68,12 +68,12 @@ test('no sentence leaks undefined, null or NaN', () => {
   for (const [e] of CASES) assert.doesNotMatch(activityText(e, names), /undefined|null|NaN|\[object/, e.kind)
 })
 
-test('every kind people can filter to has its own sentence, not the raw kind', { todo: 'QA-11: template.status (Meta’s review result) falls through to "The system: template status"' }, () => {
+test('every kind people can filter to has its own sentence, not the raw kind', () => {
   const e = sys('template.status', { entity: 'template', entityId: 'order_update', data: { name: 'order_update', language: 'en', event: 'APPROVED', reason: null } })
   assert.doesNotMatch(activityText(e, names), /: template status$/)
 })
 
-test('number history events (block, PIN, registration) belong to an area of the workspace log', { todo: 'QA-08: number.blocked / pin_viewed / deregistered … match no area, so the workspace log never shows them' }, () => {
+test('number history events (block, PIN, registration) belong to an area of the workspace log', () => {
   const prefixes = Object.values(AREAS).flatMap((a) => a.kinds as readonly string[])
   for (const kind of ['number.blocked', 'number.unblocked', 'number.pin_viewed', 'number.pin_changed', 'number.registered', 'number.deregistered', 'number.profile_updated'])
     assert.ok(prefixes.some((p) => kind.startsWith(p)), kind)

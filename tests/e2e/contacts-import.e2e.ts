@@ -28,7 +28,7 @@ test('custom fields: admins define them, names that slug the same are refused', 
   assert.equal((await s.api(w.admin, 'PUT', '/api/contacts/fields', { fields: [{ label: 'Tier' }, { label: 'tier!' }] })).status, 400)
 })
 
-test('a second field with a non-Latin name can be added', { todo: 'QA-13: keys slug to a-z0-9, so every Hindi/Arabic label becomes "field" and the second one is refused as a duplicate' }, async () => {
+test('a second field with a non-Latin name can be added', async () => {
   const r = await s.api(w.admin, 'PUT', '/api/contacts/fields', { fields: [{ label: 'City' }, { label: 'शहर' }, { label: 'उम्र' }] })
   assert.equal(r.status, 200, r.text)
   await s.api(w.admin, 'PUT', '/api/contacts/fields', { fields: [{ label: 'City', type: 'text' }, { label: 'Tier', type: 'select', options: 'gold, silver' }, { label: 'Orders', type: 'number' }] })
@@ -69,13 +69,13 @@ test('import: adds, updates, skips with reasons, and keeps unicode', async () =>
   assert.deepEqual(rahul.tags.sort(), ['existing', 'imported oct', 'returning'], 'import adds tags, never removes')
 })
 
-test('import: skipped rows are numbered as in the file even with blank lines', { todo: 'QA-19: parseCsv drops blank lines, and importRows numbers rows by index + 2' }, async () => {
+test('import: skipped rows are numbered as in the file even with blank lines', async () => {
   const { rows } = toImportRows(parseCsv('Phone,Name\n\n\nbad,X'), [])
   const r = await s.api(w.owner, 'POST', '/api/contacts/import', { rows })
   assert.equal(r.json.skipped[0].row, 4)
 })
 
-test('import: a 10-digit number without a country code is not taken as international', { todo: 'QA-18: 9850000003 passes the 8–15 digit check and is stored as a different country’s number' }, async () => {
+test('import: a 10-digit number without a country code is not taken as international', async () => {
   const r = await s.api(w.owner, 'POST', '/api/contacts/import', { rows: [{ phone: '9850000003', fields: {} }] })
   assert.equal(r.json.added, 0)
 })
@@ -113,7 +113,7 @@ test('editing validates email and field types; a missing contact is 404', async 
   assert.equal((await s.api(w.agent, 'POST', '/api/contacts', { phone: '+91 98500 00001' })).status, 409)
 })
 
-test('a stale edit form does not re-subscribe someone who opted out meanwhile', { todo: 'QA-16: PUT always writes optedOut from the form, so a sheet opened before the customer sent STOP opts them back in' }, async () => {
+test('a stale edit form does not re-subscribe someone who opted out meanwhile', async () => {
   await s.webhook(inbound(w.numbers[0], '919850000001', 'STOP'))
   assert.equal((await contact('919850000001'))!.optedOut, true)
   // The edit sheet was opened before STOP arrived: it still holds optedOut false.

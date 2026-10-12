@@ -27,7 +27,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - New numbers come in through **Embedded Signup v4** (`server/whatsapp.ts`, `src/app/whatsapp/*`). It needs `META_APP_ID`, `META_ES_CONFIG_ID`, `META_APP_SECRET` and `TOKEN_ENCRYPTION_KEY`, plus optionally `WA_CREDIT_LINE_ID` / `WA_CREDIT_CURRENCY` for billing through Helo.ai. Without them, Home offers "Talk to Helo.ai"; Dummy mode simulates the signup.
   - Customer tokens and PINs are stored only sealed (`server/crypto.ts`, AES-256-GCM).
 - **API docs:** every `/api` route is described in `server/openapi/*` (OpenAPI 3.1), served at `/api/docs` (Swagger UI, members only) and `/api/openapi.json`, and committed as `docs/openapi.json`. A new or changed route goes in the spec: `server/openapi.test.ts` fails otherwise; then run `npm run docs:openapi`.
-- **There is no test suite.** Verify with `npm run build` (type-checks `src/` and `server/`) and `npm run lint`. Lint is clean; keep it that way. Context hooks are allowed by name in `.oxlintrc.json`; other shared helpers go in a `.ts` file, not next to a component.
+- **Checks before pushing to `main` (it deploys):** `npm run build` (type-checks `src/` and `server/`), `npm run lint` (0 warnings), `npm run lint:tw`, `npm test` (every `*.test.ts`), and `npm run test:e2e` (journeys against a throwaway database and a fake Meta, about 3 min; needs MongoDB). `npm run test:evals` replays the AI-feature cases, `npm run test:ui` checks every page in a browser. A test for a known, unfixed bug is marked `todo` with its QA id (`tests/QA_REPORT.md`); remove the flag when it's fixed. Lint is clean; keep it that way. Context hooks are allowed by name in `.oxlintrc.json`; other shared helpers go in a `.ts` file, not next to a component.
 
 ## UI conventions
 
@@ -68,7 +68,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Analytics definitions:** a conversation needs a message from the customer, the AI or the team; AI alone = the AI answered and nobody from the team wrote; no reply = neither. Home's "Last 7 days" uses the same overview. WhatsApp spend is per account and per UTC day (Meta's data), so cost per resolved conversation shows only for all agents.
 - **Sample data never reaches Meta:** rows with `sample: true` are stored but not sent. Tests send only to sample contacts.
 - **Shared pure logic** lives in `src/` and is imported by the server too: `src/app/inbox/sampleData.ts`, `src/app/broadcasts/templates.ts`. SLA business-hours maths is `server/businessHours.ts`.
-- **Tests:** `node --test server/*.test.ts src/app/contacts/csv.test.ts src/app/whatsapp/signupEvent.test.ts src/app/wizard/*.test.ts src/app/inbox/*.test.ts src/app/activity/*.test.ts src/app/support/*.test.ts`.
+- **Tests:** `npm test` runs every unit test; end-to-end journeys are in `tests/e2e/` (one shared harness, `harness.ts`).
 
 ## Rules for Meta wiring
 

@@ -124,15 +124,29 @@ test('someone removed from their only workspace loses access at once', async () 
   assert.equal((await s.api(p, 'GET', '/api/tickets')).status, 403)
 })
 
-test('a role named after an Object property is refused', { todo: 'QA-05: isRole("toString") is true, so PUT stores role "toString"' }, async () => {
+test('a role named after an Object property is refused', async () => {
   const p = await s.seed.person({ name: 'Proto Agent', role: 'agent', workspaceId: w.id })
   const r = await s.api(w.owner, 'PUT', `/api/workspace/members/${p.id}`, { role: 'toString' })
   assert.equal(r.status, 400, r.text)
 })
 
-test('the raw Graph relay can’t do what the WhatsApp settings reserve for owners', { todo: 'QA-04: /api/graph forwards any method for agent.edit (admins); whatsapp.manage is owner-only and the spec documents GET only' }, async () => {
+test('the raw Graph relay can’t do what the WhatsApp settings reserve for owners', async () => {
   const before = s.fake.calls.length
   const r = await s.api(w.admin, 'POST', `/api/graph/WABA_ID/subscribed_apps`, { override_callback_uri: 'https://attacker.example/hook', verify_token: 'x' })
   assert.equal(r.status, 403, r.text)
   assert.equal(s.fake.calls.length, before, 'nothing reached Meta')
+})
+
+test('two owners demoting each other at the same moment never leave the workspace without an owner', async () => {
+  for (let round = 0; round < 5; round++) {
+    const w2 = await s.seed.workspace({ name: `Race ${round}`, account: null })
+    const b = await s.seed.person({ name: 'Second Owner', role: 'owner', workspaceId: w2.id })
+    const [x, y] = await Promise.all([
+      s.api(w2.owner, 'PUT', `/api/workspace/members/${b.id}`, { role: 'admin' }),
+      s.api(b as never, 'PUT', `/api/workspace/members/${w2.owner.id}`, { role: 'admin' }),
+    ])
+    const owners = await s.db.collection('memberships').countDocuments({ workspaceId: w2.id, role: 'owner' })
+    assert.ok(owners >= 1, `round ${round}: ${x.status}/${y.status} left ${owners} owners`)
+    assert.ok([x.status, y.status].every((st) => st === 200 || st === 400 || st === 409), `${x.status} ${y.status}`)
+  }
 })

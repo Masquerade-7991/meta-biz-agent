@@ -21,6 +21,7 @@ import {
   parseTeam,
   pickFromPool,
   raise,
+  routePlan,
   type AgentProfile,
   type EscalationMatrix,
   type Rule,
@@ -334,7 +335,8 @@ let demoMatrix: EscalationMatrix = { ...DEFAULT_MATRIX, enabled: true }
 const profileOf = (id: string) => demoProfiles.get(id) ?? { skills: [], maxOpen: null, availability: 'online' as const }
 let demoTurn = 0
 
-/** Same decision as the server's routeTicket, on the demo's people and minutes. */
+/** The server's routeTicket on the demo's people and minutes: the same rule and default decision
+ *  (routing.ts routePlan); only the pool of people differs. */
 function demoRoute(c: Chat, source: Ticket['source'], priority: Priority, text: string) {
   const facts = { source, priority, text, contactTags: c.tags, open: true, phoneNumberId: null }
   const rule = firstMatch(demoRules, facts)
@@ -342,16 +344,14 @@ function demoRoute(c: Chat, source: Ticket['source'], priority: Priority, text: 
   const open = new Map<string, number>()
   for (const t of tickets ?? []) if (t.status !== 'resolved' && t.assigneeId) open.set(t.assigneeId, (open.get(t.assigneeId) ?? 0) + 1)
   const profiles = new Map(demoMemberList().map((m) => [m.userId, profileOf(m.userId)]))
-  let teamId: string | null = null
-  let assigneeId: string | null = c.assigneeId
-  if (a.target.kind === 'team') {
-    const team = demoTeams.find((t) => t.id === (a.target as { teamId: string }).teamId)
-    if (team) {
-      teamId = team.id
-      assigneeId ??= pickFromPool(team.memberIds, team.assign, profiles, open, demoTurn++, a.target.skill)
-    }
-  } else if (a.target.kind === 'user') assigneeId ??= a.target.userId
-  return { priority: a.priority, tags: a.tags, teamId, assigneeId, rule: rule?.name ?? null }
+  const plan = routePlan(a.target, settings.routing, demoTeams)
+  // Someone already looking after the chat keeps it, as on the server.
+  const picked =
+    plan.to === 'user' ? plan.userId
+    : plan.to === 'team' ? pickFromPool(plan.team.memberIds, plan.team.assign, profiles, open, demoTurn++, plan.skill)
+    : plan.to === 'everyone' ? pickFromPool([...profiles.keys()], 'round_robin', profiles, open, demoTurn++)
+    : null
+  return { priority: a.priority, tags: a.tags, teamId: plan.to === 'team' ? plan.team.id : null, assigneeId: c.assigneeId ?? picked, rule: rule?.name ?? null }
 }
 
 function ensureTicket(c: Chat, source: Ticket['source'], priority: Priority = 'normal'): Ticket {

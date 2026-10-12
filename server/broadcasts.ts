@@ -3,12 +3,14 @@
 // ticks arrive by webhook (inbox.ts updates the recipient rows). Templates are read from and
 // created on the WhatsApp Business Account.
 import type http from 'node:http'
+import { createHash } from 'node:crypto'
 import { ObjectId } from 'mongodb'
 import { HttpError, type Obj, type Titles, arr, obj, readJson, serveJson } from './http.ts'
 import { col, db, dbOffReason, needMetaAssets, withWorkspace, ws } from './db.ts'
 import { metaJson } from './upstream.ts'
 import { traceId } from './context.ts'
 import { trace } from './trace.ts'
+import { needInScope } from './tickets.ts'
 import { isBsuid, parseCustomerKey } from '../src/app/lib/customer.ts'
 import { reasonOf, retryAt, type FailureReason } from '../src/app/broadcasts/sendErrors.ts'
 import { defineJob, enqueue, type JobResult } from './jobs.ts'
@@ -108,6 +110,7 @@ async function audienceFor(segmentId: unknown) {
   let filter: SegmentFilter = {}
   let segmentName = 'All contacts'
   if (segmentId) {
+    if (!ObjectId.isValid(String(segmentId))) throw new HttpError(400, 'That segment id isn’t valid.')
     const seg = await col('segments').findOne({ workspaceId: ws(), _id: new ObjectId(String(segmentId)) })
     if (!seg) throw new HttpError(404, 'That segment no longer exists.')
     filter = { ...(seg.filter as SegmentFilter), includeOptedOut: false }
@@ -138,8 +141,42 @@ async function preflight(b: Obj) {
   }
 }
 
+/** How long a broadcast blocks an identical one: a second click, a retried request, a second tab. */
+const DUPLICATE_WINDOW_MS = 30_000
+
 async function createBroadcast(b: Obj, me: Actor) {
   needMetaAssets()
+  // Sending twice costs the business twice and messages every customer twice. The same broadcast
+  // (the dialog's idempotencyKey, else the same content from the same person) is created once.
+  const lockId = createHash('sha256')
+    .update(JSON.stringify([ws(), me._id, b.idempotencyKey ?? [b.name, b.template, b.segmentId ?? null, b.scheduledAt ?? null, b.mapping]]))
+    .digest('hex')
+  const locks = col('request_locks')
+  const now = new Date()
+  const taken = await locks.findOneAndUpdate(
+    { _id: lockId as never, at: { $lt: new Date(now.getTime() - DUPLICATE_WINDOW_MS) } },
+    { $set: { at: now }, $unset: { broadcastId: '' } },
+  )
+  if (!taken) {
+    try {
+      await locks.insertOne({ _id: lockId as never, at: now })
+    } catch {
+      const l = await locks.findOne({ _id: lockId as never })
+      if (l?.broadcastId) return one(String(l.broadcastId))
+      throw new HttpError(409, 'This broadcast is already being sent. It shows in the list in a moment.')
+    }
+  }
+  try {
+    const created = await createOnce(b, me)
+    await locks.updateOne({ _id: lockId as never }, { $set: { broadcastId: created.id } })
+    return created
+  } catch (err) {
+    await locks.deleteOne({ _id: lockId as never }) // nothing was created: trying again is fine
+    throw err
+  }
+}
+
+async function createOnce(b: Obj, me: Actor) {
   const name = String(b.name ?? '').trim().slice(0, 100)
   if (!name) throw new HttpError(400, 'Give the broadcast a name.')
   const tpl = obj(b.template)
@@ -340,6 +377,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     const phone = parseCustomerKey(String(b.phone ?? ''))
     const conv = await conversations().findOne({ workspaceId: ws(), phone })
     if (!conv) throw new HttpError(404, 'No chat with this number yet.')
+    await needInScope(me, conv.assigneeId)
     const tpl = obj(b.template)
     const template = conv.sample ? (tpl as unknown as Template) : await getTemplate(String(tpl.name ?? ''), String(tpl.language ?? ''))
     const values = Object.fromEntries(Object.entries(obj(b.values)).map(([k, v]) => [k, String(v)]))

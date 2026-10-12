@@ -62,6 +62,8 @@ const INDEXES: Record<string, IndexDescription[]> = {
   saved_views: [{ key: { workspaceId: 1, userId: 1, name: 1 }, unique: true }],
   canned_responses: [{ key: { workspaceId: 1, shortcut: 1 }, unique: true }],
   presence: [{ key: { workspaceId: 1, phone: 1, userId: 1 }, unique: true }, { key: { at: 1 }, expireAfterSeconds: 60 }],
+  // Short-lived locks that stop one request running twice (e.g. a broadcast sent with two clicks).
+  request_locks: [{ key: { at: 1 }, expireAfterSeconds: DAY }],
   // Tickets (tickets.ts): numbered per workspace; one open ticket per chat at a time (the database
   // enforces it, so two events at once can't open two).
   tickets: [

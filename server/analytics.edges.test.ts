@@ -21,7 +21,7 @@ test('a day starts at local midnight on the days clocks change in the northern h
     assert.equal(wall(dayStart(day, tz), tz), `${day} 00:00`, `${day} ${tz}`)
 })
 
-test('a day starts at local midnight on the days clocks change in Australia and New Zealand', { todo: 'QA-17: dayStart reads the offset at UTC midnight, which for UTC+10..+13 is after that day’s change' }, () => {
+test('a day starts at local midnight on the days clocks change in Australia and New Zealand', () => {
   for (const [day, tz] of [
     ['2026-04-05', 'Australia/Sydney'],
     ['2026-10-04', 'Australia/Sydney'],
@@ -99,7 +99,7 @@ test('durations switch units at sensible places', () => {
   assert.equal(pct(0.995), '100%')
 })
 
-test('a minute just under the hour never reads as 60m', { todo: 'QA-28: dur(59.6) rounds to "60m" instead of "1.0h"' }, () => {
+test('a minute just under the hour never reads as 60m', () => {
   assert.notEqual(dur(59.6), '60m')
 })
 
@@ -123,7 +123,7 @@ test('report CSV: unicode survives, numbers stay numbers, negatives are not mist
   assert.match(csv, /متجر,0\r\n/)
 })
 
-test('report CSV: tab and carriage-return prefixes are neutralised too (OWASP list)', { todo: 'QA-27: tableCsv only escapes = + - @; a leading tab or CR still reaches Excel' }, () => {
+test('report CSV: tab and carriage-return prefixes are neutralised too (OWASP list)', () => {
   const csv = tableCsv({ columns: ['x'], rows: [['\t=1+1'], ['\r=1+1']] })
   assert.doesNotMatch(csv, /\r\n"?[\t\r]=/)
 })

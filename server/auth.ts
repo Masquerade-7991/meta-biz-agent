@@ -262,6 +262,13 @@ async function adoptDefaultRecords(workspaceId: string) {
 async function ownersLeft(workspaceId: string, exceptUserId: string) {
   return memberships().countDocuments({ workspaceId, role: 'owner', userId: { $ne: exceptUserId } })
 }
+/** After a change that took away an owner: if none is left (two owners stepped down at the same
+ *  moment, each having seen the other), undo it. The check before the change can't see that race. */
+async function keepAnOwner(workspaceId: string, undo: () => Promise<unknown>) {
+  if (await memberships().countDocuments({ workspaceId, role: 'owner' })) return
+  await undo()
+  throw new HttpError(409, 'A workspace needs at least one owner. Someone else changed the owners at the same moment; try again.')
+}
 
 // ---- routes ----
 function needSession(s: Session | null): Session {
@@ -311,6 +318,8 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
   if (path === '/api/auth/login' && m === 'POST') {
     const e = email(body.email)
     limit(`login|${e}|${ip}`, 10, 'Too many login attempts. Try again in an hour, or reset your password.')
+    // Across every address too, so guessing one person's password from many IPs is still capped.
+    limit(`login|${e}`, 50, 'Too many login attempts for this account. Try again in an hour, or reset your password.')
     const pw = typeof body.password === 'string' ? body.password : ''
     const user = await users().findOne({ email: e })
     const ok = await verifyPassword(pw, user?.passwordHash ?? DUMMY_HASH)
@@ -419,7 +428,9 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     const x = needWorkspace(s)
     if (x.role === 'owner' && (await ownersLeft(x.workspace._id, x.user._id)) === 0)
       throw new HttpError(400, 'You’re the only owner. Make someone else an owner before you leave.')
+    const mine = await memberships().findOne({ workspaceId: x.workspace._id, userId: x.user._id })
     await memberships().deleteOne({ workspaceId: x.workspace._id, userId: x.user._id })
+    if (x.role === 'owner' && mine) await keepAnOwner(x.workspace._id, () => memberships().insertOne(mine))
     await sessions().updateMany({ userId: x.user._id, workspaceId: x.workspace._id }, { $unset: { workspaceId: '' } })
     const owners = await memberships().find({ workspaceId: x.workspace._id, role: 'owner' }).toArray()
     for (const o of await users().find({ _id: { $in: owners.map((mm) => mm.userId) } }).toArray()) await mail.memberLeft(o.email, x.user.name, x.workspace.name).catch(() => {})
@@ -498,6 +509,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
       if (!canSetRole(x.role, target.role, role)) throw new HttpError(403, 'Only owners can make someone an owner or change an owner’s role.')
       if (target.role === 'owner' && (await ownersLeft(x.workspace._id, target.userId)) === 0) throw new HttpError(400, 'A workspace needs at least one owner.')
       await memberships().updateOne({ workspaceId: x.workspace._id, userId: target.userId }, { $set: { role } })
+      if (target.role === 'owner') await keepAnOwner(x.workspace._id, () => memberships().updateOne({ workspaceId: x.workspace._id, userId: target.userId }, { $set: { role: 'owner' } }))
       traceIn(x.workspace._id, x.user._id, 'member.role_changed', { name: person.name }, { entity: 'member', id: target.userId }, { role: [target.role, role] })
       await mail.roleChanged(person.email, x.workspace.name, role)
       return { ok: true }

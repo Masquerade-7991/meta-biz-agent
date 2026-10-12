@@ -36,7 +36,7 @@ function Preview({ p, name, photo }: { p: Profile; name: string; photo: string |
     text && (
       <div className="flex gap-3 px-4 py-2.5" style={{ borderTop: `1px solid ${WA.divider}` }}>
         <span style={{ color: WA.meta }}>{icon}</span>
-        <span className="min-w-0 break-words" style={{ color: WA.text }}>
+        <span className="min-w-0 wrap-break-word" style={{ color: WA.text }}>
           {text}
         </span>
       </div>

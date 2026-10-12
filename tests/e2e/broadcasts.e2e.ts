@@ -38,7 +38,7 @@ test('preflight counts who it reaches: opted-out people never, sample contacts s
   assert.equal(r.json.sample, 1)
 })
 
-test('a malformed segment id is a 400, not a server error', { todo: 'QA-29: new ObjectId("abc") throws inside audienceFor → 500' }, async () => {
+test('a malformed segment id is a 400, not a server error', async () => {
   assert.equal((await s.api(w.supervisor, 'POST', '/api/broadcasts/preflight', { segmentId: 'abc' })).status, 400)
 })
 
@@ -95,7 +95,7 @@ test('a scheduled broadcast can be cancelled once; nobody is sent anything', asy
   assert.equal(s.fake.find('POST', /\/messages$/).length, before)
 })
 
-test('pressing Send twice quickly creates one broadcast', { todo: 'QA-30: POST /api/broadcasts has no idempotency key; two clicks send twice' }, async () => {
+test('pressing Send twice quickly creates one broadcast', async () => {
   const before = (await s.api(w.owner, 'GET', '/api/broadcasts')).json.length
   const at = new Date(Date.now() + 3_600_000).toISOString()
   const [a, b] = await Promise.all([s.api(w.owner, 'POST', '/api/broadcasts', body({ scheduledAt: at })), s.api(w.owner, 'POST', '/api/broadcasts', body({ scheduledAt: at }))])

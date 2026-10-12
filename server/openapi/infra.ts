@@ -42,6 +42,7 @@ export const infra = area('Server', {
         'The body must carry a valid `X-Hub-Signature-256` from one of the apps in WEBHOOK_APP_SECRETS (401 otherwise). With no secret set, or no database, it answers 503 so Meta keeps the event and retries (up to 7 days).',
         'Each delivery is stored exactly as sent (webhook_inbox, once per body even when Meta retries), processed, then answered 200. A delivery that fails to process is kept and retried automatically; events for a number no workspace has are kept, not dropped.',
         'The business’s own number is listen-only: an event never makes the console send anything.',
+        'Bodies over 5 MB are refused with 413 before the signature is checked.',
       ].join('\n\n'),
       who: { text: 'Meta, signed by a listening app.', public: true },
       headers: { 'X-Hub-Signature-256': d('string', '`sha256=<HMAC of the raw body with the app secret>`.') },

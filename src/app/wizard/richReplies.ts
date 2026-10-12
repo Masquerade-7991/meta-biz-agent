@@ -178,6 +178,10 @@ export function describeImageSource(src: ImageSource): string {
 const list = (parts: string[]) =>
   parts.length < 3 ? parts.join(' and ') : `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`
 
+/** A value quoted inside the instruction. The business's own double quotes become single ones, so a
+ *  value can't close the quote early and turn the rest of its text into instructions for the agent. */
+const q = (v: unknown) => `"${String(v ?? '').replace(/["“”]/g, "'")}"`
+
 /** The UI-skill instruction, regenerated in full from `blanks` on every save (never parsed back).
  *  Follows Meta's writing-ui-skills guide: trigger first, then every element with its exact value;
  *  optional parts appear only when set. Deterministic. */
@@ -188,30 +192,30 @@ export function compileRichReplySentence(draft: RichReplyDraft): string {
   switch (draft.type) {
     case 'cta_url': {
       const b = draft.blanks
-      const parts = [`the body text "${b.messageText}"`, `the button label "${b.buttonLabel}"`, `the URL ${b.link}`]
+      const parts = [`the body text ${q(b.messageText)}`, `the button label ${q(b.buttonLabel)}`, `the URL ${b.link}`]
       if (b.headerMedia && has(b.headerMedia.ref)) parts.push(`a header ${b.headerMedia.mediaType}: ${describeImageSource(b.headerMedia).replace(/^the image/, `the ${b.headerMedia.mediaType}`)}`)
-      if (has(b.footer)) parts.push(`the footer text "${b.footer}"`)
+      if (has(b.footer)) parts.push(`the footer text ${q(b.footer)}`)
       return `If ${t}, send a button message with ${list(parts)}.`
     }
     case 'image': {
       const b = draft.blanks
-      const caption = has(b.caption) ? ` with the caption "${b.caption}"` : ''
+      const caption = has(b.caption) ? ` with the caption ${q(b.caption)}` : ''
       return `If ${t}, send an image message with ${describeImageSource(b.image)}${caption}. Do not use any other image.`
     }
     case 'interactive_list': {
       const b = draft.blanks
       const rows = b.options.map((o) => {
-        let row = `row ID "${o.rowId}" titled "${o.title}"`
-        if (has(o.description)) row += ` with the description "${o.description}"`
-        if (b.groupsEnabled && has(o.group)) row += ` in the section "${o.group}"`
+        let row = `row ID ${q(o.rowId)} titled ${q(o.title)}`
+        if (has(o.description)) row += ` with the description ${q(o.description)}`
+        if (b.groupsEnabled && has(o.group)) row += ` in the section ${q(o.group)}`
         return row
       })
-      return `If ${t}, send a list message with the body text "${b.messageText}", the button text "${b.menuButtonLabel}", and ${rows.length} ${rows.length === 1 ? 'row' : 'rows'}: ${rows.join('; ')}.`
+      return `If ${t}, send a list message with the body text ${q(b.messageText)}, the button text ${q(b.menuButtonLabel)}, and ${rows.length} ${rows.length === 1 ? 'row' : 'rows'}: ${rows.join('; ')}.`
     }
     case 'interactive_reply_buttons': {
       const b = draft.blanks
-      const buttons = b.buttons.filter(has).map((x) => `"${x}"`)
-      return `If ${t}, send a reply buttons message with the body text "${b.messageText}" and ${buttons.length} ${buttons.length === 1 ? 'button' : 'buttons'}: ${list(buttons)}.`
+      const buttons = b.buttons.filter(has).map((x) => `${q(x)}`)
+      return `If ${t}, send a reply buttons message with the body text ${q(b.messageText)} and ${buttons.length} ${buttons.length === 1 ? 'button' : 'buttons'}: ${list(buttons)}.`
     }
     case 'carousel_url':
     case 'carousel_quick_reply': {
@@ -219,24 +223,24 @@ export function compileRichReplySentence(draft: RichReplyDraft): string {
       const url = draft.type === 'carousel_url'
       const cards = b.cards.map(
         (c, i) =>
-          `Card ${i + 1}: ${describeImageSource(c.image)}, the card text "${c.cardText}", ` +
-          (url ? `the button label "${c.buttonLabel}", and the button URL ${c.link}.` : `and the quick-reply button "${c.buttonLabel}".`),
+          `Card ${i + 1}: ${describeImageSource(c.image)}, the card text ${q(c.cardText)}, ` +
+          (url ? `the button label ${q(c.buttonLabel)}, and the button URL ${c.link}.` : `and the quick-reply button ${q(c.buttonLabel)}.`),
       )
       const kind = url ? 'a carousel with URL buttons' : 'a carousel with quick-reply buttons'
-      return `If ${t}, send ${kind} with the body text "${b.messageText}" and ${b.cards.length} cards. ${cards.join(' ')}`
+      return `If ${t}, send ${kind} with the body text ${q(b.messageText)} and ${b.cards.length} cards. ${cards.join(' ')}`
     }
     case 'location': {
       const b = draft.blanks
       const parts = [`the latitude ${b.latitude.trim()}`, `the longitude ${b.longitude.trim()}`]
-      if (has(b.placeName)) parts.push(`the name "${b.placeName}"`)
-      if (has(b.address)) parts.push(`the address "${b.address}"`)
+      if (has(b.placeName)) parts.push(`the name ${q(b.placeName)}`)
+      if (has(b.address)) parts.push(`the address ${q(b.address)}`)
       return `If ${t}, send a location message with ${list(parts)}. These coordinates are verified by the business; use them exactly and never invent or change coordinates.`
     }
     case 'location_request':
-      return `If ${t}, send a location request message with the body text "${draft.blanks.messageText}".`
+      return `If ${t}, send a location request message with the body text ${q(draft.blanks.messageText)}.`
     case 'flow': {
       const b = draft.blanks
-      return `If ${t}, open the WhatsApp form "${b.flowName}" with the body text "${b.messageText}" and the button label "${b.buttonLabel}".`
+      return `If ${t}, open the WhatsApp form ${q(b.flowName)} with the body text ${q(b.messageText)} and the button label ${q(b.buttonLabel)}.`
     }
     default:
       return ''
@@ -275,7 +279,13 @@ export function migrateRichReply(r: any): RichReply {
  *  "!3d19.05!4d72.82") or a plain "19.0596, 72.8295". Short maps.app.goo.gl links hide them: null. */
 export function coordsFromMapsLink(text: string): { latitude: string; longitude: string } | null {
   const n = String.raw`(-?\d{1,3}(?:\.\d+)?)`
-  const t = decodeURIComponent(text.trim())
+  // A pasted link is percent-encoded; anything else (a stray %) is read as typed.
+  let t = text.trim()
+  try {
+    t = decodeURIComponent(t)
+  } catch {
+    /* not encoded */
+  }
   const m =
     t.match(new RegExp(String.raw`!3d${n}!4d${n}`)) ??
     t.match(new RegExp(String.raw`@${n},${n}`)) ??

@@ -192,6 +192,11 @@ export async function handle(req: http.IncomingMessage, res: http.ServerResponse
     if (traceRoute && !can(s.role, 'traces.read')) return sendError(res, 403, 'Not allowed', 'Only owners and admins can read traces.')
     if (traceRoute) return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(await readTrace(traceRoute[1])))
     if (metaRoute) {
+      // The Graph relay only reads (the console's WhatsApp changes go through their own routes, which
+      // check owner and admin rights), and only the object its path names: ?ids= and batch would
+      // reach any business with this workspace's token.
+      if (metaRoute[1] === 'graph' && req.method !== 'GET' && req.method !== 'HEAD') return sendError(res, 403, 'Not allowed', 'The Graph relay is read-only.')
+      if (metaRoute[1] === 'graph' && /[?&](ids|batch)=/i.test(metaRoute[2])) return sendError(res, 403, 'Not allowed', 'Name one WhatsApp object in the path.')
       const path = resolveIds(metaRoute[2])
       // Several businesses share this server: a workspace may only name its own WABA, numbers and business.
       if (pathIds(path).some((id) => !assets!.ids.has(id))) return sendError(res, 403, 'Not your WhatsApp account', 'That WhatsApp ID isn’t connected to this workspace.')

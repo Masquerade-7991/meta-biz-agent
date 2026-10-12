@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { ErrorBoundary } from '@/app/components/ErrorBoundary'
 import { BrowserRouter, Navigate, useLocation, useNavigate } from 'react-router'
 import { Toaster } from '@/app/components/ui/sonner'
 import { TooltipProvider } from '@/app/components/ui/tooltip'
@@ -147,9 +148,11 @@ export default function App() {
       <WizardProvider>
         <TooltipProvider>
           <DevControlsProvider>
-            <Suspense fallback={<PageLoader fullscreen />}>
-              <Gate />
-            </Suspense>
+            <ErrorBoundary>
+              <Suspense fallback={<PageLoader fullscreen />}>
+                <Gate />
+              </Suspense>
+            </ErrorBoundary>
             <CommandPalette />
             {(isDummyMode() || import.meta.env.DEV) && (
               <>

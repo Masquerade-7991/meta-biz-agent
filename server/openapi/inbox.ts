@@ -191,7 +191,7 @@ export const inbox = area('Inbox', {
     post: {
       id: 'simulateCustomerMessage',
       summary: 'Pretend a customer wrote',
-      description: 'Runs a made-up customer message through the real webhook processor, so the whole flow can be tried while Meta still sends this number’s webhooks elsewhere.',
+      description: 'Runs a made-up customer message through the real webhook processor, so the whole flow can be tried while Meta still sends this number’s webhooks elsewhere. Sample chats only (403 otherwise): on a real chat it would put words in a real customer’s mouth.',
       body: o({ phone: d('string', 'Defaults to the first sample chat.'), 'text*': 'string', name: 'string' }),
     },
   },

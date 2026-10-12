@@ -67,14 +67,14 @@ test('listen-only: no away message and no rating question to the business’s cu
   assert.deepEqual(metaCallsSince(m).filter((c) => /\/messages$/.test(c.path)), [], 'no rating question')
 })
 
-test('a Graph batch call can’t smuggle a protected write past the checks', { todo: 'QA-03: POST /api/graph/ with a batch body names no id in its path' }, async () => {
+test('a Graph batch call can’t smuggle a protected write past the checks', async () => {
   const n = s.fake.calls.length
   const r = await s.api(w.owner, 'POST', '/api/graph/', { batch: [{ method: 'POST', relative_url: `${WABA}/subscribed_apps` }] })
   assert.equal(r.status, 403, r.text)
   assert.deepEqual(metaCallsSince(n), [])
 })
 
-test('the relay can’t read another business through ?ids=', { todo: 'QA-04: pathIds checks only the path, so GET /api/graph/?ids=<any id> uses the server token' }, async () => {
+test('the relay can’t read another business through ?ids=', async () => {
   const n = s.fake.calls.length
   const r = await s.api(w.agent, 'GET', '/api/graph/?ids=770000000000001&fields=name,phone_numbers')
   assert.equal(r.status, 403, r.text)

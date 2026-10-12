@@ -133,7 +133,7 @@ test('with restricted agents, an agent can’t open someone else’s ticket', as
   }
 })
 
-test('with restricted agents, an agent can’t read someone else’s ticket by its number either', { todo: 'QA-15: GET /api/tickets/{n} (one()) skips needInScope, so numbers can be walked' }, async () => {
+test('with restricted agents, an agent can’t read someone else’s ticket by its number either', async () => {
   const t = (await ticketOf('919810000002'))!
   await s.db.collection('support_settings').updateOne({ workspaceId: w.id }, { $set: { 'settings.restrictAgents': true } })
   try {
@@ -196,7 +196,7 @@ test('escalation levels fire in order, once each, as time passes', async () => {
   assert.ok(done.escalations[0].notify.includes(w.owner.id), 'admins & owners were notified')
 })
 
-test('a ticket answered on time still escalates when its resolution breaches', { todo: 'QA-01: the first-reply level never fires once answered, and blocks the resolution level behind it' }, async () => {
+test('a ticket answered on time still escalates when its resolution breaches', async () => {
   const ops = await serverModules(s)
   await write('919810000005', 'please help', 'standby')
   await s.api(w.owner, 'POST', '/api/tickets', { phone: '919810000005', priority: 'urgent', subject: 'Answered quickly' })

@@ -10,7 +10,7 @@ export const ROLES: { id: Role; label: string; description: string }[] = [
 ]
 const RANK: Record<Role, number> = { owner: 3, admin: 2, supervisor: 1, agent: 0 }
 export const roleLabel = (r: Role | null | undefined) => ROLES.find((x) => x.id === r)?.label ?? 'Member'
-export const isRole = (v: unknown): v is Role => typeof v === 'string' && v in RANK
+export const isRole = (v: unknown): v is Role => typeof v === 'string' && Object.hasOwn(RANK, v)
 
 const AT_LEAST = (r: Role) => (Object.keys(RANK) as Role[]).filter((x) => RANK[x] >= RANK[r])
 const MATRIX = {

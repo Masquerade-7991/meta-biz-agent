@@ -209,12 +209,13 @@ export const schemas: Record<string, Schema> = {
     openTicket: 'boolean',
   }),
   ContactInput: o({
-    phone: d('string', 'Required when creating. 8 to 15 digits, country code first.'),
+    phone: d('string', 'Required when creating. 8 to 15 digits, country code first; 10 digits without + or 00 are refused as a local number missing its country code.'),
     name: 'string?',
     email: 'string?',
     tags: d({ anyOf: [t('string[]'), t('string')] }, 'A list, or one comma-separated string.'),
     fields: { type: 'object', additionalProperties: { type: 'string' } },
-    optedOut: 'boolean',
+    optedOut: d('boolean', 'Left out: unchanged. Opting someone back in (false) only applies with optedOutWas: true.'),
+    optedOutWas: d('boolean', 'What the form showed when it opened. A form opened before the customer sent STOP says false, so saving it never undoes their STOP.'),
   }),
   FieldDef: o({ 'key*': 'string', 'label*': 'string', 'type*': 'text|number|date|select', options: d('string[]', 'For `select`.') }),
   SegmentFilter: o({

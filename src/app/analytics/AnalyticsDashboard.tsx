@@ -37,7 +37,8 @@ const TABS = [
 
 /** One place for every number: all agents together or any of them, the team behind them, what it all cost, and the rows behind each chart. */
 export function AnalyticsDashboard() {
-  const { filter, range, set, tab } = useAnalyticsFilter()
+  const [timezone, setTimezone] = useState<string | undefined>()
+  const { filter, range, set, tab } = useAnalyticsFilter(timezone)
   const [data, setData] = useState<Overview | null>(null)
   const [error, setError] = useState<string | null>(null)
   // A new filter keeps the old numbers on screen until the new ones arrive; this says they're coming.
@@ -50,7 +51,13 @@ export function AnalyticsDashboard() {
 
   useEffect(() => {
     listTeams().then(setTeams, () => {})
-    getSupportSettings().then((s) => setFirstReplyTarget(s.sla.normal.firstResponse), () => {})
+    getSupportSettings().then(
+      (s) => {
+        setFirstReplyTarget(s.sla.normal.firstResponse)
+        setTimezone(s.hours.timezone)
+      },
+      () => {},
+    )
   }, [])
   useEffect(() => {
     let live = true

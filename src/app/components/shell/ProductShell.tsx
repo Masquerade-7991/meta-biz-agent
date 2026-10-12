@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
+import { ErrorBoundary } from '@/app/components/ErrorBoundary'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
 import { CircleHelp, ExternalLink, Menu, Search } from 'lucide-react'
 import { openCommandPalette, PALETTE_SHORTCUT } from '@/app/lib/commandPalette'
@@ -182,7 +183,9 @@ export function ProductShell({
           </div>
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto">
-          <Suspense fallback={<PageLoader />}>{renderContent()}</Suspense>
+          <ErrorBoundary resetKey={active}>
+            <Suspense fallback={<PageLoader />}>{renderContent()}</Suspense>
+          </ErrorBoundary>
         </main>
       </div>
     </div>

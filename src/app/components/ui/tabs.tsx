@@ -45,7 +45,7 @@ function TabsList({
       className={cn(
         variant === "segmented"
           ? "inline-flex w-fit items-center rounded-md bg-muted p-0.5 text-muted-foreground"
-          : "-mb-px flex min-w-0 flex-1 items-end gap-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          : "-mb-px flex min-w-0 flex-1 items-end gap-5 overflow-x-auto scrollbar-none [&::-webkit-scrollbar]:hidden",
         className
       )}
       {...props}

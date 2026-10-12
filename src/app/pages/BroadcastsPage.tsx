@@ -104,6 +104,8 @@ function SendCheck({ check, error, category }: { check: Preflight | null; error:
 function NewBroadcastDialog({ templates, segments, fields, onClose, onCreated }: { templates: WaTemplate[]; segments: Segment[]; fields: FieldDef[]; onClose: () => void; onCreated: (b: BroadcastDetail) => void }) {
   const approved = templates.filter((t) => t.status === 'APPROVED')
   const [name, setName] = useState('')
+  // One key per dialog: a second click or a retried request creates the broadcast once.
+  const [idempotencyKey] = useState(() => crypto.randomUUID())
   const [tplId, setTplId] = useState('')
   const [segmentId, setSegmentId] = useState('all')
   const [mapping, setMapping] = useState<Record<string, SlotMapping>>({})
@@ -138,7 +140,7 @@ function NewBroadcastDialog({ templates, segments, fields, onClose, onCreated }:
     setBusy(true)
     setError(null)
     try {
-      onCreated(await createBroadcast({ name, template: { name: tpl.name, language: tpl.language }, segmentId: segmentId === 'all' ? null : segmentId, mapping, scheduledAt: later && at ? new Date(at).toISOString() : null }))
+      onCreated(await createBroadcast({ name, template: { name: tpl.name, language: tpl.language }, segmentId: segmentId === 'all' ? null : segmentId, mapping, scheduledAt: later && at ? new Date(at).toISOString() : null, idempotencyKey }))
     } catch (err) {
       setError(errorDetail(err))
     } finally {

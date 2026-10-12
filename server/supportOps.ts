@@ -23,6 +23,7 @@ import {
   parseTeam,
   pickFromPool,
   raise,
+  routePlan,
   type AgentProfile,
   type Availability,
   type EscalationMatrix,
@@ -193,19 +194,11 @@ export async function routeTicket(input: { phone: string; source: TicketSource; 
   const rule = firstMatch(await getRules(), facts)
   const a = applyRule(rule, facts)
   const priority = input.explicitPriority ? input.priority : a.priority
-  const teams = await getTeams()
   const base = { priority, tags: a.tags, rule: rule?.name ?? null }
-  if (a.target.kind === 'user') return { ...base, assigneeId: a.target.userId, teamId: null }
-  if (a.target.kind === 'none') return { ...base, assigneeId: null, teamId: null }
-  if (a.target.kind === 'team') {
-    const team = teams.find((t) => t.id === (a.target as { teamId: string }).teamId)
-    if (team) return { ...base, assigneeId: await pickInTeam(team, a.target.skill), teamId: team.id }
-  }
-  // No rule decided: the workspace default.
-  if (s.routing.mode === 'fixed') return { ...base, assigneeId: s.routing.userId, teamId: null }
-  if (s.routing.mode === 'unassigned') return { ...base, assigneeId: null, teamId: null }
-  const team = s.routing.teamId ? teams.find((t) => t.id === s.routing.teamId) : null
-  if (team) return { ...base, assigneeId: await pickInTeam(team), teamId: team.id }
+  const plan = routePlan(a.target, s.routing, await getTeams())
+  if (plan.to === 'user') return { ...base, assigneeId: plan.userId, teamId: null }
+  if (plan.to === 'nobody') return { ...base, assigneeId: null, teamId: null }
+  if (plan.to === 'team') return { ...base, assigneeId: await pickInTeam(plan.team, plan.skill), teamId: plan.team.id }
   // Everyone in the workspace takes turns (people set to away or offline are skipped).
   const ps = await profiles()
   const everyone = ps.map((p) => p.userId)

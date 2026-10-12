@@ -15,7 +15,9 @@ test('never ends in a hyphen after cutting to 64', () => {
 })
 
 test('a name with no latin letters or digits gets the fallback', () => {
-  assert.equal(skillTitle('ऑर्डर की स्थिति'), 'skill')
+  assert.match(skillTitle('ऑर्डर की स्थिति'), /^skill-[a-z0-9]{1,6}$/)
+  assert.equal(skillTitle('ऑर्डर की स्थिति'), skillTitle(' ऑर्डर की स्थिति '), 'stable for the same name')
+  assert.notEqual(skillTitle('ऑर्डर'), skillTitle('रिफंड'), 'two names in another script get different titles')
   assert.equal(skillTitle('🎉', 'reply-ab12'), 'reply-ab12')
 })
 

@@ -1,5 +1,63 @@
 # QA report: first pass
 
+## Status after the fixes (12 Oct 2026)
+
+Every finding below is fixed, except QA-31, which is deliberately left strict. The tests that reproduced the findings are now ordinary tests (no `todo` left).
+
+- **High:**
+  - QA-01: escalations continue after an on-time first reply.
+  - QA-02 and QA-15: restricted agents are checked before any action, and when reading a ticket by its number.
+  - QA-03: `refusal()` refuses root/batch Graph writes, protected ids in the body, form-encoded PINs, and any letter case.
+  - QA-04: the Graph relay is read-only and refuses `?ids=`/`batch`.
+  - QA-06: replies, thread control, blocks and turns use the chat's own number.
+  - QA-10: simulate works only on sample chats.
+- **Medium:**
+  - QA-05: `isRole` checks own keys only.
+  - QA-07 and QA-27: one formula-safe `csvCell` for every CSV.
+  - QA-08 and QA-11: number and template events show in the log, in sentences.
+  - QA-12: no code change; the test now waits for the relay's after-response write.
+  - QA-13: fields in other scripts get their own keys; header matching handles any script; blank headers match nothing.
+  - QA-16: a stale form can't undo a customer's STOP (`optedOutWas`).
+  - QA-18: 10 digits without + or 00 are refused as a local number.
+  - QA-20: the webhook body is capped at 5 MB before the signature check.
+  - QA-30: a broadcast is created once per dialog key or identical content within 30 s.
+  - QA-35: an error boundary, plus a one-time reload on `vite:preloadError`.
+- **Low and improvements:**
+  - QA-09: business minutes step at most an hour, so DST is exact.
+  - QA-14: shifted deadlines are capped at "never".
+  - QA-17: `dayStart` settles the offset twice.
+  - QA-19: skipped rows carry their file line.
+  - QA-21: a per-account login cap across IPs.
+  - QA-22: if no owner is left after a race, the change is undone with a 409.
+  - QA-24: presets use the workspace's time zone on Analytics, Reports and Home.
+  - QA-25: escalation levels must rise on each clock.
+  - QA-28: `dur` rounds first.
+  - QA-29: an invalid segment id gives 400.
+  - QA-32: quotes in the business's text can't break the instruction.
+  - QA-33: a stray % in a map link doesn't throw.
+  - QA-34: `npm test` is the gate in CLAUDE.md and the skill.
+  - QA-36: `lint:tw` is clean.
+  - QA-37: Reports shows a loader, and an error with Try again.
+  - QA-38: Dummy mode routes through the shared `routePlan`.
+- **Smaller notes:**
+  - Skill names in other scripts get a stable tag (`skill-xxxx`).
+  - Routing keywords match at word starts ("no" no longer matches "know").
+  - `playwright-core` is pinned as a direct dev dependency.
+- **Not changed: QA-31.** Emoji in button labels still count as two. Loosening the limit before confirming how Meta counts could let saves fail at Meta. Its eval stays `known`.
+
+Gates after the fixes:
+
+| Gate | Result |
+|---|---|
+| build | pass |
+| lint | 0 warnings |
+| lint:tw | exit 0 |
+| `npm test` | 221/221 |
+| `npm run test:e2e` | 87/87 |
+| evals | 46/47 Dummy mode, 49/50 upstream; the remaining case is QA-31, known |
+| `npm run test:ui` | 89/89, on two runs in a row; the error and stale checks now wait for their message instead of racing the page |
+
+
 Date: 12 Oct 2026 · Branch `worktree-agent-a119c6662efff8335` (from `947c620`) · No product code changed.
 
 **Outcome.** The core flows hold up end to end: sign-up, roles, webhook ingest, the ticket lifecycle, analytics by local day, reports, imports and broadcasts all work against a real server and database. There are also 4 high-severity problems:

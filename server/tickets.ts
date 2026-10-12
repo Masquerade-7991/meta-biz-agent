@@ -481,7 +481,12 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   if ((seg = path.match(/^\/api\/tickets\/(\d+)(\/resolve)?$/))) {
     const n = Number(seg[1])
     if (seg[2] && m === 'POST') return resolve(n, obj(await readJson(req)), me)
-    if (m === 'GET') return one(n)
+    if (m === 'GET') {
+      const t = await one(n)
+      // A restricted agent can't walk the numbers into other people's tickets.
+      await needInScope(me, (t as { assigneeId?: unknown }).assigneeId)
+      return t
+    }
     if (m === 'PATCH') return update(n, obj(await readJson(req)), me)
   }
   if (path === '/api/support/settings' && m === 'GET')

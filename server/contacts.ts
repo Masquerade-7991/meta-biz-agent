@@ -4,6 +4,7 @@
 import type http from 'node:http'
 import { ObjectId } from 'mongodb'
 import { HttpError, type Obj, type Titles, digits, obj, readJson, serveJson } from './http.ts'
+import { createHash } from 'node:crypto'
 import { col, db, dbOffReason, ws } from './db.ts'
 import { trace } from './trace.ts'
 import type { Actor } from './inbox.ts'
@@ -26,8 +27,12 @@ export interface SegmentFilter {
 }
 
 function phoneOf(v: unknown): string {
+  const raw = String(v ?? '').trim()
   const p = digits(v)
-  if (!/^\d{8,15}$/.test(p)) throw new HttpError(400, `${String(v ?? '') || 'That'} isn’t a phone number with a country code (8 to 15 digits).`)
+  if (!/^\d{8,15}$/.test(p)) throw new HttpError(400, `${raw || 'That'} isn’t a phone number with a country code (8 to 15 digits).`)
+  // Ten digits with no + is a local mobile number written without its country code (98765 43210 in
+  // India); taken as is, it would be someone in another country.
+  if (p.length === 10 && !/^(\+|00)/.test(raw)) throw new HttpError(400, `${raw} looks like a local number. Add the country code, like +91 ${raw}.`)
   return p
 }
 const tagsOf = (v: unknown) =>
@@ -112,11 +117,16 @@ async function save(b: Obj, phone?: string) {
     email: String(b.email ?? '').trim().slice(0, 200) || null,
     tags: tagsOf(b.tags),
     fields: fieldsOf(b.fields, defs),
-    optedOut: b.optedOut === true,
+    ...(typeof b.optedOut === 'boolean' && { optedOut: b.optedOut }),
+    ...(b.optedOut === true && { optedOutAt: new Date() }),
     updatedAt: new Date(),
   }
   if (doc.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(doc.email))) throw new HttpError(400, 'That email address doesn’t look right.')
   if (phone) {
+    // Opting someone back in must be a decision about what the form showed: a form opened before the
+    // customer sent STOP still says "subscribed", and saving it must not undo their STOP.
+    if (doc.optedOut === false && b.optedOutWas !== true) delete doc.optedOut
+    if (doc.optedOut === true && b.optedOutWas === true) delete doc.optedOutAt
     const r = await contacts().findOneAndUpdate({ workspaceId: ws(), phone: p }, { $set: doc }, { returnDocument: 'before' })
     if (!r) throw new HttpError(404, 'That contact no longer exists.')
     // Which details changed, not their values: the activity log keeps no customer details.
@@ -125,7 +135,7 @@ async function save(b: Obj, phone?: string) {
     return out({ ...r, ...doc })
   }
   if (await contacts().findOne({ workspaceId: ws(), phone: p })) throw new HttpError(409, `+${p} is already a contact.`)
-  const full = { ...doc, workspaceId: ws(), phone: p, source: 'manual', createdAt: new Date() }
+  const full = { optedOut: false, ...doc, workspaceId: ws(), phone: p, source: 'manual', createdAt: new Date() }
   await contacts().insertOne(full)
   trace('contact.created', {}, { entity: 'contact', id: p })
   return out(full)
@@ -156,7 +166,8 @@ async function importRows(b: Obj) {
       if (res.upsertedCount) added++
       else updated++
     } catch (err) {
-      skipped.push({ row: i + 2, reason: err instanceof HttpError ? err.message : 'Couldn’t read this row.' })
+      // The line in the file when the browser sent it (blank lines don't shift the count); else header + index.
+      skipped.push({ row: Number(r.line) > 0 ? Number(r.line) : i + 2, reason: err instanceof HttpError ? err.message : 'Couldn’t read this row.' })
     }
   }
   trace('contact.imported', { added, updated, skipped: skipped.length })
@@ -184,7 +195,8 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
       const x = obj(f)
       const label = String(x.label ?? '').trim().slice(0, 60)
       if (!label) throw new HttpError(400, 'Every field needs a name.')
-      const key = String(x.key || label).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || 'field'
+      // Latin labels give readable keys; a label in another script (शहर, مدينة) gets a short stable one.
+      const key = String(x.key || label).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || `field_${createHash('sha256').update(label).digest('hex').slice(0, 6)}`
       if (seen.has(key)) throw new HttpError(400, `Two fields would both be called “${label}”.`)
       seen.add(key)
       const type = ['number', 'date', 'select'].includes(String(x.type)) ? (x.type as FieldDef['type']) : 'text'

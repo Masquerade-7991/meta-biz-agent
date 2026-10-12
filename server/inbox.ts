@@ -152,7 +152,7 @@ async function syncTurns(phone: string, force = false) {
   if (!force && Date.now() - (lastSync.get(key) ?? 0) < 15_000) return
   if (!force && Date.now() < (noConversation.get(key) ?? 0)) return
   lastSync.set(key, Date.now())
-  const r = await callUpstream('meta', 'GET', resolveIds(`/PHONE_NUMBER_ID/insights/conversations/turns?user_phone_number=${phone}&limit=50`)).catch(() => null)
+  const r = await callUpstream('meta', 'GET', resolveIds(`/${await chatNumber(phone)}/insights/conversations/turns?user_phone_number=${phone}&limit=50`)).catch(() => null)
   if (r && (r.status === 400 || r.status === 404)) noConversation.set(key, Date.now() + 10 * 60_000)
   if (!r || r.status !== 200) return
   noConversation.delete(key)
@@ -242,7 +242,7 @@ async function processChange(field: string, value: Obj) {
     )
     // WhatsApp's opt-out words: STOP keeps the contact out of broadcasts, START lets them back in.
     const word = body.trim().toUpperCase()
-    if (['STOP', 'UNSUBSCRIBE', 'START'].includes(word)) await contacts().updateOne({ workspaceId: ws(), phone }, { $set: { optedOut: word !== 'START' } })
+    if (['STOP', 'UNSUBSCRIBE', 'START'].includes(word)) await contacts().updateOne({ workspaceId: ws(), phone }, { $set: { optedOut: word !== 'START', ...(word !== 'START' && { optedOutAt: new Date() }) } })
     await wakeOnMessage(phone)
     // On `messages` our app holds the chat; on `standby` the agent does. A listen-only app (the
     // business's own number) can't tell from the field, so ownership there follows handovers only.
@@ -439,9 +439,14 @@ export async function handleWebhook(req: http.IncomingMessage, res: http.ServerR
     res.writeHead(ok ? 200 : 403, { 'content-type': 'text/plain' }).end(ok ? (u.searchParams.get('hub.challenge') ?? '') : 'Verification failed')
     return true
   }
-  const chunks: Buffer[] = []
-  for await (const c of req) chunks.push(c as Buffer)
-  const raw = Buffer.concat(chunks)
+  // Anyone can post here, so the body is capped before the signature is checked. Meta's deliveries
+  // are a few kilobytes; 413 for anything over 5 MB.
+  let raw: Buffer
+  try {
+    raw = await readRaw(req, 5_000_000)
+  } catch {
+    return void res.writeHead(413).end(), true
+  }
   const secrets = webhookSecrets()
   // Not set up yet: 503 makes Meta keep the event and retry (up to 7 days) instead of losing it.
   if (!secrets.length) return void res.writeHead(503).end(), true
@@ -598,11 +603,18 @@ async function getConversation(phone: string, me?: Actor) {
 
 // ---- writes ----
 /** Sends a WhatsApp message (sample chats are only stored) and records it in the chat. */
+/** The number a chat belongs to (the one the customer wrote to), so replies, thread control and
+ *  blocks go out from it; the workspace's default number when unknown or no longer connected. */
+export async function chatNumber(phone: string): Promise<string> {
+  const id = (await conversations().findOne({ workspaceId: ws(), phone }, { projection: { phoneNumberId: 1 } }))?.phoneNumberId
+  return id && currentAssets()?.ids.has(String(id)) ? String(id) : 'PHONE_NUMBER_ID'
+}
+
 async function deliver(phone: string, payload: Obj, msg: Omit<Msg, 'phone' | 'direction' | 'at' | 'waMessageId'>, sample: boolean): Promise<string | undefined> {
   let waMessageId: string | undefined
   if (!sample) {
     needMetaAssets()
-    const r = await metaJson('graph', 'POST', '/PHONE_NUMBER_ID/messages', { messaging_product: 'whatsapp', recipient_type: 'individual', ...sendTarget(phone), ...payload })
+    const r = await metaJson('graph', 'POST', `/${await chatNumber(phone)}/messages`, { messaging_product: 'whatsapp', recipient_type: 'individual', ...sendTarget(phone), ...payload })
     waMessageId = str(obj(arr(r.messages)[0]).id)
   }
   await addMessage({ ...msg, phone, direction: 'out', at: new Date(), waMessageId, status: 'sent', ...(sample && { sample: true }) })
@@ -682,7 +694,7 @@ export async function setControl(me: Actor, phone: string, action: 'take' | 'rel
   if (!conv.sample) {
     needMetaAssets()
     // Thread control refusals are the caller's to fix (e.g. another app owns the chat): always 400.
-    await metaJson('meta', 'POST', '/business/whatsapp/phone_numbers/PHONE_NUMBER_ID/thread_control', { messaging_product: 'whatsapp', action, to: phone }, 400)
+    await metaJson('meta', 'POST', `/business/whatsapp/phone_numbers/${await chatNumber(phone)}/thread_control`, { messaging_product: 'whatsapp', action, to: phone }, 400)
   }
   await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { owner: action === 'take' ? 'human' : 'ai', ...(action === 'take' && !conv.assigneeId && { assigneeId: me._id }) } })
   if (action === 'take') await ensureTicket(phone, 'takeover')
@@ -801,6 +813,9 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     const phone = phoneParam(decodeURIComponent(seg[1]))
     const action = seg[2]
     if (!action && m === 'GET') return getConversation(phone, me)
+    // A restricted agent reaches only their own chats and unassigned ones: checked before anything
+    // is sent or changed, not on the read that follows.
+    await needInScope(me, (await conversations().findOne({ workspaceId: ws(), phone }, { projection: { assigneeId: 1 } }))?.assigneeId)
     if (action === 'transcript' && m === 'GET') return transcript(phone, me, u)
     if (m !== 'POST') throw new HttpError(405, 'Method not allowed.')
     if (action === 'media') {
@@ -844,13 +859,14 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     } else if (action === 'read') await conversations().updateOne({ workspaceId: ws(), phone }, { $set: { unread: 0 } })
     else if (action === 'snooze') await snooze(phone, body.until ?? null, me._id)
     else if (action === 'block' || action === 'unblock') {
-      // Blocking happens on WhatsApp, on the workspace's default number (sample chats: only here).
+      // Blocking happens on WhatsApp, on the chat's own number (sample chats: only here).
       if (!can(me.role, 'numbers.edit')) throw new HttpError(403, 'Owners and admins block customers.')
       const conv = await conversations().findOne({ workspaceId: ws(), phone })
       if (conv?.sample) await contacts().updateOne({ workspaceId: ws(), phone }, action === 'block' ? { $set: { blocked: true } } : { $unset: { blocked: '' } })
       else {
         needMetaAssets()
-        await setBlocked(currentAssets()!.phoneNumberId, phone, action === 'block')
+        const n = await chatNumber(phone)
+        await setBlocked(n === 'PHONE_NUMBER_ID' ? currentAssets()!.phoneNumberId : n, phone, action === 'block')
       }
     }
     else if (action === 'remind') await remind(phone, body, me._id)
@@ -882,7 +898,9 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     const body = obj(await readJson(req))
     const phone = phoneParam(String(body.phone ?? SAMPLE_CHATS[0].phone))
     const conv = await conversations().findOne({ workspaceId: ws(), phone })
-    const sample = !!conv?.sample
+    // Only sample chats: on a real chat this would put words in a real customer's mouth (and could
+    // open tickets, rate one, opt them out or send them an away message).
+    if (!conv?.sample) throw new HttpError(403, 'Simulated messages only go into sample chats.')
     // Meta delivers on `messages` while people hold the chat, on `standby` while the agent does.
     const field = conv?.owner === 'human' ? 'messages' : 'standby'
     const event = { contacts: [{ wa_id: phone, profile: { name: str(body.name) } }], messages: [{ from: phone, id: `sim.${Date.now()}`, timestamp: String(Math.floor(Date.now() / 1000)), type: 'text', text: { body: text(body.text, 'a message') } }] }
@@ -898,7 +916,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
         },
       ],
     })
-    if (sample) await messages().updateMany({ workspaceId: ws(), phone, sample: { $exists: false } }, { $set: { sample: true } })
+    await messages().updateMany({ workspaceId: ws(), phone, sample: { $exists: false } }, { $set: { sample: true } })
     return { ok: true }
   }
   throw new HttpError(404, 'Not found.')

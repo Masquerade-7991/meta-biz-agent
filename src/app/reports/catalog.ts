@@ -2,6 +2,7 @@
 // or have emailed on a schedule. Each report is a table built from the Analytics overview or a log,
 // the same way on the server (CSV, emails) and in the browser (print view, Dummy mode).
 import { csatScore, type LogKind, type LogPage, type Overview } from '../analytics/types.ts'
+import { csvCell } from '../contacts/csv.ts'
 
 export const REPORTS = [
   { id: 'business_review', title: 'Business review', description: 'The headline numbers against the period before: conversations, containment, satisfaction, speed, escalations and spend.', source: 'overview' },
@@ -63,8 +64,8 @@ export function reportTable(id: ReportId, o: Overview | null, log: LogPage | nul
     }
     case 'daily':
       return {
-        columns: ['Date', 'Conversations', 'AI alone', 'With the team', 'Handovers', 'Tickets opened', 'Tickets resolved', 'Open at end of day', 'Median first reply (minutes)', 'Resolved on time (%)', 'Satisfaction (%)', 'Escalations', `WhatsApp spend${cur}`, `Business Agent cost${cur}`],
-        rows: o.series.map((p) => [p.date, p.conversations, p.aiOnly, p.withTeam, p.handoffs, p.ticketsOpened, p.ticketsResolved, p.backlog, r2(p.medianFirstReplyMin), pctv(p.slaMet), pctv(csatScore(p.csatGood, p.csatOkay, p.csatBad)), p.escalations, r2(p.spend), r2(p.agentCost)]),
+        columns: ['Date', 'Conversations', 'AI alone', 'With the team', 'No reply', 'Handovers', 'Tickets opened', 'Tickets resolved', 'Open at end of day', 'Median first reply (minutes)', 'Resolved on time (%)', 'Satisfaction (%)', 'Escalations', `WhatsApp spend${cur}`, `Business Agent cost${cur}`],
+        rows: o.series.map((p) => [p.date, p.conversations, p.aiOnly, p.withTeam, p.noReply, p.handoffs, p.ticketsOpened, p.ticketsResolved, p.backlog, r2(p.medianFirstReplyMin), pctv(p.slaMet), pctv(csatScore(p.csatGood, p.csatOkay, p.csatBad)), p.escalations, r2(p.spend), r2(p.agentCost)]),
       }
     case 'agents':
       return {
@@ -95,12 +96,8 @@ export function reportTable(id: ReportId, o: Overview | null, log: LogPage | nul
   return { columns: [], rows: [] }
 }
 
-const esc = (v: string | number | null) => {
-  const s = v == null ? '' : String(v)
-  return /[",\r\n]/.test(s) || /^[=+\-@]/.test(s) ? `"${(/^[=+\-@]/.test(s) ? "'" : '') + s.replace(/"/g, '""')}"` : s
-}
-/** CSV that Excel opens with the right characters (UTF-8 mark first). Cells starting = + - @ are quoted as text, so a value can't run as a formula. */
-export const tableCsv = (t: ReportTable) => '﻿' + [t.columns, ...t.rows].map((r) => r.map((v) => (typeof v === 'number' ? String(v) : esc(v))).join(',')).join('\r\n') + '\r\n'
+/** CSV that Excel opens with the right characters (UTF-8 mark first). Text cells go through csvCell, so a value can't run as a formula. */
+export const tableCsv = (t: ReportTable) => '﻿' + [t.columns, ...t.rows].map((r) => r.map((v) => (typeof v === 'number' ? String(v) : csvCell(v))).join(',')).join('\r\n') + '\r\n'
 
 export const reportFile = (id: ReportId, from: string, to: string) => `helo-${id.replace(/_/g, '-')}-${from}-to-${to}.csv`
 

@@ -50,7 +50,7 @@ test('shifting deadlines keeps both clocks and accepts strings', () => {
   assert.equal(+same.firstResponseDueAt, now)
 })
 
-test('a "never" deadline (no business hours) stays a valid far-future date when shifted', { todo: 'QA-14: shiftDues overflows 8.64e15 into Invalid Date; duesFrom caps, shiftDues does not' }, () => {
+test('a "never" deadline (no business hours) stays a valid far-future date when shifted', () => {
   const never = new Date(8.64e15)
   const d = shiftDues({ firstResponseDueAt: never, resolveDueAt: never }, 60_000)
   assert.ok(!Number.isNaN(+d.resolveDueAt))

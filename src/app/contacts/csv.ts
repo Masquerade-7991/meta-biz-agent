@@ -1,10 +1,19 @@
 // CSV for contact import and export (RFC 4180: quotes, doubled quotes, newlines inside quotes).
 
+/** Rows of cells; blank lines are dropped. Each row also carries (non-enumerable) `line`: the file
+ *  line it starts on, so a skipped row can be named as in the file. */
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = []
   let row: string[] = []
   let cell = ''
   let quoted = false
+  let line = 1
+  let start = 1
+  const keep = (r: string[]) => {
+    if (!r.some((x) => x.trim())) return
+    Object.defineProperty(r, 'line', { value: start, enumerable: false })
+    rows.push(r)
+  }
   const s = text.replace(/^﻿/, '') // Excel's byte-order mark
   for (let i = 0; i < s.length; i++) {
     const c = s[i]
@@ -13,7 +22,10 @@ export function parseCsv(text: string): string[][] {
         cell += '"'
         i++
       } else if (c === '"') quoted = false
-      else cell += c
+      else {
+        if (c === '\n' || (c === '\r' && s[i + 1] !== '\n')) line++
+        cell += c
+      }
     } else if (c === '"') quoted = true
     else if (c === ',') {
       row.push(cell)
@@ -21,18 +33,26 @@ export function parseCsv(text: string): string[][] {
     } else if (c === '\n' || c === '\r') {
       if (c === '\r' && s[i + 1] === '\n') i++
       row.push(cell)
-      if (row.some((x) => x.trim())) rows.push(row)
+      keep(row)
       row = []
       cell = ''
+      start = ++line
     } else cell += c
   }
   row.push(cell)
-  if (row.some((x) => x.trim())) rows.push(row)
+  keep(row)
   return rows
 }
 
-const esc = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
-export const toCsv = (rows: string[][]) => rows.map((r) => r.map(esc).join(',')).join('\r\n') + '\r\n'
+/** One CSV cell: quoted when it must be. A value starting with = + - @, a tab or a carriage return is
+ *  prefixed with ' so a spreadsheet shows it as text instead of running it as a formula (customer
+ *  names come from their WhatsApp profiles, which they control). Shared by every CSV the console writes. */
+export function csvCell(v: string | number | null | undefined): string {
+  const s = v == null ? '' : String(v)
+  const formula = /^[=+\-@\t\r]/.test(s)
+  return formula || /[",\r\n]/.test(s) ? `"${(formula ? "'" : '') + s.replace(/"/g, '""')}"` : s
+}
+export const toCsv = (rows: string[][]) => rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n'
 
 export interface ImportRow {
   phone: string
@@ -40,8 +60,17 @@ export interface ImportRow {
   email?: string
   tags?: string
   fields: Record<string, string>
+  /** The file line this row came from, for naming skipped rows. */
+  line?: number
 }
-const norm = (h: string) => h.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+/** Headers compare by their letters and digits in any script (Hindi vowel signs are marks, so kept). */
+const norm = (h: string) =>
+  h
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
+    .trim()
 const PHONE = ['phone', 'phone number', 'mobile', 'mobile number', 'whatsapp', 'whatsapp number', 'number', 'contact number']
 const NAME = ['name', 'full name', 'customer name', 'contact name']
 
@@ -49,6 +78,8 @@ const NAME = ['name', 'full name', 'customer name', 'contact name']
 export function mapColumns(header: string[], fields: { key: string; label: string }[]) {
   return header.map((h) => {
     const n = norm(h)
+    // A blank header feeds nothing (it would match any field whose name normalises to nothing).
+    if (!n) return null
     if (PHONE.includes(n)) return 'phone'
     if (NAME.includes(n)) return 'name'
     if (n === 'email' || n === 'email address') return 'email'
@@ -62,7 +93,8 @@ export function toImportRows(table: string[][], fields: { key: string; label: st
   const [header = [], ...body] = table
   const mapping = mapColumns(header, fields)
   const rows = body.map((cells) => {
-    const r: ImportRow = { phone: '', fields: {} }
+    const line = (cells as string[] & { line?: number }).line
+    const r: ImportRow = { phone: '', fields: {}, ...(line && { line }) }
     mapping.forEach((m, i) => {
       const v = (cells[i] ?? '').trim()
       if (!m || !v) return

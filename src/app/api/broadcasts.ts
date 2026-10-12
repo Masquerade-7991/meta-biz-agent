@@ -85,7 +85,7 @@ export const createTemplate = (t: NewTemplate) => call<{ id: string; status: str
 export const deleteTemplate = (name: string) => call<{ ok: true }>(`/api/broadcasts/templates/${name}`, 'DELETE')
 export const listBroadcasts = () => call<Broadcast[]>('/api/broadcasts')
 export const getBroadcast = (id: string) => call<BroadcastDetail>(`/api/broadcasts/${id}`)
-export const createBroadcast = (b: { name: string; template: { name: string; language: string }; segmentId: string | null; mapping: Record<string, SlotMapping>; scheduledAt: string | null }) =>
+export const createBroadcast = (b: { name: string; template: { name: string; language: string }; segmentId: string | null; mapping: Record<string, SlotMapping>; scheduledAt: string | null; idempotencyKey?: string }) =>
   call<BroadcastDetail>('/api/broadcasts', 'POST', b)
 export const preflightBroadcast = (b: { segmentId: string | null; category: string }) => call<Preflight>('/api/broadcasts/preflight', 'POST', b)
 export const cancelBroadcast = (id: string) => call<BroadcastDetail>(`/api/broadcasts/${id}/cancel`, 'POST', {})

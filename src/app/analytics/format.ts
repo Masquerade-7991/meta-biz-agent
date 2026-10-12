@@ -1,7 +1,12 @@
 // Number formats shared by Analytics and Reports.
 export const num = (v: number | null | undefined) => (v == null ? '–' : new Intl.NumberFormat([], { maximumFractionDigits: 0 }).format(v))
 export const pct = (v: number | null | undefined) => (v == null ? '–' : `${Math.round(v * 100)}%`)
-export const dur = (min: number | null | undefined) => (min == null ? '–' : min < 60 ? `${Math.round(min)}m` : min < 60 * 48 ? `${(min / 60).toFixed(min < 600 ? 1 : 0)}h` : `${Math.round(min / 1440)}d`)
+/** Minutes as 45m, 1.5h, 12h or 3d. Rounded first, so 59.6 minutes reads 1.0h, never "60m". */
+export const dur = (min: number | null | undefined) => {
+  if (min == null) return '–'
+  const m = Math.round(min)
+  return m < 60 ? `${m}m` : m < 60 * 48 ? `${(m / 60).toFixed(m < 600 ? 1 : 0)}h` : `${Math.round(m / 1440)}d`
+}
 export const money = (v: number | null | undefined, currency: string | null) =>
   v == null ? '–' : currency ? new Intl.NumberFormat([], { style: 'currency', currency, maximumFractionDigits: v < 100 ? 2 : 0 }).format(v) : new Intl.NumberFormat([], { maximumFractionDigits: 2 }).format(v)
 /** Change against the period before, as a fraction; null when there's nothing to compare. */

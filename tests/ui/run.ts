@@ -79,7 +79,10 @@ async function check(ctx: BrowserContext, mode: string, [id, url]: [string, stri
   const problems: string[] = []
   page.on('pageerror', (e) => problems.push(`page error: ${e.message.split('\n')[0]}`))
   page.on('console', (m) => {
-    if (m.type() === 'error' && !/Failed to load resource|status of 5\d\d|net::ERR_ABORTED/.test(m.text())) problems.push(`console error: ${m.text().split('\n')[0].slice(0, 200)}`)
+    // In stale mode the failed import is the point of the check (it must then show a message), so its
+    // own error lines, and the error boundary's report of it, are expected.
+    const expected = mode === 'stale' && /dynamically imported module|Page failed|^%o$/.test(m.text())
+    if (m.type() === 'error' && !expected && !/Failed to load resource|status of 5\d\d|net::ERR_ABORTED/.test(m.text())) problems.push(`console error: ${m.text().split('\n')[0].slice(0, 200)}`)
   })
   try {
     await page.goto(APP + url, { waitUntil: 'domcontentloaded', timeout: 60_000 })
@@ -153,7 +156,10 @@ try {
     await ctx.route(DATA, (r) => r.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ title: 'Server error', detail: 'Injected by the UI checks.', status: 500 }) }))
     for (const p of pages)
       await check(ctx, 'error', p, 1440, 'light', async (page) => {
-        const shown = await page.evaluate(() => /couldn|could not|went wrong|try again|server error|injected by the ui checks|unavailable|failed/i.test(document.body.innerText))
+        // Waits for it (up to 8 s): a page under load can still be between its loader and its message.
+        const shown = await page
+          .waitForFunction(() => /couldn|could not|went wrong|try again|server error|injected by the ui checks|unavailable|failed/i.test(document.body.innerText), null, { timeout: 8000 })
+          .then(() => true, () => false)
         return shown ? [] : ['no error message on screen while every data call fails']
       })
     await ctx.close()
@@ -173,11 +179,15 @@ try {
   if (MODES.includes('stale')) {
     const ctx = await context('light', false)
     // Vite serves each lazily loaded page as its own module (a hashed chunk after a build).
-    await ctx.route((u) => u.pathname.startsWith('/src/app/pages/'), (r) => r.abort())
+    const LAZY = /^\/src\/app\/(pages\/|analytics\/AnalyticsDashboard|reports\/ReportsPage|components\/shell\/SettingsPage)/
+    await ctx.route((u) => LAZY.test(u.pathname), (r) => r.abort())
     for (const p of pages.filter(([id]) => id !== 'agents'))
       await check(ctx, 'stale', p, 1440, 'light', async (page) => {
-        const text = await page.evaluate(() => document.body.innerText.trim().length)
-        return text ? [] : ['blank page: no message and no way to reload when the page’s code fails to load']
+        const reload = await page
+          .getByRole('button', { name: 'Reload' })
+          .waitFor({ timeout: 8000 })
+          .then(() => true, () => false)
+        return reload ? [] : ['no message and no way to reload when the page’s code fails to load']
       })
     await ctx.close()
   }

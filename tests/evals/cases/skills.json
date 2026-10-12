@@ -1,11 +1,11 @@
 [
   { "id": "skill-title-plain", "feature": "skills", "what": "A readable name becomes Meta's lowercase-hyphen title", "input": { "name": "Order status" }, "expect": [{ "path": "title", "equals": "order-status" }] },
   { "id": "skill-title-punctuation", "feature": "skills", "what": "Punctuation and spaces collapse to single hyphens, none at the ends", "input": { "name": "  ¿Track my order?? (fast) " }, "expect": [{ "path": "title", "equals": "track-my-order-fast" }, { "path": "title", "regex": "^[a-z0-9]+(-[a-z0-9]+)*$" }] },
-  { "id": "skill-title-hindi", "feature": "skills", "what": "A name with no Latin letters gets the fallback title Meta accepts", "input": { "name": "ऑर्डर की स्थिति" }, "expect": [{ "path": "title", "equals": "skill" }] },
+  { "id": "skill-title-hindi", "feature": "skills", "what": "A name with no Latin letters gets the fallback title Meta accepts", "input": { "name": "ऑर्डर की स्थिति" }, "expect": [{ "path": "title", "regex": "^skill-[a-z0-9]{1,6}$" }] },
   { "id": "skill-title-rtl-mixed", "feature": "skills", "what": "Mixed Arabic and Latin keeps the Latin part", "input": { "name": "تتبع Order 42" }, "expect": [{ "path": "title", "equals": "order-42" }] },
   { "id": "skill-title-emoji", "feature": "skills", "what": "Emoji never reach the title", "input": { "name": "🎁 Gift wrap 🎀" }, "expect": [{ "path": "title", "equals": "gift-wrap" }] },
   { "id": "skill-title-max", "feature": "skills", "what": "A very long name is cut to 64 without a trailing hyphen", "input": { "name": "refund policy for orders placed during the festive season sale week and returns" }, "expect": [{ "path": "titleLength", "max": 64 }, { "path": "title", "notRegex": "-$" }] },
   { "id": "skill-title-collision", "feature": "skills", "what": "Two names that reach Meta as the same title are caught", "input": { "name": "Order-Status", "others": ["order status", "Refunds"] }, "expect": [{ "path": "taken", "equals": true }] },
   { "id": "skill-title-no-collision", "feature": "skills", "what": "Different titles are fine", "input": { "name": "Order tracking", "others": ["Order status"] }, "expect": [{ "path": "taken", "equals": false }] },
-  { "id": "skill-title-two-hindi", "feature": "skills", "what": "Two non-Latin names both fall back to 'skill', so the second is refused (documented; see QA report)", "input": { "name": "रिफंड", "others": ["ऑर्डर"] }, "expect": [{ "path": "taken", "equals": true }] }
+  { "id": "skill-title-two-hindi", "feature": "skills", "what": "Two names in another script get different titles, so both can exist", "input": { "name": "रिफंड", "others": ["ऑर्डर"] }, "expect": [{ "path": "taken", "equals": false }] }
 ]

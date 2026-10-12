@@ -17,13 +17,12 @@ const toMin = (hhmm: string) => {
   return h * 60 + m
 }
 
+const formats = new Map<string, Intl.DateTimeFormat>()
 /** Local date, weekday and minute-of-day of an instant in `tz`. */
 function local(t: Date, tz: string) {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', weekday: 'short' })
-      .formatToParts(t)
-      .map((p) => [p.type, p.value]),
-  )
+  let f = formats.get(tz)
+  if (!f) formats.set(tz, (f = new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', weekday: 'short' })))
+  const parts = Object.fromEntries(f.formatToParts(t).map((p) => [p.type, p.value]))
   return {
     date: `${parts.year}-${parts.month}-${parts.day}`,
     day: parts.weekday.slice(0, 3).toLowerCase() as Day,
@@ -46,21 +45,25 @@ export function isOpen(t: Date, h: Hours): boolean {
   return !!win && l.minute >= win.open && l.minute < win.close
 }
 
-/** `start` plus `minutes` of working time. Walks minute blocks, so it stays correct across DST. */
+/** At most this many real minutes per step, then the local time is read again: a clock change
+ *  (DST) moves wall time by up to an hour, so wall-minute arithmetic over longer steps miscounts. */
+const STEP = 60
+
+/** `start` plus `minutes` of working time, counted in real minutes, so it stays correct across DST. */
 export function addBusinessMinutes(start: Date, minutes: number, h: Hours): Date {
   let t = new Date(Math.floor(start.getTime() / MIN) * MIN)
   let left = minutes
-  // ponytail: at most 3 steps a day (to opening, work, to midnight) for a year; no open hours at all → "never".
-  for (let guard = 0; guard < 366 * 3 && left > 0; guard++) {
+  // ponytail: hour-long steps for up to a year (about 9,000 when nothing is ever open → "never").
+  for (let guard = 0; guard < 366 * 25 && left > 0; guard++) {
     const { l, win } = windowOf(t, h)
     if (win && l.minute >= win.open && l.minute < win.close) {
-      const step = Math.min(left, win.close - l.minute)
+      const step = Math.min(left, win.close - l.minute, STEP)
       t = new Date(t.getTime() + step * MIN)
       left -= step
     } else {
-      // Jump to the next open time today, or to the next local midnight.
+      // Towards the next open time today, or the next local midnight.
       const jump = win && l.minute < win.open ? win.open - l.minute : 24 * 60 - l.minute
-      t = new Date(t.getTime() + jump * MIN)
+      t = new Date(t.getTime() + Math.min(jump, STEP) * MIN)
     }
   }
   return left > 0 ? new Date(8.64e15) : t

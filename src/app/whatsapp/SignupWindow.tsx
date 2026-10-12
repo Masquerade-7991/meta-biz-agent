@@ -122,7 +122,7 @@ export function SignupWindow({ flow, mode, missing, onDone, onClose }: { flow: F
   const done = i >= steps.length
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[26rem]" style={{ fontFamily: '-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-104" style={{ fontFamily: '-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
         {/* Window bar: says plainly that this isn't Meta's real window. */}
         <div className="flex items-center gap-2 border-b border-[#dadde1] bg-[#f0f2f5] px-4 py-2.5">
           <span className="flex size-6 items-center justify-center rounded-full text-white" style={{ background: '#25d366' }}>

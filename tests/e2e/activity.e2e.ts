@@ -113,12 +113,19 @@ test('the CSV export opens in Excel and carries the same sentences', async () =>
   assert.equal((await s.api(w.supervisor, 'GET', '/api/activity.csv')).status, 403)
 })
 
-test('changes to the AI agent appear under the AI agent area', { todo: 'QA-12: nothing on the server writes agent.* events; the area is always empty outside Dummy mode' }, async () => {
-  await s.api(w.admin, 'PUT', '/api/meta/PHONE_NUMBER_ID/agent_config/settings', { rollout: { enabled: true } })
-  assert.ok((await read('area=agent')).json.events.length > 0)
+test('changes to the AI agent appear under the AI agent area', async () => {
+  const put = await s.api(w.admin, 'PUT', '/api/meta/PHONE_NUMBER_ID/agent_config/settings', { rollout: { enabled: true } })
+  assert.equal(put.status, 200, put.text)
+  // The relay records after it answers, so the row lands a moment later.
+  let events: Ev[] = []
+  for (let i = 0; i < 20 && !events.length; i++) {
+    await new Promise((r) => setTimeout(r, 100))
+    events = (await read('area=agent')).json.events
+  }
+  assert.ok(events.some((e) => e.kind === 'agent.update' && e.data['rollout.enabled'] === true), JSON.stringify(events))
 })
 
-test('blocking a customer on a number shows in the workspace log', { todo: 'QA-08: number.blocked matches no area prefix' }, async () => {
+test('blocking a customer on a number shows in the workspace log', async () => {
   const r = await s.api(w.owner, 'POST', '/api/inbox/conversations/919820000001/block')
   assert.equal(r.status, 200, r.text)
   const { json } = await read('area=whatsapp')

@@ -19,7 +19,7 @@ test('a header with no rows maps but imports nothing', () => {
 test('a trailing comma, a missing cell and a final line without newline all parse', () => {
   assert.deepEqual(parseCsv('a,b,\n1'), [['a', 'b', ''], ['1']])
   const { rows } = toImportRows(parseCsv('Phone,Name,Email\n919800000001'), [])
-  assert.deepEqual(rows, [{ phone: '919800000001', fields: {} }])
+  assert.deepEqual(rows, [{ phone: '919800000001', fields: {}, line: 2 }])
 })
 
 test('an unterminated quote swallows the rest of the file into one cell rather than throwing', () => {
@@ -42,7 +42,7 @@ test('a custom field matches by its key as well as its label', () => {
 
 test('values are trimmed; a cell of spaces does not overwrite anything', () => {
   const { rows } = toImportRows(parseCsv('Phone,Name\n  919800000001  ,   '), [])
-  assert.deepEqual(rows[0], { phone: '919800000001', fields: {} })
+  assert.deepEqual(rows[0], { phone: '919800000001', fields: {}, line: 2 })
 })
 
 test('two phone columns: the last non-empty one wins (documented)', () => {
@@ -50,7 +50,7 @@ test('two phone columns: the last non-empty one wins (documented)', () => {
   assert.deepEqual(rows.map((r) => r.phone), ['222', '333'])
 })
 
-test('non-Latin headers map to their own field, never to another non-Latin field', { todo: 'QA-13: norm() drops every non a-z character, so any non-Latin or blank header matches a non-Latin field' }, () => {
+test('non-Latin headers map to their own field, never to another non-Latin field', () => {
   // A Hindi label gets the key "field" on the server (contacts.ts slugs keys to a-z0-9), so one such field exists.
   const fields = [{ key: 'field', label: 'शहर' }]
   assert.deepEqual(mapColumns(['Phone', 'उम्र', '', 'शहर'], fields), ['phone', null, null, 'field:field'])
@@ -70,7 +70,12 @@ test('a 10,000-row file parses in well under a second', () => {
   assert.ok(Date.now() - t < 1000)
 })
 
-test('export never lets a cell run as a spreadsheet formula', { todo: 'QA-07: toCsv (contacts export) quotes but does not neutralise = + - @; reports’ tableCsv does' }, () => {
+test('export never lets a cell run as a spreadsheet formula', () => {
   const csv = toCsv([['=HYPERLINK("http://x","click")', '@SUM(1)', '-1+1', '+cmd']])
   for (const cell of csv.trim().split(',')) assert.doesNotMatch(cell, /^"?[=+\-@]/)
+})
+
+test('each row knows its line in the file, past blank lines and multi-line cells', () => {
+  const { rows } = toImportRows(parseCsv('Phone,Note\r\n\r\n911,"two\nlines"\n\n912,x'), [])
+  assert.deepEqual(rows.map((r) => r.line), [3, 6])
 })

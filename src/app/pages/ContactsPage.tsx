@@ -75,7 +75,8 @@ function ContactDialog({
     setBusy(true)
     setError(null)
     try {
-      const body = { name, email, tags: tagList(tags), fields: values, optedOut }
+      // optedOutWas: what the form showed, so the server can tell a decision from a stale form.
+      const body = { name, email, tags: tagList(tags), fields: values, optedOut, optedOutWas: !!initial?.optedOut }
       onSaved(initial ? await updateContact(initial.phone, body) : await createContact({ ...body, phone }))
     } catch (err) {
       setError(errorDetail(err))

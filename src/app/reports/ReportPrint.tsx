@@ -21,7 +21,8 @@ export function ReportPrint() {
   const { me } = useAuth()
   const q = useMemo(() => new URLSearchParams(window.location.search), [])
   const ids = (q.get('reports') ?? 'business_review').split(',').filter(isReport).filter((id) => reportOf(id).source === 'overview') as ReportId[]
-  const today = new Date().toISOString().slice(0, 10)
+  // Only when the link names no dates (it always does from Reports): the viewer's own day, not UTC's.
+  const today = new Intl.DateTimeFormat('en-CA').format(new Date())
   const filter: AnalyticsFilter = {
     from: q.get('from') ?? today,
     to: q.get('to') ?? today,

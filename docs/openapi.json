@@ -203,7 +203,7 @@
           "Server"
         ],
         "summary": "Meta’s webhook events",
-        "description": "**Who can call:** Meta, signed by a listening app.\n\nEvery WhatsApp event for the connected accounts: messages, statuses (with per-message pricing), echoes, standby, handovers, marketing preferences, template and number changes, account notices.\n\nThe body must carry a valid `X-Hub-Signature-256` from one of the apps in WEBHOOK_APP_SECRETS (401 otherwise). With no secret set, or no database, it answers 503 so Meta keeps the event and retries (up to 7 days).\n\nEach delivery is stored exactly as sent (webhook_inbox, once per body even when Meta retries), processed, then answered 200. A delivery that fails to process is kept and retried automatically; events for a number no workspace has are kept, not dropped.\n\nThe business’s own number is listen-only: an event never makes the console send anything.",
+        "description": "**Who can call:** Meta, signed by a listening app.\n\nEvery WhatsApp event for the connected accounts: messages, statuses (with per-message pricing), echoes, standby, handovers, marketing preferences, template and number changes, account notices.\n\nThe body must carry a valid `X-Hub-Signature-256` from one of the apps in WEBHOOK_APP_SECRETS (401 otherwise). With no secret set, or no database, it answers 503 so Meta keeps the event and retries (up to 7 days).\n\nEach delivery is stored exactly as sent (webhook_inbox, once per body even when Meta retries), processed, then answered 200. A delivery that fails to process is kept and retried automatically; events for a number no workspace has are kept, not dropped.\n\nThe business’s own number is listen-only: an event never makes the console send anything.\n\nBodies over 5 MB are refused with 413 before the signature is checked.",
         "security": [],
         "parameters": [
           {
@@ -4245,7 +4245,7 @@
           "Inbox"
         ],
         "summary": "Pretend a customer wrote",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\nRuns a made-up customer message through the real webhook processor, so the whole flow can be tried while Meta still sends this number’s webhooks elsewhere.",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nRuns a made-up customer message through the real webhook processor, so the whole flow can be tried while Meta still sends this number’s webhooks elsewhere. Sample chats only (403 otherwise): on a real chat it would put words in a real customer’s mouth.",
         "requestBody": {
           "required": true,
           "content": {
@@ -8162,6 +8162,10 @@
                     "type": "string",
                     "format": "date-time",
                     "description": "Empty: send now."
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "description": "One per send dialog. The same key (or, without one, the same content from the same person) within 30 seconds returns the broadcast already created instead of sending twice."
                   }
                 },
                 "required": [
@@ -8185,7 +8189,7 @@
             }
           },
           "400": {
-            "description": "Give the broadcast a name. / Choose what goes in {{1}}. / Nobody to send to: the segment has no contacts who accept messages. / Pick a time in the future.",
+            "description": "Give the broadcast a name. / Choose what goes in {{1}}. / Nobody to send to: the segment has no contacts who accept messages. / Pick a time in the future. / That segment id isn’t valid.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8209,6 +8213,16 @@
           },
           "404": {
             "description": "That segment no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This broadcast is already being sent. It shows in the list in a moment.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11954,7 +11968,7 @@
           "Meta Business Agent (via relay)"
         ],
         "summary": "Any Graph API call",
-        "description": "**Who can call:** Reads: any member. Writes (POST, PUT, PATCH, DELETE): Admin or above (`agent.edit`).\n\nForwards to the Graph API with the workspace’s token. Timeout 20 s.\n\n`{path}` is the rest of Meta’s path and may contain slashes; the query string passes through. In it, the segments `PHONE_NUMBER_ID`, `WABA_ID` and `BUSINESS_ID` are replaced with the workspace’s own ids, so the browser never needs real ids. Any other 10+ digit id must belong to the workspace.\n\nMeta’s status and body come back unchanged. GET answers are cached briefly (Graph 10 min; agent settings 60 s; insight date ranges 5 min); identical reads already on their way share one Meta call; a Meta 429 on a read is retried once after Retry-After (max 10 s). Writes are never repeated.\n\nLocal safety limit per number per rolling hour: 1000 calls per resource, 500 agent_test.",
+        "description": "**Who can call:** Any member; reads only.\n\nForwards a read (GET) to the Graph API with the workspace’s token. Timeout 20 s. Read-only: writes answer 403 (WhatsApp changes go through their own routes, which check owner and admin rights), and so do `?ids=` and `batch`, which would reach objects outside the path.\n\n`{path}` is the rest of Meta’s path and may contain slashes; the query string passes through. In it, the segments `PHONE_NUMBER_ID`, `WABA_ID` and `BUSINESS_ID` are replaced with the workspace’s own ids, so the browser never needs real ids. Any other 10+ digit id must belong to the workspace.\n\nMeta’s status and body come back unchanged. GET answers are cached briefly (Graph 10 min; agent settings 60 s; insight date ranges 5 min); identical reads already on their way share one Meta call; a Meta 429 on a read is retried once after Retry-After (max 10 s). Writes are never repeated.\n\nLocal safety limit per number per rolling hour: 1000 calls per resource, 500 agent_test.",
         "parameters": [
           {
             "name": "path",
@@ -16016,7 +16030,7 @@
         "properties": {
           "phone": {
             "type": "string",
-            "description": "Required when creating. 8 to 15 digits, country code first."
+            "description": "Required when creating. 8 to 15 digits, country code first; 10 digits without + or 00 are refused as a local number missing its country code."
           },
           "name": {
             "type": [
@@ -16051,7 +16065,12 @@
             }
           },
           "optedOut": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Left out: unchanged. Opting someone back in (false) only applies with optedOutWas: true."
+          },
+          "optedOutWas": {
+            "type": "boolean",
+            "description": "What the form showed when it opened. A form opened before the customer sent STOP says false, so saving it never undoes their STOP."
           }
         }
       },

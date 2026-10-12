@@ -50,12 +50,13 @@ If the request is ambiguous ("look at the code"), run the hygiene check (§B) an
 npm run build                    # tsc -b (src + server) + vite build
 npm run lint                     # oxlint, must be 0 warnings
 npm run lint:tw                  # Tailwind canonical classes / conflicts (scripts/check-tailwind.mjs), exit 0
-node --test server/*.test.ts src/app/contacts/csv.test.ts src/app/whatsapp/signupEvent.test.ts
+npm test                         # every *.test.ts in server/ and src/
+npm run test:e2e                 # journeys on a throwaway database + fake Meta (tests/e2e/harness.ts), before pushing to main
 ```
 
 Extra checks by area:
 - **UI changes:** take a Playwright screenshot of the affected screens before and after and compare them. Wait for `document.fonts.ready`; changing timestamps and font loading are known false diffs. Check phone width (390px) too.
-- **Server or auth changes:** exercise the routes against a test relay. Use `SERVER_PORT=8797 MONGODB_URI=<throwaway> MONGODB_DB=<name>_test COLLECTORS=off SMTP_PASS= node server/index.ts`; with `SMTP_PASS` empty, emails and magic links print to the log. Use `mongodb-memory-server` for the throwaway database when Atlas isn't reachable.
+- **Server or auth changes:** add or extend a journey in `tests/e2e/` (the harness starts the server on :8797 against a throwaway `meta_agent_e2e_*` database and a fake Meta, seeds people and workspaces, and always cleans up).
 - **Dummy mode:** dummy mode must still open with no login and run the scripted demo (flask button → Dummy mode → Test & Eval chat → carousel → pay → order confirmed).
 - **Editor:** if the user sees red underlines that `tsc -b` doesn't, the editor may be running another TypeScript version, such as the TS 7 native preview (`typescript.experimental.useTsgo`). Reproduce with that binary before changing code.
 

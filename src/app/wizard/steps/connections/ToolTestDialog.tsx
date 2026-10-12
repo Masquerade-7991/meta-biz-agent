@@ -161,7 +161,7 @@ function Banner({ ok, title, detail, action }: { ok: boolean; title: string; det
       <div className="min-w-0 space-y-0.5">
         <p className="text-sm font-semibold">{title}</p>
         {detail && (
-          <p className="break-words text-muted-foreground text-xs">
+          <p className="wrap-break-word text-muted-foreground text-xs">
             {detail}
           </p>
         )}

@@ -19,6 +19,7 @@ import {
   type Facts,
   type Rule,
   type TicketClock,
+  routePlan,
 } from '../src/app/support/routing.ts'
 
 const facts: Facts = { source: 'handoff', priority: 'normal', text: '', contactTags: [], open: true, phoneNumberId: null }
@@ -35,9 +36,13 @@ test('keywords match unicode, emoji and right-to-left text, ignoring case', () =
   assert.ok(!kw(['   '], 'anything'), 'a blank keyword never matches everything')
 })
 
-test('keywords are substrings, so a short word also matches inside longer words', () => {
-  // Documents today's behaviour (see QA report): "no" matches "know" and "cannot".
-  assert.ok(conditionHolds({ field: 'keyword', any: ['no'] }, { ...facts, text: 'I know' }))
+test('keywords match at the start of a word: "refund" finds "refunded", "no" doesn’t find "know"', () => {
+  const kw = (any: string[], text: string) => conditionHolds({ field: 'keyword', any }, { ...facts, text })
+  assert.ok(!kw(['no'], 'I know, I cannot'))
+  assert.ok(kw(['no'], 'No, thanks'))
+  assert.ok(kw(['refund'], 'Was I refunded?'))
+  assert.ok(kw(['money back'], 'I want my money   back!'), 'a phrase matches across extra spaces and punctuation')
+  assert.ok(!kw(['money back'], 'money and back'))
 })
 
 test('a number condition never matches a chat with no number', () => {
@@ -105,14 +110,14 @@ test('a waiting ticket’s percent is not computed here: the sweep only looks at
   assert.ok((clockPercent(clock({ status: 'pending' }), 'resolution', 9 * H) ?? 0) > 100)
 })
 
-test('answering on time does not stop a later resolution breach from escalating', { todo: 'QA-01: a stopped first-reply level blocks every level after it' }, () => {
+test('answering on time does not stop a later resolution breach from escalating', () => {
   // High priority by default: [first reply at breach, resolution at breach]. The team replied after
   // 10 minutes, then the ticket sat unresolved for 9 hours (resolution due at 8h).
   const levels = DEFAULT_MATRIX.levels.high
   assert.equal(nextEscalation(clock({ firstRespondedAt: H / 6 }), levels, 0, 9 * H), 2)
 })
 
-test('urgent: replying before the 75% mark still lets the resolution level fire', { todo: 'QA-01: same root cause, urgent default matrix' }, () => {
+test('urgent: replying before the 75% mark still lets the resolution level fire', () => {
   const levels = DEFAULT_MATRIX.levels.urgent // FR 75%, FR 100%, resolution 100%
   assert.equal(nextEscalation(clock({ firstRespondedAt: H / 2 }), levels, 0, 9 * H), 3)
 })
@@ -163,8 +168,8 @@ test('rules: names are trimmed and cut, emoji names survive, keywords are cut to
 })
 
 test('matrix: at most three levels per priority, percent bounds inclusive, unknown teams dropped', () => {
-  const level = { percent: 100, notify: ['admins'] }
-  const m = parseMatrix({ levels: { urgent: [level, level, level, level], high: [{ percent: 25, notify: ['assignee'] }, { percent: 500, notify: ['assignee'] }] } }, new Set())
+  const level = (percent: number) => ({ percent, notify: ['admins'] })
+  const m = parseMatrix({ levels: { urgent: [level(100), level(150), level(200), level(250)], high: [{ percent: 25, notify: ['assignee'] }, { percent: 500, notify: ['assignee'] }] } }, new Set())
   assert.equal(m.levels.urgent.length, MAX_LEVELS)
   assert.deepEqual(m.levels.high.map((l) => l.percent), [25, 500])
   assert.throws(() => parseMatrix({ levels: { low: [{ percent: 501, notify: ['admins'] }] } }, new Set()), /between 25% and 500%/)
@@ -174,7 +179,7 @@ test('matrix: at most three levels per priority, percent bounds inclusive, unkno
   assert.equal(moved.enabled, false, 'off unless asked')
 })
 
-test('matrix: levels out of order are accepted as sent', { todo: 'QA-25: parseMatrix accepts 100% then 75% on the same clock; level 2 then fires at once after level 1' }, () => {
+test('matrix: levels out of order on one clock are refused', () => {
   assert.throws(() =>
     parseMatrix({ levels: { urgent: [{ clock: 'first_response', percent: 100, notify: ['admins'] }, { clock: 'first_response', percent: 75, notify: ['admins'] }] } }, new Set()),
   )
@@ -184,4 +189,17 @@ test('teams: a name is required, members outside the workspace and duplicates ar
   assert.throws(() => parseTeam({ name: '  ' }, new Set()), /team a name/)
   const t = parseTeam({ name: ' Billing ', memberIds: ['u1', 'u1', 'stranger'], leadId: 'stranger', assign: 'magic' }, new Set(['u1']))
   assert.deepEqual(t, { name: 'Billing', description: '', leadId: null, memberIds: ['u1'], assign: 'round_robin' })
+})
+
+test('the routing plan: a rule decides first, else the workspace default; a deleted team falls back', () => {
+  const team = { id: 't1', name: 'Billing', description: '', leadId: null, memberIds: ['u1'], assign: 'round_robin' as const }
+  const rr = { mode: 'round_robin' as const, teamId: null, userId: null }
+  assert.deepEqual(routePlan({ kind: 'user', userId: 'u2' }, rr, [team]), { to: 'user', userId: 'u2' })
+  assert.deepEqual(routePlan({ kind: 'none' }, rr, [team]), { to: 'nobody' })
+  assert.deepEqual(routePlan({ kind: 'team', teamId: 't1', skill: 'hindi' }, rr, [team]), { to: 'team', team, skill: 'hindi' })
+  assert.deepEqual(routePlan({ kind: 'team', teamId: 'gone' }, rr, [team]), { to: 'everyone' }, 'a rule naming a deleted team uses the default')
+  assert.deepEqual(routePlan({ kind: 'default' }, { mode: 'fixed', teamId: null, userId: 'u3' }, []), { to: 'user', userId: 'u3' })
+  assert.deepEqual(routePlan({ kind: 'default' }, { mode: 'unassigned', teamId: 't1', userId: null }, [team]), { to: 'nobody' })
+  assert.deepEqual(routePlan({ kind: 'default' }, { mode: 'round_robin', teamId: 't1', userId: null }, [team]), { to: 'team', team })
+  assert.deepEqual(routePlan({ kind: 'default' }, { mode: 'round_robin', teamId: 'gone', userId: null }, []), { to: 'everyone' })
 })

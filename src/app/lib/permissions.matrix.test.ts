@@ -73,7 +73,7 @@ test('isRole accepts the four roles and nothing else', () => {
   for (const v of ['', 'Owner', 'root', 1, null, undefined, {}, ['owner']]) assert.equal(isRole(v), false, String(v))
 })
 
-test('isRole refuses names from the object prototype', { todo: 'QA-05: `v in RANK` walks the prototype, so "toString" / "constructor" pass as roles' }, () => {
+test('isRole refuses names from the object prototype', () => {
   for (const v of ['toString', 'constructor', 'hasOwnProperty', '__proto__', 'valueOf']) assert.equal(isRole(v), false, v)
 })
 

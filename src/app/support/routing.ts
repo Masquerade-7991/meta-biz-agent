@@ -71,6 +71,14 @@ export interface Facts {
 }
 
 const lc = (s: string) => s.trim().toLowerCase()
+/** Lowercase words separated by single spaces (letters, marks, digits and emoji, in any script). */
+const words = (s: string) =>
+  s
+    .normalize('NFKC')
+    .toLowerCase()
+    .split(/[^\p{L}\p{M}\p{N}\p{Extended_Pictographic}]+/u)
+    .filter(Boolean)
+    .join(' ')
 
 export function conditionHolds(c: Condition, f: Facts): boolean {
   switch (c.field) {
@@ -79,8 +87,9 @@ export function conditionHolds(c: Condition, f: Facts): boolean {
     case 'priority':
       return c.in.includes(f.priority)
     case 'keyword': {
-      const text = lc(f.text)
-      return c.any.some((k) => lc(k) && text.includes(lc(k)))
+      // At the start of a word, in any script: "refund" matches "refunded", but "no" doesn't match "know".
+      const text = ` ${words(f.text)}`
+      return c.any.some((k) => !!words(k) && text.includes(` ${words(k)}`))
     }
     case 'contactTag': {
       const tags = new Set(f.contactTags.map(lc))
@@ -146,6 +155,23 @@ export function pickFromPool(
   return eligible[turn % eligible.length]
 }
 
+/** Who a new ticket goes to, before picking a person: the matched rule's target, else the workspace
+ *  default (support settings). Shared by the server and Dummy mode, so both route the same way. */
+export type RoutePlan = { to: 'user'; userId: string | null } | { to: 'nobody' } | { to: 'team'; team: Team; skill?: string } | { to: 'everyone' }
+export function routePlan(target: ReturnType<typeof applyRule>['target'], defaults: { mode: 'unassigned' | 'round_robin' | 'fixed'; teamId: string | null; userId: string | null }, teams: Team[]): RoutePlan {
+  if (target.kind === 'user') return { to: 'user', userId: target.userId }
+  if (target.kind === 'none') return { to: 'nobody' }
+  if (target.kind === 'team') {
+    const team = teams.find((t) => t.id === target.teamId)
+    if (team) return { to: 'team', team, skill: target.skill }
+  }
+  // No rule decided (or its team is gone): the workspace default.
+  if (defaults.mode === 'fixed') return { to: 'user', userId: defaults.userId }
+  if (defaults.mode === 'unassigned') return { to: 'nobody' }
+  const team = defaults.teamId ? teams.find((t) => t.id === defaults.teamId) : null
+  return team ? { to: 'team', team } : { to: 'everyone' }
+}
+
 // ---- escalation ----
 export type Notify = 'assignee' | 'team_lead' | 'supervisors' | 'admins'
 
@@ -209,11 +235,14 @@ export function clockPercent(t: TicketClock, clock: EscalationLevel['clock'], no
  * (the next sweep takes it), so everyone along the way hears about it.
  */
 export function nextEscalation(t: TicketClock, levels: EscalationLevel[], current: number, now: number): number | null {
-  const next = current + 1
-  const l = levels[next - 1]
-  if (!l) return null
-  const pct = clockPercent(t, l.clock, now)
-  return pct != null && pct >= l.percent ? next : null
+  for (let i = current; i < levels.length; i++) {
+    const pct = clockPercent(t, levels[i].clock, now)
+    // A first-reply level whose clock stopped (the team answered) can never fire: it no longer
+    // blocks the levels after it, e.g. a later resolution breach.
+    if (pct == null && levels[i].clock === 'first_response' && t.status !== 'resolved') continue
+    return pct != null && pct >= levels[i].percent ? i + 1 : null
+  }
+  return null
 }
 
 export const notifyLabel: Record<Notify, string> = { assignee: 'Assignee', team_lead: 'Team lead', supervisors: 'Supervisors', admins: 'Admins & owners' }
@@ -295,6 +324,11 @@ export function parseMatrix(v: unknown, teams: Set<string>): EscalationMatrix {
         const reassignTeamId = l.reassignTeamId && teams.has(String(l.reassignTeamId)) ? String(l.reassignTeamId) : null
         if (!notify.length && !reassignTeamId && l.raisePriority !== true) throw new Error(`${p} level ${i + 1} does nothing: notify someone, move the ticket or raise its priority.`)
         return { clock: l.clock === 'first_response' ? 'first_response' : 'resolution', percent, notify, email: l.email === true, reassignTeamId, raisePriority: l.raisePriority === true }
+      })
+      // Levels fire in order, so on one clock each must come later than the one before it.
+      list.forEach((l, i) => {
+        const before = list.slice(0, i).filter((x) => x.clock === l.clock).at(-1)
+        if (before && l.percent <= before.percent) throw new Error(`${p} level ${i + 1} fires at ${l.percent}%, no later than an earlier level on the same clock (${before.percent}%). Put the levels in order.`)
       })
       return [p, list]
     }),

@@ -37,10 +37,16 @@ const MAX_DAYS = 366
 /** The instant a local day starts in `tz`. */
 export function dayStart(day: string, tz: string) {
   const utc = Date.parse(day + 'T00:00:00Z')
-  // The zone's offset at that moment: local wall time read back as if it were UTC, minus UTC.
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(utc)).map((p) => [p.type, p.value]))
-  const wall = Date.parse(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:00Z`)
-  return new Date(utc - (wall - utc))
+  const fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  // The zone's offset at an instant: local wall time read back as if it were UTC, minus UTC.
+  const offset = (at: number) => {
+    const p = Object.fromEntries(fmt.formatToParts(new Date(at)).map((x) => [x.type, x.value]))
+    return Date.parse(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:00Z`) - at
+  }
+  // Read at UTC midnight first, then again at the guess: in zones far ahead of UTC (Sydney, Auckland)
+  // UTC midnight already falls after that day's clock change, so the first reading can be an hour off.
+  const guess = utc - offset(utc)
+  return new Date(utc - offset(guess))
 }
 
 export function parseFilter(u: URL, tz: string): AnalyticsFilter {

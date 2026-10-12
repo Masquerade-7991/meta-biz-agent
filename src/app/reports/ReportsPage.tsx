@@ -18,7 +18,9 @@ import { useMembers } from '@/app/auth/useMembers'
 import { errorDetail } from '@/app/api/meta'
 import { getOverview } from '@/app/api/overview'
 import { createSchedule, deleteSchedule, downloadReport, listSchedules, printUrl, sendScheduleNow, updateSchedule } from '@/app/api/reports'
-import { listTeams, type Team } from '@/app/api/tickets'
+import { getSupportSettings, listTeams, type Team } from '@/app/api/tickets'
+import { PageLoader } from '@/app/components/ui/wavy-loader'
+import { InlineError } from '@/app/components/wizard/RetryBanner'
 import { can } from '@/app/lib/permissions'
 import { FilterBar } from '@/app/analytics/FilterBar'
 import { useAnalyticsFilter } from '@/app/analytics/useAnalyticsFilter'
@@ -29,7 +31,8 @@ const blank = (me: string | undefined): Omit<ReportSchedule, 'id'> => ({ name: '
 /** Every report as CSV (opens in Excel) or a printable PDF summary, for any period and agents; and reports emailed on a schedule. */
 export function ReportsPage() {
   const { me } = useAuth()
-  const { filter, range, set } = useAnalyticsFilter()
+  const [timezone, setTimezone] = useState<string | undefined>()
+  const { filter, range, set } = useAnalyticsFilter(timezone)
   const members = useMembers()
   const [agents, setAgents] = useState<{ id: string; label: string }[]>([])
   const [teams, setTeams] = useState<Team[]>([])
@@ -39,10 +42,22 @@ export function ReportsPage() {
   const [removing, setRemoving] = useState<ReportSchedule | null>(null)
   const [q, setQ] = useSearchParams()
 
-  const load = useCallback(() => listSchedules().then(setSchedules, (err) => toast.error('Couldn’t load schedules', { description: errorDetail(err) })), [])
+  const [scheduleError, setScheduleError] = useState<string | null>(null)
+  const load = useCallback(
+    () =>
+      listSchedules().then(
+        (x) => {
+          setSchedules(x)
+          setScheduleError(null)
+        },
+        (err) => setScheduleError(errorDetail(err)),
+      ),
+    [],
+  )
   useEffect(() => {
     void load()
     listTeams().then(setTeams, () => {})
+    getSupportSettings().then((s) => setTimezone(s.hours.timezone), () => {})
     // The agents for the filter come with the overview; a short period keeps it light.
     getOverview({ ...filter, from: filter.to }).then((o) => setAgents(o.agents), () => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -113,7 +128,11 @@ export function ReportsPage() {
           </Button>
         }
       />
-      {!schedules ? null : !schedules.length ? (
+      {scheduleError && !schedules ? (
+        <InlineError message={`Couldn’t load the schedules. ${scheduleError}`} onRetry={() => void load()} />
+      ) : !schedules ? (
+        <PageLoader context="analytics" className="min-h-32" />
+      ) : !schedules.length ? (
         <EmptyState icon={CalendarClock} title="No scheduled reports" description="Send a weekly business review to your managers every Monday, for example." />
       ) : (
         <ul className="space-y-2">
