@@ -105,3 +105,6 @@ WEBHOOK_SETUP.txt
 
 # Local design export, not used by the app
 src/assets/helo-conversations.webp
+
+# Agent worktrees (isolated copies for background agents)
+.claude/worktrees/
