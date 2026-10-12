@@ -102,3 +102,6 @@ desktop.ini
 
 # Setup notes for the Meta admin, kept local
 WEBHOOK_SETUP.txt
+
+# Local design export, not used by the app
+src/assets/helo-conversations.webp
