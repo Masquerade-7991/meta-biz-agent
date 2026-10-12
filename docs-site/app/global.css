@@ -54,35 +54,46 @@
 }
 
 /* ---------------------------------------------------------------------------------------------
-   Backdrop: three fixed layers behind everything, CSS only.
-   1. body: a barely-there wash, Helo blue top-left, warm grey bottom-right.
-   2. body::before: a fine dot grid with a faint isometric lattice, masked away from the middle so
-      text never sits on texture.
-   3. body::after: two abstract shapes, a soft blue glow and a pair of hairline rings.
+   Backdrop: fixed layers behind everything, CSS and inline SVG only.
+   1. body: a soft multi-colour gradient wash (Helo blue, a cool violet, a warm sand).
+   2. body::before: a fine dot grid with an isometric lattice, faded out behind the reading column.
+   3. body::after: film grain over everything (dithers the gradient so it never bands) plus
+      outline geometry in two corners: hexagons and a dotted arc top-right, rings, a triangle and
+      a square bottom-left.
    --------------------------------------------------------------------------------------------- */
 :root {
-  --bd-wash-a: rgb(34 112 208 / 0.055);
-  --bd-wash-b: rgb(168 150 120 / 0.06);
-  --bd-glow: rgb(34 112 208 / 0.07);
-  --bd-ring: rgb(34 112 208 / 0.16);
-  --bd-pattern-opacity: 0.55;
-  --bd-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cg fill='none' stroke='%231c1b19' stroke-opacity='.05' stroke-width='.6'%3E%3Cpath d='M0 0l56 32.3M56 0L0 32.3M0 64.7l56 32.3M56 64.7L0 97M28 0v97'/%3E%3C/g%3E%3Cg fill='%231c1b19' fill-opacity='.16'%3E%3Ccircle cx='0' cy='0' r='.9'/%3E%3Ccircle cx='56' cy='0' r='.9'/%3E%3Ccircle cx='28' cy='16.2' r='.9'/%3E%3Ccircle cx='0' cy='32.3' r='.9'/%3E%3Ccircle cx='56' cy='32.3' r='.9'/%3E%3Ccircle cx='28' cy='48.5' r='.9'/%3E%3Ccircle cx='0' cy='64.7' r='.9'/%3E%3Ccircle cx='56' cy='64.7' r='.9'/%3E%3Ccircle cx='28' cy='80.8' r='.9'/%3E%3Ccircle cx='0' cy='97' r='.9'/%3E%3Ccircle cx='56' cy='97' r='.9'/%3E%3C/g%3E%3C/svg%3E");
+  --bd-wash-a: rgb(34 112 208 / 0.16);
+  --bd-wash-b: rgb(124 92 220 / 0.10);
+  --bd-wash-c: rgb(214 170 110 / 0.14);
+  --bd-glow: rgb(34 112 208 / 0.12);
+  --bd-pattern-opacity: 0.9;
+  --bd-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --bd-grain-opacity: 0.2;
+  --bd-shapes-tr: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='640' viewBox='0 0 640 640' fill='none' stroke='%232270d0' stroke-opacity='0.32'%3E%3Cpolygon points='420,40 590,138 590,334 420,432 250,334 250,138' stroke-width='1.2'/%3E%3Cpolygon points='420,130 512,183 512,289 420,342 328,289 328,183' stroke-width='1' transform='rotate(30 420 236)'/%3E%3Ccircle cx='420' cy='236' r='36' stroke-width='1'/%3E%3Ccircle cx='250' cy='460' r='120' stroke-width='1' stroke-dasharray='2 7'/%3E%3Cline x1='590' y1='334' x2='640' y2='363' stroke-width='1'/%3E%3C/svg%3E");
+  --bd-shapes-bl: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='560' viewBox='0 0 560 560' fill='none' stroke='%232270d0' stroke-opacity='0.28'%3E%3Ccircle cx='60' cy='500' r='170' stroke-width='1.2'/%3E%3Ccircle cx='60' cy='500' r='240' stroke-width='1'/%3E%3Ccircle cx='60' cy='500' r='310' stroke-width='1' stroke-dasharray='1 6'/%3E%3Cpolygon points='330,150 420,306 240,306' stroke-width='1.2'/%3E%3C/svg%3E");
+  --bd-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cg fill='none' stroke='%231c1b19' stroke-opacity='.07' stroke-width='.6'%3E%3Cpath d='M0 0l56 32.3M56 0L0 32.3M0 64.7l56 32.3M56 64.7L0 97M28 0v97'/%3E%3C/g%3E%3Cg fill='%231c1b19' fill-opacity='.2'%3E%3Ccircle cx='0' cy='0' r='.9'/%3E%3Ccircle cx='56' cy='0' r='.9'/%3E%3Ccircle cx='28' cy='16.2' r='.9'/%3E%3Ccircle cx='0' cy='32.3' r='.9'/%3E%3Ccircle cx='56' cy='32.3' r='.9'/%3E%3Ccircle cx='28' cy='48.5' r='.9'/%3E%3Ccircle cx='0' cy='64.7' r='.9'/%3E%3Ccircle cx='56' cy='64.7' r='.9'/%3E%3Ccircle cx='28' cy='80.8' r='.9'/%3E%3Ccircle cx='0' cy='97' r='.9'/%3E%3Ccircle cx='56' cy='97' r='.9'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 .dark {
-  --bd-wash-a: rgb(76 147 234 / 0.09);
-  --bd-wash-b: rgb(140 120 200 / 0.05);
-  --bd-glow: rgb(76 147 234 / 0.10);
-  --bd-ring: rgb(143 188 245 / 0.12);
-  --bd-pattern-opacity: 0.7;
-  --bd-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.045' stroke-width='.6'%3E%3Cpath d='M0 0l56 32.3M56 0L0 32.3M0 64.7l56 32.3M56 64.7L0 97M28 0v97'/%3E%3C/g%3E%3Cg fill='%23ffffff' fill-opacity='.14'%3E%3Ccircle cx='0' cy='0' r='.9'/%3E%3Ccircle cx='56' cy='0' r='.9'/%3E%3Ccircle cx='28' cy='16.2' r='.9'/%3E%3Ccircle cx='0' cy='32.3' r='.9'/%3E%3Ccircle cx='56' cy='32.3' r='.9'/%3E%3Ccircle cx='28' cy='48.5' r='.9'/%3E%3Ccircle cx='0' cy='64.7' r='.9'/%3E%3Ccircle cx='56' cy='64.7' r='.9'/%3E%3Ccircle cx='28' cy='80.8' r='.9'/%3E%3Ccircle cx='0' cy='97' r='.9'/%3E%3Ccircle cx='56' cy='97' r='.9'/%3E%3C/g%3E%3C/svg%3E");
+  --bd-wash-a: rgb(76 147 234 / 0.24);
+  --bd-wash-b: rgb(140 110 240 / 0.16);
+  --bd-wash-c: rgb(64 180 170 / 0.10);
+  --bd-glow: rgb(76 147 234 / 0.18);
+  --bd-pattern-opacity: 1;
+  --bd-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.32 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --bd-grain-opacity: 0.16;
+  --bd-shapes-tr: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='640' viewBox='0 0 640 640' fill='none' stroke='%238fbcf5' stroke-opacity='0.26'%3E%3Cpolygon points='420,40 590,138 590,334 420,432 250,334 250,138' stroke-width='1.2'/%3E%3Cpolygon points='420,130 512,183 512,289 420,342 328,289 328,183' stroke-width='1' transform='rotate(30 420 236)'/%3E%3Ccircle cx='420' cy='236' r='36' stroke-width='1'/%3E%3Ccircle cx='250' cy='460' r='120' stroke-width='1' stroke-dasharray='2 7'/%3E%3Cline x1='590' y1='334' x2='640' y2='363' stroke-width='1'/%3E%3C/svg%3E");
+  --bd-shapes-bl: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='560' viewBox='0 0 560 560' fill='none' stroke='%238fbcf5' stroke-opacity='0.22'%3E%3Ccircle cx='60' cy='500' r='170' stroke-width='1.2'/%3E%3Ccircle cx='60' cy='500' r='240' stroke-width='1'/%3E%3Ccircle cx='60' cy='500' r='310' stroke-width='1' stroke-dasharray='1 6'/%3E%3Cpolygon points='330,150 420,306 240,306' stroke-width='1.2'/%3E%3C/svg%3E");
+  --bd-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.06' stroke-width='.6'%3E%3Cpath d='M0 0l56 32.3M56 0L0 32.3M0 64.7l56 32.3M56 64.7L0 97M28 0v97'/%3E%3C/g%3E%3Cg fill='%23ffffff' fill-opacity='.18'%3E%3Ccircle cx='0' cy='0' r='.9'/%3E%3Ccircle cx='56' cy='0' r='.9'/%3E%3Ccircle cx='28' cy='16.2' r='.9'/%3E%3Ccircle cx='0' cy='32.3' r='.9'/%3E%3Ccircle cx='56' cy='32.3' r='.9'/%3E%3Ccircle cx='28' cy='48.5' r='.9'/%3E%3Ccircle cx='0' cy='64.7' r='.9'/%3E%3Ccircle cx='56' cy='64.7' r='.9'/%3E%3Ccircle cx='28' cy='80.8' r='.9'/%3E%3Ccircle cx='0' cy='97' r='.9'/%3E%3Ccircle cx='56' cy='97' r='.9'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 body {
   background-color: var(--color-fd-background);
   background-image:
-    radial-gradient(60rem 40rem at 0% 0%, var(--bd-wash-a), transparent 70%),
-    radial-gradient(55rem 45rem at 100% 100%, var(--bd-wash-b), transparent 70%);
+    radial-gradient(52rem 38rem at 0% 0%, var(--bd-wash-a), transparent 70%),
+    radial-gradient(46rem 34rem at 100% 0%, var(--bd-wash-b), transparent 70%),
+    radial-gradient(56rem 44rem at 100% 100%, var(--bd-wash-c), transparent 70%),
+    radial-gradient(40rem 30rem at 0% 100%, var(--bd-wash-b), transparent 70%);
   background-attachment: fixed;
 }
 
@@ -100,15 +111,36 @@ body::before {
   background-size: 56px 97px;
   opacity: var(--bd-pattern-opacity);
   /* Texture lives at the edges; the reading column stays clean. */
-  mask-image: radial-gradient(ellipse 55% 65% at 52% 45%, transparent 40%, #000 100%);
+  mask-image: radial-gradient(ellipse 50% 60% at 52% 45%, transparent 30%, #000 95%);
 }
 
 body::after {
   background-image:
-    radial-gradient(28rem 28rem at 92% 6%, var(--bd-glow), transparent 70%),
-    /* Rings sit in the bottom-left corner, under the sidebar on docs pages, clear of the text. */
-    radial-gradient(circle at 0% 100%, transparent 0 9.9rem, var(--bd-ring) 10rem 10.06rem, transparent 10.15rem),
-    radial-gradient(circle at 0% 100%, transparent 0 13.9rem, var(--bd-ring) 14rem 14.06rem, transparent 14.15rem);
+    var(--bd-shapes-tr),
+    var(--bd-shapes-bl),
+    radial-gradient(26rem 26rem at 90% 8%, var(--bd-glow), transparent 70%);
+  background-repeat: no-repeat;
+  background-position: right -120px top -90px, left -150px bottom -150px, 0 0;
+  background-size: 640px 640px, 560px 560px, auto;
+}
+
+/* Docs pages: the table of contents fills the top-right, so the hexagons move to the bottom-right
+   below it; the rings stay bottom-left behind the translucent sidebar. */
+body:has(#nd-docs-layout)::after {
+  background-position: right -170px bottom -170px, left -150px bottom -150px, 0 0;
+}
+
+/* Grain sits above the washes and shapes but below the content, on its own layer so its strength
+   is one number. */
+html::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: var(--bd-grain);
+  background-size: 220px 220px;
+  opacity: var(--bd-grain-opacity);
 }
 
 /* Surfaces let the backdrop read through faintly; code and tables stay solid for legibility. */
