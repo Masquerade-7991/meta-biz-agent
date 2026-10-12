@@ -1,0 +1,105 @@
+[
+  {
+    "id": "chat-demo-script",
+    "feature": "test_chat",
+    "targets": ["dummy"],
+    "what": "Dummy mode's scripted demo: intro with a quick reply, the product carousel, order details, payment confirmed",
+    "input": {
+      "turns": [
+        { "send": "Hi" },
+        { "send": "What products do you have?" },
+        { "send": "__buy:{{product:0}}" },
+        { "send": "__paid:{{order}}:{{product:0}}" }
+      ]
+    },
+    "expect": [
+      { "path": "turns.0.status", "equals": 200 },
+      { "path": "turns.0.agent_response", "regex": "^Hi! 👋" },
+      { "path": "turns.0.quick_replies", "includes": "What products do you have?" },
+      { "path": "turns.1.rich", "equals": "carousel" },
+      { "path": "turns.1.cards", "equals": 5 },
+      { "path": "turns.2.rich", "equals": "order_details" },
+      { "path": "turns.3.rich", "equals": "order_confirmed" },
+      { "path": "turns.3.quick_replies", "includes": "Talk to my account manager" },
+      { "path": "turns.3.fallback", "equals": false }
+    ]
+  },
+  {
+    "id": "chat-empty-message",
+    "feature": "test_chat",
+    "targets": ["dummy"],
+    "what": "An empty message is refused like Meta does (user_msg is required)",
+    "input": { "turns": [{ "send": "   " }] },
+    "expect": [{ "path": "turns.0.status", "equals": 400 }]
+  },
+  {
+    "id": "chat-new-conversation-restarts",
+    "feature": "test_chat",
+    "targets": ["dummy"],
+    "what": "A new conversation id starts from the intro again; the same id carries on",
+    "input": { "turns": [{ "send": "Hi", "conversation": "a" }, { "send": "Hi", "conversation": "b" }, { "send": "more", "conversation": "a" }] },
+    "expect": [{ "path": "turns.0.agent_response", "regex": "^Hi! 👋" }, { "path": "turns.1.agent_response", "regex": "^Hi! 👋" }, { "path": "turns.2.rich", "equals": "carousel" }]
+  },
+  {
+    "id": "chat-handoff",
+    "feature": "test_chat",
+    "targets": ["upstream"],
+    "what": "A handoff reply passes through untouched and its reason is kept with the test chat",
+    "input": { "turns": [{ "send": "I want to talk to a person", "meta": { "json": { "message_id": "wamid.1", "conversation_id": "conv-handoff", "timestamp": 1791400000, "agent_response": "Let me connect you with someone from our team.", "handoff_reason": "USER_REQUESTED" } } }] },
+    "expect": [
+      { "path": "turns.0.status", "equals": 200 },
+      { "path": "turns.0.agent_response", "equals": "Let me connect you with someone from our team." },
+      { "path": "turns.0.metaVersion", "equals": "2.0.0" },
+      { "path": "recorded.1.handoffReason", "equals": "USER_REQUESTED" },
+      { "path": "recorded.0.text", "equals": "I want to talk to a person" }
+    ]
+  },
+  {
+    "id": "chat-meta-fallback",
+    "feature": "test_chat",
+    "targets": ["upstream", "dummy"],
+    "what": "Meta's canned 'I had trouble responding fully' is recognised as a non-answer",
+    "input": { "turns": [{ "send": "x", "meta": { "json": { "message_id": "wamid.2", "conversation_id": "conv-fb", "agent_response": "I had trouble responding fully. Could you rephrase?" } }, "classify": "I had trouble responding fully. Could you rephrase?" }] },
+    "expect": [{ "path": "turns.0.classified", "equals": true }]
+  },
+  {
+    "id": "chat-no-response",
+    "feature": "test_chat",
+    "targets": ["upstream"],
+    "what": "When the agent chooses not to answer, the reason is kept",
+    "input": { "turns": [{ "send": "buy crypto?", "meta": { "json": { "message_id": "wamid.3", "conversation_id": "conv-nr", "agent_response": "", "no_response_reason": "OFF_TOPIC" } } }] },
+    "expect": [{ "path": "turns.0.status", "equals": 200 }, { "path": "recorded.1.noResponseReason", "equals": "OFF_TOPIC" }]
+  },
+  {
+    "id": "chat-unicode",
+    "feature": "test_chat",
+    "targets": ["upstream"],
+    "what": "Hindi, Arabic and emoji replies arrive and are stored byte for byte",
+    "input": { "turns": [{ "send": "नमस्ते", "meta": { "json": { "message_id": "wamid.4", "conversation_id": "conv-uni", "agent_response": "नमस्ते! مرحبا 👋 How can I help?", "quick_replies": ["ऑर्डर ट्रैक करें", "🛒 Shop"] } } }] },
+    "expect": [{ "path": "turns.0.agent_response", "equals": "नमस्ते! مرحبا 👋 How can I help?" }, { "path": "turns.0.quick_replies", "includes": "🛒 Shop" }, { "path": "recorded.1.text", "equals": "नमस्ते! مرحبا 👋 How can I help?" }]
+  },
+  {
+    "id": "chat-meta-500",
+    "feature": "test_chat",
+    "targets": ["upstream"],
+    "what": "Meta's 500 after a long wait reaches the console as a failure with Meta's words, not a hang",
+    "input": { "turns": [{ "send": "slow", "meta": { "status": 500, "json": "upstream request timeout" } }] },
+    "expect": [{ "path": "turns.0.status", "equals": 500 }, { "path": "recorded", "equals": null }]
+  },
+  {
+    "id": "chat-meta-401",
+    "feature": "test_chat",
+    "targets": ["upstream"],
+    "what": "Meta refusing the token never looks like the member was logged out (502, not 401)",
+    "input": { "turns": [{ "send": "hi", "meta": { "status": 401, "json": { "error": { "message": "Invalid OAuth access token" } } } }] },
+    "expect": [{ "path": "turns.0.status", "equals": 502 }, { "path": "turns.0.title", "equals": "Meta refused the access token" }]
+  },
+  {
+    "id": "chat-meta-429",
+    "feature": "test_chat",
+    "targets": ["upstream"],
+    "what": "A rate-limited test message is not sent twice (writes are never retried)",
+    "input": { "turns": [{ "send": "hi", "meta": { "status": 429, "json": { "error": { "message": "Too many calls" } } } }] },
+    "expect": [{ "path": "turns.0.status", "equals": 429 }, { "path": "turns.0.metaCalls", "equals": 1 }]
+  }
+]

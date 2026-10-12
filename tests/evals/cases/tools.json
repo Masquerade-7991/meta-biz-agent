@@ -1,0 +1,72 @@
+[
+  {
+    "id": "tool-run-success",
+    "feature": "tools",
+    "what": "Meta's runner format with code 1 and an HTTP 200 inside is a success showing the system's data",
+    "input": { "kind": "run", "metaStatus": "success", "output": "{\"status\":{\"code\":1},\"body\":\"{\\\"output\\\":{\\\"status\\\":200,\\\"data\\\":{\\\"stock\\\":7}}}\"}" },
+    "expect": [{ "path": "ok", "equals": true }, { "path": "httpStatus", "equals": 200 }, { "path": "body", "regex": "\"stock\": 7" }]
+  },
+  {
+    "id": "tool-run-success-wrapper-hides-404",
+    "feature": "tools",
+    "what": "Meta says success but the system answered 404: shown as a failure",
+    "input": { "kind": "run", "metaStatus": "success", "output": "{\"status\":{\"code\":1},\"body\":\"{\\\"output\\\":{\\\"status\\\":404,\\\"data\\\":{\\\"error\\\":\\\"no such order\\\"}}}\"}" },
+    "expect": [{ "path": "ok", "equals": false }, { "path": "httpStatus", "equals": 404 }]
+  },
+  {
+    "id": "tool-run-refused-key",
+    "feature": "tools",
+    "what": "A refused API key before the system answered: Meta's message, and the refusal's status",
+    "input": { "kind": "run", "metaStatus": "success", "output": "{\"status\":{\"code\":2,\"failure_code\":\"AUTH\"},\"body\":\"{\\\"message\\\":\\\"Request failed with status code 401\\\",\\\"causedByError\\\":{\\\"data\\\":{\\\"response\\\":{\\\"status\\\":401}}}}\"}" },
+    "expect": [{ "path": "ok", "equals": false }, { "path": "httpStatus", "equals": 401 }, { "path": "body", "equals": "Request failed with status code 401" }]
+  },
+  {
+    "id": "tool-run-plain-text",
+    "feature": "tools",
+    "what": "Output that isn't JSON is shown as it came, and Meta's own status decides",
+    "input": { "kind": "run", "metaStatus": "error", "output": "Timed out after 10s" },
+    "expect": [{ "path": "ok", "equals": false }, { "path": "body", "equals": "Timed out after 10s" }]
+  },
+  {
+    "id": "tool-run-unicode",
+    "feature": "tools",
+    "what": "Unicode in the system's reply survives the double JSON decoding",
+    "input": { "kind": "run", "metaStatus": "success", "output": "{\"status\":{\"code\":1},\"body\":\"{\\\"output\\\":{\\\"status\\\":200,\\\"data\\\":{\\\"name\\\":\\\"मसाला चाय ☕\\\"}}}\"}" },
+    "expect": [{ "path": "ok", "equals": true }, { "path": "body", "regex": "मसाला चाय ☕" }]
+  },
+  {
+    "id": "tool-calls-newest-turn",
+    "feature": "tools",
+    "what": "The reply's tool calls come from the newest turn that started after the message",
+    "input": {
+      "kind": "turns",
+      "since": 1000000,
+      "turns": [
+        { "turn_id": "old", "conversation_id": "c", "timestamp": 900000, "steps": [{ "type": "TOOL_CALL", "tool_name": "integration_123_Shop__old_tool", "status": "SUCCESS" }] },
+        { "turn_id": "new", "conversation_id": "c", "timestamp": 1000500, "steps": [{ "type": "LLM_CALL" }, { "type": "TOOL_CALL", "tool_name": "integration_123456789012345_Shopify_Store__search_products", "status": "ERROR", "latency_ms": 412 }] }
+      ]
+    },
+    "expect": [{ "path": "calls.length", "equals": 1 }, { "path": "calls.0.connector", "equals": "Shopify_Store" }, { "path": "calls.0.tool", "equals": "search_products" }, { "path": "calls.0.status", "equals": "ERROR" }]
+  },
+  {
+    "id": "tool-calls-not-yet",
+    "feature": "tools",
+    "what": "No turn yet means 'still checking' (null), not 'no tools were called'",
+    "input": { "kind": "turns", "since": 1000000, "turns": [{ "turn_id": "old", "conversation_id": "c", "timestamp": 100, "steps": [] }] },
+    "expect": [{ "path": "calls", "equals": null }]
+  },
+  {
+    "id": "tool-calls-none",
+    "feature": "tools",
+    "what": "A turn with only the model's step means no tools were called",
+    "input": { "kind": "turns", "since": 1000000, "turns": [{ "turn_id": "t", "conversation_id": "c", "timestamp": 1000001, "steps": [{ "type": "LLM_CALL" }] }] },
+    "expect": [{ "path": "calls", "equals": [] }]
+  },
+  {
+    "id": "tool-name-unprefixed",
+    "feature": "tools",
+    "what": "A tool name without Meta's integration prefix stays whole",
+    "input": { "kind": "name", "name": "lookup_order" },
+    "expect": [{ "path": "connector", "equals": null }, { "path": "tool", "equals": "lookup_order" }]
+  }
+]
