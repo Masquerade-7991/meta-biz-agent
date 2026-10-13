@@ -12,5 +12,6 @@ npm run build
 - API reference: generated at build time from the console's `../docs/openapi.json` (`lib/openapi.ts`). Run `npm run docs:openapi` at the repo root after changing a route.
 - Screenshots: `node docs-site/scripts/screenshots.mjs [names]` retakes them from the console in Dummy mode into `public/screens/`.
 - Guide rule: WhatsApp facts come from Meta's docs (cite with a Source line), product steps from the console; our own words.
+- Typography: Inter (body), Plus Jakarta Sans (headings), JetBrains Mono (code), loaded in `app/layout.tsx`; sizes, greys and the 720px reading column are tokens in `app/global.css`. Technical terms go in `code`, not italics.
 - Look: the console's tokens (`src/styles/theme.css`) mapped onto Fumadocs' colours in `app/global.css`.
 - Deploy: a separate Vercel project with root directory `docs-site`, keeping "Include files outside the root directory" on so the spec is readable.

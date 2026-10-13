@@ -7,13 +7,13 @@
    for actions and focus. Helo red stays on the logo only. */
 @theme {
   --color-fd-background: #ffffff;
-  --color-fd-foreground: #1c1b19;
+  --color-fd-foreground: #1f2937;
   --color-fd-muted: #f4f4f2;
-  --color-fd-muted-foreground: #62625f;
+  --color-fd-muted-foreground: #4b5563;
   --color-fd-popover: #ffffff;
-  --color-fd-popover-foreground: #1c1b19;
+  --color-fd-popover-foreground: #1f2937;
   --color-fd-card: #fafaf9;
-  --color-fd-card-foreground: #1c1b19;
+  --color-fd-card-foreground: #1f2937;
   --color-fd-border: #e7e6e3;
   --color-fd-primary: #2270d0;
   --color-fd-primary-foreground: #ffffff;
@@ -22,13 +22,18 @@
   --color-fd-accent: #eef4fc;
   --color-fd-accent-foreground: #1d64bd;
   --color-fd-ring: #2270d0;
+
+  /* Typography: font stacks (the faces are loaded in app/layout.tsx). */
+  --font-sans: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-display: var(--font-jakarta), var(--font-sans);
+  --font-mono: var(--font-jetbrains), 'Fira Code', SFMono-Regular, Consolas, monospace;
 }
 
 .dark {
   --color-fd-background: #121315;
-  --color-fd-foreground: #ececea;
+  --color-fd-foreground: #f3f4f6;
   --color-fd-muted: #1f2023;
-  --color-fd-muted-foreground: #a3a39e;
+  --color-fd-muted-foreground: #9ca3af;
   --color-fd-popover: #1b1c1f;
   --color-fd-popover-foreground: #ececea;
   --color-fd-card: #17181b;
@@ -143,6 +148,165 @@ html::after {
   opacity: var(--bd-grain-opacity);
 }
 
+/* ---------------------------------------------------------------------------------------------
+   Typography. Tokens first; every rule below reads them, and dark mode only swaps the tokens.
+   Greys never go below WCAG AA for readable text: --text-muted is for decoration only.
+   --------------------------------------------------------------------------------------------- */
+:root {
+  --text-strong: #1f2937;
+  --text-body: #374151;
+  --text-secondary: #4b5563;
+  --text-label: #6b7280;
+  --text-muted: #9ca3af;
+  --code-fg: #dc2626;
+  --measure: 720px;
+}
+.dark {
+  --text-strong: #f3f4f6;
+  --text-body: #d1d5db;
+  --text-secondary: #9ca3af;
+  --text-label: #9ca3af;
+  --text-muted: #6b7280;
+  --code-fg: #f87171;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--text-body);
+}
+
+/* Page header: title, description, actions. */
+#nd-page h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(32px, 2.2vw + 1rem, 36px);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+}
+#nd-page h1 + p {
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+#nd-page :where(button) {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--text-strong);
+  text-transform: none;
+}
+
+/* Reading column: at most 720px whatever the screen. */
+#nd-page > :where(h1, h1 + p, h1 + p + div, .prose) {
+  width: 100%;
+  max-width: var(--measure);
+}
+
+.prose {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-body);
+}
+.prose :where(p, li, td, th, blockquote) {
+  line-height: 1.6;
+}
+.prose :where(h2, h3) {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-strong);
+}
+.prose h2 {
+  font-size: 24px;
+  letter-spacing: -0.01em;
+  margin-top: 2.5em;
+  margin-bottom: 0.75em;
+}
+.prose h3 {
+  font-size: 18px;
+  margin-top: 2em;
+  margin-bottom: 0.5em;
+}
+.prose :where(h2, h3):first-child {
+  margin-top: 0;
+}
+.prose :where(strong) {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+/* Inline code: mono chips in red (AA-safe shade). Code blocks keep their syntax colours. */
+.prose :where(:not(pre) > code) {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.85em;
+  line-height: normal;
+  color: var(--code-fg);
+  background-color: color-mix(in oklab, var(--code-fg) 3%, var(--color-fd-background));
+  border: 1px solid color-mix(in oklab, var(--code-fg) 18%, var(--color-fd-border));
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.prose :where(:not(pre) > code)::before,
+.prose :where(:not(pre) > code)::after {
+  content: none;
+}
+.prose :where(pre, pre code) {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+/* Left sidebar. */
+#nd-sidebar {
+  font-family: var(--font-sans);
+}
+#nd-sidebar :where(a, button:not([data-search-full])) {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+#nd-sidebar :where(a, button):hover {
+  color: var(--text-strong);
+}
+#nd-sidebar :where(a, button)[data-active='true'] {
+  font-weight: 600;
+  color: var(--color-fd-primary);
+}
+/* Category headers ("Support desk"): the separators between groups, not the section switcher. */
+#nd-sidebar :where(p:not(button p)) {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-label);
+  margin-bottom: 4px;
+}
+
+/* Table of contents. */
+#toc-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-label);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+#toc-title svg {
+  color: var(--text-muted);
+}
+#nd-toc :where(a) {
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 400;
+  color: var(--text-label);
+  text-wrap: pretty;
+}
+#nd-toc :where(a)[data-active='true'] {
+  font-weight: 500;
+  color: var(--color-fd-primary);
+}
+
 /* Surfaces let the backdrop read through faintly; code and tables stay solid for legibility. */
 #nd-sidebar {
   background-color: color-mix(in oklab, var(--color-fd-card) 70%, transparent);
@@ -201,4 +365,9 @@ html > body[data-scroll-locked] {
   border: 1px solid var(--color-fd-border);
   border-radius: 10px;
   box-shadow: 0 1px 2px rgb(28 27 25 / 0.04), 0 12px 32px -16px rgb(28 27 25 / 0.18);
+}
+
+/* The syntax theme's comment grey is too dim on the dark code background (3.7:1); lift it to AA. */
+.dark .shiki code span[style][style*='--shiki-dark:#6A737D'] {
+  color: #9ca3af;
 }

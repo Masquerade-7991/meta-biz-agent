@@ -31,7 +31,7 @@ export default function HomePage() {
         <span className="size-1.5 rounded-full bg-fd-primary" />
         WhatsApp Business Agent, run by Meta, set up in Helo.ai
       </p>
-      <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
+      <h1 className="max-w-2xl font-display text-4xl font-bold tracking-tight text-(--text-strong) text-balance sm:text-5xl">
         Everything you need to run WhatsApp support with AI and your team.
       </h1>
       <p className="mt-5 max-w-xl text-base text-fd-muted-foreground sm:text-lg">
@@ -49,7 +49,7 @@ export default function HomePage() {
             className="group rounded-xl border p-6 text-fd-card-foreground"
           >
             <Icon className="size-5 text-fd-primary" aria-hidden />
-            <h2 className="mt-4 flex items-center gap-1.5 text-lg font-semibold tracking-tight">
+            <h2 className="mt-4 flex items-center gap-1.5 font-display text-lg font-semibold tracking-tight text-(--text-strong)">
               {title}
               <ArrowRight className="size-4 text-fd-muted-foreground transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden />
             </h2>
