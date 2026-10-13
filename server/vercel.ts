@@ -3,16 +3,16 @@
 // There's no long-running process on Vercel, so background jobs (broadcast sending, snoozes,
 // reminders, syncs) run in short bursts after requests, plus a daily cron as a safety net.
 import type http from 'node:http'
-import { reprocessWebhooks } from './inbox.ts'
+import { reprocessWebhooks } from './messaging/inbox.ts'
 import { handle, ready } from './app.ts'
-import { db } from './db.ts'
-import { jobsTick } from './jobs.ts'
-import { escalateAll } from './supportOps.ts'
-import { resumeBroadcasts } from './broadcasts.ts'
-import { startBilling } from './billing.ts'
-import { startHealth } from './health.ts'
-import { runOnce } from './collectors.ts'
-import { env } from './upstream.ts'
+import { db } from './platform/db.ts'
+import { jobsTick } from './platform/jobs.ts'
+import { escalateAll } from './support/supportOps.ts'
+import { resumeBroadcasts } from './outreach/broadcasts.ts'
+import { startBilling } from './whatsapp/billing.ts'
+import { startHealth } from './whatsapp/health.ts'
+import { runOnce } from './insights/collectors.ts'
+import { env } from './whatsapp/upstream.ts'
 
 let lastKick = 0
 

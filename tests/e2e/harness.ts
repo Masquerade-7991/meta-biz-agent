@@ -247,14 +247,14 @@ export async function startStack(name: string, opts: { jobs?: boolean; port?: nu
  */
 export async function serverModules(s: Stack) {
   Object.assign(process.env, { MONGODB_URI: mongoUri(), MONGODB_DB: s.dbName, UPSTREAM: 'meta', GRAPH_BASE_URL: s.fake.url, BASE_URL_1: s.fake.url, META_TOKEN: 'fake-server-token', SMTP_PASS: '', SMTP_USER: '', COLLECTORS: 'off' })
-  const db = await import('../../server/db.ts')
+  const db = await import('../../server/platform/db.ts')
   if (!db.db && !(await db.initDb())) throw new Error('in-process database did not connect')
-  const accounts = await import('../../server/accounts.ts')
-  const ops = await import('../../server/supportOps.ts')
-  const jobs = await import('../../server/jobs.ts')
-  const inbox = await import('../../server/inbox.ts')
-  const broadcasts = await import('../../server/broadcasts.ts')
-  const locks = await import('../../server/locks.ts')
+  const accounts = await import('../../server/whatsapp/accounts.ts')
+  const ops = await import('../../server/support/supportOps.ts')
+  const jobs = await import('../../server/platform/jobs.ts')
+  const inbox = await import('../../server/messaging/inbox.ts')
+  const broadcasts = await import('../../server/outreach/broadcasts.ts')
+  const locks = await import('../../server/platform/locks.ts')
   return {
     /** Runs the escalation sweep for one workspace as if it were `now`. */
     escalate: async (workspaceId: string, now: number) => db.withWorkspace(workspaceId, () => ops.escalateDue(now), await accounts.assetsFor(workspaceId)),

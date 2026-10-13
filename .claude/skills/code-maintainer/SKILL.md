@@ -50,6 +50,7 @@ If the request is ambiguous ("look at the code"), run the hygiene check (§B) an
 npm run build                    # tsc -b (src + server) + vite build
 npm run lint                     # oxlint, must be 0 warnings
 npm run lint:tw                  # Tailwind canonical classes / conflicts (scripts/check-tailwind.mjs), exit 0
+npm run lint:deps                # server domain boundaries: imports via index.ts, no new cycles (scripts/check-deps.mjs)
 npm test                         # every *.test.ts in server/ and src/
 npm run test:e2e                 # journeys on a throwaway database + fake Meta (tests/e2e/harness.ts), before pushing to main
 ```
@@ -71,27 +72,20 @@ browser (React, src/)
   ├─ src/app/pages/*           Home, Inbox, Tickets, Contacts, Broadcasts, Analytics pages
   └─ src/app/auth/*            AuthContext (me), login / sign-up / verify / in-app setup screens
         │  /api/*  (Vite proxies to :8787)
-server/ (node:http, Node runs TS natively)
-  ├─ index.ts      routing + gate: /api/health public; auth routes; everything else needs a
-  │                signed-in, set-up workspace member and runs in withWorkspace(id)
-  ├─ auth.ts       users, workspaces, memberships, magic_links, sessions; scrypt; sha256 tokens
-  ├─ mail.ts       Gmail SMTP (SMTP_USER/SMTP_PASS) or log fallback; email templates
-  ├─ upstream.ts   callUpstream → Meta (api.facebook.com for agent calls, Graph for WABA lists);
-  │                fills PHONE_NUMBER_ID / WABA_ID / BUSINESS_ID from .env; logs api_calls
-  ├─ record.ts     write-through recording of relayed traffic (audit_log, test_conversations, …)
-  ├─ mirror.ts     per-kind copies of the agent config on Meta (faqs, skills, …), soft-deleted
-  ├─ store.ts      /api/store/* and /api/analytics/* handlers; HttpError / send / readJson helpers
-  ├─ inbox.ts      chats, messages, replies, thread control, canned, webhook receiver, AI assist
-  ├─ tickets.ts    tickets, SLA (businessHours.ts), routing, CSAT, support settings, bell, analytics
-  ├─ contacts.ts   contacts, custom fields, segments (segmentQuery), CSV import
-  ├─ broadcasts.ts WhatsApp templates, broadcasts, send worker (every 3 s)
-  ├─ whatsapp.ts   Embedded Signup: code exchange, subscribe, register, billing, coexistence sync
-  ├─ accounts.ts   whatsapp_accounts per workspace; assetsFor() → context; .env account migration
-  ├─ context.ts    per-request workspace + WhatsApp account (AsyncLocalStorage)
-  ├─ crypto.ts     seal/open (AES-256-GCM) for stored tokens and PINs
-  ├─ collectors.ts background jobs (COLLECTORS=off disables), per workspace
-  ├─ cache.ts      in-memory TTL cache + allow() rate limiter
-  └─ db.ts         MongoDB connect, collections + indexes + TTLs, ws()/withWorkspace (AsyncLocalStorage)
+server/ (node:http, Node runs TS natively; domains under server/<domain>/, each with index.ts = its public surface)
+  ├─ index.ts · app.ts · vercel.ts   composition root: the port, the roles, routing + the auth gate
+  ├─ platform/   db (collections, indexes, ws()/withWorkspace), context, http, jobs (Mongo queue with
+  │              leases), trace (+ cross-instance events), locks, cache (relay cache + rate guard, in
+  │              Mongo), mail, alerts, crypto, protect, roles, stream, env
+  ├─ identity/   auth: users, workspaces, memberships, sessions, magic links
+  ├─ whatsapp/   accounts, numbers, whatsapp (Embedded Signup), health, billing, upstream (callUpstream →
+  │              Meta), record, mirror, store (/api/store, /api/analytics for agents)
+  ├─ messaging/  inbox (chats, replies, thread control, webhook routing), media, followups, customers,
+  │              webhookCore, assist
+  ├─ support/    tickets, supportOps (teams, routing, escalation), businessHours, contacts
+  ├─ outreach/   broadcasts (templates, send worker)
+  ├─ insights/   analytics, reports, aiUsage, collectors, activity
+  └─ openapi/    the spec, one file per area
 api/shopify-mcp.ts  Vercel function: Meta MCP connector → Shopify UCP MCP bridge
 scripts/check-tailwind.mjs  Tailwind checker behind npm run lint:tw
 ```

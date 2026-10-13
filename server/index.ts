@@ -4,17 +4,17 @@
 // from MongoDB. Literal WABA_ID / PHONE_NUMBER_ID / BUSINESS_ID in Meta paths are filled in per workspace.
 import http from 'node:http'
 import { handle, ready } from './app.ts'
-import { startCollectors } from './collectors.ts'
-import { resumeBroadcasts } from './broadcasts.ts'
-import { releaseLeases, startJobs } from './jobs.ts'
-import { startBilling } from './billing.ts'
-import { startHealth } from './health.ts'
-import { reprocessWebhooks } from './inbox.ts'
-import { escalateAll } from './supportOps.ts'
-import { closeStreams } from './stream.ts'
-import { closeDb } from './db.ts'
-import { agentUpstream, env, upstream } from './upstream.ts'
-import { isRole, ROLE, serves } from './roles.ts'
+import { startCollectors } from './insights/collectors.ts'
+import { resumeBroadcasts } from './outreach/broadcasts.ts'
+import { releaseLeases, startJobs } from './platform/jobs.ts'
+import { startBilling } from './whatsapp/billing.ts'
+import { startHealth } from './whatsapp/health.ts'
+import { reprocessWebhooks } from './messaging/inbox.ts'
+import { escalateAll } from './support/supportOps.ts'
+import { closeStreams } from './platform/stream.ts'
+import { closeDb } from './platform/db.ts'
+import { agentUpstream, env, upstream } from './whatsapp/upstream.ts'
+import { isRole, ROLE, serves } from './platform/roles.ts'
 
 // One stray failure (an unanswered Meta call, a dropped database socket) shouldn't take the whole
 // API down: under `node --watch` a crashed server stays down until a file changes, and the console

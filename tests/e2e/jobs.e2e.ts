@@ -80,7 +80,7 @@ test('two enqueues under one key keep one row, at the earlier time', async () =>
 })
 
 test('shutting down releases this instance’s running jobs straight back to the queue', async () => {
-  const ctx = await import('../../server/context.ts')
+  const ctx = await import('../../server/platform/context.ts')
   await m.inWorkspace(w.id, () => m.jobs.enqueue('e2e.ok', { n: 6 }))
   await jobs().updateOne({ type: 'e2e.ok', 'payload.n': 6 }, { $set: { status: 'running', lockedUntil: new Date(Date.now() + 300_000), instance: ctx.INSTANCE, attempts: 1 } })
   await jobs().insertOne({ type: 'e2e.ok', payload: { n: 7 }, workspaceId: w.id, status: 'running', lockedUntil: new Date(Date.now() + 300_000), instance: 'other', attempts: 1, runAt: new Date(), createdAt: new Date(), updatedAt: new Date() })
@@ -104,7 +104,7 @@ test('shared locks: one winner, held until it expires or is released', async () 
 })
 
 test('the rate guard counts across the database, not per process', async () => {
-  const cache = await import('../../server/cache.ts')
+  const cache = await import('../../server/platform/cache.ts')
   assert.equal(await cache.allow('e2e|rate', 2), true)
   assert.equal(await cache.allow('e2e|rate', 2), true)
   assert.equal(await cache.allow('e2e|rate', 2), false)
@@ -112,7 +112,7 @@ test('the rate guard counts across the database, not per process', async () => {
 })
 
 test('the relay cache is shared: a put on one process is a hit on the next', async () => {
-  const cache = await import('../../server/cache.ts')
+  const cache = await import('../../server/platform/cache.ts')
   const reply = { status: 200, text: '{"a":1}', contentType: 'application/json' }
   await cache.putCached('meta /770/agent_config/settings', reply, 60_000)
   assert.equal((await s.db.collection('relay_cache').findOne({ _id: 'meta /770/agent_config/settings' as never }))?.reply.text, '{"a":1}')

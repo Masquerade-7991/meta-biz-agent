@@ -9,10 +9,12 @@ import test from 'node:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { openapi } from './openapi/index.ts'
 
-const read = (dir: string) =>
-  readdirSync(new URL(dir, import.meta.url))
-    .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
-    .map((f) => readFileSync(new URL(dir + f, import.meta.url), 'utf8'))
+/** Every .ts file under `dir` (the domains too), tests and the spec itself left out. */
+const read = (dir: string): string[] =>
+  readdirSync(new URL(dir, import.meta.url), { withFileTypes: true }).flatMap((e) => {
+    if (e.isDirectory()) return e.name === 'openapi' || e.name === 'assets' ? [] : read(`${dir}${e.name}/`)
+    return e.name.endsWith('.ts') && !e.name.endsWith('.test.ts') ? [readFileSync(new URL(dir + e.name, import.meta.url), 'utf8')] : []
+  })
 const source = [...read('./'), ...read('../api/')].join('\n')
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const
 /** Not API routes: Vercel's own entry point, which every /api request is rewritten to (server/vercel.ts). */

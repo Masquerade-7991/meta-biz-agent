@@ -15,5 +15,5 @@ await build({
   output: { file: `${out}/app.mjs`, format: 'esm' },
   logLevel: 'warn',
 })
-cpSync('server/assets', `${out}/assets`, { recursive: true })
+cpSync('server/platform/assets', `${out}/assets`, { recursive: true })
 console.log(`API bundled into ${out}/app.mjs`)
