@@ -14,6 +14,7 @@ import { escalateAll } from './supportOps.ts'
 import { closeStreams } from './stream.ts'
 import { closeDb } from './db.ts'
 import { agentUpstream, env, upstream } from './upstream.ts'
+import { isRole, ROLE, serves } from './roles.ts'
 
 // One stray failure (an unanswered Meta call, a dropped database socket) shouldn't take the whole
 // API down: under `node --watch` a crashed server stays down until a file changes, and the console
@@ -24,12 +25,20 @@ process.on('uncaughtException', (err) => console.error(`uncaught exception (kept
 // Hosts like Render hand the port in PORT.
 const PORT = Number(env('SERVER_PORT') || env('PORT') || 8787)
 
-const server = http.createServer((req, res) => void handle(req, res))
-server.listen(PORT, () => console.log(`API proxy on :${PORT} → graph: ${upstream || '(no upstream set)'} · agent: ${agentUpstream || '(no upstream set)'}`))
+const server = http.createServer((req, res) => {
+  if (!serves((req.url ?? '/').split('?')[0])) {
+    res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ title: 'Not served here', detail: `This instance is the ${ROLE} role.`, status: 404 }))
+    return
+  }
+  void handle(req, res)
+})
+server.listen(PORT, () => console.log(`${ROLE} on :${PORT} → graph: ${upstream || '(no upstream set)'} · agent: ${agentUpstream || '(no upstream set)'}`))
 
 const timers: NodeJS.Timeout[] = []
 const stoppers: (() => void)[] = []
-if (await ready()) {
+// The background work belongs to the worker role (every role when ROLE is unset).
+const up = await ready()
+if (up && isRole('worker')) {
   await resumeBroadcasts()
   await startBilling()
   await startHealth()
@@ -40,7 +49,7 @@ if (await ready()) {
   // Tickets running out of time move up the escalation matrix (supportOps.ts).
   if (env('JOBS') !== 'off') timers.push(setInterval(() => void escalateAll().catch(() => 0), 60_000).unref())
   if (env('COLLECTORS') !== 'off') stoppers.push(startCollectors())
-} else if (!env('MONGODB_URI')) console.log('No MONGODB_URI: running without a database (store routes return 503)')
+} else if (!up && !env('MONGODB_URI')) console.log('No MONGODB_URI: running without a database (store routes return 503)')
 
 // A deploy or restart (SIGTERM) drains instead of dropping: no new requests, in-flight ones finish,
 // running jobs go straight back to the queue, open streams end so browsers reconnect elsewhere.

@@ -16,7 +16,8 @@ import { contactFor, resolveCustomer, webhookContacts } from './customers.ts'
 import { recipientFailed } from './broadcasts.ts'
 import { onAccountWebhook } from './health.ts'
 import { inboundMedia, MEDIA_TYPES, saveMedia, serveMedia, uploadToMeta } from './media.ts'
-import { enqueue } from './jobs.ts'
+import { defineJob, enqueue } from './jobs.ts'
+import { queueWebhooks } from './roles.ts'
 import { isLocked, tryLock, unlock } from './locks.ts'
 import { deleteView, listViews, remind, saveView, searchMessages, snooze, upcomingReminders, wakeOnMessage } from './followups.ts'
 import { checkMedia, mediaLabel, MEDIA_RULES, type MediaKind, type MessageMedia } from '../src/app/inbox/media.ts'
@@ -415,6 +416,12 @@ async function processDelivery(id: string, payload: unknown) {
   }
 }
 
+/** A stored delivery, processed by a worker (the ingress role only stores and acknowledges). */
+defineJob('webhook.process', async ({ id }) => {
+  const d = await inboxCol().findOne({ _id: String(id) })
+  if (d && !d.processedAt) await processDelivery(d._id, d.payload)
+})
+
 /** Deliveries stored but not processed (a crash, a cold instance): tried again, oldest first.
  *  Runs after each delivery and from the daily cron. */
 export async function reprocessWebhooks(limit = 20) {
@@ -463,11 +470,14 @@ export async function handleWebhook(req: http.IncomingMessage, res: http.ServerR
     })
   // Couldn't store it: 503 so Meta sends it again later.
   if (stored === null) return void res.writeHead(503).end(), true
-  if (stored) await processDelivery(id, payload)
+  if (stored) {
+    if (queueWebhooks()) await enqueue('webhook.process', { id }, { key: `webhook:${id}` })
+    else await processDelivery(id, payload)
+  }
   // The same body again (Meta's retry, or its "Test" button pressed twice): kept once, but noted.
   else await inboxCol().updateOne({ _id: id }, { $set: { lastSeenAt: new Date() }, $inc: { repeats: 1 } }).catch(() => null)
   res.writeHead(200).end()
-  await reprocessWebhooks(5).catch(() => 0)
+  if (!queueWebhooks()) await reprocessWebhooks(5).catch(() => 0)
   return true
 }
 

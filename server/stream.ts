@@ -4,6 +4,7 @@
 import type http from 'node:http'
 import { ws } from './db.ts'
 import { subscribe, type TraceEvent } from './trace.ts'
+import { ROLE } from './roles.ts'
 
 const open = new Set<http.ServerResponse>()
 /** Ends every open stream (shutdown); browsers reconnect to the next instance on their own. */
@@ -14,9 +15,9 @@ export function closeStreams() {
 
 export function handleStream(req: http.IncomingMessage, res: http.ServerResponse): boolean {
   if (req.method !== 'GET' || new URL(req.url ?? '/', 'http://x').pathname !== '/api/stream') return false
-  // Serverless (Vercel): no long-lived process to hold the stream, and events from other instances
-  // wouldn't reach it. 204 tells the browser's EventSource to stop; screens keep polling instead.
-  if (process.env.VERCEL) {
+  // Serverless (Vercel): no long-lived process to hold the stream. The api role alone (no stream
+  // role routed to /api/stream): the same. 204 tells the browser's EventSource to stop; screens poll.
+  if (process.env.VERCEL || ROLE === 'api') {
     res.writeHead(204).end()
     return true
   }

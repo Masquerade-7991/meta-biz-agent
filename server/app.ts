@@ -24,6 +24,7 @@ import { handleNumbers } from './numbers.ts'
 import { agentUpstream, callUpstream, env, hasToken, pathIds, resolveIds, setCallLogger, upstream, type Kind, type UpstreamReply } from './upstream.ts'
 import { accounts, assetsFor } from './accounts.ts'
 import { INSTANCE } from './context.ts'
+import { isRole, ROLE } from './roles.ts'
 import { handleWhatsApp } from './whatsapp.ts'
 import { readTrace, trace } from './trace.ts'
 import { handleStream } from './stream.ts'
@@ -44,6 +45,13 @@ export function ready(): Promise<boolean> {
     })
   }
   return starting
+}
+
+/** How the job queue is doing, for the worker's health answer. */
+async function queueDepth() {
+  const jobs = db!.collection('jobs')
+  const [queued, running, dead] = await Promise.all([jobs.countDocuments({ status: 'queued' }), jobs.countDocuments({ status: 'running' }), jobs.countDocuments({ status: 'dead' })])
+  return { queued, running, dead }
 }
 
 async function readBody(req: http.IncomingMessage): Promise<Buffer> {
@@ -156,6 +164,9 @@ export async function handle(req: http.IncomingMessage, res: http.ServerResponse
         database: db ? 'ok' : dbOffReason,
         upstream,
         hasToken,
+        role: ROLE,
+        instance: INSTANCE,
+        ...(db && isRole('worker') && { jobs: await queueDepth() }),
         ...(account && {
           businessName: account.source === 'env' ? env('BUSINESS_NAME') : account.wabaName,
           wabaId: account.wabaId,

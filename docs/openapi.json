@@ -106,6 +106,34 @@
                     "hasToken": {
                       "type": "boolean"
                     },
+                    "role": {
+                      "type": "string",
+                      "description": "Which part of the server this instance is: `api`, `ingress`, `worker`, `stream`, or `all` (one process)."
+                    },
+                    "instance": {
+                      "type": "string",
+                      "description": "This process’s short id."
+                    },
+                    "jobs": {
+                      "type": "object",
+                      "properties": {
+                        "queued": {
+                          "type": "integer"
+                        },
+                        "running": {
+                          "type": "integer"
+                        },
+                        "dead": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "queued",
+                        "running",
+                        "dead"
+                      ],
+                      "description": "The job queue (worker role only)."
+                    },
                     "businessName": {
                       "type": "string"
                     },
@@ -129,7 +157,9 @@
                     "ok",
                     "database",
                     "upstream",
-                    "hasToken"
+                    "hasToken",
+                    "role",
+                    "instance"
                   ]
                 }
               }

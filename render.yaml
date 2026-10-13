@@ -1,14 +1,13 @@
-# The API server (server/index.ts) on Render. It must be a long-running process: the job runner,
-# collectors and live stream all live in it. The front-end stays on Vercel, which forwards /api here
-# (vercel.json). Secrets are entered in Render's dashboard (sync: false), never committed.
-services:
-  - type: web
-    name: helo-wizard-api
-    runtime: node
-    plan: starter
-    buildCommand: npm ci --omit=dev
-    startCommand: node server/index.ts
-    healthCheckPath: /api/health
+# The API on Render as four services from one image (Dockerfile), one per role (server/roles.ts):
+#   api      takes the console's requests; scale it out freely
+#   ingress  Meta's webhooks: store, acknowledge, queue; 2 instances is plenty
+#   worker   jobs, collectors, escalation, webhook retries; 1–2 (jobs are leased, so two are safe)
+#   stream   live events over SSE; 1 (more work once vercel.json routes /api/stream here)
+# The front-end stays on Vercel, which forwards /api to `api` (vercel.json); once these exist, add
+# rewrites there for /api/webhooks/* → ingress and /api/stream → stream. Secrets are entered in
+# Render's dashboard (sync: false), never committed. Readiness is /api/ready (503 until MongoDB is up).
+envVarGroups:
+  - name: helo-wizard-api
     envVars:
       - key: NODE_VERSION
         value: "24"
@@ -40,6 +39,8 @@ services:
         sync: false
       - key: WEBHOOK_VERIFY_TOKEN
         sync: false
+      - key: WEBHOOK_APP_SECRETS
+        sync: false
       - key: APP_SECRET
         sync: false
       - key: SMTP_USER
@@ -52,7 +53,46 @@ services:
         sync: false
       - key: META_ES_CONFIG_ID
         sync: false
+      - key: EMBEDDED_SIGNUP_LINK
+        sync: false
       - key: TOKEN_ENCRYPTION_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+
+services:
+  - type: web
+    name: helo-wizard-api
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/ready
+    envVars:
+      - fromGroup: helo-wizard-api
+      - key: ROLE
+        value: api
+  - type: web
+    name: helo-wizard-ingress
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/ready
+    envVars:
+      - fromGroup: helo-wizard-api
+      - key: ROLE
+        value: ingress
+  - type: web
+    name: helo-wizard-stream
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/ready
+    envVars:
+      - fromGroup: helo-wizard-api
+      - key: ROLE
+        value: stream
+  - type: worker
+    name: helo-wizard-worker
+    runtime: docker
+    plan: starter
+    envVars:
+      - fromGroup: helo-wizard-api
+      - key: ROLE
+        value: worker
