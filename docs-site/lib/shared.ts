@@ -5,6 +5,9 @@ export const docsRoute = '/docs';
 export const docsImageRoute = '/og/docs';
 export const docsContentRoute = '/llms.mdx/docs';
 
+/** Where the pages live on GitHub: "Open in GitHub" (each page's Open menu) opens the file in GitHub's web editor. */
+export const gitConfig = { user: 'Masquerade-7991', repo: 'meta-biz-agent', branch: 'main', contentDir: 'docs-site/content/docs' };
+
 
 
 const getContentUrl = createGetUrl(docsContentRoute);

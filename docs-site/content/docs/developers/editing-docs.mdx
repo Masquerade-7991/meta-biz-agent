@@ -1,0 +1,60 @@
+---
+title: Editing the docs
+description: Change the documentation in your browser, with the local editor or on GitHub, and publish it.
+---
+
+There are two ways to edit a page in the browser. Both change the same MDX files in `docs-site/content/docs`, and a commit to `main` publishes them.
+
+| | Local editor | Open in GitHub |
+| --- | --- | --- |
+| Where | `http://localhost:5180` on your machine | Any browser, signed in to GitHub |
+| Best for | Writing and rearranging pages, adding images | Quick fixes when you're away from your machine |
+| Saves | Automatically, to the files in your checkout | When you commit in GitHub's editor |
+| Publish | Commit and push | Commit to `main` (or open a pull request) |
+
+## The local editor
+
+<Steps>
+<Step>
+
+**Start it** from the repository root:
+
+```bash
+npm run docs:edit
+```
+
+It opens `http://localhost:5180` with the docs folder. The file list on the left follows the site's navigation. Press <kbd>⌘</kbd> <kbd>K</kbd> to find a page.
+
+</Step>
+<Step>
+
+**Edit.** Pages show as they read, with callouts, steps, cards, tabs and accordions as real components. Switch to **MDX** at the top to see or edit the source. Changes save on their own, and the dot next to the file name says when.
+
+</Step>
+<Step>
+
+**See it on the site.** Run the docs (`npm run dev` in `docs-site`) at the same time, and `http://localhost:3000` updates as you type.
+
+</Step>
+<Step>
+
+**Publish** by committing the changed files in `docs-site/content/docs` (and any images in `docs-site/public/uploads`) and pushing to `main`.
+
+</Step>
+</Steps>
+
+### Images
+
+Paste or drop an image into a page. It's saved to `docs-site/public/uploads` and written into the page as `/uploads/<name>`, the same way as the screenshots in `/screens`. That way it works from any page, in the editor and on the site. Images only, up to 5 MB.
+
+### Good to know
+
+- **It only listens on this machine.** The editor can write files and has no sign-in, so it's bound to `localhost`. Don't start it with `--host`.
+- **Saving never reformats a page.** `npm run docs:check` opens every page the way the editor does and writes it back. It fails if any page would change, or if a page uses a component the editor would show as raw source. Run it after upgrading the editor. Its version is pinned in `docs-site/package.json`.
+- **New components** used in MDX need a spec in `docs-site/fumadocs-studio.config.ts`, or the editor shows them as source.
+- **The API reference** is generated from `docs/openapi.json`, so it isn't edited here. Change `server/openapi/*` and run `npm run docs:openapi`.
+- **Two people at once:** add `?collab` to the editor's address to edit the same page together.
+
+## Open in GitHub
+
+On any page of the published site, open the **Open** menu next to **Copy Markdown** and choose **Open in GitHub**. The page's file opens straight in GitHub's web editor. Commit to `main` to publish, or propose the change as a pull request.

@@ -2,11 +2,14 @@
   "name": "docs-site",
   "version": "0.0.43",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
-    "types:check": "next typegen && tsc --noEmit"
+    "types:check": "next typegen && tsc --noEmit",
+    "edit": "fumadocs-studio",
+    "check:editor": "node scripts/check-roundtrip.mjs"
   },
   "dependencies": {
     "cn": "^0.4.0",
@@ -21,6 +24,9 @@
     "shiki": "^4.5.0"
   },
   "devDependencies": {
+    "@fumadocs-editor/core": "0.4.1",
+    "@fumadocs-editor/studio": "0.2.4",
+    "@fumadocs-editor/ui": "0.5.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/mdx": "^2.0.14",
     "@types/node": "^26.6.4",

@@ -16,7 +16,9 @@
     "test:e2e": "node --test --test-concurrency=1 --test-force-exit \"tests/e2e/*.e2e.ts\"",
     "test:evals": "node tests/evals/run.ts",
     "test:ui": "node tests/ui/run.ts",
-    "test:load": "node tests/load/run.ts"
+    "test:load": "node tests/load/run.ts",
+    "docs:edit": "npm --prefix docs-site run edit",
+    "docs:check": "npm --prefix docs-site run check:editor"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",
