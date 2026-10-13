@@ -1,10 +1,15 @@
-// Tiny in-memory TTL cache for relayed GETs, plus the rolling-hour rate guard. One process only;
-// ponytail: move both to Redis if the relay ever runs as several processes.
+// The relay's cache for Meta GETs and the rolling-hour rate guard, shared by every instance through
+// MongoDB (`relay_cache`, `rate_hits`; both expire on their own). A two-second in-process layer in
+// front keeps hot paths off the database. Without a database both fall back to process memory.
+import { col, db } from './db.ts'
 import { env, type UpstreamReply } from './upstream.ts'
 
 const off = env('RELAY_CACHE') === 'off' // for upstream-level tests and live debugging
+const LOCAL_MS = 2_000
 
-const entries = new Map<string, { exp: number; reply: UpstreamReply }>()
+type Entry = { exp: number; reply: UpstreamReply }
+const local = new Map<string, Entry>()
+const cacheCol = () => col<{ _id: string; reply: UpstreamReply; exp: Date }>('relay_cache')
 
 /** TTL for a resolved GET path, or 0 when it must not be cached. */
 export function ttlFor(kind: 'meta' | 'graph', path: string): number {
@@ -16,26 +21,43 @@ export function ttlFor(kind: 'meta' | 'graph', path: string): number {
   return range && range[1] !== range[2] ? 5 * 60_000 : 0
 }
 
-export function getCached(key: string): UpstreamReply | undefined {
-  const e = entries.get(key)
+export async function getCached(key: string): Promise<UpstreamReply | undefined> {
+  const e = local.get(key)
   if (e && e.exp > Date.now()) return e.reply
-  entries.delete(key)
+  local.delete(key)
+  if (!db) return
+  const row = await cacheCol().findOne({ _id: key, exp: { $gt: new Date() } }).catch(() => null)
+  if (!row) return
+  local.set(key, { exp: Math.min(+row.exp, Date.now() + LOCAL_MS), reply: row.reply })
+  return row.reply
 }
 
-export const putCached = (key: string, reply: UpstreamReply, ttl: number) => void entries.set(key, { exp: Date.now() + ttl, reply })
+export async function putCached(key: string, reply: UpstreamReply, ttl: number): Promise<void> {
+  const exp = Date.now() + ttl
+  local.set(key, { exp: db ? Math.min(exp, Date.now() + LOCAL_MS) : exp, reply })
+  if (db) await cacheCol().updateOne({ _id: key }, { $set: { reply, exp: new Date(exp) } }, { upsert: true }).catch(() => null)
+}
 
 /** Drops every entry for one number (any write to it may change its settings). */
-export function invalidatePhone(phone: string) {
-  for (const k of entries.keys()) if (k.includes(`/${phone}/`)) entries.delete(k)
+export async function invalidatePhone(phone: string): Promise<void> {
+  for (const k of local.keys()) if (k.includes(`/${phone}/`)) local.delete(k)
+  if (db) await cacheCol().deleteMany({ _id: { $regex: `/${phone}/` } }).catch(() => null)
 }
 
 const hits = new Map<string, number[]>()
 /** Counts one call against `key`; false once `limit` calls happened in the last hour. */
-export function allow(key: string, limit: number): boolean {
-  const since = Date.now() - 3_600_000
-  const list = (hits.get(key) ?? []).filter((t) => t > since)
-  hits.set(key, list)
-  if (list.length >= limit) return false
-  list.push(Date.now())
+export async function allow(key: string, limit: number): Promise<boolean> {
+  const now = Date.now()
+  const since = now - 3_600_000
+  if (!db) {
+    const list = (hits.get(key) ?? []).filter((t) => t > since)
+    hits.set(key, list)
+    if (list.length >= limit) return false
+    list.push(now)
+    return true
+  }
+  const rate = col<{ key: string; at: Date }>('rate_hits')
+  if ((await rate.countDocuments({ key, at: { $gt: new Date(since) } })) >= limit) return false
+  await rate.insertOne({ key, at: new Date(now) })
   return true
 }

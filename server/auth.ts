@@ -122,8 +122,8 @@ function password(v: unknown): string {
   if (p.length > 200) throw new HttpError(400, 'Use 200 characters or fewer for your password.')
   return p
 }
-function limit(key: string, max: number, message: string) {
-  if (!allow(`auth|${key}`, max)) throw new HttpError(429, message)
+async function limit(key: string, max: number, message: string) {
+  if (!(await allow(`auth|${key}`, max))) throw new HttpError(429, message)
 }
 
 // ---- sessions ----
@@ -305,8 +305,8 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
   // -- sign-up, login, links --
   if (path === '/api/auth/signup' && m === 'POST') {
     const e = email(body.email)
-    limit(`send|${e}`, 5, 'Too many emails sent to this address. Try again in an hour.')
-    limit(`send-ip|${ip}`, 20, 'Too many sign-up attempts. Try again in an hour.')
+    await limit(`send|${e}`, 5, 'Too many emails sent to this address. Try again in an hour.')
+    await limit(`send-ip|${ip}`, 20, 'Too many sign-up attempts. Try again in an hour.')
     const existing = await users().findOne({ email: e })
     // An account that never finished setup can sign up again (e.g. the setup tab was closed).
     if (existing?.passwordHash) throw new HttpError(409, 'You already have an account. Log in instead.')
@@ -317,9 +317,9 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
   if (path === '/api/auth/verify' && m === 'POST') return verify(res, body.token)
   if (path === '/api/auth/login' && m === 'POST') {
     const e = email(body.email)
-    limit(`login|${e}|${ip}`, 10, 'Too many login attempts. Try again in an hour, or reset your password.')
+    await limit(`login|${e}|${ip}`, 10, 'Too many login attempts. Try again in an hour, or reset your password.')
     // Across every address too, so guessing one person's password from many IPs is still capped.
-    limit(`login|${e}`, 50, 'Too many login attempts for this account. Try again in an hour, or reset your password.')
+    await limit(`login|${e}`, 50, 'Too many login attempts for this account. Try again in an hour, or reset your password.')
     const pw = typeof body.password === 'string' ? body.password : ''
     const user = await users().findOne({ email: e })
     const ok = await verifyPassword(pw, user?.passwordHash ?? DUMMY_HASH)
@@ -348,8 +348,8 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
   }
   if (path === '/api/auth/forgot' && m === 'POST') {
     const e = email(body.email)
-    limit(`send|${e}`, 5, 'Too many emails sent to this address. Try again in an hour.')
-    limit(`send-ip|${ip}`, 20, 'Too many requests. Try again in an hour.')
+    await limit(`send|${e}`, 5, 'Too many emails sent to this address. Try again in an hour.')
+    await limit(`send-ip|${ip}`, 20, 'Too many requests. Try again in an hour.')
     // Same answer either way, so this can't be used to find out who has an account.
     // Failures are only logged: this route must answer the same whether or not the account exists.
     if (await users().findOne({ email: e })) await mailLink({ email: e, purpose: 'reset' }, (t) => mail.reset(e, t)).catch(() => {})
@@ -366,7 +366,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
   }
   if (path === '/api/account/password' && m === 'POST') {
     const x = needReady(s)
-    limit(`pw|${x.user._id}`, 10, 'Too many attempts. Try again in an hour.')
+    await limit(`pw|${x.user._id}`, 10, 'Too many attempts. Try again in an hour.')
     if (!(await verifyPassword(String(body.currentPassword ?? ''), x.user.passwordHash))) throw new HttpError(400, 'Your current password is incorrect.')
     await users().updateOne({ _id: x.user._id }, { $set: { passwordHash: await hashPassword(password(body.newPassword)) } })
     await sessions().deleteMany({ userId: x.user._id, tokenHash: { $ne: x.sessionHash } }) // other devices log out
@@ -375,7 +375,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
   }
   if (path === '/api/account/email' && m === 'POST') {
     const x = needReady(s)
-    limit(`send|${x.user._id}`, 5, 'Too many emails sent. Try again in an hour.')
+    await limit(`send|${x.user._id}`, 5, 'Too many emails sent. Try again in an hour.')
     if (!(await verifyPassword(String(body.password ?? ''), x.user.passwordHash))) throw new HttpError(400, 'Your password is incorrect.')
     const e = email(body.newEmail)
     if (e === x.user.email) throw new HttpError(400, 'That’s already your email.')
@@ -419,7 +419,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
   // -- workspace --
   if (path === '/api/workspace' && m === 'POST') {
     const x = needReady(s)
-    limit(`ws-create|${x.user._id}`, 5, 'Too many workspaces created. Try again in an hour.')
+    await limit(`ws-create|${x.user._id}`, 5, 'Too many workspaces created. Try again in an hour.')
     const w = await createWorkspace(x.user._id, text(body.name, 'a workspace name'))
     await sessions().updateOne({ tokenHash: x.sessionHash }, { $set: { workspaceId: w._id } })
     return me((await sessionFor(x.user._id, w._id))!)
@@ -459,7 +459,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     const e = email(body.email)
     const role: Role = isRole(body.role) ? body.role : 'agent'
     if (!canSetRole(x.role, 'agent', role)) throw new HttpError(403, `Your role can’t invite someone as ${roleLabel(role)}.`)
-    limit(`invite|${x.workspace._id}`, 50, 'Too many invites sent. Try again in an hour.')
+    await limit(`invite|${x.workspace._id}`, 50, 'Too many invites sent. Try again in an hour.')
     const existing = await users().findOne({ email: e })
     if (existing && (await memberships().findOne({ userId: existing._id, workspaceId: x.workspace._id }))) throw new HttpError(409, 'This person is already in this workspace.')
     if (await links().findOne({ email: e, workspaceId: x.workspace._id, purpose: 'invite', ...live() }))
@@ -479,7 +479,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
       return { ok: true }
     }
     if (m === 'POST' && seg[2]) {
-      limit(`send|${inv.email}`, 5, 'Too many emails sent to this address. Try again in an hour.')
+      await limit(`send|${inv.email}`, 5, 'Too many emails sent to this address. Try again in an hour.')
       const send = (await users().findOne({ email: inv.email }))?.passwordHash ? mail.inviteExisting : mail.invite
       await mailLink({ email: inv.email, purpose: 'invite', workspaceId: x.workspace._id, invitedBy: x.user._id, role: inv.role }, (t) => send(inv.email, t, x.user.name, x.workspace.name))
       await links().updateOne({ tokenHash: inv.tokenHash }, { $set: { revokedAt: new Date() } }) // sent: the old link stops working

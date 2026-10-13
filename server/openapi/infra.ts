@@ -23,6 +23,16 @@ export const infra = area('Server', {
       }),
     },
   },
+  '/api/ready': {
+    get: {
+      id: 'ready',
+      summary: 'Can this instance take traffic',
+      description: 'For the host’s readiness check (Render, Kubernetes): 200 once the database is connected and the schema is in place, 503 before that. /api/health stays 200 either way so the browser can tell the two apart.',
+      who: 'public',
+      ok: o({ 'ok*': { type: 'boolean', const: true }, 'instance*': d('string', 'This process’s short id.') }),
+      errors: { 503: 'Not ready: the database is not connected yet.' },
+    },
+  },
   '/api/webhooks/whatsapp': {
     get: {
       id: 'verifyWebhook',

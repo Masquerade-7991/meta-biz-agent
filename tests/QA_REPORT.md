@@ -513,3 +513,15 @@ Each finding gives its label, what breaks, the steps to reproduce, file:line, th
    - Embedded Signup.
 4. **Add an error boundary and the chunk-reload handler** (QA-35). Then add `test:ui` to the release checklist.
 5. **Decide the compliance items with the product owner:** stale opt-outs (QA-16), local-number imports (QA-18) and double-send protection (QA-30).
+
+## Load baseline (`npm run test:load`, laptop → Atlas, fake Meta)
+
+Comparable between runs on the same machine only; the absolute numbers are the e2e environment's network latency, not production's.
+
+| Scenario | Before shared state (commit eda6f8d) | After (phase 1) |
+| --- | --- | --- |
+| 50 webhooks at once, p50 / p95 | 15.5 s / 16.5 s | 16.3 s / 16.4 s |
+| 200 inbox reads at once, p50 / p95 | 11.2 s / 12.0 s | 12.2 s / 13.1 s |
+| 100 tickets + 100 overview, p50 / p95 | 30.9 s / 33.9 s | 29.8 s / 32.9 s |
+
+Errors: 0 in every run.

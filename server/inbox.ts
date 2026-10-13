@@ -17,6 +17,7 @@ import { recipientFailed } from './broadcasts.ts'
 import { onAccountWebhook } from './health.ts'
 import { inboundMedia, MEDIA_TYPES, saveMedia, serveMedia, uploadToMeta } from './media.ts'
 import { enqueue } from './jobs.ts'
+import { isLocked, tryLock, unlock } from './locks.ts'
 import { deleteView, listViews, remind, saveView, searchMessages, snooze, upcomingReminders, wakeOnMessage } from './followups.ts'
 import { checkMedia, mediaLabel, MEDIA_RULES, type MediaKind, type MessageMedia } from '../src/app/inbox/media.ts'
 import { interactiveError, interactivePayload, interactiveText, type InteractiveReply } from '../src/app/inbox/interactive.ts'
@@ -140,22 +141,21 @@ export interface Turn {
   steps?: { type?: string; llm_output_preview?: string; tool_name?: string }[]
 }
 
-/** Pulls the customer's recent turns from Meta into the chat (throttled per customer). */
-const lastSync = new Map<string, number>()
-/** Customers Meta has no conversation with (allowlisted numbers that never chatted): not asked again for
- *  10 minutes, or until they write. Otherwise every inbox open makes a failed call per such number. */
-const noConversation = new Map<string, number>()
+/** Pulls the customer's recent turns from Meta into the chat: at most once per 15 s per customer
+ *  across every instance (locks.ts). A customer Meta has no conversation with (an allowlisted
+ *  number that never chatted) isn't asked about again for 10 minutes, or until they write;
+ *  otherwise every inbox open makes a failed call per such number. */
 async function syncTurns(phone: string, force = false) {
   // Meta's turns are looked up by phone number; a number-hidden customer's arrive by webhook only.
   if (!ownsMetaAssets() || isBsuid(phone)) return
   const key = `${ws()}|${phone}`
-  if (!force && Date.now() - (lastSync.get(key) ?? 0) < 15_000) return
-  if (!force && Date.now() < (noConversation.get(key) ?? 0)) return
-  lastSync.set(key, Date.now())
+  if (!force && (await isLocked(`noconv:${key}`))) return
+  const first = await tryLock(`sync:turns:${key}`, 15_000)
+  if (!force && !first) return
   const r = await callUpstream('meta', 'GET', resolveIds(`/${await chatNumber(phone)}/insights/conversations/turns?user_phone_number=${phone}&limit=50`)).catch(() => null)
-  if (r && (r.status === 400 || r.status === 404)) noConversation.set(key, Date.now() + 10 * 60_000)
+  if (r && (r.status === 400 || r.status === 404)) await tryLock(`noconv:${key}`, 10 * 60_000)
   if (!r || r.status !== 200) return
-  noConversation.delete(key)
+  await unlock(`noconv:${key}`)
   await importTurns(phone, arr(obj(parseJson(r.text)).data) as Turn[])
 }
 
@@ -180,11 +180,10 @@ export async function importTurns(phone: string, turns: Turn[]) {
   }
 }
 
-/** Everyone the agent may talk to: the allowlist (the agent answers only these while ALLOWLISTED_ONLY). */
-const lastRoster = new Map<string, number>()
+/** Everyone the agent may talk to: the allowlist (the agent answers only these while ALLOWLISTED_ONLY).
+ *  Once a minute per workspace across every instance. */
 async function syncRoster() {
-  if (!ownsMetaAssets() || Date.now() - (lastRoster.get(ws()) ?? 0) < 60_000) return
-  lastRoster.set(ws(), Date.now())
+  if (!ownsMetaAssets() || !(await tryLock(`sync:roster:${ws()}`, 60_000))) return
   const r = await callUpstream('meta', 'GET', resolveIds('/PHONE_NUMBER_ID/agent_config/allowlist')).catch(() => null)
   const listed = r?.status === 200 ? arr(parseJson(r.text)).map((a) => digits(obj(a).consumer_phone_number)) : []
   const traced = (await col('conversation_traces').distinct('consumer', { workspaceId: ws() })).map(digits)
@@ -212,7 +211,7 @@ async function processChange(field: string, value: Obj) {
     const who = contactFor(people, digits(m.from), str(m.from_user_id) ?? '')
     const { key: phone, link } = await resolveCustomer(m.from, m.from_user_id ?? who?.bsuid, { username: who?.username })
     if (!phone) continue
-    noConversation.delete(`${ws()}|${phone}`)
+    await unlock(`noconv:${ws()}|${phone}`)
     await ensureConversation(phone, who?.name, false, link)
     const type = str(m.type) ?? 'text'
     const media = MEDIA_TYPES.has(type as MediaKind) ? inboundMedia(type as MediaKind, m) : undefined

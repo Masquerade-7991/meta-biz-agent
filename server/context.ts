@@ -4,6 +4,9 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
 
+/** This process, so events it wrote aren't replayed to it by the change stream (trace.ts) and its job leases can be released on shutdown (jobs.ts). */
+export const INSTANCE = randomUUID().slice(0, 8)
+
 /** The WhatsApp account calls are made through. The token stays on the server. */
 export interface Assets {
   wabaId: string

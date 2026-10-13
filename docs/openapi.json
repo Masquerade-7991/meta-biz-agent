@@ -138,6 +138,53 @@
         }
       }
     },
+    "/api/ready": {
+      "get": {
+        "operationId": "ready",
+        "tags": [
+          "Server"
+        ],
+        "summary": "Can this instance take traffic",
+        "description": "**Who can call:** Anyone; no sign-in.\n\nFor the host’s readiness check (Render, Kubernetes): 200 once the database is connected and the schema is in place, 503 before that. /api/health stays 200 either way so the browser can tell the two apart.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "instance": {
+                      "type": "string",
+                      "description": "This process’s short id."
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "instance"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not ready: the database is not connected yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/webhooks/whatsapp": {
       "get": {
         "operationId": "verifyWebhook",

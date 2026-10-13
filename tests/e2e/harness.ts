@@ -129,14 +129,15 @@ export interface Reply {
   headers: Headers
 }
 
-export async function startStack(name: string, opts: { jobs?: boolean; port?: number; env?: Record<string, string> } = {}): Promise<Stack> {
-  const dbName = `meta_agent_e2e_${name}_${Date.now().toString(36)}`
+/** `shareWith`: a second instance of the same deployment: same database and same fake Meta, its own port; stopping it leaves both for the first stack to drop. */
+export async function startStack(name: string, opts: { jobs?: boolean; port?: number; env?: Record<string, string>; shareWith?: Stack } = {}): Promise<Stack> {
+  const dbName = opts.shareWith?.dbName ?? `meta_agent_e2e_${name}_${Date.now().toString(36)}`
   if (!/^meta_agent_e2e_[a-z0-9_]+$/.test(dbName)) throw new Error(`Refusing database name ${dbName}`)
   const uri = mongoUri()
   const client = new MongoClient(uri, { serverSelectionTimeoutMS: 15_000 })
   await client.connect()
   const db = client.db(dbName)
-  const fake = await startFakeMeta()
+  const fake = opts.shareWith?.fake ?? (await startFakeMeta())
   const port = opts.port ?? Number(process.env.E2E_PORT || 8797)
   if (port === 8787 || port === 5173) throw new Error('Those ports belong to the user’s own servers.')
   let out = ''
@@ -174,6 +175,10 @@ export async function startStack(name: string, opts: { jobs?: boolean; port?: nu
     proc.kill('SIGTERM')
     await new Promise((done) => setTimeout(done, 300))
     if (proc.exitCode === null) proc.kill('SIGKILL')
+    if (opts.shareWith) {
+      await client.close().catch(() => {})
+      return
+    }
     await fake.close().catch(() => {})
     // Always drop the throwaway database, whatever happened (a few tries: Atlas DNS blips happen).
     for (let i = 0; i < 3; i++) {
@@ -246,9 +251,24 @@ export async function serverModules(s: Stack) {
   if (!db.db && !(await db.initDb())) throw new Error('in-process database did not connect')
   const accounts = await import('../../server/accounts.ts')
   const ops = await import('../../server/supportOps.ts')
+  const jobs = await import('../../server/jobs.ts')
+  const inbox = await import('../../server/inbox.ts')
+  const broadcasts = await import('../../server/broadcasts.ts')
+  const locks = await import('../../server/locks.ts')
   return {
     /** Runs the escalation sweep for one workspace as if it were `now`. */
     escalate: async (workspaceId: string, now: number) => db.withWorkspace(workspaceId, () => ops.escalateDue(now), await accounts.assetsFor(workspaceId)),
+    /** Runs work in one workspace, the way a job or a request would. */
+    inWorkspace: async <T>(workspaceId: string, fn: () => T) => db.withWorkspace(workspaceId, fn, await accounts.assetsFor(workspaceId)),
+    jobs,
+    locks,
+    /** One worker pass: every due job, then webhook retries and broadcast resumption. */
+    tick: async () => {
+      const ran = await jobs.jobsTick()
+      await inbox.reprocessWebhooks()
+      await broadcasts.resumeBroadcasts()
+      return ran
+    },
   }
 }
 

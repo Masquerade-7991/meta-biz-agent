@@ -5,6 +5,7 @@ import { assetsFor } from './accounts.ts'
 import { hash, saveTurns } from './record.ts'
 import { importTurns, type Turn } from './inbox.ts'
 import { callUpstream, metaGet, parseJson } from './upstream.ts'
+import { tryLock, unlock } from './locks.ts'
 
 type Obj = Record<string, unknown>
 export type Job = 'metrics' | 'handoffs' | 'connectorLogs' | 'traces' | 'agentUsage'
@@ -224,25 +225,24 @@ async function agentUsage() {
 }
 
 const JOBS: Record<Job, () => Promise<void>> = { metrics, handoffs, connectorLogs, traces, agentUsage }
-const running = new Set<Job>()
-
-/** Runs one job now (skips if it's already running or there is no database). */
+/** Runs one job now (skips if any instance is already running it, or there is no database). */
 export async function runOnce(job: Job): Promise<void> {
-  if (!db || running.has(job)) return
-  running.add(job)
+  if (!db || !(await tryLock(`collector:${job}`, 50 * 60_000))) return
   try {
     // Each workspace's agents are collected inside that workspace.
     for (const w of (await col('agents').distinct('workspaceId')) as string[]) await withWorkspace(w, JOBS[job], await assetsFor(w))
   } catch (err) {
     console.log(`collector ${job} skipped: ${(err as { down?: boolean }).down ? 'upstream unreachable' : err instanceof Error ? err.message : err}`)
   } finally {
-    running.delete(job)
+    await unlock(`collector:${job}`)
   }
 }
 
 const HOUR = 3_600_000
+/** Starts the timers; returns the function that stops them. */
 export function startCollectors() {
-  const every = (job: Job, ms: number) => setInterval(() => void runOnce(job), ms).unref()
+  const timers: NodeJS.Timeout[] = []
+  const every = (job: Job, ms: number) => timers.push(setInterval(() => void runOnce(job), ms).unref())
   every('metrics', 6 * HOUR)
   every('handoffs', 15 * 60_000)
   every('connectorLogs', HOUR)
@@ -250,4 +250,5 @@ export function startCollectors() {
   every('agentUsage', HOUR)
   void runOnce('metrics')
   void runOnce('handoffs')
+  return () => timers.forEach(clearInterval)
 }

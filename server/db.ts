@@ -36,6 +36,10 @@ export const col = <T extends Document = Document>(name: string): Collection<T> 
 const TIME_SERIES = ['metrics_daily', 'handoff_snapshots']
 const INDEXES: Record<string, IndexDescription[]> = {
   agents: [{ key: { workspaceId: 1 } }],
+  // Shared between instances (cache.ts, locks.ts): rows expire on their own.
+  relay_cache: [{ key: { exp: 1 }, expireAfterSeconds: 0 }],
+  rate_hits: [{ key: { key: 1, at: 1 } }, { key: { at: 1 }, expireAfterSeconds: 3600 }],
+  locks: [{ key: { until: 1 }, expireAfterSeconds: 600 }],
   // Inbox (inbox.ts): one conversation per customer; messages deduped by wamid or Meta turn id.
   // WhatsApp accounts (accounts.ts): a WABA belongs to one workspace; webhooks find it by number.
   whatsapp_accounts: [{ key: { wabaId: 1 }, unique: true }, { key: { workspaceId: 1, createdAt: 1 } }, { key: { 'phoneNumbers.id': 1 } }],

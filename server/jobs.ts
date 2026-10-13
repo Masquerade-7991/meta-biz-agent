@@ -5,7 +5,7 @@
 // run is picked up again after the lease. Enough for several instances too, at low job volume.
 import { ObjectId } from 'mongodb'
 import { col, db, withWorkspace, ws } from './db.ts'
-import { traceId } from './context.ts'
+import { INSTANCE, traceId } from './context.ts'
 import { assetsFor } from './accounts.ts'
 import { trace } from './trace.ts'
 
@@ -45,7 +45,7 @@ async function claim() {
   const now = new Date()
   return jobs().findOneAndUpdate(
     { $or: [{ status: 'queued', runAt: { $lte: now } }, { status: 'running', lockedUntil: { $lt: now } }] },
-    { $set: { status: 'running', lockedUntil: new Date(now.getTime() + LEASE_MS), startedAt: now }, $inc: { attempts: 1 } },
+    { $set: { status: 'running', lockedUntil: new Date(now.getTime() + LEASE_MS), startedAt: now, instance: INSTANCE }, $inc: { attempts: 1 } },
     { sort: { runAt: 1 }, returnDocument: 'after' },
   )
 }
@@ -110,3 +110,11 @@ export async function jobsTick(budgetMs = Infinity) {
   return ran
 }
 export const startJobs = () => setInterval(() => void jobsTick(), 1000).unref()
+
+/** On shutdown: jobs this instance was running go back to the queue now, not when their lease ends. */
+export async function releaseLeases() {
+  if (!db) return
+  await jobs()
+    .updateMany({ status: 'running', instance: INSTANCE }, { $set: { status: 'queued', updatedAt: new Date() }, $inc: { attempts: -1 }, $unset: { lockedUntil: '', instance: '' } })
+    .catch(() => null)
+}

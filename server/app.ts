@@ -23,6 +23,7 @@ import { handleHealth } from './health.ts'
 import { handleNumbers } from './numbers.ts'
 import { agentUpstream, callUpstream, env, hasToken, pathIds, resolveIds, setCallLogger, upstream, type Kind, type UpstreamReply } from './upstream.ts'
 import { accounts, assetsFor } from './accounts.ts'
+import { INSTANCE } from './context.ts'
 import { handleWhatsApp } from './whatsapp.ts'
 import { readTrace, trace } from './trace.ts'
 import { handleStream } from './stream.ts'
@@ -53,14 +54,14 @@ async function readBody(req: http.IncomingMessage): Promise<Buffer> {
 
 
 /** Local guard below Meta's limits: 500 agent_test/h per number, 1000/h per resource per number. */
-function rateLimited(kind: Kind, path: string): string | null {
+async function rateLimited(kind: Kind, path: string): Promise<string | null> {
   const { phone, rest } = splitPhone(new URL(path, 'http://x').pathname)
   if (kind !== 'meta' || !phone) return null
   if (rest === 'agent_test') {
-    return allow(`${phone}|agent_test`, 500) ? null : 'Local safety limit reached (500 test messages per hour for this number). Try again shortly.'
+    return (await allow(`${phone}|agent_test`, 500)) ? null : 'Local safety limit reached (500 test messages per hour for this number). Try again shortly.'
   }
   const { resource } = resourceOf(rest)
-  return allow(`${phone}|${resource}`, 1000) ? null : `Local safety limit reached (1000 requests per hour for ${resource} on this number). Try again shortly.`
+  return (await allow(`${phone}|${resource}`, 1000)) ? null : `Local safety limit reached (1000 requests per hour for ${resource} on this number). Try again shortly.`
 }
 
 const inFlight = new Map<string, Promise<UpstreamReply>>()
@@ -84,13 +85,13 @@ async function forward(req: http.IncomingMessage, res: http.ServerResponse, kind
   const method = req.method ?? 'GET'
   const ttl = method === 'GET' ? ttlFor(kind, path) : 0
   const key = `${kind} ${path}`
-  const hit = ttl ? getCached(key) : undefined
+  const hit = ttl ? await getCached(key) : undefined
   if (hit) {
     res.writeHead(hit.status, { 'content-type': hit.contentType })
     res.end(hit.text)
     return
   }
-  const limited = rateLimited(kind, path)
+  const limited = await rateLimited(kind, path)
   if (limited) {
     console.log(`${method} ${path} → 429 (local guard)`)
     return sendError(res, 429, 'Too many requests', limited)
@@ -115,11 +116,11 @@ async function forward(req: http.IncomingMessage, res: http.ServerResponse, kind
     res.writeHead(r.status, { 'content-type': r.contentType })
     res.end(r.text)
     const ok = r.status >= 200 && r.status < 300
-    if (ttl && ok) putCached(key, r, ttl)
+    if (ttl && ok) await putCached(key, r, ttl)
     // Only settings reads are cached per number, so only a settings write makes them stale.
     if (method !== 'GET' && ok && path.includes('/agent_config/settings')) {
       const { phone } = splitPhone(new URL(path, 'http://x').pathname)
-      if (phone) invalidatePhone(phone)
+      if (phone) await invalidatePhone(phone)
     }
     record({ kind, method, path, reqBody: body, contentType: contentType ?? '', status: r.status, resText: r.text })
   } catch (err) {
@@ -136,6 +137,11 @@ export async function handle(req: http.IncomingMessage, res: http.ServerResponse
   // Every answer names its trace, so a reported error can be looked up (GET /api/trace/<id>).
   const tid = randomUUID()
   res.setHeader('x-trace-id', tid)
+  if (url.split('?')[0] === '/api/ready') {
+    res.writeHead(db ? 200 : 503, { 'content-type': 'application/json' })
+    res.end(JSON.stringify(db ? { ok: true, instance: INSTANCE } : { title: 'Not ready', detail: dbOffReason, status: 503 }))
+    return
+  }
   if (url.split('?')[0] === '/api/health') {
     // Public, so a WhatsApp account's labels are only added for members of the workspace it belongs
     // to (the Create Agent fallback and dummy mode use them). Tokens never leave this process.

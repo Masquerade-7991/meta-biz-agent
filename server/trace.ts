@@ -4,7 +4,7 @@
 // Keep `data` to ids, counts and statuses: no message text, customer numbers or secrets.
 import { EventEmitter } from 'node:events'
 import { col, db, withWorkspace, ws } from './db.ts'
-import { currentUserId, traceId } from './context.ts'
+import { currentUserId, INSTANCE, traceId } from './context.ts'
 
 export interface TraceEvent {
   workspaceId: string
@@ -31,12 +31,50 @@ export function diff(before: Record<string, unknown>, after: Record<string, unkn
 /** Live events per workspace; listeners are the open /api/stream connections. */
 export const bus = new EventEmitter().setMaxListeners(0)
 
+/** Events written by other instances, from a change stream on `events` (needs a replica set; Atlas
+ *  is one). Opened once, on the first subscriber; without a replica set the stream only carries this
+ *  instance's events, and that is logged once. */
+let watching: 'no' | 'opening' | 'yes' | 'unsupported' = 'no'
+let subscribers = 0
+function watchEvents() {
+  if (watching !== 'no' || !db) return
+  watching = 'opening'
+  try {
+    const stream = col('events').watch([{ $match: { operationType: 'insert', 'fullDocument.instance': { $ne: INSTANCE } } }], { fullDocument: 'updateLookup' })
+    stream.on('change', (c) => {
+      const d = (c as { fullDocument?: TraceEvent & { instance?: string } }).fullDocument
+      if (d) bus.emit(d.workspaceId, d)
+    })
+    stream.on('error', (err) => {
+      // 40573: change streams need a replica set. Anything else: reopen on the next subscriber.
+      watching = (err as { code?: number }).code === 40573 ? 'unsupported' : 'no'
+      if (watching === 'unsupported') console.log('live events: this MongoDB is not a replica set, so other instances’ events are not streamed')
+      void stream.close().catch(() => null)
+    })
+    watching = 'yes'
+    console.log('live events: streaming other instances’ events (change stream)')
+  } catch {
+    watching = 'no'
+  }
+}
+
+/** Live events of one workspace, from every instance. Returns the unsubscribe. */
+export function subscribe(workspaceId: string, fn: (e: TraceEvent) => void): () => void {
+  subscribers++
+  watchEvents()
+  bus.on(workspaceId, fn)
+  return () => {
+    subscribers--
+    bus.off(workspaceId, fn)
+  }
+}
+
 export function trace(kind: string, data: Record<string, unknown> = {}, ref?: { entity: string; id: string }, changes?: Changes): void {
   const e: TraceEvent = { workspaceId: ws(), traceId: traceId(), userId: currentUserId(), kind, entity: ref?.entity, entityId: ref?.id, data, changes, at: new Date() }
   bus.emit(e.workspaceId, e)
   if (!db) return
   col('events')
-    .insertOne({ ...e }, { ignoreUndefined: true })
+    .insertOne({ ...e, instance: INSTANCE }, { ignoreUndefined: true })
     .catch((err) => console.log(`events write failed (${kind}): ${err instanceof Error ? err.message : err}`))
 }
 

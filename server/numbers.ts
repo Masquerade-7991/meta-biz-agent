@@ -302,7 +302,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     case 'POST request-code': {
       need(me, 'numbers.edit')
       const method = b.method === 'VOICE' ? 'VOICE' : 'SMS'
-      if (!allow(`code|${id}`, 5)) throw new HttpError(429, 'Too many codes asked for this number. Try again in an hour.')
+      if (!(await allow(`code|${id}`, 5))) throw new HttpError(429, 'Too many codes asked for this number. Try again in an hour.')
       await metaJson('graph', 'POST', `/${id}/request_code`, { code_method: method, language: String(b.language || 'en') })
       changed(id, 'code_requested', { method })
       return { ok: true }

@@ -162,7 +162,7 @@ async function connect(b: Obj, me: Actor) {
   if (!can(me.role, 'whatsapp.manage')) throw new HttpError(403, 'Only workspace owners can connect WhatsApp accounts.')
   reportMissing()
   if (missing().length) throw new HttpError(503, 'Connecting numbers from the console isn’t switched on for this workspace yet. Talk to Helo.ai.')
-  if (!allow(`wa-connect|${ws()}`, 10)) throw new HttpError(429, 'Too many signup attempts. Try again in an hour.')
+  if (!(await allow(`wa-connect|${ws()}`, 10))) throw new HttpError(429, 'Too many signup attempts. Try again in an hour.')
   const code = str(b.code)
   const wabaId = String(b.wabaId ?? '').replace(/\D/g, '')
   const phoneId = String(b.phoneNumberId ?? '').replace(/\D/g, '')

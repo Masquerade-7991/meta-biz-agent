@@ -6,11 +6,13 @@ import http from 'node:http'
 import { handle, ready } from './app.ts'
 import { startCollectors } from './collectors.ts'
 import { resumeBroadcasts } from './broadcasts.ts'
-import { startJobs } from './jobs.ts'
+import { releaseLeases, startJobs } from './jobs.ts'
 import { startBilling } from './billing.ts'
 import { startHealth } from './health.ts'
 import { reprocessWebhooks } from './inbox.ts'
 import { escalateAll } from './supportOps.ts'
+import { closeStreams } from './stream.ts'
+import { closeDb } from './db.ts'
 import { agentUpstream, env, upstream } from './upstream.ts'
 
 // One stray failure (an unanswered Meta call, a dropped database socket) shouldn't take the whole
@@ -22,16 +24,40 @@ process.on('uncaughtException', (err) => console.error(`uncaught exception (kept
 // Hosts like Render hand the port in PORT.
 const PORT = Number(env('SERVER_PORT') || env('PORT') || 8787)
 
-http.createServer((req, res) => void handle(req, res)).listen(PORT, () => console.log(`API proxy on :${PORT} → graph: ${upstream || '(no upstream set)'} · agent: ${agentUpstream || '(no upstream set)'}`))
+const server = http.createServer((req, res) => void handle(req, res))
+server.listen(PORT, () => console.log(`API proxy on :${PORT} → graph: ${upstream || '(no upstream set)'} · agent: ${agentUpstream || '(no upstream set)'}`))
+
+const timers: NodeJS.Timeout[] = []
+const stoppers: (() => void)[] = []
 if (await ready()) {
   await resumeBroadcasts()
   await startBilling()
   await startHealth()
   // JOBS=off: a second copy of the server (e.g. against a stand-in Meta) must not run real jobs.
-  if (env('JOBS') !== 'off') startJobs()
+  if (env('JOBS') !== 'off') timers.push(startJobs())
   // Webhook deliveries stored but not processed are tried again every 5 minutes.
-  setInterval(() => void reprocessWebhooks().catch(() => 0), 5 * 60_000).unref()
+  timers.push(setInterval(() => void reprocessWebhooks().catch(() => 0), 5 * 60_000).unref())
   // Tickets running out of time move up the escalation matrix (supportOps.ts).
-  if (env('JOBS') !== 'off') setInterval(() => void escalateAll().catch(() => 0), 60_000).unref()
-  if (env('COLLECTORS') !== 'off') startCollectors()
+  if (env('JOBS') !== 'off') timers.push(setInterval(() => void escalateAll().catch(() => 0), 60_000).unref())
+  if (env('COLLECTORS') !== 'off') stoppers.push(startCollectors())
 } else if (!env('MONGODB_URI')) console.log('No MONGODB_URI: running without a database (store routes return 503)')
+
+// A deploy or restart (SIGTERM) drains instead of dropping: no new requests, in-flight ones finish,
+// running jobs go straight back to the queue, open streams end so browsers reconnect elsewhere.
+let stopping = false
+async function shutdown(signal: string) {
+  if (stopping) return
+  stopping = true
+  console.log(`${signal}: shutting down`)
+  const force = setTimeout(() => process.exit(1), 10_000).unref()
+  server.close()
+  timers.forEach(clearInterval)
+  stoppers.forEach((stop) => stop())
+  closeStreams()
+  await releaseLeases()
+  await closeDb()?.catch(() => null)
+  clearTimeout(force)
+  process.exit(0)
+}
+process.on('SIGTERM', () => void shutdown('SIGTERM'))
+process.on('SIGINT', () => void shutdown('SIGINT'))
