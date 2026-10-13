@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Bot, History } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/app/components/ui/button'
+import { toast } from 'sonner'
+import { retryJob } from '@/app/api/activity'
 import { EmptyState } from '@/app/components/ui/page'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
 import { InlineError } from '@/app/components/wizard/RetryBanner'
@@ -24,6 +26,16 @@ const timeOf = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-
  *  day headings and links (a ticket's own history). */
 export function ActivityList({ query, compact, empty = 'Nothing has happened here yet.' }: { query: ActivityQuery; compact?: boolean; empty?: string }) {
   const navigate = useNavigate()
+  const [retried, setRetried] = useState<Set<string>>(() => new Set())
+  const retry = async (id: string) => {
+    try {
+      await retryJob(id)
+      setRetried((r) => new Set(r).add(id))
+      toast.success('Queued to run again.')
+    } catch (err) {
+      toast.error(errorDetail(err))
+    }
+  }
   const [rows, setRows] = useState<ActivityEvent[] | null>(null)
   const [names, setNames] = useState<Names>({})
   const [more, setMore] = useState(false)
@@ -62,6 +74,7 @@ export function ActivityList({ query, compact, empty = 'Nothing has happened her
           const day = dayOf(e.at)
           const newDay = !compact && day !== (i ? dayOf(rows[i - 1].at) : '')
           const ticket = !compact && e.entity === 'ticket' && e.entityId
+          const deadJob = e.kind === 'job.dead' && typeof e.data.id === 'string' && !retried.has(e.data.id) ? e.data.id : null
           return (
             <li key={e.id}>
               {newDay && <p className="border-b border-border bg-muted/40 px-4 py-1.5 text-xs font-medium text-muted-foreground first:rounded-t-lg">{day}</p>}
@@ -77,6 +90,11 @@ export function ActivityList({ query, compact, empty = 'Nothing has happened her
                   {ticket && (
                     <Button variant="link" size="sm" className="ml-1 h-auto p-0 align-baseline" onClick={() => navigate(`/tickets?n=${e.entityId}`)}>
                       Open
+                    </Button>
+                  )}
+                  {deadJob && (
+                    <Button variant="link" size="sm" className="ml-1 h-auto p-0 align-baseline" onClick={() => void retry(deadJob)}>
+                      Retry
                     </Button>
                   )}
                 </span>

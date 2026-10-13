@@ -425,10 +425,14 @@ defineJob('webhook.process', async ({ id }) => {
 /** Deliveries stored but not processed (a crash, a cold instance): tried again, oldest first.
  *  Runs after each delivery and from the daily cron. */
 export async function reprocessWebhooks(limit = 20) {
+  const due = { processedAt: null, attempts: { $lt: 10 }, receivedAt: { $lt: new Date(Date.now() - 60_000) } }
+  // A backlog (a worker was down, a burst from Meta) is worked off in bigger batches, and said so.
+  const backlog = await inboxCol().countDocuments(due)
+  if (backlog > 1000) console.log(`webhook backlog: ${backlog} deliveries waiting`)
   const pending = await inboxCol()
-    .find({ processedAt: null, attempts: { $lt: 10 }, receivedAt: { $lt: new Date(Date.now() - 60_000) } })
+    .find(due)
     .sort({ receivedAt: 1 })
-    .limit(limit)
+    .limit(backlog > 1000 ? Math.max(limit, 200) : limit)
     .toArray()
   for (const d of pending) await processDelivery(d._id, d.payload)
   return pending.length

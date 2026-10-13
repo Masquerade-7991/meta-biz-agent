@@ -25,6 +25,9 @@ import { agentUpstream, callUpstream, env, hasToken, pathIds, resolveIds, setCal
 import { accounts, assetsFor } from './whatsapp/accounts.ts'
 import { INSTANCE } from './platform/context.ts'
 import { isRole, ROLE } from './platform/roles.ts'
+import { handleJobs } from './platform/jobs.ts'
+import { breakerState } from './platform/breaker.ts'
+import { createHash } from 'node:crypto'
 import { handleWhatsApp } from './whatsapp/whatsapp.ts'
 import { readTrace, trace } from './platform/trace.ts'
 import { handleStream } from './platform/stream.ts'
@@ -45,6 +48,50 @@ export function ready(): Promise<boolean> {
     })
   }
   return starting
+}
+
+/** Deliveries from Meta not yet processed, and how long the oldest has waited. */
+async function webhookBacklog() {
+  const inbox = db!.collection('webhook_inbox')
+  const due = { processedAt: null, attempts: { $lt: 10 } }
+  const [pending, oldest] = await Promise.all([inbox.countDocuments(due), inbox.find(due, { projection: { receivedAt: 1 } }).sort({ receivedAt: 1 }).limit(1).next()])
+  return { pending, oldestAgeS: oldest ? Math.round((Date.now() - +oldest.receivedAt) / 1000) : 0 }
+}
+
+const IDEMPOTENT = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+/** `Idempotency-Key`: the same key from the same person on the same route within 10 minutes gets the
+ *  first answer back (header `idempotent-replayed: true`) instead of doing the work again. True when
+ *  replayed; otherwise the answer is captured as it goes out. Broadcasts keep their own lock too. */
+async function idempotency(req: http.IncomingMessage, res: http.ServerResponse, scope: string): Promise<boolean> {
+  const header = req.headers['idempotency-key']
+  if (typeof header !== 'string' || !header || !IDEMPOTENT.has(req.method ?? '') || !db) return false
+  const key = 'idem:' + createHash('sha256').update(`${scope}|${req.method}|${req.url?.split('?')[0]}|${header}`).digest('hex')
+  const locks = db.collection('request_locks')
+  const prior = await locks.findOne({ _id: key as never, at: { $gt: new Date(Date.now() - 10 * 60_000) } })
+  if (prior?.response) {
+    res.writeHead(prior.response.status, { 'content-type': prior.response.contentType, 'idempotent-replayed': 'true' })
+    res.end(prior.response.body)
+    return true
+  }
+  const chunks: Buffer[] = []
+  const write = res.write.bind(res)
+  const end = res.end.bind(res)
+  res.write = ((chunk: unknown, ...rest: unknown[]) => {
+    if (chunk) chunks.push(Buffer.from(chunk as string | Buffer))
+    return (write as (...a: unknown[]) => boolean)(chunk, ...rest)
+  }) as typeof res.write
+  res.end = ((chunk?: unknown, ...rest: unknown[]) => {
+    if (chunk && typeof chunk !== 'function') chunks.push(Buffer.from(chunk as string | Buffer))
+    return (end as (...a: unknown[]) => http.ServerResponse)(chunk, ...rest)
+  }) as typeof res.end
+  res.on('finish', () => {
+    const body = Buffer.concat(chunks)
+    if (res.statusCode >= 500 || body.length > 256 * 1024) return
+    void locks
+      .updateOne({ _id: key as never }, { $set: { at: new Date(), response: { status: res.statusCode, contentType: String(res.getHeader('content-type') ?? 'application/json'), body: body.toString('utf8') } } }, { upsert: true })
+      .catch(() => null)
+  })
+  return false
 }
 
 /** How the job queue is doing, for the worker's health answer. */
@@ -166,7 +213,8 @@ export async function handle(req: http.IncomingMessage, res: http.ServerResponse
         hasToken,
         role: ROLE,
         instance: INSTANCE,
-        ...(db && isRole('worker') && { jobs: await queueDepth() }),
+        breaker: { meta: breakerState('meta'), graph: breakerState('graph') },
+        ...(db && isRole('worker') && { jobs: await queueDepth(), webhooks: await webhookBacklog() }),
         ...(account && {
           businessName: account.source === 'env' ? env('BUSINESS_NAME') : account.wabaName,
           wabaId: account.wabaId,
@@ -206,6 +254,7 @@ export async function handle(req: http.IncomingMessage, res: http.ServerResponse
   const traceRoute = url.match(/^\/api\/trace\/([0-9a-f-]{8,36})$/)
   await withWorkspace(wsId, async () => {
     if (handleStream(req, res)) return
+    if (await idempotency(req, res, `${wsId}|${me._id}`)) return
     if (traceRoute && !can(s.role, 'traces.read')) return sendError(res, 403, 'Not allowed', 'Only owners and admins can read traces.')
     if (traceRoute) return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(await readTrace(traceRoute[1])))
     if (metaRoute) {
@@ -233,6 +282,7 @@ export async function handle(req: http.IncomingMessage, res: http.ServerResponse
     else if (await handleAssist(req, res, me)) return
     else if (await handleBroadcasts(req, res, me)) return
     else if (await handleBilling(req, res, me)) return
+    else if (await handleJobs(req, res, me)) return
     else if (!(await handleStore(req, res))) res.writeHead(404).end()
   }, assets, { traceId: tid, userId: String(me._id) })
 }

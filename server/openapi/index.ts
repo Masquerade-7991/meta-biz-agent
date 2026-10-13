@@ -27,6 +27,7 @@ export const openapi = {
       '**Signing in.** Every route except the public ones needs the session cookie `sid` from `POST /api/auth/login` (or an emailed link). In this page, “Try it out” uses your current session. Routes also need finished setup and a workspace.',
       '**Roles.** Owner › Admin › Supervisor › Agent. Each route says the lowest role that may call it (from src/app/lib/permissions.ts).',
       '**Errors.** `{title, detail, status}`. Every response has an `x-trace-id` header; owners and admins can look up what a request did with `GET /api/trace/{id}`.',
+      '**Repeating a request safely.** Send an `Idempotency-Key` header (any string you choose, up to 10 minutes apart) with a POST, PUT, PATCH or DELETE: the same key from the same person on the same route gets the first answer back (`idempotent-replayed: true`) instead of doing the work twice. Broadcasts are also protected without it.',
       '**Same origin only.** No CORS; the console and the API share a host (Vite proxies `/api` in development, Vercel rewrites it in production).',
     ].join('\n\n'),
   },

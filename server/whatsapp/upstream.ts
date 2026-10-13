@@ -2,6 +2,7 @@
 // headers, placeholders and timeouts stay the same for both.
 import { HttpError, obj, str, type Obj } from '../platform/http.ts'
 import { env } from '../platform/env.ts'
+import { acquire, guard, record } from '../platform/breaker.ts'
 import { currentAssets, traceId } from '../platform/context.ts'
 import { addProtected, refusal } from '../platform/protect.ts'
 try {
@@ -111,8 +112,11 @@ export async function callUpstream(
   const timeout = path.includes('/agent_test') ? 90_000 : 20_000
   const at = new Date()
   const base = { at, source, kind, method, url: safeUrl(target) }
+  await guard(kind)
+  const release = await acquire()
   try {
     const r = await fetch(target, { method, headers, body, signal: AbortSignal.timeout(timeout) })
+    record(kind, r.status < 500)
     const text = await r.text()
     console.log(`[${traceId()?.slice(0, 8) ?? '-'}] ${method} ${safeUrl(target)} → ${r.status}`)
     // Errors keep Meta's message and trace id (StandardError {title, detail, fbtrace_id} or Graph {error: {...}}).
@@ -127,8 +131,11 @@ export async function callUpstream(
     })
     return { status: r.status, text, contentType: r.headers.get('content-type') ?? 'application/json', retryAfter: r.headers.get('retry-after') ?? undefined }
   } catch (err) {
+    record(kind, false)
     logCall({ ...base, status: 0, ms: Date.now() - at.getTime(), error: err instanceof Error ? `${err.name}: ${err.message}` : String(err) })
     throw err
+  } finally {
+    release()
   }
 }
 /**

@@ -3,7 +3,10 @@
 // the request that queued it. Failures retry with backoff, then the job is parked as 'dead'.
 // ponytail: one process polls every second and claims jobs with a lease (lockedUntil), so a crashed
 // run is picked up again after the lease. Enough for several instances too, at low job volume.
+import type http from 'node:http'
 import { ObjectId } from 'mongodb'
+import { HttpError, send, sendError } from './http.ts'
+import { can, type Role } from '../../src/app/lib/permissions.ts'
 import { col, db, withWorkspace, ws } from './db.ts'
 import { INSTANCE, traceId } from './context.ts'
 import { assetsFor } from '../whatsapp/index.ts'
@@ -77,7 +80,7 @@ async function runJob(j: Record<string, unknown> & { _id: ObjectId }) {
           { _id: j._id },
           { $set: dead ? { status: 'dead', finishedAt: new Date(), lastError: error, updatedAt: new Date() } : { status: 'queued', runAt: new Date(Date.now() + backoffMs(attempts)), lastError: error, updatedAt: new Date() }, $unset: { lockedUntil: '' } },
         )
-        trace(dead ? 'job.dead' : 'job.failed', { type: j.type, attempts, error })
+        trace(dead ? 'job.dead' : 'job.failed', { id: String(j._id), type: j.type, attempts, error })
         if (dead) await h?.onDead?.((j.payload ?? {}) as Record<string, unknown>).catch(() => {})
         console.log(`job ${String(j.type)} ${dead ? 'gave up' : 'will retry'} (attempt ${attempts}): ${error}`)
       }
@@ -110,6 +113,37 @@ export async function jobsTick(budgetMs = Infinity) {
   return ran
 }
 export const startJobs = () => setInterval(() => void jobsTick(), 1000).unref()
+
+/** Owners and admins see the queue and retry what gave up (Settings › Activity › Operations). */
+export async function handleJobs(req: http.IncomingMessage, res: http.ServerResponse, me: { role: Role | null }): Promise<boolean> {
+  const u = new URL(req.url ?? '/', 'http://x')
+  const retry = u.pathname.match(/^\/api\/jobs\/([0-9a-f]{24})\/retry$/)
+  if (!(u.pathname === '/api/jobs' && req.method === 'GET') && !(retry && req.method === 'POST')) return false
+  if (!can(me.role, 'settings.manage')) {
+    sendError(res, 403, 'Not allowed', 'Only owners and admins manage background work.')
+    return true
+  }
+  if (!db) throw new HttpError(503, 'The database is not available.')
+  const view = (j: Record<string, unknown>) => ({ id: String(j._id), type: j.type, status: j.status, attempts: j.attempts, lastError: j.lastError ?? null, runAt: j.runAt, createdAt: j.createdAt, updatedAt: j.updatedAt })
+  if (retry) {
+    const r = await jobs().findOneAndUpdate(
+      { _id: new ObjectId(retry[1]), workspaceId: ws(), status: 'dead' },
+      { $set: { status: 'queued', runAt: new Date(), attempts: 0, updatedAt: new Date() }, $unset: { lastError: '', finishedAt: '' } },
+      { returnDocument: 'after' },
+    )
+    if (!r) {
+      sendError(res, 404, 'Not found', 'No job of this workspace gave up under that id.')
+      return true
+    }
+    trace('job.retried', { id: retry[1], type: r.type })
+    send(res, 200, view(r as Record<string, unknown>))
+    return true
+  }
+  const status = ['queued', 'running', 'dead', 'done'].includes(u.searchParams.get('status') ?? '') ? u.searchParams.get('status')! : 'dead'
+  const rows = await jobs().find({ workspaceId: ws(), status }).sort({ updatedAt: -1 }).limit(100).toArray()
+  send(res, 200, rows.map((j) => view(j as Record<string, unknown>)))
+  return true
+}
 
 /** On shutdown: jobs this instance was running go back to the queue now, not when their lease ends. */
 export async function releaseLeases() {

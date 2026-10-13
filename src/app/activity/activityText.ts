@@ -30,6 +30,7 @@ export const AREAS = {
   reports: { label: 'Reports', kinds: ['report.'] },
   settings: { label: 'Settings', kinds: ['settings.'] },
   whatsapp: { label: 'WhatsApp', kinds: ['whatsapp.', 'number.', 'account.notice', 'alert.', 'webhook.baseline_reset'] },
+  operations: { label: 'Operations', kinds: ['job.dead', 'job.retried', 'request.failed'] },
 } as const
 export type Area = keyof typeof AREAS
 export const isArea = (v: unknown): v is Area => typeof v === 'string' && Object.hasOwn(AREAS, v)
@@ -257,6 +258,12 @@ export function activityText(e: ActivityEvent, names: Names = {}): string {
       return `Alert raised: ${String(d.key).split(':')[0].replace(/_/g, ' ')}`
     case 'webhook.baseline_reset':
       return `${who} marked the apps receiving events as expected`
+    case 'job.dead':
+      return `A background task gave up after ${e.data.attempts ?? '?'} tries: ${e.data.type}${e.data.error ? ` (${String(e.data.error).slice(0, 120)})` : ''}`
+    case 'job.retried':
+      return `${who} retried a background task: ${e.data.type}`
+    case 'request.failed':
+      return `A request failed on the server: ${e.data.method} ${e.data.path} (${e.data.status})`
     default:
       return `${who}: ${e.kind.replace(/[._]/g, ' ')}`
   }

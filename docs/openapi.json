@@ -3,7 +3,7 @@
   "info": {
     "title": "Helo.ai Console API",
     "version": "1.0.0",
-    "description": "The API behind the Helo.ai console: accounts and workspace, the support desk (inbox, tickets, contacts, broadcasts), WhatsApp numbers, and the relay to Meta’s Business Agent API.\n\n**Signing in.** Every route except the public ones needs the session cookie `sid` from `POST /api/auth/login` (or an emailed link). In this page, “Try it out” uses your current session. Routes also need finished setup and a workspace.\n\n**Roles.** Owner › Admin › Supervisor › Agent. Each route says the lowest role that may call it (from src/app/lib/permissions.ts).\n\n**Errors.** `{title, detail, status}`. Every response has an `x-trace-id` header; owners and admins can look up what a request did with `GET /api/trace/{id}`.\n\n**Same origin only.** No CORS; the console and the API share a host (Vite proxies `/api` in development, Vercel rewrites it in production)."
+    "description": "The API behind the Helo.ai console: accounts and workspace, the support desk (inbox, tickets, contacts, broadcasts), WhatsApp numbers, and the relay to Meta’s Business Agent API.\n\n**Signing in.** Every route except the public ones needs the session cookie `sid` from `POST /api/auth/login` (or an emailed link). In this page, “Try it out” uses your current session. Routes also need finished setup and a workspace.\n\n**Roles.** Owner › Admin › Supervisor › Agent. Each route says the lowest role that may call it (from src/app/lib/permissions.ts).\n\n**Errors.** `{title, detail, status}`. Every response has an `x-trace-id` header; owners and admins can look up what a request did with `GET /api/trace/{id}`.\n\n**Repeating a request safely.** Send an `Idempotency-Key` header (any string you choose, up to 10 minutes apart) with a POST, PUT, PATCH or DELETE: the same key from the same person on the same route gets the first answer back (`idempotent-replayed: true`) instead of doing the work twice. Broadcasts are also protected without it.\n\n**Same origin only.** No CORS; the console and the API share a host (Vite proxies `/api` in development, Vercel rewrites it in production)."
   },
   "servers": [
     {
@@ -114,6 +114,22 @@
                       "type": "string",
                       "description": "This process’s short id."
                     },
+                    "breaker": {
+                      "type": "object",
+                      "properties": {
+                        "meta": {
+                          "type": "string",
+                          "description": "`open` while calls to the agent API are paused after repeated failures, else `closed`."
+                        },
+                        "graph": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "meta",
+                        "graph"
+                      ]
+                    },
                     "jobs": {
                       "type": "object",
                       "properties": {
@@ -133,6 +149,24 @@
                         "dead"
                       ],
                       "description": "The job queue (worker role only)."
+                    },
+                    "webhooks": {
+                      "type": "object",
+                      "properties": {
+                        "pending": {
+                          "type": "integer",
+                          "description": "Deliveries from Meta stored but not processed yet."
+                        },
+                        "oldestAgeS": {
+                          "type": "integer",
+                          "description": "How long the oldest has waited, in seconds."
+                        }
+                      },
+                      "required": [
+                        "pending",
+                        "oldestAgeS"
+                      ],
+                      "description": "Worker role only."
                     },
                     "businessName": {
                       "type": "string"
@@ -159,7 +193,8 @@
                     "upstream",
                     "hasToken",
                     "role",
-                    "instance"
+                    "instance",
+                    "breaker"
                   ]
                 }
               }
@@ -211,6 +246,164 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/jobs": {
+      "get": {
+        "operationId": "listJobs",
+        "tags": [
+          "Server"
+        ],
+        "summary": "Background work of this workspace",
+        "description": "**Who can call:** Admin or above (`settings.manage`).\n\nJobs by status, newest change first, 100 at most. `dead` (the default) is work that gave up after its retries; each carries its last error.",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "`dead` (default), `queued`, `running` or `done`."
+            },
+            "description": "`dead` (default), `queued`, `running` or `done`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "attempts": {
+                        "type": "integer"
+                      },
+                      "lastError": {
+                        "type": "string"
+                      },
+                      "runAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "type",
+                      "status",
+                      "attempts",
+                      "runAt",
+                      "createdAt",
+                      "updatedAt"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/jobs/{id}/retry": {
+      "post": {
+        "operationId": "retryJob",
+        "tags": [
+          "Server"
+        ],
+        "summary": "Retry a job that gave up",
+        "description": "**Who can call:** Admin or above (`settings.manage`).\n\nPuts a dead job back in the queue to run now, with its attempts reset. The activity log records it (`job.retried`).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Record id (MongoDB ObjectId).",
+              "pattern": "^[a-f0-9]{24}$"
+            },
+            "description": "Record id (MongoDB ObjectId)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "attempts": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type",
+                    "status",
+                    "attempts"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "No job of this workspace gave up under that id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
           }
         }
       }

@@ -28,6 +28,7 @@ const qs = (q: ActivityQuery, before?: string) => {
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 function dummy<T>(_m: string, path: string): Promise<T> {
+  if (path.startsWith('/api/jobs/')) return Promise.resolve({ id: path.split('/')[3], type: 'broadcast.send', status: 'queued', attempts: 0 } as T)
   const u = new URL(path, 'http://x')
   const ticket = u.searchParams.get('entity') === 'ticket' ? u.searchParams.get('entityId') : null
   const n = ticket ?? '1042'
@@ -45,5 +46,7 @@ function dummy<T>(_m: string, path: string): Promise<T> {
 
 const call = jsonClient(dummy)
 export const listActivity = (q: ActivityQuery, before?: string) => call<ActivityPage>(`/api/activity${qs(q, before)}`)
+/** Puts a background task that gave up back in the queue (owners and admins). */
+export const retryJob = (id: string) => call<{ id: string; type: string; status: string; attempts: number }>(`/api/jobs/${id}/retry`, 'POST')
 /** The CSV of the same filters (a download link; not available in dummy mode). */
 export const activityCsvUrl = (q: ActivityQuery) => (isDummyMode() ? null : `/api/activity.csv${qs(q)}`)

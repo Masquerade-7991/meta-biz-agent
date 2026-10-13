@@ -16,7 +16,9 @@ export const infra = area('Server', {
         'hasToken*': 'boolean',
         'role*': d('string', 'Which part of the server this instance is: `api`, `ingress`, `worker`, `stream`, or `all` (one process).'),
         'instance*': d('string', 'This process’s short id.'),
+        'breaker*': o({ 'meta*': d('string', '`open` while calls to the agent API are paused after repeated failures, else `closed`.'), 'graph*': 'string' }),
         jobs: o({ 'queued*': 'integer', 'running*': 'integer', 'dead*': 'integer' }, 'The job queue (worker role only).'),
+        webhooks: o({ 'pending*': d('integer', 'Deliveries from Meta stored but not processed yet.'), 'oldestAgeS*': d('integer', 'How long the oldest has waited, in seconds.') }, 'Worker role only.'),
         businessName: 'string',
         wabaId: 'string',
         wabaName: 'string',
@@ -34,6 +36,26 @@ export const infra = area('Server', {
       who: 'public',
       ok: o({ 'ok*': { type: 'boolean', const: true }, 'instance*': d('string', 'This process’s short id.') }),
       errors: { 503: 'Not ready: the database is not connected yet.' },
+    },
+  },
+  '/api/jobs': {
+    get: {
+      id: 'listJobs',
+      summary: 'Background work of this workspace',
+      description: 'Jobs by status, newest change first, 100 at most. `dead` (the default) is work that gave up after its retries; each carries its last error.',
+      who: 'settings.manage',
+      query: { status: d('string', '`dead` (default), `queued`, `running` or `done`.') },
+      ok: { type: 'array', items: o({ 'id*': 'string', 'type*': 'string', 'status*': 'string', 'attempts*': 'integer', lastError: 'string', 'runAt*': 'date-time', 'createdAt*': 'date-time', 'updatedAt*': 'date-time' }) },
+    },
+  },
+  '/api/jobs/{id}/retry': {
+    post: {
+      id: 'retryJob',
+      summary: 'Retry a job that gave up',
+      description: 'Puts a dead job back in the queue to run now, with its attempts reset. The activity log records it (`job.retried`).',
+      who: 'settings.manage',
+      ok: o({ 'id*': 'string', 'type*': 'string', 'status*': 'string', 'attempts*': 'integer' }),
+      errors: { 404: 'No job of this workspace gave up under that id.' },
     },
   },
   '/api/webhooks/whatsapp': {
