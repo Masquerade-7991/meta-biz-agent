@@ -23,7 +23,9 @@ export const source = loader(
   {
     docs: docs.toFumadocsSource(),
     // One page per API area (the spec's tags), generated from the console's OpenAPI file.
-    openapi: await openapi.staticSource({ baseDir: 'developers/api', per: 'tag' }),
+    // Tag names like "Tickets & support" become plain slugs (tickets-support): `&` and brackets in
+    // a URL path break links and 404 when the browser encodes them.
+    openapi: await openapi.staticSource({ baseDir: 'developers/api', per: 'tag', slugify: (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') }),
   },
   {
     baseUrl: docsRoute,
