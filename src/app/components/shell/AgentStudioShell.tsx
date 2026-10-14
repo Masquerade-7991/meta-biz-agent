@@ -157,7 +157,8 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
   )
 
   return (
-    <div className="flex h-dvh flex-col bg-background">
+    <div className="relative isolate flex h-dvh flex-col bg-background">
+      <Backdrop />
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-3 sm:px-4">
         <button
           type="button"
@@ -217,8 +218,7 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
           </SheetContent>
         </Sheet>
 
-        <main className="relative isolate min-h-0 flex-1 overflow-y-auto bg-canvas">
-          <Backdrop />
+        <main className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-8">
             <h1 className="mb-5 truncate text-title font-semibold">{activeLabel}</h1>
             {readOnly && (

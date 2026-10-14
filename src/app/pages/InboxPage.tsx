@@ -1108,7 +1108,7 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
     <div className="flex h-full min-h-0 flex-col">
       <TestNumberNote />
       <div className="flex min-h-0 flex-1">
-      <section className={cn('flex w-full shrink-0 flex-col border-r border-border md:w-80', open && 'hidden md:flex')} aria-label="Chats">
+      <section className={cn('flex w-full shrink-0 flex-col border-r border-border bg-background md:w-80', open && 'hidden md:flex')} aria-label="Chats">
         <div className="space-y-3 border-b border-border p-4">
           <SearchInput value={q} onChange={setQ} placeholder="Search names, numbers and messages" label="Search chats" />
           <PillTabs label="Filter chats" options={FILTERS} value={filter} onChange={setFilter} compact />

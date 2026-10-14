@@ -1,101 +1,60 @@
-/* The console's backdrop (components/ui/backdrop.tsx): a band behind the top of a page that scrolls
-   away with it. Three layers, all coloured by --backdrop-* tokens (theme.css):
-   1. a top-down wash of the accent blue, with a soft glow top-right;
-   2. an ordered (Bayer) dither in 2 px squares along the top edge, on the right side only, so page
-      titles (left-aligned) never sit on it (a mask, see scripts/make-backdrop.mjs);
-   3. two outlines of the mark's silhouette and a few hairline rules, top-right, cut off by the top
-      edge and faded out before content (also a mask).
-   Variants: `band` (every page), `hero` (Home: stronger wash, glow on both sides) and `auth`
-   (sign-in screens, which have room: taller, with the full shapes).
-   Mounted inside a container with `relative isolate`, so z-index -1 stays above the page
-   background and below the page. */
+/* The console's backdrop (components/ui/backdrop.tsx): one fixed layer behind the whole content
+   area, like the docs site's, but quieter. Nothing in it is darker than a hairline, and the dither
+   and geometry fade out over the reading area (top and left of the page), so it sits at the edges
+   where there is space. Cards, tables, dialogs and the sidebar are opaque and cover it.
+   1. two large, soft washes: Helo blue top-right, a cool neutral bottom-left;
+   2. a fine halftone screen (1 px dots on a diagonal 4 px grid), dissolving towards the content;
+   3. two large outlines of the mark's silhouette, bottom-right, partly off-screen.
+   Colours are --backdrop-* tokens (theme.css); the masks come from scripts/make-backdrop.mjs.
+   Mounted as the first child of a shell's root, which has `relative isolate`: the layer is fixed
+   to the viewport and its z-index -1 stays above the root's background and below everything else. */
 .backdrop {
-  position: absolute;
-  inset-inline: 0;
-  top: 0;
+  position: fixed;
+  inset: 0;
   z-index: -1;
-  height: var(--backdrop-height, 170px);
   pointer-events: none;
-  overflow: hidden;
   background:
-    radial-gradient(ellipse 30rem 10rem at 85% 0%, var(--backdrop-glow), transparent 70%),
-    linear-gradient(var(--backdrop-wash), transparent);
-  mask-image: linear-gradient(#000 30%, transparent);
+    radial-gradient(60rem 40rem at 100% 0%, var(--backdrop-wash-a), transparent 70%),
+    radial-gradient(50rem 36rem at 0% 100%, var(--backdrop-wash-b), transparent 70%);
 }
 
 .backdrop::before,
 .backdrop::after {
   content: '';
   position: absolute;
-  top: 0;
-  right: 0;
 }
 
-/* The dither: the token colour through the ramp's dots, faded out towards the left. */
+/* The halftone: the token colour through the dots, shown only away from the reading area. */
 .backdrop::before {
-  width: var(--backdrop-dither-width, 45%);
-  height: var(--backdrop-dither-height, 64px);
-  background-color: var(--backdrop-dither);
-  mask-image: url('../assets/backdrop/dither-ramp.svg'), linear-gradient(to left, #000 40%, transparent);
+  inset: 0;
+  background-color: var(--backdrop-dot);
+  /* One line: Vite only rewrites a url() that starts on the property's line. */
+  mask-image: url('../assets/backdrop/halftone.svg'), radial-gradient(ellipse 75% 80% at 30% 25%, transparent 50%, #000 100%);
   mask-composite: intersect;
-  mask-repeat: repeat-x, no-repeat;
-  mask-size: 8px 96px, 100% 100%;
-  mask-position: top right, 0 0;
-  image-rendering: pixelated;
+  mask-repeat: repeat, no-repeat;
+  mask-size: 8px 8px, 100% 100%;
 }
 
-/* The shapes, from tablet width up: the upper part of the outlines, fading out by 130 px. */
+/* The geometry, bottom-right, fading in from the centre. */
 .backdrop::after {
-  display: none;
-  width: 480px;
-  height: var(--backdrop-shapes-height, 130px);
+  right: -120px;
+  bottom: -160px;
+  width: 640px;
+  height: 640px;
   background-color: var(--backdrop-line);
-  mask-image: url('../assets/backdrop/shapes.svg'), linear-gradient(#000 35%, transparent);
+  mask-image: url('../assets/backdrop/shapes.svg'), radial-gradient(circle at 100% 100%, #000 35%, transparent 75%);
   mask-composite: intersect;
   mask-repeat: no-repeat;
-  mask-size: 480px 240px, 100% 100%;
-  mask-position: 0 var(--backdrop-shapes-shift, -70px), 0 0;
-}
-@media (min-width: 768px) {
-  .backdrop::after {
-    display: block;
-  }
+  mask-size: 640px 640px, 100% 100%;
 }
 
-/* Home: a touch stronger, with a second glow on the left behind the greeting. */
-.backdrop--hero {
-  --backdrop-height: 200px;
-  --backdrop-dither-width: 55%;
-  background:
-    radial-gradient(ellipse 36rem 12rem at 85% 0%, var(--backdrop-glow), transparent 70%),
-    radial-gradient(ellipse 28rem 9rem at 0% 0%, var(--backdrop-glow), transparent 70%),
-    linear-gradient(var(--backdrop-wash), transparent);
-}
-
-/* Sign-in: the form is centred with room around it, so the band is taller and the shapes whole. */
-.backdrop--auth {
-  --backdrop-height: 100%;
-  --backdrop-dither-width: 100%;
-  --backdrop-dither-height: 96px;
-  --backdrop-shapes-height: 240px;
-  --backdrop-shapes-shift: 0px;
-  background:
-    radial-gradient(ellipse 36rem 16rem at 90% 0%, var(--backdrop-glow), transparent 70%),
-    radial-gradient(ellipse 30rem 14rem at 0% 100%, var(--backdrop-glow), transparent 70%),
-    linear-gradient(var(--backdrop-wash), transparent 45%);
-  mask-image: none;
-}
-.backdrop--auth::before {
-  mask-image: url('../assets/backdrop/dither-ramp.svg'), linear-gradient(#000, #000);
-}
-.backdrop--auth::after {
-  mask-image: url('../assets/backdrop/shapes.svg'), linear-gradient(#000 60%, transparent);
-}
-
-/* Phones: titles use the full width, so the dither is a thin strip above them. */
+/* Phones: no room at the edges, so only the washes and a lighter halftone. */
 @media (max-width: 767px) {
-  .backdrop {
-    --backdrop-dither-height: 36px;
+  .backdrop::before {
+    opacity: 0.6;
+  }
+  .backdrop::after {
+    display: none;
   }
 }
 

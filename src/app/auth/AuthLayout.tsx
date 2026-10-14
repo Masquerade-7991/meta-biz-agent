@@ -9,7 +9,8 @@ import { Backdrop } from '@/app/components/ui/backdrop'
 /** Login, sign-up and setup screens: brand panel on wide screens, the form on the right. */
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="relative isolate flex min-h-screen bg-background">
+      <Backdrop />
       {/* Helo.ai's own look (helo.ai): blush page, red-and-black logo, and its homepage art of an agent answering on WhatsApp. */}
       <aside className="hidden flex-col justify-between gap-8 bg-[#FDF3F1] p-10 text-[#14181B] lg:flex lg:w-5/12 xl:p-14">
         <img src={logo} alt="Helo.ai" className="h-14 w-auto self-start" />
@@ -27,8 +28,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           </p>
         </div>
       </aside>
-      <main className="relative isolate flex flex-1 justify-center px-4 py-10 sm:items-center sm:py-16">
-        <Backdrop variant="auth" />
+      <main className="flex flex-1 justify-center px-4 py-10 sm:items-center sm:py-16">
         <div className="w-full max-w-100">
           <img src={logo} alt="Helo.ai" className="mb-10 h-12 w-auto lg:hidden" />
           {children}

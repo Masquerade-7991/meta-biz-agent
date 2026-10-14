@@ -57,12 +57,12 @@
   --chart-4: #d97706;
   --chart-5: #8a8a85;
 
-  /* Backdrop (styles/backdrop.css): the band behind the top of a page. Blue and neutral only;
-     the dither and lines stay far below text contrast so nothing over them changes. */
-  --backdrop-wash: var(--accent);
-  --backdrop-glow: color-mix(in oklab, var(--primary) 8%, transparent);
-  --backdrop-dither: color-mix(in oklab, var(--primary) 20%, transparent);
-  --backdrop-line: color-mix(in oklab, var(--primary) 35%, var(--border-strong));
+  /* Backdrop (styles/backdrop.css): the quiet field behind every screen. Blue and neutral only,
+     and far below text contrast: the dots and lines are hairline-faint by design. */
+  --backdrop-wash-a: color-mix(in oklab, var(--primary) 6%, transparent);
+  --backdrop-wash-b: color-mix(in oklab, var(--muted-foreground) 5%, transparent);
+  --backdrop-dot: color-mix(in oklab, var(--foreground) 14%, transparent);
+  --backdrop-line: color-mix(in oklab, var(--primary) 22%, transparent);
 
   /* Sidebar */
   --sidebar: #fafaf9;
@@ -138,10 +138,10 @@
   --chart-4: #f0a53a;
   --chart-5: #8a8a85;
 
-  --backdrop-wash: color-mix(in oklab, var(--accent) 55%, transparent);
-  --backdrop-glow: color-mix(in oklab, var(--primary) 14%, transparent);
-  --backdrop-dither: color-mix(in oklab, var(--primary) 24%, transparent);
-  --backdrop-line: color-mix(in oklab, var(--primary) 30%, var(--border-strong));
+  --backdrop-wash-a: color-mix(in oklab, var(--primary) 10%, transparent);
+  --backdrop-wash-b: color-mix(in oklab, var(--muted-foreground) 6%, transparent);
+  --backdrop-dot: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --backdrop-line: color-mix(in oklab, var(--primary) 26%, transparent);
 
   --sidebar: #0e0f10;
   --sidebar-foreground: #b4b4af;

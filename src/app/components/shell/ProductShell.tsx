@@ -135,7 +135,8 @@ export function ProductShell({
   }
 
   return (
-    <div className="flex h-dvh bg-background">
+    <div className="relative isolate flex h-dvh bg-background">
+      <Backdrop />
       <div className="hidden md:flex">
         <AppSidebar active={active} onNavigate={setActive} onOpenSettings={openSettings} />
       </div>
@@ -183,9 +184,7 @@ export function ProductShell({
             />
           </div>
         </header>
-        <main className="relative isolate min-h-0 flex-1 overflow-y-auto">
-          {/* The band behind the page title; the Inbox fills the screen with its panes, so none there. */}
-          {active !== 'inbox' && <Backdrop variant={active === 'home' ? 'hero' : 'band'} />}
+        <main className="min-h-0 flex-1 overflow-y-auto">
           <ErrorBoundary resetKey={active}>
             <Suspense fallback={<PageLoader />}>{renderContent()}</Suspense>
           </ErrorBoundary>
