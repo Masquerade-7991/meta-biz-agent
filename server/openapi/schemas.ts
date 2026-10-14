@@ -30,6 +30,18 @@ export const schemas: Record<string, Schema> = {
       'Invited people who verified their email but haven’t finished setting up. Empty unless you can manage members.',
     ),
   }),
+  ApiToken: o({
+    'id*': d('string', 'Token id (UUID), for revoking it.'),
+    'name*': 'string',
+    'prefix*': d('string', 'The token’s first characters (`hk_` and 7 more), to tell tokens apart. The full token is shown only once, when it’s created.'),
+    'createdAt*': 'date-time',
+    'lastUsedAt*': d('date-time?', 'Updated at most once a minute.'),
+    'expiresAt*': d('date-time?', 'Null: never expires.'),
+    userId: d('string', 'Workspace list only: whose token it is.'),
+    ownerName: d('string', 'Workspace list only.'),
+    ownerEmail: d('string', 'Workspace list only.'),
+  }),
+  ApiTokens: o({ 'tokens*': 'ApiToken[]' }),
   Member: o({ 'userId*': 'string', 'name*': 'string', 'email*': 'string', 'role*': ROLE, 'joinedAt*': 'date-time' }),
   Invite: o({ 'id*': 'string', 'email*': 'string', 'role*': ROLE, 'invitedAt*': 'date-time', 'expiresAt*': 'date-time' }),
 

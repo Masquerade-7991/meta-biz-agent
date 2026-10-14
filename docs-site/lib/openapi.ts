@@ -9,9 +9,20 @@ export const openapi = createOpenAPI({
     console: async () => {
       const doc = JSON.parse(await readFile(path.resolve(process.cwd(), '../docs/openapi.json'), 'utf8'));
       for (const tag of doc.tags ?? []) tag['x-displayName'] ??= tag.name;
-      // The spec says "this server" ('/'), which code samples would print as example.com. Here they
-      // name the local API server instead (docs: Running locally).
-      doc.servers = [{ url: 'http://localhost:8787', description: 'The API server when running locally (in production: your console’s address)' }];
+      // The spec says "this server" ('/'), which only makes sense inside the console. Here the reader
+      // picks a console (an editable address, like Stripe's or Scalar's references) or the local API
+      // server; "Try it" calls it straight from the browser (the console allows this origin, CORS).
+      doc.servers = [
+        {
+          url: '{console}',
+          description: 'Your console',
+          variables: { console: { default: process.env.NEXT_PUBLIC_CONSOLE_URL || 'https://meta-biz-agent.vercel.app', description: 'Your console’s address, with https://' } },
+        },
+        { url: 'http://localhost:8787', description: 'The API server running locally (npm run dev:server)' },
+      ];
+      // From another site only an API token works (cookies never cross origins), so the reference
+      // shows that one; the session cookie is for the console itself (developers/api).
+      doc.security = [{ apiToken: [] }];
       return doc;
     },
   },

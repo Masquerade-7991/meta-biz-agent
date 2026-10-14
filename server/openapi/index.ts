@@ -24,15 +24,15 @@ export const openapi = {
     version: '1.0.0',
     description: [
       'The API behind the Helo.ai console: accounts and workspace, the support desk (inbox, tickets, contacts, broadcasts), WhatsApp numbers, and the relay to Meta’s Business Agent API.',
-      '**Signing in.** Every route except the public ones needs the session cookie `sid` from `POST /api/auth/login` (or an emailed link). In this page, “Try it out” uses your current session. Routes also need finished setup and a workspace.',
+      '**Signing in.** Every route except the public ones needs either the session cookie `sid` from `POST /api/auth/login` (or an emailed link), or an API token: `Authorization: Bearer hk_…`, created in Settings › API tokens. A token acts as its owner, in one workspace, with the owner’s current role; it can read account routes but not change them (password, email, workspaces, tokens). In this page, “Try it out” uses your current session. Routes also need finished setup and a workspace.',
       '**Roles.** Owner › Admin › Supervisor › Agent. Each route says the lowest role that may call it (from src/app/lib/permissions.ts).',
       '**Errors.** `{title, detail, status}`. Every response has an `x-trace-id` header; owners and admins can look up what a request did with `GET /api/trace/{id}`.',
       '**Repeating a request safely.** Send an `Idempotency-Key` header (any string you choose, up to 10 minutes apart) with a POST, PUT, PATCH or DELETE: the same key from the same person on the same route gets the first answer back (`idempotent-replayed: true`) instead of doing the work twice. Broadcasts are also protected without it.',
-      '**Same origin only.** No CORS; the console and the API share a host (Vite proxies `/api` in development, Vercel rewrites it in production).',
+      '**CORS.** The console and the API share a host (Vite proxies `/api` in development, Vercel rewrites it in production). Other sites listed in `DOCS_ORIGINS` (the docs site by default) may call it from a browser with an API token; cookies are never sent cross-origin.',
     ].join('\n\n'),
   },
   servers: [{ url: '/', description: 'This server' }],
-  security: [{ session: [] }],
+  security: [{ session: [] }, { apiToken: [] }],
   tags: [
     { name: 'Server', description: 'Health, Meta’s webhook, scheduled jobs, live updates, traces and these docs.' },
     { name: 'Accounts & workspace', description: 'Sign-up, login, your account, and the workspace’s people.' },
@@ -57,9 +57,10 @@ export const openapi = {
   components: {
     securitySchemes: {
       session: { type: 'apiKey', in: 'cookie', name: 'sid', description: 'Set by POST /api/auth/login. HttpOnly, so the browser sends it for you.' },
+      apiToken: { type: 'http', scheme: 'bearer', bearerFormat: 'hk_…', description: 'An API token from Settings › API tokens. Acts as you, in one workspace, with your current role.' },
     },
     responses: {
-      NotLoggedIn: error('Not logged in: no session, or it expired.'),
+      NotLoggedIn: error('Not logged in: no session, or it expired (with an API token: “Invalid API token”).'),
       Forbidden: error('Not allowed: setup not finished, no workspace, or your role can’t do this (the detail says which).'),
       DatabaseUnavailable: error('The database isn’t available (title: “Database not configured” or “Database unavailable”).'),
     },

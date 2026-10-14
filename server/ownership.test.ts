@@ -9,7 +9,7 @@ import path from 'node:path'
 const SERVER = import.meta.dirname
 const OWNER: Record<string, string> = {
   platform: 'jobs events api_calls audit_log alerts request_locks relay_cache rate_hits locks schema_meta',
-  identity: 'users workspaces memberships sessions magic_links invites',
+  identity: 'users workspaces memberships sessions magic_links invites api_tokens',
   whatsapp: 'whatsapp_accounts phone_numbers number_health webhook_baseline billing spend_daily agents agent_drafts agent_events eval_runs test_conversations',
   messaging: 'conversations messages webhook_inbox whatsapp_webhooks message_charges presence canned_responses reminders saved_views conversation_traces',
   support: 'tickets counters teams routing_rules escalation_policies support_settings contacts contact_fields segments',

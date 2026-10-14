@@ -166,6 +166,12 @@ const INDEXES: Record<string, IndexDescription[]> = {
     { key: { userId: 1 } },
     { key: { expiresAt: 1 }, expireAfterSeconds: 0 },
   ],
+  // API tokens (Authorization: Bearer hk_…): one person in one workspace. A token without expiresAt never expires.
+  api_tokens: [
+    { key: { tokenHash: 1 }, unique: true },
+    { key: { workspaceId: 1, userId: 1 } },
+    { key: { expiresAt: 1 }, expireAfterSeconds: 0 },
+  ],
   // Configuration copies (mirror.ts): one document per item on Meta, kept after delete (deletedAt).
   ...Object.fromEntries(
     ['faqs', 'skills', 'rich_replies', 'websites', 'documents', 'allowlist', 'connectors', 'connector_tools'].map((c) => [

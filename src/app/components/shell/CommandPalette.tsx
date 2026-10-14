@@ -25,6 +25,7 @@ const SETTINGS: { tab: string; label: string }[] = [
   { tab: 'canned', label: 'Canned responses' },
   { tab: 'fields', label: 'Contact fields' },
   { tab: 'profile', label: 'Your profile' },
+  { tab: 'tokens', label: 'API tokens' },
 ]
 
 /** ⌘K / Ctrl+K anywhere: jump to any page, setting or agent section, or run a quick action. */

@@ -24,7 +24,7 @@ export const AREAS = {
   tickets: { label: 'Tickets', kinds: ['ticket.'] },
   chats: { label: 'Chats', kinds: ['conversation.updated', 'customer.'] },
   agent: { label: 'AI agent', kinds: ['agent.'] },
-  people: { label: 'Team & members', kinds: ['member.', 'team.'] },
+  people: { label: 'Team & members', kinds: ['member.', 'team.', 'api_token.'] },
   contacts: { label: 'Contacts', kinds: ['contact.'] },
   broadcasts: { label: 'Broadcasts & templates', kinds: ['broadcast.created', 'broadcast.started', 'broadcast.completed', 'broadcast.cancelled', 'template.'] },
   reports: { label: 'Reports', kinds: ['report.'] },
@@ -162,6 +162,10 @@ export function activityText(e: ActivityEvent, names: Names = {}): string {
       return `${who} switched to this workspace`
     case 'member.invited':
       return `${who} invited ${d.email} as ${roleLabel(d.role as Role)}`
+    case 'api_token.created':
+      return `${who} created the API token “${d.name}”`
+    case 'api_token.revoked':
+      return `${who} revoked the API token “${d.name}”`
     case 'member.invite_revoked':
       return `${who} cancelled the invite for ${d.email}`
     case 'member.invite_declined':

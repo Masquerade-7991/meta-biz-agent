@@ -5,6 +5,9 @@
 // - After setup: email + password login.
 // - Tokens and session ids are random; only their sha256 is stored. Passwords use scrypt.
 // - Owners invite and manage members; every workspace keeps at least one owner.
+// - API tokens (`Authorization: Bearer hk_…`) act as one person in one workspace, with that person's
+//   current role; they stop working when the person leaves. Shown once; only the sha256 is stored.
+//   They read account routes but never change them (no password, workspace or token changes).
 // - A person can belong to several workspaces. Each session works in one of them (sessions.workspaceId)
 //   and switches with POST /api/account/workspace. Someone who already has an account accepts an invite
 //   in the app, signed in as the invited email; opening the emailed link never joins them by itself.
@@ -85,6 +88,21 @@ const memberships = () => col<Membership>('memberships')
 const links = () => col<MagicLink>('magic_links')
 /** `workspaceId`: the workspace this session works in; unset falls back to the most recent membership. */
 const sessions = () => col<{ tokenHash: string; userId: string; createdAt: Date; expiresAt: Date; workspaceId?: string }>('sessions')
+interface ApiToken {
+  _id: string
+  tokenHash: string
+  /** The first characters, so people can tell their tokens apart. */
+  prefix: string
+  name: string
+  userId: string
+  workspaceId: string
+  createdAt: Date
+  lastUsedAt?: Date
+  /** Unset: never expires. */
+  expiresAt?: Date
+}
+const apiTokens = () => col<ApiToken>('api_tokens')
+const TOKEN_DAYS = [30, 90, 365, 0] // 0 = never
 
 // ---- crypto ----
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex')
@@ -146,12 +164,17 @@ interface Session {
   role: Role | null
   setup: Setup
   sessionHash: string
+  /** Signed in with an API token rather than the session cookie. */
+  via?: 'token'
 }
+const bearer = (req: http.IncomingMessage) => /^Bearer\s+(hk_[\w-]+)$/i.exec(String(req.headers.authorization ?? ''))?.[1]
+/** True when the request authenticates with an API token (the cookie wins when both are sent). */
+export const usesApiToken = (req: http.IncomingMessage) => !cookieValue(req) && !!bearer(req)
 /** The signed-in user and their workspace (if any), or null. */
 export async function getSession(req: http.IncomingMessage): Promise<Session | null> {
   if (!db) return null
   const token = cookieValue(req)
-  if (!token) return null
+  if (!token) return tokenSession(req)
   const s = await sessions().findOne({ tokenHash: sha256(token), expiresAt: { $gt: new Date() } })
   const user = s && (await users().findOne({ _id: s.userId }))
   if (!s || !user) return null
@@ -161,6 +184,30 @@ export async function getSession(req: http.IncomingMessage): Promise<Session | n
   if (active.workspace && active.workspace._id !== s.workspaceId) await sessions().updateOne({ tokenHash: s.tokenHash }, { $set: { workspaceId: active.workspace._id } })
   return { user, ...active, setup: setupOf(user), sessionHash: s.tokenHash }
 }
+
+async function tokenSession(req: http.IncomingMessage): Promise<Session | null> {
+  const token = bearer(req)
+  if (!token) return null
+  const now = new Date()
+  const t = await apiTokens().findOne({ tokenHash: sha256(token), $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: now } }] })
+  const user = t && (await users().findOne({ _id: t.userId }))
+  const mm = user && (await memberships().findOne({ userId: user._id, workspaceId: t.workspaceId }))
+  const workspace = mm && (await workspaces().findOne({ _id: t.workspaceId }))
+  if (!t || !user || !mm || !workspace) return null
+  // At most one write a minute per token, not one per request.
+  void apiTokens().updateOne({ _id: t._id, $or: [{ lastUsedAt: { $exists: false } }, { lastUsedAt: { $lt: new Date(now.getTime() - MIN) } }] }, { $set: { lastUsedAt: now } }).catch(() => {})
+  return { user, workspace, role: mm.role, setup: setupOf(user), sessionHash: t.tokenHash, via: 'token' }
+}
+
+const tokenView = (t: ApiToken, owner?: Pick<User, 'name' | 'email'>) => ({
+  id: t._id,
+  name: t.name,
+  prefix: t.prefix,
+  createdAt: t.createdAt,
+  lastUsedAt: t.lastUsedAt ?? null,
+  expiresAt: t.expiresAt ?? null,
+  ...(owner && { userId: t.userId, ownerName: owner.name, ownerEmail: owner.email }),
+})
 
 /** The workspace a session works in: the one it chose if the person is still a member there,
  *  otherwise the one they joined most recently. */
@@ -299,6 +346,8 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
   // A cross-site HTML form always sends a form content type; only JSON (or no body) is accepted.
   const ct = String(req.headers['content-type'] ?? '')
   if (m !== 'GET' && ct && !ct.includes('application/json')) throw new HttpError(415, 'Send JSON.')
+  // An API token reads account routes but never changes them: no password, email, workspace or token changes.
+  if (m !== 'GET' && usesApiToken(req)) throw new HttpError(403, 'Not available with an API token. Sign in to the console instead.')
   const body = m === 'POST' || m === 'PUT' ? ((await readJson(req)) as Obj | null) ?? {} : {}
   let seg: RegExpMatchArray | null
 
@@ -393,6 +442,41 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     return me((await sessionFor(x.user._id, id))!)
   }
 
+  // -- API tokens: the caller's own, in the workspace they're working in --
+  if (path === '/api/account/tokens' && m === 'GET') {
+    const x = needWorkspace(s)
+    const ts = await apiTokens().find({ userId: x.user._id, workspaceId: x.workspace._id }).sort({ createdAt: -1 }).toArray()
+    return { tokens: ts.map((t) => tokenView(t)) }
+  }
+  if (path === '/api/account/tokens' && m === 'POST') {
+    const x = needWorkspace(s)
+    await limit(`token|${x.user._id}`, 20, 'Too many tokens created. Try again in an hour.')
+    const days = body.expiresInDays === undefined ? 90 : Number(body.expiresInDays)
+    if (!TOKEN_DAYS.includes(days)) throw new HttpError(400, 'expiresInDays must be 30, 90, 365 or 0 (never).')
+    const token = `hk_${newToken()}`
+    const now = new Date()
+    const t: ApiToken = {
+      _id: randomUUID(),
+      tokenHash: sha256(token),
+      prefix: token.slice(0, 10),
+      name: text(body.name, 'a name for the token', 60),
+      userId: x.user._id,
+      workspaceId: x.workspace._id,
+      createdAt: now,
+      ...(days && { expiresAt: new Date(now.getTime() + days * 24 * 60 * MIN) }),
+    }
+    await apiTokens().insertOne(t)
+    traceIn(x.workspace._id, x.user._id, 'api_token.created', { name: t.name }, { entity: 'member', id: x.user._id })
+    return { ...tokenView(t), token }
+  }
+  if ((seg = path.match(/^\/api\/account\/tokens\/([0-9a-f-]{36})$/)) && m === 'DELETE') {
+    const x = needWorkspace(s)
+    const t = await apiTokens().findOneAndDelete({ _id: seg[1], userId: x.user._id, workspaceId: x.workspace._id })
+    if (!t) throw new HttpError(404, 'This token was already revoked or has expired.')
+    traceIn(x.workspace._id, x.user._id, 'api_token.revoked', { name: t.name }, { entity: 'member', id: x.user._id })
+    return { ok: true }
+  }
+
   // -- invites to someone who already has an account --
   if ((seg = path.match(/^\/api\/account\/invites\/([a-f0-9]{24})\/(accept|decline)$/)) && m === 'POST') {
     const x = needReady(s)
@@ -432,6 +516,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     await memberships().deleteOne({ workspaceId: x.workspace._id, userId: x.user._id })
     if (x.role === 'owner' && mine) await keepAnOwner(x.workspace._id, () => memberships().insertOne(mine))
     await sessions().updateMany({ userId: x.user._id, workspaceId: x.workspace._id }, { $unset: { workspaceId: '' } })
+    await apiTokens().deleteMany({ userId: x.user._id, workspaceId: x.workspace._id })
     const owners = await memberships().find({ workspaceId: x.workspace._id, role: 'owner' }).toArray()
     for (const o of await users().find({ _id: { $in: owners.map((mm) => mm.userId) } }).toArray()) await mail.memberLeft(o.email, x.user.name, x.workspace.name).catch(() => {})
     traceIn(x.workspace._id, x.user._id, 'member.left', { name: x.user.name }, { entity: 'member', id: x.user._id })
@@ -486,6 +571,19 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
       return { ok: true }
     }
   }
+  if (path === '/api/workspace/tokens' && m === 'GET') {
+    const x = needCan(s, 'tokens.manage')
+    const ts = await apiTokens().find({ workspaceId: x.workspace._id }).sort({ createdAt: -1 }).toArray()
+    const people = new Map((await users().find({ _id: { $in: ts.map((t) => t.userId) } }).toArray()).map((p) => [p._id, p]))
+    return { tokens: ts.map((t) => tokenView(t, people.get(t.userId) ?? { name: '', email: '' })) }
+  }
+  if ((seg = path.match(/^\/api\/workspace\/tokens\/([0-9a-f-]{36})$/)) && m === 'DELETE') {
+    const x = needCan(s, 'tokens.manage')
+    const t = await apiTokens().findOneAndDelete({ _id: seg[1], workspaceId: x.workspace._id })
+    if (!t) throw new HttpError(404, 'This token was already revoked or has expired.')
+    traceIn(x.workspace._id, x.user._id, 'api_token.revoked', { name: t.name }, { entity: 'member', id: t.userId })
+    return { ok: true }
+  }
   if ((seg = path.match(/^\/api\/workspace\/members\/([0-9a-f-]{36})$/))) {
     const x = needCan(s, 'members.manage')
     const target = await memberships().findOne({ workspaceId: x.workspace._id, userId: seg[1] })
@@ -497,6 +595,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
       await memberships().deleteOne({ workspaceId: x.workspace._id, userId: target.userId })
       // Their other workspaces stay open; sessions working in this one fall back to another.
       await sessions().updateMany({ userId: target.userId, workspaceId: x.workspace._id }, { $unset: { workspaceId: '' } })
+      await apiTokens().deleteMany({ userId: target.userId, workspaceId: x.workspace._id })
       traceIn(x.workspace._id, x.user._id, 'member.removed', { name: person.name, email: person.email }, { entity: 'member', id: target.userId })
       await withWorkspace(x.workspace._id, () => cleanUpMember(target.userId, person.name), null, { userId: x.user._id })
       await mail.removed(person.email, x.workspace.name)

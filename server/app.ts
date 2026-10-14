@@ -4,7 +4,7 @@
 import type http from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { allow, getCached, invalidatePhone, putCached, ttlFor } from './platform/cache.ts'
-import { getSession, handleAuth } from './identity/auth.ts'
+import { getSession, handleAuth, usesApiToken } from './identity/auth.ts'
 import { handleAnalytics } from './insights/analytics.ts'
 import { handleActivity } from './insights/activity.ts'
 import { handleReports } from './insights/reports.ts'
@@ -59,6 +59,31 @@ async function webhookBacklog() {
 }
 
 const IDEMPOTENT = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
+/** Sites that may call the API from a browser (the docs site's "Try it"). Only with an API token:
+ *  credentials are never allowed cross-origin, so the session cookie never rides along. */
+const CORS_ORIGINS = new Set(
+  (env('DOCS_ORIGINS') || 'https://helo-docs.vercel.app,http://localhost:3000')
+    .split(',')
+    .map((o) => o.trim().replace(/\/$/, ''))
+    .filter(Boolean),
+)
+/** Adds CORS headers for an allowed origin; answers a preflight itself (true = done). */
+function cors(req: http.IncomingMessage, res: http.ServerResponse): boolean {
+  const origin = String(req.headers.origin ?? '')
+  res.setHeader('vary', 'Origin')
+  if (!CORS_ORIGINS.has(origin)) return false
+  res.setHeader('access-control-allow-origin', origin)
+  res.setHeader('access-control-expose-headers', 'x-trace-id, idempotent-replayed, retry-after')
+  if (req.method !== 'OPTIONS') return false
+  res.writeHead(204, {
+    'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE',
+    'access-control-allow-headers': 'authorization, content-type, idempotency-key, x-api-version',
+    'access-control-max-age': '600',
+  })
+  res.end()
+  return true
+}
 /** `Idempotency-Key`: the same key from the same person on the same route within 10 minutes gets the
  *  first answer back (header `idempotent-replayed: true`) instead of doing the work again. True when
  *  replayed; otherwise the answer is captured as it goes out. Broadcasts keep their own lock too. */
@@ -192,6 +217,7 @@ export async function handle(req: http.IncomingMessage, res: http.ServerResponse
   // Every answer names its trace, so a reported error can be looked up (GET /api/trace/<id>).
   const tid = randomUUID()
   res.setHeader('x-trace-id', tid)
+  if (cors(req, res)) return
   if (url.split('?')[0] === '/api/ready') {
     res.writeHead(db ? 200 : 503, { 'content-type': 'application/json' })
     res.end(JSON.stringify(db ? { ok: true, instance: INSTANCE } : { title: 'Not ready', detail: dbOffReason, status: 503 }))
@@ -237,6 +263,7 @@ export async function handle(req: http.IncomingMessage, res: http.ServerResponse
   const pathname = url.split('?')[0]
   // The docs page is opened in a browser tab: without a session, go log in instead of a JSON 401.
   if (!s && pathname === '/api/docs') return void res.writeHead(302, { location: '/' }).end()
+  if (!s && usesApiToken(req)) return sendError(res, 401, 'Invalid API token', 'This API token is wrong, revoked or expired, or its owner left the workspace. Create a new one in Settings › API tokens.')
   if (!s) return sendError(res, 401, 'Not logged in', 'Log in to continue.')
   if (s.setup !== 'complete') return sendError(res, 403, 'Setup not finished', 'Finish setting up your account first.')
   if (!s.workspace) return sendError(res, 403, 'No workspace', 'Create or join a workspace first.')

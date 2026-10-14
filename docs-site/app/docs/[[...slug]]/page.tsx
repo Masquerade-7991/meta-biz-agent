@@ -23,7 +23,8 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
     return (
       <DocsPage full>
         <DocsTitle>{page.data.title}</DocsTitle>
-        <DocsBody>
+        {/* Full width and a container, so each endpoint's code samples sit pinned beside it (api-page.tsx). */}
+        <DocsBody className="@container max-w-none!">
           <OpenAPIPage {...page.data.getOpenAPIPageProps()} />
         </DocsBody>
       </DocsPage>

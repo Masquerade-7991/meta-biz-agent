@@ -41,6 +41,19 @@ export interface Member {
   role: Role
   joinedAt: string
 }
+/** An API token as listed: never the token itself, which is shown once when created. */
+export interface ApiToken {
+  id: string
+  name: string
+  prefix: string
+  createdAt: string
+  lastUsedAt: string | null
+  expiresAt: string | null
+  /** The workspace-wide list only. */
+  userId?: string
+  ownerName?: string
+  ownerEmail?: string
+}
 export interface Invite {
   id: string
   email: string
@@ -147,7 +160,29 @@ function dummyWorkspace(method: string, path: string, body: Record<string, unkno
   return { ok: true }
 }
 
+// Dummy mode: tokens live in this tab and never work anywhere.
+let demoTokens: ApiToken[] = []
+function dummyTokens(method: string, path: string, body: Record<string, unknown>): unknown {
+  const id = path.match(/\/tokens\/([^/]+)$/)?.[1]
+  if (id && method === 'DELETE') {
+    demoTokens = demoTokens.filter((t) => t.id !== id)
+    return { ok: true }
+  }
+  if (method === 'POST') {
+    const name = String(body.name ?? '').trim()
+    if (!name) throw new MetaError(400, 'Check your details', 'Enter a name for the token.')
+    const days = Number(body.expiresInDays ?? 90)
+    const token = `hk_demo${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`
+    const t: ApiToken = { id: `tok${Date.now()}`, name, prefix: token.slice(0, 10), createdAt: new Date().toISOString(), lastUsedAt: null, expiresAt: days ? new Date(Date.now() + days * 86_400_000).toISOString() : null }
+    demoTokens = [t, ...demoTokens]
+    return { ...t, token }
+  }
+  const all = path.startsWith('/api/workspace/')
+  return { tokens: demoTokens.map((t) => (all ? { ...t, userId: 'demo', ownerName: 'Demo User', ownerEmail: 'demo@helo.ai' } : t)) }
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (isDummyMode() && /^\/api\/(account|workspace)\/tokens(\/|$)/.test(path)) return dummyTokens(method, path, (body ?? {}) as Record<string, unknown>) as T
   if (isDummyMode() && (/^\/api\/account\/(workspace|invites\/)/.test(path) || path === '/api/workspace' || path === '/api/workspace/leave'))
     return dummyAccount(method, path, (body ?? {}) as Record<string, unknown>) as T
   if (isDummyMode() && path.startsWith('/api/workspace/')) return dummyWorkspace(method, path, (body ?? {}) as Record<string, unknown>) as T
@@ -184,4 +219,9 @@ export const authApi = {
   revokeInvite: (id: string) => call<{ ok: true }>('DELETE', `/api/workspace/invites/${id}`),
   setRole: (userId: string, role: Role) => call<{ ok: true }>('PUT', `/api/workspace/members/${userId}`, { role }),
   removeMember: (userId: string) => call<{ ok: true }>('DELETE', `/api/workspace/members/${userId}`),
+  tokens: () => call<{ tokens: ApiToken[] }>('GET', '/api/account/tokens'),
+  createToken: (name: string, expiresInDays: number) => call<ApiToken & { token: string }>('POST', '/api/account/tokens', { name, expiresInDays }),
+  revokeToken: (id: string) => call<{ ok: true }>('DELETE', `/api/account/tokens/${id}`),
+  workspaceTokens: () => call<{ tokens: ApiToken[] }>('GET', '/api/workspace/tokens'),
+  revokeWorkspaceToken: (id: string) => call<{ ok: true }>('DELETE', `/api/workspace/tokens/${id}`),
 }

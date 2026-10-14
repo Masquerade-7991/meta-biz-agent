@@ -24,10 +24,11 @@ import { Label } from '@/app/components/ui/label'
 import { errorDetail } from '@/app/api/meta'
 import { SettingsSection } from './SettingsSection'
 import { WhatsAppSettings } from './WhatsAppSettings'
+import { ApiTokensSettings } from './ApiTokensSettings'
 import { assignableRoles, can, canSetRole, roleLabel, ROLES, type Role } from '@/app/lib/permissions'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
 
-export type SettingsTab = 'profile' | 'whatsapp' | 'billing' | 'members' | 'activity' | 'canned' | 'support' | 'fields' | 'teams' | 'routing' | 'escalation'
+export type SettingsTab = 'profile' | 'whatsapp' | 'billing' | 'members' | 'activity' | 'canned' | 'support' | 'fields' | 'teams' | 'routing' | 'escalation' | 'tokens'
 
 
 const days = (from: string, to = Date.now()) => Math.round((to - Date.parse(from)) / 86_400_000)
@@ -381,7 +382,13 @@ const SETTINGS_GROUPS: { label: string; items: { id: SettingsTab; label: string 
       { id: 'fields', label: 'Contact fields' },
     ],
   },
-  { label: 'You', items: [{ id: 'profile', label: 'Profile' }] },
+  {
+    label: 'You',
+    items: [
+      { id: 'profile', label: 'Profile' },
+      { id: 'tokens', label: 'API tokens' },
+    ],
+  },
 ]
 
 export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: SettingsTab; onTabChange: (t: SettingsTab) => void; onManageNumbers?: () => void }) {
@@ -464,6 +471,9 @@ export function SettingsPage({ tab, onTabChange, onManageNumbers }: { tab: Setti
         </TabsContent>
         <TabsContent value="fields">
           <ContactFieldsSettings />
+        </TabsContent>
+        <TabsContent value="tokens">
+          <ApiTokensSettings />
         </TabsContent>
         </div>
       </Tabs>

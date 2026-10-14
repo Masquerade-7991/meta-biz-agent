@@ -168,6 +168,44 @@ export const auth = area('Accounts & workspace', {
       errors: { 400: 'You’re the only owner. Make someone else an owner before you leave.' },
     },
   },
+  '/api/account/tokens': {
+    get: {
+      id: 'listApiTokens',
+      summary: 'Your API tokens',
+      description: 'Your tokens in the workspace you’re working in. Never includes the token itself.',
+      ok: 'ApiTokens',
+    },
+    post: {
+      id: 'createApiToken',
+      summary: 'Create an API token',
+      description:
+        'Returns the token once, in `token`: store it now. It acts as you, in this workspace, with your current role (`Authorization: Bearer hk_…`), and stops working if you leave the workspace. Needs the session cookie: an API token can’t create tokens.',
+      body: o({ 'name*': d('string', 'Up to 60 characters, e.g. “CI” or “Docs try it”.', { maxLength: 60 }), expiresInDays: d({ type: 'integer', enum: [30, 90, 365, 0] }, '0: never expires.', { default: 90 }) }),
+      ok: { allOf: [{ $ref: '#/components/schemas/ApiToken' }, o({ 'token*': d('string', 'The token. Shown only this once.') })] },
+      errors: { 400: 'Enter a name for the token. / expiresInDays must be 30, 90, 365 or 0 (never).', 429: 'Too many tokens created (20 an hour).' },
+    },
+  },
+  '/api/account/tokens/{tokenId}': {
+    delete: {
+      id: 'revokeApiToken',
+      summary: 'Revoke one of your API tokens',
+      description: 'It stops working at once. Needs the session cookie.',
+      params: { tokenId: d('string', 'Token id.', { format: 'uuid' }) },
+      errors: { 404: 'This token was already revoked or has expired.' },
+    },
+  },
+  '/api/workspace/tokens': {
+    get: { id: 'listWorkspaceApiTokens', summary: 'Everyone’s API tokens', description: 'Every token in the workspace, with whose it is.', who: 'tokens.manage', ok: 'ApiTokens' },
+  },
+  '/api/workspace/tokens/{tokenId}': {
+    delete: {
+      id: 'revokeWorkspaceApiToken',
+      summary: 'Revoke someone’s API token',
+      who: 'tokens.manage',
+      params: { tokenId: d('string', 'Token id.', { format: 'uuid' }) },
+      errors: { 404: 'This token was already revoked or has expired.' },
+    },
+  },
   '/api/workspace/members': {
     get: { id: 'listMembers', summary: 'People in the workspace', description: 'Members, plus pending invites for those who manage members.', ok: 'Members' },
   },

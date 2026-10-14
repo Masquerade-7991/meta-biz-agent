@@ -19,6 +19,8 @@ const MATRIX = {
   'billing.manage': AT_LEAST('owner'),
   /** Invite people, change roles, remove members (admins: not owners). */
   'members.manage': AT_LEAST('admin'),
+  /** See and revoke everyone's API tokens (each person always manages their own). */
+  'tokens.manage': AT_LEAST('admin'),
   /** Support rules, contact fields, shared canned responses, automation, the AI agent's setup. */
   'settings.manage': AT_LEAST('admin'),
   'automation.manage': AT_LEAST('admin'),

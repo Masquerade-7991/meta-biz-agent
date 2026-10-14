@@ -5,9 +5,34 @@ description: The console's own API, generated from docs/openapi.json.
 
 These pages are generated from the console's OpenAPI 3.1 spec (`docs/openapi.json`), one page per area. They update whenever the docs site is rebuilt.
 
-## Signing in
+Each page opens with a table of its endpoints. Each endpoint then lists its parameters, its request body and every response it can give. Open **Show child attributes** to see a response's fields. The code samples on the right (cURL, JavaScript, Python and more) stay beside the endpoint you're reading.
 
-Every route except the public ones needs the session cookie `sid`, set by `POST /api/auth/login` or an emailed sign-in link. Routes also need finished setup and a workspace.
+## Authentication
+
+Send an **API token** in the `Authorization` header:
+
+```bash
+curl https://your-console.example/api/tickets \
+  -H "Authorization: Bearer $HELO_API_TOKEN"
+```
+
+Create one in the console under **Settings › API tokens** ([how](/docs/guide/settings#api-tokens)). A token acts as you, in one workspace, with your current role. It's shown once, and only its hash is stored. It stops working when it expires, when it's revoked, or when you leave the workspace. A wrong or dead token gets `401` with the title `Invalid API token`.
+
+A token can read account routes but can't change them (password, email, workspaces, tokens). Those need the session cookie `sid`, which the console itself uses (`POST /api/auth/login`).
+
+## Try it
+
+**Try in Playground** on any endpoint opens a form with every path, query, header and body field (required ones are marked), sends the request from your browser and shows the response.
+
+1. Pick a server. **Your console** takes your console's address; **localhost:8787** is the API server when you're [running locally](/docs/developers/running-locally).
+2. Paste your token into **Authorization**. It's kept in this browser only.
+3. Fill in the fields and press **Send** (⌘↵).
+
+Requests are real: a POST, PUT or DELETE changes data in that workspace. Sample contacts (`sample: true`) never reach Meta.
+
+## CORS
+
+The console answers browsers on other sites only if they're listed in its `DOCS_ORIGINS` setting (by default the docs site and `http://localhost:3000`), and only with an API token. Cookies are never accepted from another site.
 
 ## Roles
 
@@ -17,6 +42,6 @@ Owner › Admin › Supervisor › Agent. Each route says the lowest role that m
 
 Errors are `{title, detail, status}`. Every response has an `x-trace-id` header. Owners and admins can look up what a request did with `GET /api/trace/{id}`.
 
-## Same origin only
+## Repeating a request safely
 
-There's no CORS. The console and the API share a host. To try requests with your own session, use the Swagger UI at `/api/docs` in a running console, which is for members only.
+Send an `Idempotency-Key` header with a POST, PUT, PATCH or DELETE. The same key from the same person on the same route, within 10 minutes, gets the first answer back (`idempotent-replayed: true`) instead of doing the work twice.

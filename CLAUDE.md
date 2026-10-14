@@ -17,6 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Accounts gate the API (`server/auth.ts`):**
   - Every `/api/*` route except `/api/health` and the account routes needs a signed-in workspace member, and runs inside that member's workspace (`ws()` in `server/db.ts`).
   - A person can belong to several workspaces (memberships unique per workspace + person). Each session works in one (`sessions.workspaceId`), switched with `POST /api/account/workspace`. Someone who already has an account answers an invite in the app, signed in as the invited email (`/api/account/invites/{id}/accept|decline`); the emailed link alone never joins them.
+  - API tokens (`Authorization: Bearer hk_…`, Settings › API tokens, `api_tokens`) act as one person in one workspace with their current role; they read account routes but never change them. `getSession()` accepts them. CORS allows `DOCS_ORIGINS` (default: the docs site, localhost:3000) without credentials, so the docs site's "Try in Playground" works with a token.
   - Accounts need MongoDB.
   - Emails go through Gmail SMTP (`SMTP_USER` / `SMTP_PASS` App password). Without `SMTP_PASS`, emails, including magic links, print to the relay log.
   - Dummy mode skips login entirely.

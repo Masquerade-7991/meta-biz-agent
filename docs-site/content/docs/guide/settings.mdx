@@ -153,6 +153,18 @@ Extra fields on every contact, such as City. Choose a name and a type (text, num
 
 Switch light and dark mode with the toggle in the top bar. The workspace switcher at the top of the sidebar moves you between workspaces if you belong to several.
 
+## API tokens
+
+**API tokens** let a script, or the **Try in Playground** button in the [API reference](/docs/developers/api), use the console's API as you. Everyone can create their own.
+
+- A token works in the workspace you're in when you create it, with **your current role**. If your role changes, the token's does too. If you leave the workspace or are removed, it stops working.
+- Give it a name you'll recognise, such as *Docs try it*, and choose when it expires: 30 days, 90 days (the default), 1 year or never.
+- **Copy the token straight away.** It's shown once. Afterwards the list shows only its first characters (`hk_…`), when it was last used and when it expires.
+- **Revoke** a token you no longer need, or one that might have leaked. Anything using it stops working at once.
+- Owners and admins also see **All tokens in this workspace** and can revoke anyone's.
+
+A token can read your account but can't change it: no password, email, workspace or token changes. Do those in the console.
+
 ## If something goes wrong
 
 | What you see | What to do |
@@ -161,6 +173,7 @@ Switch light and dark mode with the toggle in the top bar. The workspace switche
 | **This person is already in this workspace** or **already invited** | Resend the invite from the Members list instead of creating another. |
 | **A workspace needs at least one owner** | Make someone else an owner before demoting or removing the last one. |
 | **This invite was revoked, has expired or was already answered** | Ask an admin to send a new one. |
+| **Invalid API token** | The token is wrong, revoked or expired, or its owner left the workspace. Create a new one under **API tokens**. |
 | **Check the hours for …: closing must be after opening** | Fix the times for that day. |
 | **Check the … targets: both above zero, and resolution at least as long as first response** | Raise the resolution time or lower the first reply time. |
 | **The rule … sends tickets to this team. Change the rule first.** | Edit the routing rule, then delete the team. |
