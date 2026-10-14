@@ -5,13 +5,14 @@
 // Refuses on another branch, with other files already staged, or when a page wouldn't build or
 // wouldn't round-trip through the editor.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 const DOCS = path.resolve(import.meta.dirname, '..')
 const REPO = path.resolve(DOCS, '..')
 const { siteUrl } = await import('../lib/shared.ts').catch(() => ({ siteUrl: 'https://helo-docs.vercel.app' }))
-const PATHS = ['docs-site/content', 'docs-site/public/uploads']
+// Only folders that exist: git refuses a whole command over a missing path (no uploads yet).
+const PATHS = ['docs-site/content', 'docs-site/public/uploads'].filter((p) => existsSync(path.join(REPO, p)))
 const dryRun = process.argv.includes('--dry-run')
 const WAIT_MS = 5 * 60_000
 
@@ -70,7 +71,11 @@ const titles = [...new Set(pages.filter((c) => !c.code.includes('D')).map((c) =>
 const images = changes.filter((c) => c.file.startsWith('docs-site/public/uploads/')).length
 const subject = `Docs: ${titles.length ? titles.slice(0, 4).join(', ') + (titles.length > 4 ? ` and ${titles.length - 4} more` : '') : 'pages'}${images ? ` (${images} image${images > 1 ? 's' : ''})` : ''}`
 git('commit', '-m', subject, '--', ...PATHS)
-const pull = spawnSync('git', ['pull', '--rebase', '--autostash', 'origin', 'main'], { cwd: REPO, encoding: 'utf8' })
+// Bring in main only when GitHub has moved on: a rebase also has to set aside every other uncommitted
+// file, which can fail for reasons that have nothing to do with the docs.
+spawnSync('git', ['fetch', 'origin', 'main'], { cwd: REPO })
+const behind = Number(git('rev-list', '--count', 'HEAD..origin/main')) > 0
+const pull = behind ? spawnSync('git', ['pull', '--rebase', '--autostash', 'origin', 'main'], { cwd: REPO, encoding: 'utf8' }) : { status: 0, stderr: '' }
 if (pull.status !== 0) {
   spawnSync('git', ['rebase', '--abort'], { cwd: REPO })
   stop(`Couldn't bring in the latest main (someone changed the same lines?). Your edit is committed locally; run "git pull --rebase", resolve, then publish again.\n${pull.stderr}`)
