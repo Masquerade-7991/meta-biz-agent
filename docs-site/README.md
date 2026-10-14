@@ -15,4 +15,4 @@ npm run build
 - Guide rule: WhatsApp facts come from Meta's docs (cite with a Source line), product steps from the console; our own words.
 - Typography: Inter (body), Plus Jakarta Sans (headings), JetBrains Mono (code), loaded in `app/layout.tsx`; sizes, greys and the 720px reading column are tokens in `app/global.css`. Technical terms go in `code`, not italics.
 - Look: the console's tokens (`src/styles/theme.css`) mapped onto Fumadocs' colours in `app/global.css`.
-- Deploy: a separate Vercel project with root directory `docs-site`, keeping "Include files outside the root directory" on so the spec is readable.
+- Hosted at https://helo-docs.vercel.app (Vercel project `helo-docs`, root directory `docs-site`, files outside the root included so the spec is readable). `vercel.json` here and at the repo root skip builds that don't concern each project. Publish edits with `npm run docs:publish` (commits only pages and uploads, pushes, waits for the hosted site to serve the commit; `/version.json` shows it).

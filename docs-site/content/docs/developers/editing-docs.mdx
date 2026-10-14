@@ -3,14 +3,14 @@ title: Editing the docs
 description: Change the documentation in your browser, with the local editor or on GitHub, and publish it.
 ---
 
-There are two ways to edit a page in the browser. Both change the same MDX files in `docs-site/content/docs`, and a commit to `main` publishes them.
+The docs are hosted at **[helo-docs.vercel.app](https://helo-docs.vercel.app/docs)**, a Vercel project of their own (`helo-docs`) that rebuilds from `main` whenever the docs change. There are two ways to edit a page in the browser. Both change the same MDX files in `docs-site/content/docs`.
 
 | | Local editor | Open in GitHub |
 | --- | --- | --- |
 | Where | `http://localhost:5180` on your machine | Any browser, signed in to GitHub |
 | Best for | Writing and rearranging pages, adding images | Quick fixes when you're away from your machine |
 | Saves | Automatically, to the files in your checkout | When you commit in GitHub's editor |
-| Publish | Commit and push | Commit to `main` (or open a pull request) |
+| Publish | `npm run docs:publish` | Commit to `main` (or open a pull request) |
 
 ## The local editor
 
@@ -38,7 +38,13 @@ It opens `http://localhost:5180` with the docs folder. The file list on the left
 </Step>
 <Step>
 
-**Publish** by committing the changed files in `docs-site/content/docs` (and any images in `docs-site/public/uploads`) and pushing to `main`.
+**Publish** to the hosted docs:
+
+```bash
+npm run docs:publish
+```
+
+See [Publish to the hosted docs](#publish-to-the-hosted-docs) below.
 
 </Step>
 </Steps>
@@ -54,6 +60,29 @@ Paste or drop an image into a page. It's saved to `docs-site/public/uploads` and
 - **New components** used in MDX need a spec in `docs-site/fumadocs-studio.config.ts`, or the editor shows them as source.
 - **The API reference** is generated from `docs/openapi.json`, so it isn't edited here. Change `server/openapi/*` and run `npm run docs:openapi`.
 - **Two people at once:** add `?collab` to the editor's address to edit the same page together.
+
+## Publish to the hosted docs
+
+`npm run docs:publish` sends your edits to the hosted docs and tells you when they're live:
+
+1. It lists the pages and images you changed. Only those go out. Anything else you're working on stays out of it.
+2. It checks them first. It refuses when:
+   - you're not on `main`;
+   - other files are already staged;
+   - a page's title block is broken;
+   - a page wouldn't save back unchanged through the editor.
+3. It commits them as `Docs: <page titles>`, brings in the latest `main` and pushes.
+4. It waits until the hosted site serves that commit (usually 1–2 minutes), then prints the live address of each page.
+
+Add `-- --dry-run` (`npm run docs:publish -- --dry-run`) to see what would go out without publishing anything.
+
+**If the build fails**, the previous version stays live, and the command points you to the deployments on Vercel. `https://helo-docs.vercel.app/version.json` shows which commit the hosted docs are serving.
+
+**Builds are separate.** A docs-only commit rebuilds only the docs, and a console change rebuilds only the console. Each project has an `ignoreCommand` in its `vercel.json`. A change to `docs/openapi.json` rebuilds the docs too, because the API reference comes from it.
+
+### A custom domain later
+
+In Vercel, open the `helo-docs` project, go to **Settings › Domains** and add the domain (for example `docs.helo.ai`). Add the CNAME record Vercel shows at your DNS provider. Then change `siteUrl` in `docs-site/lib/shared.ts`.
 
 ## Open in GitHub
 

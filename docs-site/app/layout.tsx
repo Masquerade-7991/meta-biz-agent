@@ -2,8 +2,10 @@ import { RootProvider } from 'fumadocs-ui/provider/next';
 import './global.css';
 import { Inter, JetBrains_Mono, Plus_Jakarta_Sans } from 'next/font/google';
 import type { Metadata } from 'next';
+import { siteUrl } from '@/lib/shared';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: { template: '%s · Helo.ai docs', default: 'Helo.ai docs' },
   description: 'How to use the Helo.ai console for the WhatsApp Business Agent, and how it is built.',
   icons: '/favicon.svg',

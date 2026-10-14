@@ -9,7 +9,8 @@
     "start": "next start",
     "types:check": "next typegen && tsc --noEmit",
     "edit": "fumadocs-studio",
-    "check:editor": "node scripts/check-roundtrip.mjs"
+    "check:editor": "node scripts/check-roundtrip.mjs",
+    "publish-docs": "node scripts/publish.mjs"
   },
   "dependencies": {
     "cn": "^0.4.0",
