@@ -57,6 +57,13 @@
   --chart-4: #d97706;
   --chart-5: #8a8a85;
 
+  /* Backdrop (styles/backdrop.css): the band behind the top of a page. Blue and neutral only;
+     the dither and lines stay far below text contrast so nothing over them changes. */
+  --backdrop-wash: var(--accent);
+  --backdrop-glow: color-mix(in oklab, var(--primary) 8%, transparent);
+  --backdrop-dither: color-mix(in oklab, var(--primary) 20%, transparent);
+  --backdrop-line: color-mix(in oklab, var(--primary) 35%, var(--border-strong));
+
   /* Sidebar */
   --sidebar: #fafaf9;
   --sidebar-foreground: #4a4945;
@@ -130,6 +137,11 @@
   --chart-3: #f05561;
   --chart-4: #f0a53a;
   --chart-5: #8a8a85;
+
+  --backdrop-wash: color-mix(in oklab, var(--accent) 55%, transparent);
+  --backdrop-glow: color-mix(in oklab, var(--primary) 14%, transparent);
+  --backdrop-dither: color-mix(in oklab, var(--primary) 24%, transparent);
+  --backdrop-line: color-mix(in oklab, var(--primary) 30%, var(--border-strong));
 
   --sidebar: #0e0f10;
   --sidebar-foreground: #b4b4af;

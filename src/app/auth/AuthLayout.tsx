@@ -4,6 +4,7 @@ import heroArt from '@/assets/helo-conversations.svg'
 import metaPartner from '@/assets/meta-partner.svg'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
+import { Backdrop } from '@/app/components/ui/backdrop'
 
 /** Login, sign-up and setup screens: brand panel on wide screens, the form on the right. */
 export function AuthLayout({ children }: { children: ReactNode }) {
@@ -26,7 +27,8 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           </p>
         </div>
       </aside>
-      <main className="flex flex-1 justify-center px-4 py-10 sm:items-center sm:py-16">
+      <main className="relative isolate flex flex-1 justify-center px-4 py-10 sm:items-center sm:py-16">
+        <Backdrop variant="auth" />
         <div className="w-full max-w-100">
           <img src={logo} alt="Helo.ai" className="mb-10 h-12 w-auto lg:hidden" />
           {children}

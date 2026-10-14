@@ -1,6 +1,7 @@
 @import './fonts.css';
 @import './theme.css';
 @import './tailwind.css';
+@import './backdrop.css';
 
 * {
   box-sizing: border-box;

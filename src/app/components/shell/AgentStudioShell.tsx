@@ -18,6 +18,7 @@ import { cn } from '@/app/lib/utils'
 import { useAuth } from '@/app/auth/AuthContext'
 import { can } from '@/app/lib/permissions'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
+import { Backdrop } from '@/app/components/ui/backdrop'
 
 // Slices a stored draft may restore. Gate (which number is open) and demo controls stay local.
 const DRAFT_SLICES = [
@@ -216,7 +217,8 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
           </SheetContent>
         </Sheet>
 
-        <main className="min-h-0 flex-1 overflow-y-auto bg-canvas">
+        <main className="relative isolate min-h-0 flex-1 overflow-y-auto bg-canvas">
+          <Backdrop />
           <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-8">
             <h1 className="mb-5 truncate text-title font-semibold">{activeLabel}</h1>
             {readOnly && (

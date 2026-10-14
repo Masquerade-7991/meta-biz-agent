@@ -17,6 +17,7 @@ import {
 } from '@/app/components/ui/dropdown-menu'
 import { HELP_GROUPS, SHORTCUTS } from '@/app/home/helpLinks'
 import mark from '@/assets/helo-mark.svg'
+import { Backdrop } from '@/app/components/ui/backdrop'
 import { AppSidebar } from './AppSidebar'
 import { navFor, type NavId } from '@/app/nav'
 import { useAuth } from '@/app/auth/AuthContext'
@@ -182,7 +183,9 @@ export function ProductShell({
             />
           </div>
         </header>
-        <main className="min-h-0 flex-1 overflow-y-auto">
+        <main className="relative isolate min-h-0 flex-1 overflow-y-auto">
+          {/* The band behind the page title; the Inbox fills the screen with its panes, so none there. */}
+          {active !== 'inbox' && <Backdrop variant={active === 'home' ? 'hero' : 'band'} />}
           <ErrorBoundary resetKey={active}>
             <Suspense fallback={<PageLoader />}>{renderContent()}</Suspense>
           </ErrorBoundary>
