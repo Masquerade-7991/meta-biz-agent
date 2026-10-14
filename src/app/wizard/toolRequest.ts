@@ -33,7 +33,7 @@ export interface MetaTool {
 export const agentFills = (v: ActionValue) => v.source === 'conversation' || v.source === 'conversation_memory'
 export const bodyAllowed = (method: ConnectionAction['method']) => method === 'POST' || method === 'PUT' || method === 'PATCH'
 
-export function paramNode(v: ActionValue): ParamNode {
+function paramNode(v: ActionValue): ParamNode {
   // Shapes the console can't edit (objects, lists from MCP or elsewhere) go back exactly as Meta sent them.
   if (v.raw) return v.raw as ParamNode
   const binding: ParamNode['binding'] =

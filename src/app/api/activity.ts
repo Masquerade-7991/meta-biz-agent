@@ -13,7 +13,7 @@ export interface ActivityQuery {
   /** An error reference (the 8 characters shown with an error). */
   ref?: string
 }
-export interface ActivityPage {
+interface ActivityPage {
   events: ActivityEvent[]
   more: boolean
   names: Names

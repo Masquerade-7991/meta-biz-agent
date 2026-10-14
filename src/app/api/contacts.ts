@@ -1,6 +1,5 @@
 // Contacts, tags, custom fields and segments (/api/contacts/*). Dummy mode answers in this browser.
-import { jsonClient } from './client'
-import { dummyContacts } from './supportDummy'
+import { jsonClient, supportDummy } from './client'
 import type { ImportRow } from '../contacts/csv'
 
 export interface Contact {
@@ -36,9 +35,9 @@ export interface Segment {
   filter: SegmentFilter
   count: number
 }
-export type ContactInput = Pick<Contact, 'name' | 'email' | 'tags' | 'fields'> & { phone?: string; optedOut?: boolean }
+type ContactInput = Pick<Contact, 'name' | 'email' | 'tags' | 'fields'> & { phone?: string; optedOut?: boolean }
 
-const call = jsonClient(dummyContacts)
+const call = jsonClient(supportDummy('dummyContacts'))
 
 export const listContacts = (f: { q?: string; tag?: string; segment?: string } = {}) =>
   call<Contact[]>(`/api/contacts?${new URLSearchParams(Object.entries(f).filter((e): e is [string, string] => !!e[1])).toString()}`)

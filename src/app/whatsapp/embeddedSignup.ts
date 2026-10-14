@@ -34,7 +34,7 @@ function loadSdk(appId: string, version: string): Promise<FB> {
   return sdk
 }
 
-export type SignupResult = Extract<SignupEvent, { kind: 'finish' }> & { code: string }
+type SignupResult = Extract<SignupEvent, { kind: 'finish' }> & { code: string }
 /** Meta's own limit on the code; past it there's nothing to wait for. */
 const CODE_WAIT_MS = 30_000
 

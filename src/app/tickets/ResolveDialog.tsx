@@ -6,7 +6,7 @@ import { Label } from '@/app/components/ui/label'
 import { Textarea } from '@/app/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog'
 
-export interface ResolveChoice {
+interface ResolveChoice {
   resolution: string
   askFeedback: boolean
   handBack: boolean

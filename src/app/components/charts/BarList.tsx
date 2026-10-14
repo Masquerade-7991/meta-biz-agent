@@ -1,6 +1,6 @@
 import { compact } from './chartTheme'
 
-export interface BarRow {
+interface BarRow {
   label: string
   value: number
   hint?: string

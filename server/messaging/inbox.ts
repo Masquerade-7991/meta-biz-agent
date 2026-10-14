@@ -341,7 +341,7 @@ async function processChange(field: string, value: Obj) {
 }
 
 /** Handles the events for the current workspace's numbers (anything else in the payload is skipped). */
-export async function processWebhook(payload: unknown) {
+async function processWebhook(payload: unknown) {
   const mine = currentAssets()?.ids
   for (const entry of arr(obj(payload).entry))
     for (const change of arr(obj(entry).changes)) {
@@ -618,7 +618,7 @@ async function getConversation(phone: string, me?: Actor) {
 /** Sends a WhatsApp message (sample chats are only stored) and records it in the chat. */
 /** The number a chat belongs to (the one the customer wrote to), so replies, thread control and
  *  blocks go out from it; the workspace's default number when unknown or no longer connected. */
-export async function chatNumber(phone: string): Promise<string> {
+async function chatNumber(phone: string): Promise<string> {
   const id = (await conversations().findOne({ workspaceId: ws(), phone }, { projection: { phoneNumberId: 1 } }))?.phoneNumberId
   return id && currentAssets()?.ids.has(String(id)) ? String(id) : 'PHONE_NUMBER_ID'
 }

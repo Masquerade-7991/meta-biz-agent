@@ -4,7 +4,7 @@
 /** A customer writing within this many days of a resolve reopens that ticket; later, a new one starts. */
 export const REOPEN_DAYS = 3
 
-export type CustomerWrites = 'resume' | 'reopen' | 'new' | 'none'
+type CustomerWrites = 'resume' | 'reopen' | 'new' | 'none'
 
 /**
  * What a customer's message does to their latest ticket:

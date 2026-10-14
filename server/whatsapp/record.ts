@@ -11,7 +11,7 @@ import { parseJson, type CallLog, type Kind } from './upstream.ts'
 
 
 /** Meta timestamps come as seconds or ms. */
-export const toDate = (t: unknown) => (typeof t === 'number' && t > 0 ? new Date(t < 1e12 ? t * 1000 : t) : new Date())
+const toDate = (t: unknown) => (typeof t === 'number' && t > 0 ? new Date(t < 1e12 ? t * 1000 : t) : new Date())
 
 /** `/123/agent_config/faq` or `/business/whatsapp/phone_numbers/123/thread_control` → phone + rest. */
 export function splitPhone(pathname: string): { phone: string | null; rest: string } {
@@ -63,7 +63,7 @@ function bodyOf(raw: Buffer | undefined, contentType: string): unknown {
 const stringLeaves = (v: unknown): string[] =>
   typeof v === 'string' ? [v] : Array.isArray(v) ? v.flatMap(stringLeaves) : v && typeof v === 'object' ? Object.values(v).flatMap(stringLeaves) : []
 
-export interface Exchange {
+interface Exchange {
   kind: Kind
   method: string
   path: string // resolved, with query

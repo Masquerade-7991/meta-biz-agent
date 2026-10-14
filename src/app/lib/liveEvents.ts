@@ -3,7 +3,7 @@
 // dropped stream (or dummy mode, which has no server) only means updates come on the timer.
 import { isDummyMode } from '@/app/api/dummy'
 
-export interface LiveEvent {
+interface LiveEvent {
   /** Dotted name from the server's trace(): 'message.added', 'ticket.updated', 'broadcast.progress'… */
   kind: string
   entity?: string

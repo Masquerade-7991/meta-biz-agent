@@ -89,7 +89,7 @@ async function createTemplate(b: Obj) {
 }
 
 // ---- values: each slot is filled per contact ----
-export interface Mapping {
+interface Mapping {
   /** 'text' uses `text`; 'name' / 'phone' / 'field:<key>' read the contact, then `text` as the fallback. */
   [slot: string]: { source: string; text?: string }
 }

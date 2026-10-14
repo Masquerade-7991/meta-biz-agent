@@ -1,9 +1,8 @@
 // WhatsApp number management (/api/whatsapp/numbers/*, server/numbers.ts). Dummy mode answers in
 // this browser with the same rules. Screens run Demo controls' forced failure (useForcedFailure) first.
-import { jsonClient } from './client'
+import { jsonClient, supportDummy } from './client'
 import { isDummyMode } from './dummy'
 import { parse } from './meta'
-import { dummyNumbers } from './supportDummy'
 import type { Automation, Profile } from '@/app/whatsapp/profileRules'
 
 export interface WaNumber {
@@ -41,7 +40,7 @@ export interface NumberDetail {
   activity: { kind: string; data: Record<string, unknown>; at: string; by: string }[]
 }
 
-const call = jsonClient(dummyNumbers)
+const call = jsonClient(supportDummy('dummyNumbers'))
 const base = (id: string, action = '') => `/api/whatsapp/numbers/${id}${action && '/' + action}`
 const write = <T>(fn: () => Promise<T>) => fn()
 
@@ -63,7 +62,7 @@ export const unblockUser = (id: string, user: string) => write(() => call<{ ok: 
 /** Uploads a new profile photo (JPG or PNG, up to 5 MB). */
 export async function uploadPhoto(id: string, file: File): Promise<NumberDetail> {
   return write(async () => {
-    if (isDummyMode()) return dummyNumbers<NumberDetail>('POST', base(id, 'photo'), { file })
+    if (isDummyMode()) return supportDummy('dummyNumbers')<NumberDetail>('POST', base(id, 'photo'), { file })
     return parse<NumberDetail>(await fetch(base(id, 'photo'), { method: 'POST', headers: { 'content-type': file.type }, body: file }))
   })
 }

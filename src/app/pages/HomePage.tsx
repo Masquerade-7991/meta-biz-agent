@@ -20,7 +20,6 @@ import { listAccounts, type WaAccount } from '@/app/api/whatsapp'
 import { AccountSteps } from '@/app/whatsapp/AccountSteps'
 import { ConnectNumberButton } from '@/app/whatsapp/ConnectNumberDialog'
 import { isDummyMode } from '@/app/api/dummy'
-import { resetDummyWhatsApp } from '@/app/api/supportDummy'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
@@ -516,16 +515,16 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
     'home-whatsapp',
     isDummyMode() ? (
       <DemoControlsGroup label="WhatsApp">
-        <Button size="sm" variant="outline" onClick={() => {
-            resetDummyWhatsApp(false)
+        <Button size="sm" variant="outline" onClick={() => void import('@/app/api/supportDummy').then((m) => {
+            m.resetDummyWhatsApp(false)
             setAttempt((n) => n + 1)
-          }}>
+          })}>
           New workspace (no number)
         </Button>
-        <Button size="sm" variant="outline" onClick={() => {
-            resetDummyWhatsApp(true)
+        <Button size="sm" variant="outline" onClick={() => void import('@/app/api/supportDummy').then((m) => {
+            m.resetDummyWhatsApp(true)
             setAttempt((n) => n + 1)
-          }}>
+          })}>
           Number connected
         </Button>
       </DemoControlsGroup>

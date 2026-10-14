@@ -1,12 +1,12 @@
 // Sample customers and chats for demos: loaded into a workspace by "Load sample data" (server) and
 // shown by dummy mode (browser). Pure data, so both sides import it. Numbers are fake (+91 99000…).
-export interface SampleMessage {
+interface SampleMessage {
   /** Minutes before now. */
   ago: number
   author: 'customer' | 'ai' | 'agent' | 'note'
   body: string
 }
-export interface SampleChat {
+interface SampleChat {
   /** A phone number, or a BSUID for a customer who hides their number (src/app/lib/customer.ts). */
   phone: string
   name: string

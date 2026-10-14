@@ -6,7 +6,6 @@ import { col, ws } from '../platform/db.ts'
 import { stripSecrets } from './store.ts'
 import { obj, type Obj } from '../platform/http.ts'
 
-
 /** List resources: path pattern → collection; `id` / `parent` are capture-group numbers. */
 const LISTS: { re: RegExp; coll: string; id: number; parent?: number }[] = [
   { re: /^agent_config\/faq(?:\/([^/]+))?$/, coll: 'faqs', id: 1 },
@@ -22,8 +21,6 @@ const LISTS: { re: RegExp; coll: string; id: number; parent?: number }[] = [
 ]
 /** One document per agent. */
 const SINGLES: Record<string, string> = { 'agent_config/business_info': 'business_info', 'agent_config/settings': 'agent_settings' }
-
-export const MIRROR_COLLECTIONS = [...new Set([...LISTS.map((l) => l.coll), ...Object.values(SINGLES)])]
 /** Collections whose full contents may also go into the audit log (allowlist holds customer numbers). */
 export const isConfigCollection = (coll: string | null) => !!coll && coll !== 'allowlist'
 
@@ -106,7 +103,6 @@ const DRAFT_SECTIONS: [string, string, string[]][] = [
   ['guardrails', 'guardrails', []],
   ['system_replies', 'replies', []],
 ]
-export const DRAFT_COLLECTIONS = DRAFT_SECTIONS.map(([c]) => c)
 
 /** One write per section, all at once (they're separate collections, so nothing waits on another). */
 export async function mirrorDraft(phone: string, state: Obj) {

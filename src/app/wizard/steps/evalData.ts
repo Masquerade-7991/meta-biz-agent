@@ -263,25 +263,6 @@ export const EVAL_RESULTS: EvalConversationResult[] = [
   },
 ]
 
-// Headline scores are Meta's real 1-5 field (avg_conversation_score). The band labels below are
-// Helo's own addition for readability, not something Meta returns.
-export interface ScoreBand {
-  label: string
-  min: number
-}
-
-export const SCORE_BANDS: ScoreBand[] = [
-  { label: 'Excellent', min: 4.5 },
-  { label: 'Very good', min: 3.5 },
-  { label: 'Good', min: 2.5 },
-  { label: 'Needs work', min: 1.5 },
-  { label: 'Poor', min: 1.0 },
-]
-
-export function scoreBandLabel(score: number): string {
-  return SCORE_BANDS.find((b) => score >= b.min)?.label ?? 'Poor'
-}
-
 // Demo-only: derives a weak result from a scenario's real curated result, for the "complete
 // [scenario], weak result" dev control, so a bad outcome doesn't need a hand-authored twin of
 // every scenario.

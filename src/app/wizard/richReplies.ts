@@ -29,7 +29,7 @@ export interface RichReplyIssue {
 // Plain `Pick` collapses a union into one flat shape (losing the type<->blanks correlation) —
 // distributing over a naked type parameter keeps each variant separate, so switches narrow.
 type DistributivePick<T, K extends keyof T> = T extends unknown ? Pick<T, K> : never
-export type RichReplyDraft = DistributivePick<RichReply, 'type' | 'trigger' | 'blanks'>
+type RichReplyDraft = DistributivePick<RichReply, 'type' | 'trigger' | 'blanks'>
 
 const isHttps = (s: string | undefined) => {
   try {
@@ -161,7 +161,7 @@ export function rowIdFromTitle(title: string, existing: string[]): string {
   return id
 }
 
-export function describeImageSource(src: ImageSource): string {
+function describeImageSource(src: ImageSource): string {
   switch (src.kind) {
     case 'document':
       return `the image from the knowledge document "${src.label}"`

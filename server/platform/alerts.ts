@@ -6,8 +6,8 @@ import { mail } from './mail.ts'
 import { trace } from './trace.ts'
 
 /** Where the bell takes you: a Settings tab or a page. */
-export type AlertTarget = 'billing' | 'whatsapp' | 'broadcasts' | 'members'
-export interface Alert {
+type AlertTarget = 'billing' | 'whatsapp' | 'broadcasts' | 'members'
+interface Alert {
   key: string
   severity: 'warning' | 'critical'
   title: string

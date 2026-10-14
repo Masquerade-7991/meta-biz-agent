@@ -20,13 +20,13 @@ import { compileConfig } from '../wizard/compiler'
 import { validateRichReply } from '../wizard/richReplies'
 import { skillTitle } from '../wizard/skillTitle'
 import { crawlStatus, type MetaCrawlStatus } from '../wizard/websites'
-export { skillTitle }
+
 import type { Profile } from '../whatsapp/profileRules'
 import type { EvalConversationResult, EvalScenario, TranscriptLine } from '../wizard/steps/evalData'
 import { isDummyMode } from './dummy'
 import { toolBody, toolToAction, type MetaTool } from '../wizard/toolRequest'
 export { toolToAction }
-import { dummyAssets, dummyMeta, type DummyRich } from './dummyMeta'
+import type { DummyRich } from './dummyMeta'
 
 // The number every call targets. Unset → the PHONE_NUMBER_ID placeholder the server fills from .env.
 let activePhoneNumberId: string | null = null
@@ -85,8 +85,10 @@ export async function parse<T>(res: Response): Promise<T> {
   return json as T
 }
 
-/** Dummy mode answers in this browser; the reply goes through the same parse() as a real one. */
+/** Dummy mode answers in this browser; the reply goes through the same parse() as a real one. The
+ *  stand-in loads on first use, so people who never open dummy mode don't download it. */
 async function dummyFetch<T>(method: string, path: string, body?: unknown, form?: FormData): Promise<T> {
+  const { dummyMeta } = await import('./dummyMeta')
   const r = await dummyMeta(method, path, (body ?? {}) as Record<string, unknown>, form)
   return parse<T>(new Response(r.json === undefined || r.status === 204 ? null : JSON.stringify(r.json), { status: r.status }))
 }
@@ -102,7 +104,7 @@ export async function metaFetch<T = unknown>(path: string, method = 'GET', body?
 }
 
 /** GET on the Graph API (WABAs, phone numbers), via the server's /api/graph route. */
-export async function graphFetch<T = unknown>(path: string): Promise<T> {
+async function graphFetch<T = unknown>(path: string): Promise<T> {
   if (isDummyMode()) return dummyFetch<T>('GET', path)
   return parse<T>(await fetch(`/api/graph${path}`))
 }
@@ -148,7 +150,7 @@ async function listAllPages<T>(path: string, fetcher: typeof graphFetch = metaFe
 }
 
 // ---- Server health (which WABA / number the local server is pointed at) ----
-export interface ServerHealth {
+interface ServerHealth {
   ok: boolean
   upstream: string
   hasToken: boolean
@@ -162,7 +164,7 @@ export interface ServerHealth {
 }
 export async function getServerHealth(): Promise<ServerHealth | null> {
   if (isDummyMode()) {
-    const a = await dummyAssets()
+    const a = await (await import('./dummyMeta')).dummyAssets()
     return { ok: true, upstream: 'dummy', hasToken: false, ...a }
   }
   try {
@@ -174,7 +176,7 @@ export async function getServerHealth(): Promise<ServerHealth | null> {
 }
 
 // ---- WABAs and phone numbers (Graph API) ----
-export interface MetaWaba {
+interface MetaWaba {
   id: string
   name: string
 }
@@ -192,7 +194,7 @@ export async function listWabas(): Promise<MetaWaba[]> {
   }
 }
 
-export interface MetaPhoneNumber {
+interface MetaPhoneNumber {
   id: string
   displayPhoneNumber: string
   verifiedName: string
@@ -241,7 +243,7 @@ export const onboardAgent = (phoneId?: string) => metaFetch<{ agent_id: string }
 export const deleteAgent = () => metaFetch<{ deleted_agent_id: string | null }>(`${agent()}/delete_agent`, 'DELETE')
 
 // ---- Test (not billed; 500 req/hour per number) ----
-export interface AgentTestReply {
+interface AgentTestReply {
   message_id: string
   agent_response: string
   conversation_id: string
@@ -259,7 +261,7 @@ export const sendTestMessage = (user_msg: string, conversation_id?: string) =>
 /** Safety & handoff's part of the settings. Rollout and audience are left out on purpose: they
  *  belong to Publish (setRollout), and re-sending them from here turned the agent on (Meta then
  *  refused the whole save without billing) or off from a stale draft. */
-export function settingsBody(state: WizardState) {
+function settingsBody(state: WizardState) {
   const { guardrails, replies } = state
   const handoffSel = guardrails.handoffMessageSource ?? (guardrails.handoffMessageEnabled ? 'custom' : 'default')
   const followupCustom = (replies.followUpMessageSource ?? 'custom') === 'custom'
@@ -281,7 +283,7 @@ export function settingsBody(state: WizardState) {
     never_say_phrases: guardrails.neverSayPhrases,
   }
 }
-export const saveSettings = (state: WizardState) => metaFetch(`${agent()}/agent_config/settings`, 'PUT', settingsBody(state))
+const saveSettings = (state: WizardState) => metaFetch(`${agent()}/agent_config/settings`, 'PUT', settingsBody(state))
 
 /** Publish / Stop / Resume: only rollout + audience. */
 export const setRollout = (enabled: boolean, audienceMode: WizardState['publish']['audienceMode']) =>
@@ -322,7 +324,7 @@ interface MetaSettings {
 }
 
 // ---- Business info (full replace) ----
-export const saveBusinessInfo = (state: WizardState) =>
+const saveBusinessInfo = (state: WizardState) =>
   metaFetch(`${agent()}/agent_config/business_info`, 'PUT', compileConfig(state).business_info)
 
 /**
@@ -365,12 +367,11 @@ interface MetaSkill {
   status?: 'active' | 'pending_review' | 'blocked'
 }
 
-
 export const listSkills = () => metaFetch<MetaSkill[]>(`${agent()}/agent_config/skills`)
 
 /** The Layer-1 skills compiled from Identity / Personality / Safety, upserted by title. Custom
  *  (Layer-2) skills are saved one by one from the Skills tab instead. */
-export async function syncSkills(state: WizardState) {
+async function syncSkills(state: WizardState) {
   const existing = await listSkills()
   const byTitle = new Map(existing.map((s) => [s.title, s.id]))
   for (const s of compileConfig(state).skills.filter((k) => k.managed)) {
@@ -472,7 +473,7 @@ const tabHidden = () => typeof document !== 'undefined' && document.visibilitySt
  *  60 s, so a long crawl costs ~70 checks over ~1 hour instead of eating Meta's 1000/hour website
  *  budget; then it marks the row stalled (opening the agent again re-polls via hydrate). It asks only
  *  while the tab is visible, always about the agent it started for, and stops when the studio closes. */
-export async function pollWebsite(id: string, onUpdate: (fields: Partial<WebsiteSource>) => void) {
+async function pollWebsite(id: string, onUpdate: (fields: Partial<WebsiteSource>) => void) {
   const epoch = crawlEpoch
   const base = agent()
   let failures = 0
@@ -527,7 +528,7 @@ interface MetaUiSkill {
 }
 /** Refuses to send a rich reply Meta's agent couldn't build. Rows with `blanks: null` (created
  *  outside this app) have only raw instruction text, so they just need a title and instruction. */
-export function assertValidRichReply(reply: RichReply) {
+function assertValidRichReply(reply: RichReply) {
   const issues = validateRichReply(reply)
   if (!reply.name.trim()) issues.unshift({ field: 'name', message: 'Name is required.' })
   if (!reply.instructionSentence.trim()) issues.push({ field: 'instructionSentence', message: 'Instruction is empty.' })
@@ -535,7 +536,7 @@ export function assertValidRichReply(reply: RichReply) {
   if (issues.length) throw new MetaError(422, 'Rich reply is not valid', issues.map((i) => i.message).join(' '))
 }
 /** A name with no a-z or 0-9 still gets a valid title of its own, so two of them don't collide. */
-export const uiSkillTitle = (name: string, id: string) => skillTitle(name, `reply-${id.replace(/[^a-z0-9]/gi, '').slice(-8).toLowerCase()}`)
+const uiSkillTitle = (name: string, id: string) => skillTitle(name, `reply-${id.replace(/[^a-z0-9]/gi, '').slice(-8).toLowerCase()}`)
 export const createUiSkill = async (r: RichReply) => {
   assertValidRichReply(r)
   return metaFetch<MetaUiSkill>(`${agent()}/agent-ui-skills`, 'POST', {
@@ -561,7 +562,6 @@ export const deleteUiSkill = (id: string) => metaFetch(`${agent()}/agent-ui-skil
 // ---- Connectors + tools ----
 /** Meta rejects connector and tool names with anything else (spaces, hyphens, dots); checked live. */
 export const META_NAME = /^[A-Za-z0-9_]+$/
-export const META_NAME_HINT = 'Use only letters, numbers and underscores, e.g. Shopify_store.'
 type MetaConnStatus = 'PENDING_OAUTH' | 'ACTIVE' | 'EXPIRED' | 'ERROR'
 interface MetaConnector {
   id: string
@@ -594,7 +594,7 @@ const CONN_STATUS: Record<MetaConnStatus, ConnectionStatus> = {
   EXPIRED: 'key_rejected',
   ERROR: 'having_problems',
 }
-export const connectorFields = (c: MetaConnector): Partial<Connection> => ({
+const connectorFields = (c: MetaConnector): Partial<Connection> => ({
   metaId: c.id,
   name: c.name,
   description: c.description,
@@ -659,14 +659,6 @@ export async function saveConnector(c: Connection, auth = !c.metaId): Promise<Pa
   }
 }
 export const deleteConnector = (id: string) => metaFetch(`${agent()}/agent_connectors/${id}`, 'DELETE')
-/** Rotate key / connect: push the credentials already set on the connection. */
-export async function upsertCredentials(c: Connection): Promise<Partial<Connection>> {
-  const r =
-    c.authMethod === 'client_credentials'
-      ? await metaFetch<MetaConnector>(`${agent()}/agent_connectors/${c.metaId}/upsertOAuth`, 'POST', { oauth_config: oauthConfig(c) })
-      : await metaFetch<MetaConnector>(`${agent()}/agent_connectors/${c.metaId}/upsertApiKey`, 'POST', { api_key_config: apiKeyConfig(c) })
-  return connectorFields(r)
-}
 export const refreshMcpTools = async (id: string) =>
   connectorFields(await metaFetch<MetaConnector>(`${agent()}/agent_connectors/${id}/refreshMCPTools`, 'POST', {}))
 
@@ -724,7 +716,7 @@ export async function listEvalCases(): Promise<EvalScenario[]> {
   }))
 }
 
-export type EvalStage = 'simulation' | 'evaluation' | 'insights' | 'done'
+type EvalStage = 'simulation' | 'evaluation' | 'insights' | 'done'
 interface MetaEvalJob {
   status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
   progress?: { current_stage?: EvalStage }
@@ -814,7 +806,7 @@ export async function runEvalCase(
 }
 
 // ---- Agent events ----
-export type MetaAgentEventStatus = 'request_received' | 'processing' | 'sent' | 'failed' | 'skipped' | 'success'
+type MetaAgentEventStatus = 'request_received' | 'processing' | 'sent' | 'failed' | 'skipped' | 'success'
 export const sendAgentEvent = (to: string, event: { type: string; description: string; payload: string }) =>
   metaFetch<{ status: string; agent_event_id?: string }>(`${agent()}/agent_event`, 'POST', { to, event })
 export const getAgentEvent = (id: string) =>
@@ -877,14 +869,6 @@ export const toolCallInsights = (range: DateRange = lastDays(30)) =>
     }[]
   }>(`${agent()}/insights/tool_calls` + q({ ...range }))
 
-// ---- Thread control (human takeover; X-API-Version 1.0.0 is set by the server) ----
-export const threadControl = (action: 'take' | 'release', to: string) =>
-  metaFetch(`/business/whatsapp/phone_numbers${agent()}/thread_control`, 'POST', {
-    messaging_product: 'whatsapp',
-    action,
-    to: to.replace(/[^\d]/g, ''),
-  })
-
 // ---- Save-on-Next sections ----
 /** What a section's Save pushes to Meta. Sections not listed save through their own per-row calls. */
 export function pushSlice(slice: SliceKey, state: WizardState): Promise<unknown> {
@@ -907,7 +891,7 @@ export function pushSlice(slice: SliceKey, state: WizardState): Promise<unknown>
 /** Merge Meta's list into the local one by metaId: matched rows take Meta's fields and keep
  *  local-only extras; Meta-only rows are added; local rows Meta no longer has are dropped; rows
  *  never sent to Meta (no metaId) are kept. */
-export function reconcile<L extends { metaId?: string }, R extends { id: string }>(
+function reconcile<L extends { metaId?: string }, R extends { id: string }>(
   local: L[],
   remote: R[],
   fields: (r: R) => Partial<L>,

@@ -15,7 +15,7 @@ export interface Template {
   category?: string
   components: TemplateComponent[]
 }
-export type Slot = { id: string; label: string; kind: 'text' | 'media' }
+type Slot = { id: string; label: string; kind: 'text' | 'media' }
 
 const vars = (s = '') => [...new Set([...s.matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map((m) => Number(m[1])))].sort((a, z) => a - z)
 const comp = (t: Template, type: TemplateComponent['type']) => t.components.find((c) => c.type === type)

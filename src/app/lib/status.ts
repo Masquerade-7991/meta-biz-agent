@@ -13,22 +13,6 @@ export const AGENT_STATUS: Record<AgentStatus, { label: string; tone: Tone }> = 
   paused: { label: 'Paused', tone: 'warning' },
 }
 
-/** A WhatsApp number's connection health. */
-export type NumberStatus = 'connected' | 'attention' | 'disconnected'
-export const NUMBER_STATUS: Record<NumberStatus, { label: string; tone: Tone }> = {
-  connected: { label: 'Connected', tone: 'success' },
-  attention: { label: 'Needs attention', tone: 'warning' },
-  disconnected: { label: 'Disconnected', tone: 'danger' },
-}
-
-/** A connection to the business's own system. */
-export type ConnectionStatus = 'working' | 'failing' | 'untested'
-export const CONNECTION_STATUS: Record<ConnectionStatus, { label: string; tone: Tone }> = {
-  working: { label: 'Working', tone: 'success' },
-  failing: { label: 'Failing', tone: 'danger' },
-  untested: { label: 'Not tested yet', tone: 'neutral' },
-}
-
 /** An agent's status from its publish settings: stopped → Paused; switched on for everyone → Live;
  *  switched on for test numbers only → Testing; never switched on → Draft. */
 export function agentStatusOf(p: { activated: boolean; stopped: boolean; audienceMode: 'allowlisted' | 'everyone' }): AgentStatus {

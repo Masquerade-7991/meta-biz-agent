@@ -6,40 +6,23 @@ import type {
   AgentEventTypeDef,
   BusinessHourRow,
   BusinessState,
-  ApiKeyEntry,
   CarouselCard,
   Connection,
   ConnectionAction,
   ConnectionStatus,
-  ConnectorTool,
-  ConnectorType,
-  ConversationTurn,
   Day,
-  FaqRow,
   FollowUpInterval,
-  FollowUpMaxAttempts,
   IntegrationDef,
-  IntentRow,
   MenuOption,
   PersonaId,
   RichReply,
   RichReplyType,
-  StepMeta,
   ToneId,
   ValueLocation,
   ValueSource,
   ValueType,
   WabaNumber,
-  WizardState,
 } from './types'
-
-export const STEP_ORDER: StepMeta[] = [
-  { id: 'agent', index: 1, label: 'Your agent' },
-  { id: 'knowledge', index: 2, label: 'Knowledge' },
-  { id: 'connections', index: 3, label: 'Connections', optionalTag: true },
-  { id: 'safety', index: 4, label: 'Safety & handoff' },
-  { id: 'publish', index: 5, label: 'Test & publish' },
-]
 
 export const MOCK_WABAS: WabaNumber[] = [
   {
@@ -79,19 +62,6 @@ export const MOCK_WABAS: WabaNumber[] = [
     billingAttached: false,
   },
 ]
-
-export const CAPABILITY_STARTER_SET = [
-  'Answer questions',
-  'Provide business hours',
-  'Share return policy',
-  'Track an order',
-]
-
-export const CAPABILITY_FROM_CONNECTORS: Record<string, string[]> = {
-  shopify: ['Check order status', 'Create a cart', 'Track a shipment'],
-  woocommerce: ['Check order status', 'Track a shipment'],
-  custom_rest: ['Run a custom action'],
-}
 
 export const PAYMENT_METHOD_OPTIONS: { id: string; label: string }[] = [
   { id: 'cod', label: 'Cash on delivery' },
@@ -198,7 +168,6 @@ export const LANGUAGE_OPTIONS = [
   'Vietnamese',
 ]
 
-
 // ---- Personality and Skills, Section B: custom skills ----
 
 // Placeholder templates for the prototype. `retailSuggested` drives which group ("Suggested for
@@ -274,97 +243,6 @@ export const SAMPLE_CUSTOM_SKILLS: { name: string; instruction: string }[] = [
   },
 ]
 
-export const USE_CASE_TEMPLATES: {
-  id: string
-  label: string
-  description: string
-  journeys: Array<'support' | 'commerce'>
-  intents: Omit<IntentRow, 'id' | 'fromTemplate'>[]
-}[] = [
-  {
-    id: 'order_tracking',
-    label: 'Order tracking',
-    description: 'Let customers check the status of an existing order.',
-    journeys: ['commerce'],
-    intents: [
-      {
-        name: 'Track order',
-        triggerPhrases: ['where is my order', 'track my order', 'order status'],
-        eligibleStates: ['Order placed', 'Shipped', 'Out for delivery'],
-        action: 'Call: Check order status',
-      },
-    ],
-  },
-  {
-    id: 'returns_refunds',
-    label: 'Returns and refunds',
-    description: 'Guide customers through a return or refund request.',
-    journeys: ['commerce'],
-    intents: [
-      {
-        name: 'Start a return',
-        triggerPhrases: ['i want to return', 'refund my order', 'return this item'],
-        eligibleStates: ['Delivered'],
-        action: 'Reply: Share return policy',
-      },
-    ],
-  },
-  {
-    id: 'address_change',
-    label: 'Address change',
-    description: 'Handle a request to update a delivery address.',
-    journeys: ['commerce'],
-    intents: [
-      {
-        name: 'Change delivery address',
-        triggerPhrases: ['change my address', 'wrong delivery address', 'update shipping address'],
-        eligibleStates: ['Order placed'],
-        action: 'Escalate: Address change needed',
-      },
-    ],
-  },
-  {
-    id: 'product_search',
-    label: 'Product search',
-    description: 'Help customers find a product from the catalog.',
-    journeys: ['commerce'],
-    intents: [
-      {
-        name: 'Find a product',
-        triggerPhrases: ['do you have', 'looking for', 'in stock'],
-        eligibleStates: ['Any'],
-        action: 'Call: Search products',
-      },
-    ],
-  },
-  {
-    id: 'appointment_booking',
-    label: 'Appointment booking',
-    description: 'Let customers book, reschedule, or cancel a visit.',
-    journeys: ['support'],
-    intents: [
-      {
-        name: 'Book an appointment',
-        triggerPhrases: ['book an appointment', 'schedule a visit', 'reschedule'],
-        eligibleStates: ['Any'],
-        action: 'Reply: Share booking link',
-      },
-    ],
-  },
-]
-
-export const CONNECTOR_TOOL_TEMPLATES: Record<Exclude<ConnectorType, null | 'custom_rest' | 'none'>, Omit<ConnectorTool, 'id' | 'enabled' | 'testStatus' | 'lastResponse'>[]> = {
-  shopify: [
-    { name: 'Check order status', description: 'Looks up an order by ID or customer phone number.' },
-    { name: 'Create a cart', description: 'Creates a new cart and returns a checkout link.' },
-    { name: 'Track a shipment', description: 'Returns carrier and tracking details for a shipped order.' },
-  ],
-  woocommerce: [
-    { name: 'Check order status', description: 'Looks up an order by ID or customer phone number.' },
-    { name: 'Track a shipment', description: 'Returns carrier and tracking details for a shipped order.' },
-  ],
-}
-
 export const FOLLOW_UP_INTERVALS: { value: FollowUpInterval; label: string }[] = [
   { value: 0, label: 'Never follow up' },
   { value: 300, label: '5 minutes of silence' },
@@ -374,12 +252,6 @@ export const FOLLOW_UP_INTERVALS: { value: FollowUpInterval; label: string }[] =
   { value: 7200, label: '2 hours of silence' },
   { value: 28800, label: '8 hours of silence' },
   { value: 86400, label: '24 hours of silence' },
-]
-
-export const FOLLOW_UP_ATTEMPT_OPTIONS: { value: FollowUpMaxAttempts; label: string }[] = [
-  { value: 1, label: 'Once' },
-  { value: 2, label: 'Twice, spacing out each attempt' },
-  { value: 3, label: 'Up to 3 times, spacing out each attempt' },
 ]
 
 export const DEFAULT_REPLIES = {
@@ -392,26 +264,7 @@ export const DEFAULT_REPLIES = {
   followUpMessage: "Just checking in, are you still there? Happy to help whenever you're ready.",
 }
 
-export const ALWAYS_PROTECTED_RULES = [
-  'The agent will never claim to be human when directly asked.',
-  'The agent will never request full payment card numbers, passwords, or OTPs in chat.',
-  'The agent will never provide medical, legal, or financial advice beyond what is configured.',
-  'The agent will always honour an explicit request to speak with a person.',
-  'The agent will never disclose another customer\'s data.',
-]
-
-export const MOCK_APPROVERS = ['Priya Sharma', 'Rahul Mehta', 'Ananya Iyer']
-
-export const DEFAULT_HANDOFF_MESSAGE =
-  "You're being connected with a member of our team. They'll be with you shortly."
-
-export const NEVER_SAY_EXAMPLES = [
-  'guaranteed cure',
-  'risk-free investment',
-  'no side effects',
-]
-
-export const INJECTION_PATTERNS = [
+const INJECTION_PATTERNS = [
   /ignore (all |any |previous |the )*instructions/i,
   /you are now/i,
   /system\s*:/i,
@@ -507,7 +360,7 @@ export interface RecipeAction {
   setupSentence: string
 }
 
-export interface ConnectionRecipe {
+interface ConnectionRecipe {
   id: string
   name: string
   summary: string
@@ -773,12 +626,7 @@ export const INTEGRATION_CATALOG: IntegrationDef[] = [
   },
 ]
 
-// Curated public MCP servers relevant to this audience — content is a later decision (see the
-// Connections redesign spec), left empty so the gallery section renders structurally ready to
-// populate without fabricating specific server URLs here.
-export const KNOWN_MCP_SERVERS: { name: string; description: string; url: string }[] = []
-
-export const CONNECTION_RECIPES: ConnectionRecipe[] = [
+const CONNECTION_RECIPES: ConnectionRecipe[] = [
   {
     id: 'order_lookup',
     name: 'Order lookup (store system)',
@@ -948,7 +796,7 @@ function recipeById(id: string): ConnectionRecipe {
   return recipe
 }
 
-export interface SampleConnectionSeed {
+interface SampleConnectionSeed {
   name: string
   description: string
   baseUrl: string
@@ -980,7 +828,7 @@ export const SAMPLE_CONNECTIONS: SampleConnectionSeed[] = [
 
 /** 2-3 canned reply lines per ready-made setup category, plus a generic fallback for actions that
  *  don't map to any known category (a custom-built action whose wording doesn't match a keyword). */
-export const CONNECTION_PREVIEW_REPLIES: Record<string, string[]> = {
+const CONNECTION_PREVIEW_REPLIES: Record<string, string[]> = {
   order_lookup: [
     "Let me check your order... it shipped yesterday and should arrive by Thursday.",
     "Checking now... your order is being packed and should ship within 24 hours.",
@@ -1040,46 +888,9 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
   abandoned_cart_recovery: ['cart', 'checkout'],
 }
 
-const PREVIEW_STOPWORDS = new Set([
-  'this', 'that', 'have', 'your', 'with', 'from', 'want', 'need', 'does', 'they', 'them',
-  'what', 'when', 'will', 'about', 'there', 'been', 'were', 'which', 'could', 'would',
-  'should', 'also', 'just', 'like', 'please', 'know', 'here', 'still',
-])
-
-function previewMessageKeywords(message: string): string[] {
-  return Array.from(
-    new Set(
-      message
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, ' ')
-        .split(/\s+/)
-        .filter((w) => w.length >= 4 && !PREVIEW_STOPWORDS.has(w)),
-    ),
-  )
-}
-
-export interface PreviewActionMatch {
+interface PreviewActionMatch {
   action: ConnectionAction
   connection: Connection
-}
-
-/** Simple keyword matching for the prototype: a message matches an action if any word in the
- *  message also appears in that action's name or description. */
-export function matchConnectionPreviewMessage(
-  message: string,
-  connections: Connection[],
-  actions: ConnectionAction[],
-): PreviewActionMatch[] {
-  const words = previewMessageKeywords(message)
-  if (words.length === 0) return []
-  const matches: PreviewActionMatch[] = []
-  for (const action of actions) {
-    const connection = connections.find((c) => c.id === action.connectionId)
-    if (!connection) continue
-    const haystack = `${action.name} ${action.description}`.toLowerCase()
-    if (words.some((w) => haystack.includes(w))) matches.push({ action, connection })
-  }
-  return matches
 }
 
 function previewCategoryFor(match: PreviewActionMatch): string {
@@ -1096,39 +907,6 @@ export function pickConnectionPreviewReply(match: PreviewActionMatch): string {
   return lines[Math.floor(Math.random() * lines.length)]
 }
 
-/** Single canonical "what would the agent say" simulator, shared by the Preview page and the
- *  Simulations standard-checks runner — checks knowledge (FAQs) first, then connections/tools,
- *  then falls back to a greeting or the configured fallback reply. No real system is contacted. */
-export function simulateAgentReply(
-  state: Pick<WizardState, 'knowledge' | 'connections' | 'replies'>,
-  message: string,
-): string {
-  const faqMatches = matchFaqPreviewMessage(message, state.knowledge.faqs)
-  if (faqMatches.length > 0) return faqMatches[0].answer
-  const connMatches = matchConnectionPreviewMessage(message, state.connections.connections, state.connections.actions)
-  if (connMatches.length > 0) return pickConnectionPreviewReply(connMatches[0])
-  if (/\b(hi|hello|hey)\b/i.test(message)) return state.replies.greetingReply
-  return state.replies.fallbackReply
-}
-
-/** A real agent answers from its knowledge base as well as its connections, and that knowledge
- *  persists across the whole wizard (it's just wizard state), so the try-it preview checks FAQs
- *  too — matched against the question a customer would actually ask, not the answer text.
- *
- *  Whole-word matching, not substring: action matching intentionally treats "book" as matching
- *  "booking", but FAQ questions are full sentences a customer might quote closely, and substring
- *  matching there causes false hits between unrelated words that merely share a root — e.g. a
- *  message word "deliver" substring-matching a different FAQ's "delivery", turning an exact
- *  question match into a confusing three-way "did you mean". */
-export function matchFaqPreviewMessage(message: string, faqs: FaqRow[]): FaqRow[] {
-  const words = previewMessageKeywords(message)
-  if (words.length === 0) return []
-  return faqs.filter((faq) => {
-    const questionWords = new Set(faq.question.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/))
-    return words.some((w) => questionWords.has(w))
-  })
-}
-
 // ---- Step 1: Rich replies (the system underneath calls these "UI skills") ----
 
 const RICH_REPLY_TYPES: { type: RichReplyType; name: string; description: string }[] = [
@@ -1142,7 +920,6 @@ const RICH_REPLY_TYPES: { type: RichReplyType; name: string; description: string
   { type: 'location_request', name: 'Ask for location', description: 'Asks the customer to share where they are.' },
   { type: 'flow', name: 'WhatsApp form', description: 'Opens a structured form the customer fills in, like a booking or survey.' },
 ]
-
 
 export const RICH_REPLY_TYPE_LABEL: Record<RichReplyType, string> = Object.fromEntries(
   RICH_REPLY_TYPES.map((t) => [t.type, t.name]),
@@ -1159,12 +936,7 @@ export function newCarouselCard(): CarouselCard {
   return { id: newId('card'), image: { kind: 'url', ref: '', label: '' }, cardText: '', buttonLabel: '', link: '' }
 }
 
-export function newApiKeyEntry(): ApiKeyEntry {
-  return { id: newId('key'), value: '', location: 'header', fieldName: '', prefix: '' }
-}
-
 // Moved to richReplies.ts; re-exported so existing imports keep working.
-export { compileRichReplySentence }
 
 const SAMPLE_RR_1_TRIGGER = 'When someone asks where to buy online'
 const SAMPLE_RR_1_BLANKS = {
@@ -1272,7 +1044,7 @@ export type RichReplyStarter = {
 /** A small built-in list of common near-variants (plurals, comparative/superlative forms, and a
  *  short list of close synonyms) for words businesses commonly want to avoid — maintained here
  *  rather than computed, since generic morphology guesses too wrong too often to be useful. */
-export const WORD_VARIANT_SUGGESTIONS: Record<string, string[]> = {
+const WORD_VARIANT_SUGGESTIONS: Record<string, string[]> = {
   cheap: ['cheaper', 'cheapest'],
   guarantee: ['guaranteed', 'guarantees'],
   guaranteed: ['guarantee', 'guarantees'],
@@ -1632,49 +1404,6 @@ export function buildSampleAgentEventLog(): AgentEventRow[] {
     if (status === 'skipped') row.skippedReason = SAMPLE_SKIP_REASONS[Math.floor(Math.random() * SAMPLE_SKIP_REASONS.length)]
     return row
   })
-}
-
-export const SAMPLE_QUALITY_CHECK_RUN: { situation: string; sent: string; reply: string; status: 'normal' | 'warn' }[] = [
-  { situation: 'Greeting', sent: 'Hi', reply: 'Hi there! How can I help you today?', status: 'normal' },
-  { situation: 'A question from your FAQ', sent: 'What is your return policy?', reply: '7 day returns on unused items with original packaging.', status: 'normal' },
-  { situation: 'Something outside what you sell', sent: 'Can you help me file my taxes?', reply: "That's outside what I can help with here.", status: 'normal' },
-  { situation: 'Asking for a person', sent: 'Can I talk to a real person?', reply: "I'll connect you with someone from our team.", status: 'warn' },
-]
-
-// ---- Agent Activity page: Conversations (real customer lookup) ----
-
-/** "1.8s" — sub-second precision, unlike formatDuration's whole-unit rounding, since a response
- *  time this short is the whole point of showing it. */
-export function formatLatencySeconds(ms: number): string {
-  return `${(ms / 1000).toFixed(1)}s`
-}
-
-/** "Today, 2:47 PM" for the current calendar day, "Aug 18, 2:47 PM" otherwise. */
-export function formatConversationTurnTime(timestamp: number): string {
-  const d = new Date(timestamp)
-  const now = new Date()
-  const isToday = d.toDateString() === now.toDateString()
-  const time = d.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-  if (isToday) return `Today, ${time}`
-  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
-}
-
-// Same recipient number used elsewhere in this sample data, so the two demo surfaces read as the
-// same customer rather than unrelated placeholder numbers.
-export const SAMPLE_CONVERSATION_NUMBER = '+91 98765 43210'
-
-export function buildSampleConversationTurns(): ConversationTurn[] {
-  const now = Date.now()
-  return [
-    { timestamp: now - 90_000, e2eLatencyMs: 1800, tool: 'check_stock', toolWorked: true },
-    { tool: 'check_stock' },
-  ]
-}
-
-// For "Demo: simulate a slow or failed turn" — appended to whatever conversation is currently
-// shown, so the plain-language treatment of a bad turn can be reviewed without a fresh lookup.
-export function buildSlowOrFailedTurn(): ConversationTurn {
-  return { timestamp: Date.now(), e2eLatencyMs: 14_200, tool: 'check_stock', toolWorked: false }
 }
 
 const SUBPAGE_SEGMENTS = [

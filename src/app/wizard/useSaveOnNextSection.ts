@@ -5,7 +5,7 @@ import type { SliceKey, WizardState } from './types'
 import { toast } from 'sonner'
 import { pushSlice } from '../api/meta'
 
-export interface SaveOnNextOptions<T> {
+interface SaveOnNextOptions<T> {
   /** Custom dirty comparison. Defaults to a plain deep-equality check. Use this to exclude
    *  sub-fields that save independently (e.g. a list that saves immediately, like custom skills). */
   isDirty?: (saved: T, current: T) => boolean

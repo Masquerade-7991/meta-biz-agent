@@ -3,7 +3,7 @@ import type { StudioSectionId, WizardState } from './types'
 // What an agent needs before it goes live, in order. Overview shows it as a checklist and Publish
 // as its pre-flight, so both read the same facts.
 
-export interface ReadinessItem {
+interface ReadinessItem {
   id: 'number' | 'identity' | 'knowledge' | 'tested' | 'audience' | 'live'
   label: string
   /** Short state shown beside the label, e.g. "3 sources". */

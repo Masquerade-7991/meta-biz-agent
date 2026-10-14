@@ -4,12 +4,10 @@ import {
   agent,
   connectorLogs,
   conversationInsights,
-  conversationTurns,
   errorText,
   getActivePhoneNumberId,
   metaFetch,
   q,
-  toMs,
   toolCallInsights,
   type DateRange,
 } from './meta'
@@ -25,17 +23,17 @@ const today = (timeZone?: string) => new Intl.DateTimeFormat('en-CA', { timeZone
 const addDays = (day: string, n: number) => new Date(Date.parse(day + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10)
 
 /** Inclusive range of `days` days ending today in `timeZone`. */
-export function rangeDates(days: number, timeZone?: string): DateRange {
+function rangeDates(days: number, timeZone?: string): DateRange {
   const end_date = today(timeZone)
   return { start_date: addDays(end_date, -(days - 1)), end_date }
 }
 
 /** Rates should be 0–1, but tolerate a 0–100 percentage. */
-export const normRate = (r: number | null | undefined): number | null =>
+const normRate = (r: number | null | undefined): number | null =>
   r == null || !Number.isFinite(r) ? null : r > 1 ? r / 100 : r
 
 /** Σ(w·v)/Σw over rows whose value is known; null when none are. */
-export function weightedAvg(rows: { w: number; v: number | null | undefined }[]): number | null {
+function weightedAvg(rows: { w: number; v: number | null | undefined }[]): number | null {
   let num = 0
   let den = 0
   for (const { w, v } of rows) {
@@ -47,7 +45,7 @@ export function weightedAvg(rows: { w: number; v: number | null | undefined }[])
 }
 
 /** Meta counts timeouts inside error_rate; split them out so success + error + timeout ≈ 1. */
-export function splitErrorRate(error: number | null, timeout: number | null): number | null {
+function splitErrorRate(error: number | null, timeout: number | null): number | null {
   if (error == null) return null
   return Math.max(0, error - (timeout ?? 0))
 }
@@ -68,7 +66,7 @@ const eventInsights = (range: AnalyticsRange) =>
     `${agent()}/insights/agent_events` + q({ ...rangeDates(range, 'America/Los_Angeles') }),
   )
 
-export interface Kpis {
+interface Kpis {
   aiThreads: number | null
   openHandoffs: number | null
   toolCalls: number | null
@@ -158,7 +156,7 @@ export async function getHandoffTrend(range: AnalyticsRange): Promise<HandoffPoi
   return rows?.map((r) => ({ at: ms(r.ts), count: r.count })) ?? null
 }
 
-export interface ToolRow {
+interface ToolRow {
   tool: string
   threads: number
   successRate: number | null
@@ -184,7 +182,7 @@ export async function getToolBreakdown(range: AnalyticsRange): Promise<ToolRow[]
     .sort((a, b) => b.threads - a.threads)
 }
 
-export interface EventRow {
+interface EventRow {
   type: string
   received: number
   processed: number
@@ -204,7 +202,7 @@ export async function getEventBreakdown(range: AnalyticsRange): Promise<{ rows: 
   }
 }
 
-export interface ConnectorHealth {
+interface ConnectorHealth {
   id: string
   name: string
   stats: { executions: number; successes: number; successRate: number | null; avgLatencyS: number | null; p95LatencyS: number | null } | null
@@ -246,30 +244,4 @@ export function getConnectorHealth(connections: { id: string; name: string; meta
         }
       }),
   )
-}
-
-export interface TimelineStep {
-  kind: 'llm' | 'tool'
-  tool?: string
-  status?: 'SUCCESS' | 'ERROR' | 'TIMEOUT'
-  latencyMs?: number
-}
-export interface TimelineTurn {
-  at: number | null
-  latencyMs: number | null
-  steps: TimelineStep[]
-}
-
-/** Turns of the number's most recent conversation with `phone`. */
-export async function getConversationTimeline(phone: string): Promise<TimelineTurn[]> {
-  return (await conversationTurns(phone)).map((t) => ({
-    at: toMs(t.timestamp) ?? null,
-    latencyMs: t.e2e_latency_ms ?? null,
-    steps: (t.steps ?? []).map((s) => ({
-      kind: s.type === 'TOOL_CALL' ? 'tool' : 'llm',
-      tool: s.tool_name,
-      status: s.status,
-      latencyMs: s.latency_ms,
-    })),
-  }))
 }

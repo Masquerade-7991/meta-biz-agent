@@ -24,7 +24,7 @@ const GRAPH_PREFIX = env('GRAPH_PREFIX').replace(/\/+$/, '')
 export const agentUpstream = (env('AGENT_BASE_URL') || (direct ? env('BASE_URL_1') : upstream)).replace(/\/+$/, '')
 export const hasToken = !!serverToken
 /** The server's own WhatsApp account (.env). Requests use their workspace's account instead (context.ts). */
-export const envIds: Record<string, string> = {
+const envIds: Record<string, string> = {
   WABA_ID: env('WABA_ID'),
   PHONE_NUMBER_ID: env('PHONE_NUMBER_ID'),
   BUSINESS_ID: env('BUSINESS_ID'),

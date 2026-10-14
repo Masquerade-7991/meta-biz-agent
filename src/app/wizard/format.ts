@@ -2,7 +2,7 @@ import type { BusinessHourRow, Day, PaymentMethodId } from './types'
 import { PAYMENT_METHOD_OPTIONS } from './mockData'
 
 /** Joins a list with commas and "and" before the last item — no Oxford comma. "A, B and C". */
-export function formatList(items: string[]): string {
+function formatList(items: string[]): string {
   if (items.length === 0) return ''
   if (items.length === 1) return items[0]
   if (items.length === 2) return `${items[0]} and ${items[1]}`

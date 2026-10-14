@@ -40,7 +40,7 @@ const STEP_WORDS: Record<string, string> = {
   PHONE_NUMBER_VERIFICATION: 'verifying the phone number',
   PERMISSIONS: 'reviewing permissions',
 }
-export const stepWords = (step: string) => STEP_WORDS[step] ?? step.toLowerCase().replace(/_/g, ' ')
+const stepWords = (step: string) => STEP_WORDS[step] ?? step.toLowerCase().replace(/_/g, ' ')
 
 /** What to tell the person when Meta's signup ends without connecting anything. */
 export function signupMessage(ev: Exclude<SignupEvent, { kind: 'finish' }>): string {

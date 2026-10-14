@@ -3,7 +3,7 @@ import { can, type Action, type Role } from '@/app/lib/permissions'
 
 export type NavId = 'home' | 'inbox' | 'tickets' | 'contacts' | 'ai-agents' | 'broadcasts' | 'whatsapp' | 'analytics' | 'reports' | 'settings'
 
-export interface NavItem {
+interface NavItem {
   id: NavId
   label: string
   icon: LucideIcon

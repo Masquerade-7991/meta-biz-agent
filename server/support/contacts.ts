@@ -12,7 +12,7 @@ import { can } from '../../src/app/lib/permissions.ts'
 
 const contacts = () => col('contacts')
 
-export interface FieldDef {
+interface FieldDef {
   key: string
   label: string
   type: 'text' | 'number' | 'date' | 'select'
@@ -48,7 +48,7 @@ export async function contactNames(phones: string[]) {
   )
 }
 
-export async function fieldDefs(): Promise<FieldDef[]> {
+async function fieldDefs(): Promise<FieldDef[]> {
   return ((await col('contact_fields').findOne({ workspaceId: ws() }))?.fields as FieldDef[] | undefined) ?? []
 }
 

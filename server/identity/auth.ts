@@ -140,7 +140,7 @@ async function startSession(res: http.ServerResponse, userId: string, workspaceI
   return sha256(token)
 }
 
-export interface Session {
+interface Session {
   user: User
   workspace: Workspace | null
   role: Role | null

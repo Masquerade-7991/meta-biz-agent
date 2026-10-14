@@ -1,7 +1,7 @@
 // A chat is one long thread per customer; WhatsApp bills and allows free replies per 24-hour window
 // that each customer message opens. A "session" here is one such stretch: it starts with a customer
 // message that came more than 24 hours after their previous one (or their first ever).
-export interface SessionStart {
+interface SessionStart {
   n: number
   at: string
 }

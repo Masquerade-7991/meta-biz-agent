@@ -102,7 +102,7 @@ export function conditionHolds(c: Condition, f: Facts): boolean {
   }
 }
 
-export const ruleMatches = (r: Rule, f: Facts) =>
+const ruleMatches = (r: Rule, f: Facts) =>
   r.enabled && (!r.when.length || (r.match === 'any' ? r.when.some((c) => conditionHolds(c, f)) : r.when.every((c) => conditionHolds(c, f))))
 
 /** Rules run top to bottom; the first that matches decides. */
@@ -157,7 +157,7 @@ export function pickFromPool(
 
 /** Who a new ticket goes to, before picking a person: the matched rule's target, else the workspace
  *  default (support settings). Shared by the server and Dummy mode, so both route the same way. */
-export type RoutePlan = { to: 'user'; userId: string | null } | { to: 'nobody' } | { to: 'team'; team: Team; skill?: string } | { to: 'everyone' }
+type RoutePlan = { to: 'user'; userId: string | null } | { to: 'nobody' } | { to: 'team'; team: Team; skill?: string } | { to: 'everyone' }
 export function routePlan(target: ReturnType<typeof applyRule>['target'], defaults: { mode: 'unassigned' | 'round_robin' | 'fixed'; teamId: string | null; userId: string | null }, teams: Team[]): RoutePlan {
   if (target.kind === 'user') return { to: 'user', userId: target.userId }
   if (target.kind === 'none') return { to: 'nobody' }

@@ -23,7 +23,7 @@ export const isReport = (v: unknown): v is ReportId => REPORTS.some((r) => r.id 
 export const reportOf = (id: ReportId) => REPORTS.find((r) => r.id === id)!
 export const isLogReport = (id: ReportId): id is ReportId & LogKind => reportOf(id).source === 'log'
 
-export interface ReportTable {
+interface ReportTable {
   columns: string[]
   rows: (string | number | null)[][]
 }

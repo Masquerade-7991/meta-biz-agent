@@ -25,7 +25,7 @@ export function replaceable(next: string): (string | null)[] | null {
   return i < 0 ? null : [null, ...ORDER.slice(0, i)]
 }
 
-export interface Charge {
+interface Charge {
   waMessageId: string
   phone: string
   status: string

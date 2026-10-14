@@ -5,7 +5,7 @@ import { Bubble, BubbleButton, Meta, PhoneFrame } from './WhatsAppPreview'
 import { WA } from './whatsappTheme'
 import { WaText } from './WaText'
 
-export interface DemoChatMessage {
+interface DemoChatMessage {
   from: 'customer' | 'agent' | 'system'
   text: string
   at: number

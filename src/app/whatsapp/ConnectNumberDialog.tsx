@@ -39,7 +39,7 @@ const FLOWS: { id: Flow; icon: typeof Smartphone; title: string; body: string }[
  * see what gets connected, run Meta's window, then see the account connected here. With only Meta's
  * hosted link, ConnectNumberButton sends the tab straight to Meta instead.
  */
-export function ConnectNumberDialog({ open, onOpenChange, onConnected }: { open: boolean; onOpenChange: (o: boolean) => void; onConnected?: (a: WaAccount) => void }) {
+function ConnectNumberDialog({ open, onOpenChange, onConnected }: { open: boolean; onOpenChange: (o: boolean) => void; onConnected?: (a: WaAccount) => void }) {
   const { me } = useAuth()
   const workspace = me?.workspace?.name ?? 'this workspace'
   const demo = isDummyMode()

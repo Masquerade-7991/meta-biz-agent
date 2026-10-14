@@ -14,7 +14,7 @@ const WINDOW_MS = 30_000
 const IN_FLIGHT = 8
 const WAITING = 64
 
-export class BreakerOpen extends Error {
+class BreakerOpen extends Error {
   constructor(kind: string) {
     super(`Meta is not answering (${kind} calls are paused for a moment after repeated failures).`)
     this.name = 'BreakerOpen'

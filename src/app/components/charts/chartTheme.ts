@@ -1,5 +1,5 @@
 // Shared look for every chart: colours come from the theme tokens, so charts follow light and dark.
-export const CHART_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'] as const
+const CHART_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'] as const
 
 export const colorAt = (i: number) => CHART_COLORS[i % CHART_COLORS.length]
 

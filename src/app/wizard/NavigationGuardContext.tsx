@@ -3,10 +3,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 /** 'save' = the user is trying to proceed (Next / Save and close): guard should save first.
  *  'discard' = the user is trying to leave without saving (Back / Exit): guard should just warn. */
 export type NavIntent = 'save' | 'discard'
-export type NavGuard = (intent: NavIntent) => Promise<boolean>
+type NavGuard = (intent: NavIntent) => Promise<boolean>
 
 /** What the open section reports, so the studio header can say it truthfully. */
-export interface SaveStatus {
+interface SaveStatus {
   dirty: boolean
   saving: boolean
   /** When the open section last finished a save (ms), or null. */

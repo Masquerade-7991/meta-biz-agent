@@ -41,7 +41,7 @@ export interface SignupAssets {
   wabaId?: string
   phoneNumberId?: string | null
 }
-export interface AssetRow {
+interface AssetRow {
   /** What it's called on Meta. */
   meta: string
   /** The id Meta reported, once signup has finished. */

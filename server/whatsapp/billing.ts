@@ -21,7 +21,7 @@ const isoDay = (d: Date) => d.toISOString().slice(0, 10)
 const month = (d = new Date()) => d.toISOString().slice(0, 7)
 
 // ---- sync ----
-export async function syncSpend() {
+async function syncSpend() {
   if (!ownsMetaAssets()) return
   const end = Math.floor(Date.now() / 1000)
   const start = end - 35 * 86_400
@@ -74,7 +74,7 @@ async function monthToDate() {
   return { total: rows.reduce((n, r) => n + r.cost, 0), byCategory: rows.map((r) => ({ category: String(r._id), cost: r.cost, volume: r.volume })).sort((a, z) => z.cost - a.cost) }
 }
 
-export async function checkBudget() {
+async function checkBudget() {
   const s = await settings().findOne({ workspaceId: ws() })
   const budget = Number(s?.budget) || 0
   if (!budget) return
@@ -105,7 +105,7 @@ async function rates() {
   return new Map(rows.map((r) => [`${r._id.country}|${r._id.category}`, r.cost / r.volume]))
 }
 
-export interface Estimate {
+interface Estimate {
   currency: string | null
   /** Estimated total for the people we have a rate for. */
   total: number

@@ -15,7 +15,7 @@ import { SecurityTab } from './SecurityTab'
 import { BlockedTab } from './BlockedTab'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
 
-export type NumberTab = 'profile' | 'name' | 'automation' | 'security' | 'blocked' | 'activity'
+type NumberTab = 'profile' | 'name' | 'automation' | 'security' | 'blocked' | 'activity'
 /** What every tab gets: the number, a way to show what Meta now says, and the dirty flag for the guard. */
 export interface TabProps {
   detail: NumberDetail

@@ -14,7 +14,7 @@ const conversations = () => col('conversations')
 const reminders = () => col('reminders')
 
 /** A time from the browser that must be in the future (and not absurdly far). */
-export function futureTime(v: unknown, what: string): Date {
+function futureTime(v: unknown, what: string): Date {
   const d = new Date(String(v ?? ''))
   if (Number.isNaN(d.getTime())) throw new HttpError(400, `Pick when to ${what}.`)
   if (d.getTime() < Date.now() + 30_000) throw new HttpError(400, 'Pick a time in the future.')

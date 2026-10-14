@@ -29,7 +29,7 @@ export function diff(before: Record<string, unknown>, after: Record<string, unkn
 }
 
 /** Live events per workspace; listeners are the open /api/stream connections. */
-export const bus = new EventEmitter().setMaxListeners(0)
+const bus = new EventEmitter().setMaxListeners(0)
 
 /** Events written by other instances, from a change stream on `events` (needs a replica set; Atlas
  *  is one). Opened once, on the first subscriber; without a replica set the stream only carries this

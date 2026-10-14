@@ -73,11 +73,11 @@ export async function getTeams(): Promise<Team[]> {
   return rows.map(teamOut)
 }
 
-export async function getRules(): Promise<Rule[]> {
+async function getRules(): Promise<Rule[]> {
   return ((await rulesCol().findOne({ workspaceId: ws() }))?.rules as Rule[] | undefined) ?? []
 }
 
-export async function getMatrix(): Promise<EscalationMatrix> {
+async function getMatrix(): Promise<EscalationMatrix> {
   const m = (await matrixCol().findOne({ workspaceId: ws() }))?.matrix as EscalationMatrix | undefined
   return m ?? DEFAULT_MATRIX
 }
@@ -168,7 +168,7 @@ export async function cleanUpMember(userId: string, name: string) {
 }
 
 // ---- routing a new ticket ----
-export interface Routed {
+interface Routed {
   assigneeId: string | null
   teamId: string | null
   priority: Priority

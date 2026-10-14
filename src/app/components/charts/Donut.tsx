@@ -2,7 +2,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { colorAt, compact, type Series } from './chartTheme'
 import { ChartTooltip } from './ChartTooltip'
 
-export interface Slice {
+interface Slice {
   label: string
   value: number
   color?: string

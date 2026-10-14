@@ -15,10 +15,10 @@ import { queueNumbersSync, syncNumbers } from './numbers.ts'
 
 const health = () => col('number_health')
 const LIMIT: Record<string, string> = { TIER_50: '50', TIER_250: '250', TIER_2K: '2,000', TIER_10K: '10,000', TIER_100K: '100,000', TIER_UNLIMITED: 'Unlimited' }
-export const limitLabel = (t: string | null) => (t ? (LIMIT[t] ?? t) : null)
+const limitLabel = (t: string | null) => (t ? (LIMIT[t] ?? t) : null)
 
 /** Reads every number of the workspace from Meta, stores it, and alerts on quality changes. */
-export async function checkHealth() {
+async function checkHealth() {
   if (!ownsMetaAssets()) return
   const accounts = await col('whatsapp_accounts').find({ workspaceId: ws() }).toArray()
   for (const a of accounts) {
@@ -64,7 +64,7 @@ defineJob(
   },
   { maxAttempts: 3 },
 )
-export const queueHealthCheck = () => enqueue('health.check', {}, { key: 'health.check' })
+const queueHealthCheck = () => enqueue('health.check', {}, { key: 'health.check' })
 export async function startHealth() {
   if (!db) return
   for (const w of (await col('whatsapp_accounts').distinct('workspaceId')) as string[])

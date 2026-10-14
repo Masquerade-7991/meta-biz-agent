@@ -75,7 +75,7 @@ const CODES: Record<number, FailureReason> = {
 export const reasonOf = (code: unknown): FailureReason => (typeof code === 'number' && CODES[code]) || 'other'
 
 /** Retries per reason: the daily cap waits a day (twice at most); throttling waits a minute. */
-export const RETRY: Partial<Record<FailureReason, { afterMs: number; max: number }>> = {
+const RETRY: Partial<Record<FailureReason, { afterMs: number; max: number }>> = {
   marketing_limit: { afterMs: 24 * 3_600_000, max: 2 },
   too_fast: { afterMs: 60_000, max: 3 },
   meta_down: { afterMs: 5 * 60_000, max: 2 },

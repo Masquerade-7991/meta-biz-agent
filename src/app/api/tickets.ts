@@ -1,7 +1,6 @@
 // Tickets, support settings (hours, SLA, routing, teams, CSAT), notifications and AI assist.
 // Dummy mode answers in this browser (see supportDummy.ts).
-import { jsonClient } from './client'
-import { dummyTickets } from './supportDummy'
+import { jsonClient, supportDummy } from './client'
 import type { AgentProfile, EscalationMatrix, Rule, Team, TicketSource, TicketStatus } from '@/app/support/routing'
 export type { AgentProfile, EscalationMatrix, Rule, Team, TicketStatus }
 export { PRIORITY_LABEL, STATUS_LABEL } from '@/app/support/routing'
@@ -85,11 +84,11 @@ export interface ReminderNotice {
 export type Notice = TicketNotice | AlertNotice | ReminderNotice
 export const isAlert = (n: Notice): n is AlertNotice => n.kind === 'alert' || n.kind === 'alert_critical'
 
-const call = jsonClient(dummyTickets)
+const call = jsonClient(supportDummy('dummyTickets'))
 const qs = (p: Record<string, string | undefined>) =>
   new URLSearchParams(Object.entries(p).filter((e): e is [string, string] => !!e[1])).toString()
 
-export interface TicketFilter {
+interface TicketFilter {
   status?: string
   /** me, none, or a member's id. */
   assignee?: string
@@ -111,7 +110,7 @@ export const getTicket = (n: number) => call<Ticket>(`/api/tickets/${n}`)
 export const createTicket = (phone: string, subject: string, priority: Priority) => call<Ticket>('/api/tickets', 'POST', { phone, subject, priority })
 export const updateTicket = (n: number, patch: Partial<Pick<Ticket, 'status' | 'priority' | 'assigneeId' | 'subject' | 'tags' | 'teamId'>>) => call<Ticket>(`/api/tickets/${n}`, 'PATCH', patch)
 export const resolveTicket = (n: number, o: { resolution: string; askFeedback: boolean; handBack: boolean }) => call<Ticket>(`/api/tickets/${n}/resolve`, 'POST', o)
-export interface BulkResult {
+interface BulkResult {
   done: number
   /** Tickets that couldn't change, and why (e.g. already resolved). */
   failed: { number: number; reason: string }[]

@@ -45,10 +45,10 @@ export function o(props: Record<string, Field>, description?: string): Schema {
   return { type: 'object', properties, ...(required.length && { required }), ...(description && { description }) }
 }
 
-export const OK = o({ 'ok*': { type: 'boolean', const: true } })
+const OK = o({ 'ok*': { type: 'boolean', const: true } })
 
 /** "Admin or above (`agent.edit`)": the lowest role the permission allows, from the shared matrix. */
-export function roleFor(action: Action): string {
+function roleFor(action: Action): string {
   const lowest = [...ROLES].reverse().find((r) => can(r.id, action))
   return `${lowest?.label ?? 'Owner'}${lowest?.id === 'owner' ? '' : ' or above'} (\`${action}\`)`
 }

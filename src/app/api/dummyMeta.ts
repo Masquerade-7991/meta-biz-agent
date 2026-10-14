@@ -168,7 +168,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const digits = (n: number) => Array.from({ length: n }, () => Math.floor(Math.random() * 10)).join('')
 const isoDay = (d: Date) => d.toISOString().slice(0, 10)
 
-export interface DummyReply {
+interface DummyReply {
   status: number
   json?: unknown
 }

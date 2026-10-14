@@ -8,13 +8,13 @@ import { callUpstream, metaGet, parseJson } from '../whatsapp/index.ts'
 import { tryLock, unlock } from '../platform/locks.ts'
 
 type Obj = Record<string, unknown>
-export type Job = 'metrics' | 'handoffs' | 'connectorLogs' | 'traces' | 'agentUsage'
+type Job = 'metrics' | 'handoffs' | 'connectorLogs' | 'traces' | 'agentUsage'
 
 /** YYYY-MM-DD in `timeZone` (default: server local); en-CA formats dates that way. */
 export const dayIn = (d: Date, timeZone?: string) => new Intl.DateTimeFormat('en-CA', { timeZone }).format(d)
 export const addDays = (day: string, n: number) => new Date(Date.parse(day + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10)
 /** Days are stored as UTC midnight of the date label. */
-export const dayTs = (day: string) => new Date(day + 'T00:00:00Z')
+const dayTs = (day: string) => new Date(day + 'T00:00:00Z')
 const normRate = (r: unknown) => (typeof r !== 'number' || !Number.isFinite(r) ? null : r > 1 ? r / 100 : r)
 const q = (p: Record<string, string | number | boolean>) => '?' + new URLSearchParams(Object.entries(p).map(([k, v]): [string, string] => [k, String(v)])).toString()
 
@@ -22,7 +22,7 @@ const q = (p: Record<string, string | number | boolean>) => '?' + new URLSearchP
 const isHttp = (err: unknown) => typeof (err as { status?: unknown })?.status === 'number'
 const orSkip = <T>(fallback: T) => (err: unknown): T | Promise<never> => (isHttp(err) ? fallback : Promise.reject(err))
 
-export const agentPhones = async () =>
+const agentPhones = async () =>
   (await col('agents').find({ workspaceId: ws(), deletedAt: { $exists: false } }, { projection: { _id: 1 } }).toArray()).map((a) => String(a._id))
 
 // ---- metrics_daily: one doc per (phone, metric, closed day); each day fetched once ----
@@ -31,7 +31,7 @@ const METRICS = {
   tool_calls: { tz: undefined as string | undefined },
   agent_events: { tz: 'America/Los_Angeles' }, // Meta buckets agent events in Pacific time
 }
-export type Metric = keyof typeof METRICS
+type Metric = keyof typeof METRICS
 const inFlight = new Set<string>()
 
 async function fetchMetric(phone: string, metric: Metric, day: string): Promise<Obj> {

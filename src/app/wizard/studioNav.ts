@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import type { StudioSectionId } from './types'
 
-export interface StudioNavItem {
+interface StudioNavItem {
   id: StudioSectionId
   label: string
   icon: LucideIcon

@@ -1,10 +1,10 @@
 // Product help shown on Home in every state. One list so links can be swapped without touching the page.
-export interface HelpLink {
+interface HelpLink {
   title: string
   description: string
   href: string
 }
-export interface HelpGroup {
+interface HelpGroup {
   title: string
   links: HelpLink[]
 }

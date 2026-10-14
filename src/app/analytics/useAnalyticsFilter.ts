@@ -12,7 +12,7 @@ export const PRESETS = [
 /** Today in the workspace's time zone (its support hours), so "today" is the business's day, not the
  *  viewer's: someone in New York reading an Indian workspace's numbers in the evening. */
 const today = (tz?: string) => new Intl.DateTimeFormat('en-CA', tz ? { timeZone: tz } : {}).format(new Date())
-export const presetRange = (id: string, tz?: string) => {
+const presetRange = (id: string, tz?: string) => {
   const to = today(tz)
   if (id === 'mtd') return { from: to.slice(0, 8) + '01', to }
   const p = PRESETS.find((x) => x.id === id) ?? PRESETS[1]

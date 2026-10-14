@@ -1,6 +1,5 @@
 // Broadcasts and WhatsApp templates (/api/broadcasts/*). Dummy mode answers in this browser.
-import { jsonClient } from './client'
-import { dummyBroadcasts } from './supportDummy'
+import { jsonClient, supportDummy } from './client'
 import type { Template } from '../broadcasts/templates'
 import type { FailureReason } from '../broadcasts/sendErrors'
 
@@ -78,7 +77,7 @@ export interface Preflight {
   estimate: Estimate
 }
 
-const call = jsonClient(dummyBroadcasts)
+const call = jsonClient(supportDummy('dummyBroadcasts'))
 
 export const listTemplates = () => call<WaTemplate[]>('/api/broadcasts/templates')
 export const createTemplate = (t: NewTemplate) => call<{ id: string; status: string }>('/api/broadcasts/templates', 'POST', t)

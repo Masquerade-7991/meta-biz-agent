@@ -31,7 +31,7 @@ const phone = () => getActivePhoneNumberId() ?? 'PHONE_NUMBER_ID'
 const enc = encodeURIComponent
 
 // ---- Agents list (deleted agents are excluded by the server) ----
-export interface StoredAgent {
+interface StoredAgent {
   phoneNumberId: string
   wabaId?: string
   displayName?: string
@@ -72,7 +72,7 @@ export function stripConnectionSecrets(state: WizardState): WizardState {
 }
 
 /** Credentials never leave the browser; the server blanks the same fields again. */
-export function stripSecrets(state: WizardState): WizardState {
+function stripSecrets(state: WizardState): WizardState {
   const s = stripConnectionSecrets(state)
   return { ...s, connectors: { ...s.connectors, apiKey: '', clientSecret: '' }, agentEvents: { ...s.agentEvents, secretKey: '' } }
 }
@@ -120,7 +120,7 @@ interface StoredTestMessage {
   handoffReason?: string
   noResponseReason?: string
 }
-export interface TestHistoryEntry {
+interface TestHistoryEntry {
   id: string
   startedAt: number
   messages: { from: 'customer' | 'agent' | 'system'; text: string; at: number; quickReplies?: string[] }[]
@@ -149,22 +149,6 @@ export async function listTestConversations(): Promise<TestHistoryEntry[] | null
   )
 }
 
-// ---- Conversation traces (newest conversation first, turns oldest first) ----
-export interface StoredTrace {
-  conversationId: string
-  consumer: string
-  startedAt: Stamp
-  endedAt: Stamp
-  turns: {
-    turnId: string
-    ts: Stamp
-    e2eLatencyMs: number | null
-    steps: { type: 'LLM_CALL' | 'TOOL_CALL'; status?: 'SUCCESS' | 'ERROR' | 'TIMEOUT'; tool_name?: string; latency_ms?: number }[]
-  }[]
-}
-export const listTraces = (consumer: string) =>
-  storeFetch<StoredTrace[]>('/api/store/traces' + q({ phone: phone(), consumer: consumer.replace(/\D/g, '') }))
-
 // ---- Audit log (newest first) ----
 export interface AuditRow {
   at: Stamp
@@ -192,7 +176,7 @@ interface RawEvaluation {
   reasons?: string
   transcript?: string
 }
-export interface StoredEvalRun {
+interface StoredEvalRun {
   caseId: string
   jobId: string
   status: 'COMPLETED' | 'FAILED'

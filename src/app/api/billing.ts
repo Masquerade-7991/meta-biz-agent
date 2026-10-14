@@ -1,6 +1,5 @@
 // WhatsApp spend and the monthly budget (/api/billing, server/billing.ts). Dummy mode answers in this browser.
-import { jsonClient } from './client'
-import { dummyBilling } from './supportDummy'
+import { jsonClient, supportDummy } from './client'
 
 export interface Billing {
   currency: string | null
@@ -20,7 +19,7 @@ export interface Billing {
   messages?: { billable: number; free: number; byCategory: { category: string; billable: number; free: number }[] }
 }
 
-const call = jsonClient(dummyBilling)
+const call = jsonClient(supportDummy('dummyBilling'))
 export const getBilling = () => call<Billing>('/api/billing')
 export const setBudget = (budget: number | null) => call<Billing>('/api/billing', 'PUT', { budget })
 export const syncBilling = () => call<Billing>('/api/billing/sync', 'POST', {})

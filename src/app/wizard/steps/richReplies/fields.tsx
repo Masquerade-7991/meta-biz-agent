@@ -54,7 +54,7 @@ function Field({ id, label, optional, help, count, max, error, action, children 
   )
 }
 
-export function TextField({ field, label, value, onChange, max, optional, help, placeholder, rows, inputMode, action, errorFields }: {
+function TextField({ field, label, value, onChange, max, optional, help, placeholder, rows, inputMode, action, errorFields }: {
   field: string
   label: string
   value: string

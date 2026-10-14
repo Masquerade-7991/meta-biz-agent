@@ -330,7 +330,7 @@ export interface RichRepliesState {
 }
 
 // ---- Step 1.5 Journeys and Routing ----
-export type JourneyProfile = 'support' | 'commerce' | 'both' | null
+type JourneyProfile = 'support' | 'commerce' | 'both' | null
 
 export interface IntentRow {
   id: string
@@ -361,7 +361,7 @@ export interface ConnectorTool {
   lastResponse: string | null
 }
 
-export interface CustomTool {
+interface CustomTool {
   id: string
   name: string
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -535,13 +535,13 @@ export interface IntegrationsState {
 }
 
 // ---- Connections tab: MCP sub-tab ----
-export interface McpDiscoveredTool {
+interface McpDiscoveredTool {
   name: string
   description: string
   enabled: boolean
 }
 
-export interface McpServerConnection {
+interface McpServerConnection {
   serverUrl: string
   hasAccessKey: boolean
   connectedAt: number
@@ -589,7 +589,7 @@ export interface RepliesState {
 }
 
 // ---- Step 1.9 Review, Test, Publish ----
-export interface TestConversationResult {
+interface TestConversationResult {
   id: string
   title: string
   category: 'safety' | 'faq' | 'routing'
@@ -597,7 +597,7 @@ export interface TestConversationResult {
   transcript: { from: 'customer' | 'agent'; text: string }[]
 }
 
-export interface MetaEvalResult {
+interface MetaEvalResult {
   available: boolean
   avgConversationScore: number
   avgTurnScore: number
@@ -635,7 +635,7 @@ export interface PublishState {
 // A frozen copy of a past Test & publish standard-checks run, so the Agent Activity page can list
 // history without ever calling Meta's Agent Eval endpoint. 'pending' never appears here — only
 // finished runs are recorded.
-export interface QualityCheckItem {
+interface QualityCheckItem {
   id: string
   situation: string
   sent: string
@@ -643,7 +643,7 @@ export interface QualityCheckItem {
   status: 'normal' | 'warn'
 }
 
-export interface QualityCheckRun {
+interface QualityCheckRun {
   id: string
   timestamp: number
   items: QualityCheckItem[]

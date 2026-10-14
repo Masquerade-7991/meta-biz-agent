@@ -1,8 +1,7 @@
 // Inbox client: /api/inbox/* on the server (chats, replies, notes, assignment, thread control,
 // canned responses, sample data). Dummy mode answers from sample chats in this browser instead.
 import type { CannedActions } from '../inbox/macros'
-import { jsonClient } from './client'
-import { dummyInbox } from './supportDummy'
+import { jsonClient, supportDummy } from './client'
 import { isDummyMode } from './dummy'
 import { parse } from './meta'
 import type { MessageMedia } from '../inbox/media'
@@ -78,7 +77,7 @@ export interface SearchHit {
   author: ChatMessage['author']
 }
 
-const call = jsonClient(dummyInbox)
+const call = jsonClient(supportDummy('dummyInbox'))
 const chat = (phone: string, action = '') => `/api/inbox/conversations/${encodeURIComponent(phone)}${action && '/' + action}`
 
 export const listChats = (filter: ChatFilter = 'all', q = '') => call<ChatSummary[]>(`/api/inbox/conversations?filter=${filter}&q=${encodeURIComponent(q)}`)
@@ -112,7 +111,7 @@ export const mediaUrl = (id: string, download = false) => (id.startsWith('blob:'
 
 /** Sends a file into the chat, reporting upload progress (0 to 1). Checks happen on both sides. */
 export function sendMedia(phone: string, file: File, caption: string, onProgress: (p: number) => void): Promise<ChatDetail> {
-  if (isDummyMode()) return dummyInbox<ChatDetail>('POST', chat(phone, 'media'), { file, caption })
+  if (isDummyMode()) return supportDummy('dummyInbox')<ChatDetail>('POST', chat(phone, 'media'), { file, caption })
   return new Promise((resolve, reject) => {
     const x = new XMLHttpRequest()
     x.open('POST', chat(phone, 'media'))

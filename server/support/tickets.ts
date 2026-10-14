@@ -19,8 +19,8 @@ import { getTeams, routeTicket, supportOpsRoute } from './supportOps.ts'
 import { customerWrites, pausedFor, shiftDues } from '../../src/app/support/ticketRules.ts'
 import type { TicketSource } from '../../src/app/support/routing.ts'
 
-export const PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const
-export type Priority = (typeof PRIORITIES)[number]
+const PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const
+type Priority = (typeof PRIORITIES)[number]
 const STATUSES = ['open', 'pending', 'resolved'] as const
 const CSAT = [
   { id: 'csat_3', title: 'Good', score: 3 },
@@ -28,7 +28,7 @@ const CSAT = [
   { id: 'csat_1', title: 'Bad', score: 1 },
 ]
 
-export interface SupportSettings {
+interface SupportSettings {
   hours: Hours
   /** Sent when a customer writes to the team outside business hours; '' = off. */
   awayMessage: string
@@ -42,7 +42,7 @@ export interface SupportSettings {
   /** Agents see only chats and tickets assigned to them, plus unassigned ones (supervisors and up see all). */
   restrictAgents: boolean
 }
-export const DEFAULT_SETTINGS: SupportSettings = {
+const DEFAULT_SETTINGS: SupportSettings = {
   hours: DEFAULT_HOURS,
   awayMessage: 'Thanks for your message. Our team is offline right now and will reply when we’re back. You can keep chatting with our AI assistant meanwhile.',
   sla: { urgent: { firstResponse: 15, resolve: 240 }, high: { firstResponse: 30, resolve: 480 }, normal: { firstResponse: 60, resolve: 1440 }, low: { firstResponse: 240, resolve: 2880 } },

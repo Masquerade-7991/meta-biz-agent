@@ -34,7 +34,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /** One report's CSV for a filter. Logs are read in pages up to 50,000 rows. `o`: the overview
  *  already built for this filter (an email with several reports builds it once). */
-export async function reportCsv(id: ReportId, f: AnalyticsFilter, o?: Overview) {
+async function reportCsv(id: ReportId, f: AnalyticsFilter, o?: Overview) {
   if (isLogReport(id)) {
     const first: LogPage = await logPage(id, f, 0, 1000)
     const rows = [...first.rows]

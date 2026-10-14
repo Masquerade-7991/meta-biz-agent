@@ -7,7 +7,7 @@
 // how the server always ran. Health and readiness are served by every role for the host's checks.
 import { env } from './env.ts'
 
-export type Role = 'api' | 'ingress' | 'worker' | 'stream' | 'all'
+type Role = 'api' | 'ingress' | 'worker' | 'stream' | 'all'
 const ROLES: Role[] = ['api', 'ingress', 'worker', 'stream', 'all']
 export const ROLE: Role = (ROLES as string[]).includes(env('ROLE')) ? (env('ROLE') as Role) : 'all'
 export const isRole = (r: Exclude<Role, 'all'>) => ROLE === 'all' || ROLE === r

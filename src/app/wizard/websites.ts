@@ -21,8 +21,8 @@ export function crawlStatus(status: MetaCrawlStatus | undefined, error?: string)
   return error?.trim() && (s === 'waiting' || s === 'reading' || s === 'not_started') ? 'done_no_data' : s
 }
 
-export type SiteStage = 'queued' | 'reading' | 'ready' | 'empty' | 'failed' | 'slow'
-export interface SiteView {
+type SiteStage = 'queued' | 'reading' | 'ready' | 'empty' | 'failed' | 'slow'
+interface SiteView {
   stage: SiteStage
   label: string
   tone: 'muted' | 'info' | 'success' | 'warning' | 'danger'

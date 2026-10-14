@@ -26,7 +26,7 @@ import type { ImageSource, RichReply, RichReplyType } from '@/app/wizard/types'
 import { WA } from './whatsappTheme'
 
 /** What the preview needs from an editor draft: the type, its blanks, and the trigger. */
-export type RichReplyDraft = {
+type RichReplyDraft = {
   [T in RichReplyType]: { type: T; trigger: string; blanks: NonNullable<Extract<RichReply, { type: T }>['blanks']> }
 }[RichReplyType]
 

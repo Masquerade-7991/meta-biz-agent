@@ -189,7 +189,7 @@ const RETIRED_UNIQUE: Record<string, string> = { memberships: 'userId' }
 
 /** Creates collections and indexes, skipped when nothing changed since the last run (serverless
  *  instances start often; this keeps their cold start short). */
-export async function ensureSchema(d: Db) {
+async function ensureSchema(d: Db) {
   const version = createHash('sha256').update(JSON.stringify(INDEXES)).digest('hex').slice(0, 16)
   const meta = d.collection<{ _id: string; version: string }>('schema_meta')
   if ((await meta.findOne({ _id: 'indexes' }))?.version === version) return

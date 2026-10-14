@@ -1,6 +1,5 @@
 // The workspace's WhatsApp accounts and Embedded Signup (/api/whatsapp/*). Dummy mode answers in this browser.
-import { jsonClient } from './client'
-import { dummyWhatsApp } from './supportDummy'
+import { jsonClient, supportDummy } from './client'
 
 export type StepName = 'exchange' | 'subscribe' | 'register' | 'billing' | 'sync' | 'details'
 export interface Step {
@@ -46,7 +45,7 @@ export interface SignupConfig {
 export type Billing = 'partner_credit' | 'own'
 export type Flow = 'new' | 'coexistence'
 
-const call = jsonClient(dummyWhatsApp)
+const call = jsonClient(supportDummy('dummyWhatsApp'))
 
 export const getSignupConfig = () => call<SignupConfig>('/api/whatsapp/config')
 export const listAccounts = () => call<WaAccount[]>('/api/whatsapp/accounts')

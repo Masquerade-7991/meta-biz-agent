@@ -7,7 +7,7 @@ import { arr, obj, str, type Obj } from '../platform/http.ts'
 import { trace } from '../platform/trace.ts'
 import { customerKey, isBsuid } from '../../src/app/lib/customer.ts'
 
-export interface WebhookContact {
+interface WebhookContact {
   phone: string
   bsuid: string
   username?: string
@@ -46,7 +46,7 @@ export async function resolveCustomer(phoneIn: unknown, bsuidIn: unknown, extra:
 }
 
 /** Moves everything stored under `from` (a BSUID) to `to` (the phone number), merging when both exist. */
-export async function moveCustomer(from: string, to: string) {
+async function moveCustomer(from: string, to: string) {
   const q = { workspaceId: ws(), phone: from }
   for (const name of ['messages', 'tickets', 'broadcast_recipients', 'presence']) await col(name).updateMany(q, { $set: { phone: to } })
 

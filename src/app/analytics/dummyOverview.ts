@@ -115,7 +115,7 @@ function totals(f: AnalyticsFilter, from: string, to: string) {
   return { days, t, firstReply: median(days.filter((d) => d.opened).map((d) => d.firstReply)) }
 }
 
-export function dummyOverview(f: AnalyticsFilter): Overview {
+function dummyOverview(f: AnalyticsFilter): Overview {
   const n = daysBetween(f.from, f.to)
   const prevTo = addDays(f.from, -1)
   const prevFrom = addDays(prevTo, -(n - 1))
