@@ -104,6 +104,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - All tool request building goes through `src/app/wizard/toolRequest.ts` (payload, read-back, preview, test input).
   - Websites: Meta answers `completed` with `pages_crawled: 0` even when the agent learned from the site (checked with a question only the page answers), so never show 0 pages as fact (`src/app/wizard/websites.ts`). A `PUT` with the same URL queues a fresh read and stamps `last_crawled_at` at queue time.
 
+## Agent loops
+
+- Multi-agent work follows `.claude/loop/PROTOCOL.md`. This session is the coordinator: create the task ledger (acceptance criteria with runnable checks, plan) in `.claude/loop/tasks/` before dispatching, route every handoff, re-run the checks yourself before calling a task done, and batch questions to the user at each stop.
+- Every task ends `DONE`, `BLOCKED` or `NEEDS_APPROVAL` within 8 rounds. Pushing to `main`, real-database writes, production env vars and live Meta changes always stop for approval.
+
 ## Deliberately not wired
 
 - **Native integrations:** there is no Meta API for them, so the tab stays a mock.

@@ -108,3 +108,6 @@ src/assets/helo-conversations.webp
 
 # Agent worktrees (isolated copies for background agents)
 .claude/worktrees/
+
+# Agent loop ledgers (per-task working notes; the protocol itself is tracked)
+.claude/loop/tasks/

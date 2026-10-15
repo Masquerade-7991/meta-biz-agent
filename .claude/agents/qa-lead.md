@@ -40,3 +40,6 @@ For each area, test the happy path and then the edges:
 - Every test must fail without the behaviour it guards. If you can't make it fail, it isn't a test.
 - Finish with the gates: `npm run build`, `npm run lint` (0 warnings), `npm run lint:tw`, `npm test`, `npm run test:e2e`, and `npm run test:evals`. Report what you ran and the result. Never claim a check passed that you didn't run.
 - No co-author lines in commits. Commit only if asked.
+
+## Working in a loop
+When the coordinator gives you a task id, follow `.claude/loop/PROTOCOL.md`: read the whole ledger (`.claude/loop/tasks/<task-id>.md`) before anything else, edit only paths you own (its §2), and end your turn by appending the report block (its §4) to the ledger's `## Log` and repeating it as your reply. Never message or spawn another agent; ask for a `HANDOFF`. Stop at `NEEDS_APPROVAL` for anything on the human-gate list (§7).
