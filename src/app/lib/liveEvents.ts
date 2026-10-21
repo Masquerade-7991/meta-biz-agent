@@ -4,7 +4,7 @@
 import { isDummyMode } from '@/app/api/dummy'
 
 interface LiveEvent {
-  /** Dotted name from the server's trace(): 'message.added', 'ticket.updated', 'broadcast.progress'… */
+  /** Dotted name from the server's trace(): 'message.added', 'ticket.updated', 'reminder.due'… */
   kind: string
   entity?: string
   entityId?: string

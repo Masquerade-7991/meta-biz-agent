@@ -111,7 +111,7 @@ function Gate() {
   if (me.setup === 'password') return <NewPasswordScreen />
   if (!me.workspace) return <CreateWorkspaceScreen />
 
-  // Older links in emails open a page or a Settings tab by query: /?page=broadcasts, /?settings=billing.
+  // Older links in emails open a page or a Settings tab by query: /?page=inbox, /?settings=billing.
   const q = new URLSearchParams(location.search)
   const legacyTab = q.get('settings')
   const legacyPage = q.get('page') as NavId | null

@@ -13,7 +13,6 @@ import { currentAssets } from '../platform/context.ts'
 import { parseActions } from '../../src/app/inbox/macros.ts'
 import { trace } from '../platform/trace.ts'
 import { contactFor, resolveCustomer, webhookContacts } from './customers.ts'
-import { recipientFailed } from '../outreach/index.ts'
 import { onAccountWebhook } from '../whatsapp/index.ts'
 import { inboundMedia, MEDIA_TYPES, saveMedia, serveMedia, uploadToMeta } from './media.ts'
 import { defineJob, enqueue } from '../platform/jobs.ts'
@@ -22,7 +21,7 @@ import { isLocked, tryLock, unlock } from '../platform/locks.ts'
 import { deleteView, listViews, remind, saveView, searchMessages, snooze, upcomingReminders, wakeOnMessage } from './followups.ts'
 import { checkMedia, mediaLabel, MEDIA_RULES, type MediaKind, type MessageMedia } from '../../src/app/inbox/media.ts'
 import { interactiveError, interactivePayload, interactiveText, type InteractiveReply } from '../../src/app/inbox/interactive.ts'
-import { reasonOf, undeliveredLine } from '../../src/app/broadcasts/sendErrors.ts'
+import { undeliveredLine } from '../../src/app/inbox/sendErrors.ts'
 import { isBsuid, NO_CONTROL_HIDDEN, parseCustomerKey, sendTarget } from '../../src/app/lib/customer.ts'
 import { accounts, assetsFor, workspaceForNumber } from '../whatsapp/index.ts'
 import { SAMPLE_CHATS } from '../../src/app/inbox/sampleData.ts'
@@ -234,13 +233,7 @@ async function processChange(field: string, value: Obj) {
       const saved = await messages().findOne({ workspaceId: ws(), waMessageId: str(m.id) }, { projection: { _id: 1 } })
       if (saved) await enqueue('media.fetch', { messageId: String(saved._id) })
     }
-    // A reply within 3 days counts towards the last broadcast this customer received.
-    await col('broadcast_recipients').findOneAndUpdate(
-      { workspaceId: ws(), phone, status: { $in: ['sent', 'delivered', 'read'] }, repliedAt: { $exists: false }, sentAt: { $gte: new Date(Date.now() - 3 * DAY) } },
-      { $set: { repliedAt: new Date() } },
-      { sort: { sentAt: -1 } },
-    )
-    // WhatsApp's opt-out words: STOP keeps the contact out of broadcasts, START lets them back in.
+    // WhatsApp's opt-out words: STOP marks the contact as opted out of marketing, START undoes it.
     const word = body.trim().toUpperCase()
     if (['STOP', 'UNSUBSCRIBE', 'START'].includes(word)) await contacts().updateOne({ workspaceId: ws(), phone }, { $set: { optedOut: word !== 'START', ...(word !== 'START' && { optedOutAt: new Date() }) } })
     await wakeOnMessage(phone)
@@ -302,20 +295,6 @@ async function processChange(field: string, value: Obj) {
           await addMessage({ phone, direction: 'out', author: 'system', kind: 'event', body: undeliveredLine(code, detail), at: fromSeconds(s.timestamp), waMessageId: `failed:${String(s.id)}` })
         }
       }
-      // Same trace as the broadcast that sent it, so one id follows click → send → delivery.
-      const rec = await col('broadcast_recipients').findOne({ workspaceId: ws(), waMessageId: String(s.id), status: { $in: ['queued', ...allowed.filter(Boolean)] } })
-      if (rec)
-        await withWorkspace(
-          ws(),
-          async () => {
-            // A failure Meta reports later (e.g. the daily marketing cap) may be retried.
-            if (status === 'failed') await recipientFailed(rec, reasonOf(code), error ?? 'WhatsApp couldn’t deliver it.', typeof code === 'number' ? code : undefined)
-            else await col('broadcast_recipients').updateOne({ _id: rec._id }, { $set: { status } })
-            trace('broadcast.recipient', { status, ...(error && { error, code }) }, { entity: 'broadcast', id: String(rec.broadcastId) })
-          },
-          currentAssets() ?? null,
-          { traceId: rec.traceId },
-        )
     }
   }
   // A customer stopped or resumed marketing messages from WhatsApp's own settings.

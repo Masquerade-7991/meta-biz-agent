@@ -1,7 +1,7 @@
-// Run: node --test server/templates.test.ts
+// Run: node --test src/app/templates/templates.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { renderTemplate, slotsOf, templatePayload, type Template } from '../../src/app/broadcasts/templates.ts'
+import { renderTemplate, slotsOf, templatePayload, type Template } from './templates.ts'
 
 const order: Template = {
   name: 'order_update',

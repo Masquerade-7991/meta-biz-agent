@@ -212,7 +212,7 @@ export function SecurityTab({ detail, onSaved }: TabProps) {
       )}
 
       {isOwner && live && (
-        <Section danger title="Deregister this number" description="Messaging stops on this number: the AI agent, inbox and broadcasts stop working there until it’s registered again.">
+        <Section danger title="Deregister this number" description="Messaging stops on this number: the AI agent and inbox stop working there until it’s registered again.">
           <Button variant="outline" className="text-destructive" onClick={() => setConfirming(true)}>
             Deregister&hellip;
           </Button>

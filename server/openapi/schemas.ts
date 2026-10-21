@@ -1,5 +1,5 @@
 // The objects the API answers with. Field lists follow the browser's own types in src/app/api/*.ts
-// (and the shared ones in src/app/inbox, src/app/broadcasts, src/app/whatsapp), which mirror the server.
+// (and the shared ones in src/app/inbox, src/app/templates, src/app/whatsapp), which mirror the server.
 import { d, o, t, type Schema } from './helpers.ts'
 
 const ROLE = 'owner|admin|supervisor|agent'
@@ -202,7 +202,7 @@ export const schemas: Record<string, Schema> = {
       'at*': 'date-time',
       number: d('integer', 'Ticket notices.'),
       phone: d('string', 'Ticket and reminder notices.'),
-      target: d('billing|whatsapp|broadcasts', 'Alerts: which page to open.'),
+      target: d('billing|whatsapp', 'Alerts: which page to open.'),
     },
     'A ticket notice, an alert (owners and admins) or one of your reminders.',
   ),
@@ -214,7 +214,7 @@ export const schemas: Record<string, Schema> = {
     'email*': 'string?',
     'tags*': 'string[]',
     'fields*': d({ type: 'object', additionalProperties: { type: 'string' } }, 'Custom field values by field key (see /api/contacts/fields).'),
-    optedOut: d('boolean', 'Opted out of broadcasts.'),
+    optedOut: d('boolean', 'Opted out of marketing messages (sent STOP).'),
     'source*': 'whatsapp|manual|import|sample',
     'createdAt*': 'date-time',
     lastSeenAt: 'date-time',
@@ -238,7 +238,7 @@ export const schemas: Record<string, Schema> = {
   }),
   Segment: o({ 'id*': 'string', 'name*': 'string', 'filter*': 'SegmentFilter', 'count*': d('integer', 'Contacts that match now.') }),
 
-  // ---- Broadcasts ----
+  // ---- Templates ----
   TemplateComponent: o({
     'type*': 'HEADER|BODY|FOOTER|BUTTONS',
     format: 'TEXT|IMAGE|VIDEO|DOCUMENT|LOCATION',
@@ -253,56 +253,6 @@ export const schemas: Record<string, Schema> = {
     'category*': 'string',
     rejectedReason: 'string',
     'components*': 'TemplateComponent[]',
-  }),
-  BroadcastStats: o({
-    'queued*': 'integer',
-    'sent*': 'integer',
-    'delivered*': 'integer',
-    'read*': 'integer',
-    'failed*': 'integer',
-    'skipped*': 'integer',
-    'replied*': 'integer',
-    'retrying*': d('integer', 'Queued again after a failure WhatsApp asked us to retry (e.g. its daily marketing limit).'),
-  }),
-  Broadcast: o({
-    'id*': 'string',
-    'name*': 'string',
-    'template*': o({ name: 'string', language: 'string' }),
-    'segmentId*': 'string?',
-    'segmentName*': 'string',
-    'audienceCount*': 'integer',
-    'status*': 'scheduled|sending|completed|cancelled',
-    'scheduledAt*': 'date-time',
-    startedAt: 'date-time',
-    completedAt: 'date-time',
-    'createdByName*': 'string',
-    'createdAt*': 'date-time',
-    'stats*': 'BroadcastStats',
-  }),
-  BroadcastDetail: {
-    allOf: [
-      { $ref: '#/components/schemas/Broadcast' },
-      o({
-        'preview*': d('string', 'The message as the first recipient sees it.'),
-        'failures*': { type: 'array', items: o({ reason: 'string', retrying: 'boolean', count: 'integer', nextAt: 'date-time?' }) },
-        'recipients*': {
-          type: 'array',
-          items: o({ phone: 'string', name: 'string?', status: 'string', reason: 'string', error: 'string', retryAt: 'date-time', sentAt: 'date-time' }),
-        },
-      }),
-    ],
-  },
-  Preflight: o({
-    'audience*': 'integer',
-    'sample*': d('integer', 'Sample contacts: stored, never sent to WhatsApp.'),
-    'hiddenNumbers*': d('integer', 'Customers who hide their number.'),
-    'gotMarketingToday*': d('integer', 'Already got a marketing message from you in the last 24 hours.'),
-    'estimate*': o({
-      currency: 'string?',
-      total: 'number',
-      unpriced: d('integer', 'People whose country has no recent rate, so they aren’t in `total`.'),
-      countries: { type: 'array', items: o({ country: 'string', people: 'integer', rate: 'number?' }) },
-    }),
   }),
 
   // ---- Agent store ----

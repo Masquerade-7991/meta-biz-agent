@@ -1,5 +1,5 @@
 // Dummy mode for the support platform: the server's /api/inbox, /api/tickets, /api/support, /api/contacts
-// and /api/broadcasts routes, answered in this browser from the sample chats.
+// and /api/templates routes, answered in this browser from the sample chats.
 // Changes live in memory for the session only. Replies go into the chat; nothing is sent.
 import { SAMPLE_CHATS, sampleName } from '../inbox/sampleData'
 import { MetaError } from './meta'
@@ -28,9 +28,9 @@ import {
   type Team,
 } from '../support/routing'
 import type { Contact, FieldDef, Segment } from './contacts'
-import type { Broadcast, BroadcastDetail, WaTemplate } from './broadcasts'
+import type { WaTemplate } from './templates'
 import type { WaAccount } from './whatsapp'
-import { renderTemplate } from '../broadcasts/templates'
+import { renderTemplate } from '../templates/templates'
 import { parseActions } from '../inbox/macros'
 import { customerWrites, pausedFor } from '../support/ticketRules'
 
@@ -630,26 +630,24 @@ export async function dummyContacts<T>(method: string, path: string, body: unkno
   throw new MetaError(404, 'Not found', path)
 }
 
-// ---- broadcasts (dummy) ----
+// ---- templates (dummy) ----
 const demoTemplates: WaTemplate[] = [
   { id: 't1', name: 'diwali_offer', language: 'en', status: 'APPROVED', category: 'MARKETING', components: [{ type: 'HEADER', format: 'TEXT', text: 'Festive offer' }, { type: 'BODY', text: 'Hi {{1}}, get 20% off Helo Messaging this Diwali. Offer ends {{2}}.' }, { type: 'FOOTER', text: 'Reply STOP to opt out' }, { type: 'BUTTONS', buttons: [{ type: 'QUICK_REPLY', text: 'Tell me more' }] }] },
   { id: 't2', name: 'order_update', language: 'en', status: 'APPROVED', category: 'UTILITY', components: [{ type: 'BODY', text: 'Hi {{1}}, your order is confirmed and goes live tomorrow.' }] },
   { id: 't3', name: 'webinar_invite', language: 'en', status: 'PENDING', category: 'MARKETING', components: [{ type: 'BODY', text: 'Join our WhatsApp AI webinar this Friday.' }] },
 ]
-let demoBroadcasts: BroadcastDetail[] = []
 
-export async function dummyBroadcasts<T>(method: string, path: string, body: unknown): Promise<T> {
+export async function dummyTemplates<T>(method: string, path: string, body: unknown): Promise<T> {
   const b = (body ?? {}) as Record<string, unknown>
   const u = new URL(path, 'http://x')
-  if (u.pathname === '/api/broadcasts/templates') {
+  if (u.pathname === '/api/templates') {
     if (method === 'POST') {
       demoTemplates.push({ id: `t${++seq}`, name: String(b.name), language: String(b.language || 'en'), status: 'PENDING', category: String(b.category), components: [{ type: 'BODY', text: String(b.body) }] })
       return { id: `t${seq}`, status: 'PENDING' } as T
     }
     return demoTemplates as T
   }
-  if (u.pathname.startsWith('/api/broadcasts/templates/')) return { ok: true } as T
-  if (u.pathname === '/api/broadcasts/send-one') {
+  if (u.pathname === '/api/templates/send-one') {
     const c = load().find((x) => x.phone === b.phone)
     if (c) {
       push(c, { direction: 'out', author: 'agent', authorName: ME.name, kind: 'template', body: renderTemplate(b.template as WaTemplate, b.values as Record<string, string>), status: 'sent' })
@@ -657,56 +655,11 @@ export async function dummyBroadcasts<T>(method: string, path: string, body: unk
     }
     return { ok: true } as T
   }
-  if (u.pathname === '/api/broadcasts/preflight') {
-    const seg = segmentsDemo.find((x) => x.id === b.segmentId)
-    const audience = contactsNow().filter((c) => !c.optedOut && (!seg || matches(c, seg.filter)))
-    const marketing = String(b.category).toUpperCase() === 'MARKETING'
-    return {
-      audience: audience.length,
-      sample: audience.length,
-      hiddenNumbers: audience.filter((c) => isBsuid(c.phone)).length,
-      gotMarketingToday: marketing && demoBroadcasts.some((x) => Date.now() - Date.parse(x.createdAt) < 86_400_000) ? Math.min(2, audience.length) : 0,
-      estimate: { currency: 'INR', total: audience.length * (marketing ? 0.86 : 0.13), unpriced: 0, countries: [{ country: 'IN', people: audience.length, rate: marketing ? 0.86 : 0.13 }] },
-    } as T
-  }
-  if (u.pathname === '/api/broadcasts' && method === 'GET') return demoBroadcasts as unknown as T
-  if (u.pathname === '/api/broadcasts' && method === 'POST') {
-    const tpl = demoTemplates.find((x) => x.name === (b.template as { name: string }).name)!
-    const seg = segmentsDemo.find((x) => x.id === b.segmentId)
-    const audience = contactsNow().filter((c) => !c.optedOut && (!seg || matches(c, seg.filter)))
-    const later = b.scheduledAt && Date.parse(String(b.scheduledAt)) > Date.now()
-    // Like the real thing: a marketing send to 3+ people meets WhatsApp's daily marketing limit once.
-    const capped = !later && tpl.category === 'MARKETING' && audience.length >= 3 ? audience.at(-1)!.phone : null
-    const retryAt = new Date(Date.now() + 86_400_000).toISOString()
-    const row: BroadcastDetail = {
-      id: `b${++seq}`,
-      name: String(b.name),
-      template: { name: tpl.name, language: tpl.language },
-      segmentId: seg?.id ?? null,
-      segmentName: seg?.name ?? 'All contacts',
-      audienceCount: audience.length,
-      status: later ? 'scheduled' : capped ? 'sending' : 'completed',
-      scheduledAt: String(b.scheduledAt ?? new Date().toISOString()),
-      createdByName: ME.name,
-      createdAt: new Date().toISOString(),
-      stats: { queued: later ? audience.length : capped ? 1 : 0, sent: later ? 0 : audience.length - (capped ? 1 : 0), delivered: 0, read: 0, failed: 0, skipped: 0, replied: 0, retrying: capped ? 1 : 0 },
-      preview: renderTemplate(tpl, {}),
-      failures: capped ? [{ reason: 'marketing_limit', retrying: true, count: 1, nextAt: retryAt }] : [],
-      recipients: audience.map((c) =>
-        c.phone === capped
-          ? { phone: c.phone, name: c.name, status: 'queued', reason: 'marketing_limit', error: 'This message was not delivered to maintain healthy ecosystem engagement.', retryAt }
-          : { phone: c.phone, name: c.name, status: later ? 'queued' : 'sent' },
-      ),
-    }
-    demoBroadcasts = [row, ...demoBroadcasts]
-    return row as T
-  }
-  const m = u.pathname.match(/^\/api\/broadcasts\/([^/]+)(\/cancel)?$/)
-  if (m) {
-    const row = demoBroadcasts.find((x) => x.id === m[1])
-    if (!row) throw new MetaError(404, 'Not found', 'That broadcast no longer exists.')
-    if (m[2]) Object.assign(row, { status: 'cancelled', stats: { ...row.stats, skipped: row.stats.queued, queued: 0 } } satisfies Partial<Broadcast>)
-    return row as T
+  const del = u.pathname.match(/^\/api\/templates\/([a-z0-9_]+)$/)
+  if (del && method === 'DELETE') {
+    const i = demoTemplates.findIndex((t) => t.name === del[1])
+    if (i >= 0) demoTemplates.splice(i, 1)
+    return { ok: true } as T
   }
   throw new MetaError(404, 'Not found', path)
 }

@@ -71,7 +71,7 @@ export interface AlertNotice {
   kind: 'alert' | 'alert_critical'
   text: string
   at: string
-  target: 'billing' | 'whatsapp' | 'broadcasts' | 'members'
+  target: 'billing' | 'whatsapp' | 'members'
 }
 /** One of your reminders that is due (or a chat back from snooze). */
 export interface ReminderNotice {

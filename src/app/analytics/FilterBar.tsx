@@ -1,4 +1,4 @@
-import { Bot, CalendarRange, Check, ChevronDown, Users, X } from 'lucide-react'
+import { Bot, CalendarRange, Check, ChevronDown, UserRound, Users, X } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
@@ -7,10 +7,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/pop
 import { cn } from '@/app/lib/utils'
 import { PRESETS } from './useAnalyticsFilter'
 import type { AnalyticsFilter } from './types'
+import type { ReportFilter } from '@/app/reports/catalog'
+
+const EVERY: readonly ReportFilter[] = ['agents', 'team', 'person']
 
 /**
- * The filters every analytics view shares: period, agents (one, several or all), team and person.
- * Team and person narrow the ticket figures; agents narrow everything.
+ * The filters every analytics view and report shares: period, agents (one, several or all), team and
+ * assignee. Each control says what it is ("Team: All"), the exact dates show underneath, and a report
+ * that ignores team or assignee hides them and says why (`applies`, `note`).
  */
 export function FilterBar({
   filter,
@@ -19,6 +23,9 @@ export function FilterBar({
   teams,
   people,
   onChange,
+  applies = EVERY,
+  note,
+  timezone,
   className,
 }: {
   filter: AnalyticsFilter
@@ -27,23 +34,25 @@ export function FilterBar({
   teams: { id: string; name: string }[]
   people: { userId: string; name: string }[]
   onChange: (patch: Record<string, string | null>) => void
+  /** The filters this view uses besides the date; the others are hidden. */
+  applies?: readonly ReportFilter[]
+  /** Why some filters are hidden. */
+  note?: string
+  /** The workspace's time zone, named under the dates. */
+  timezone?: string
   className?: string
 }) {
-  const chosen = agents.filter((a) => filter.numbers.includes(a.id))
-  const agentLabel = !chosen.length ? 'All agents' : chosen.length === 1 ? chosen[0].label : `${chosen.length} agents`
-  const toggleAgent = (id: string) => {
-    const next = filter.numbers.includes(id) ? filter.numbers.filter((x) => x !== id) : [...filter.numbers, id]
-    onChange({ agents: next.length === agents.length ? null : next.join(',') })
-  }
   const rangeLabel = range === 'custom' ? `${fmt(filter.from)} – ${fmt(filter.to)}` : (PRESETS.find((p) => p.id === range)?.label ?? 'Last 30 days')
   const narrowed = filter.numbers.length || filter.team || filter.person || range !== '30'
+  const span = `${fmtLong(filter.from)}${filter.from === filter.to ? '' : ` – ${fmtLong(filter.to)}`}`
 
   return (
-    <div className={cn('flex flex-wrap items-center gap-2', className)} role="group" aria-label="Filters">
+    <div className={cn('space-y-1.5', className)}>
+    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filters">
       <Popover>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="h-9">
-            <CalendarRange className="size-4" /> {rangeLabel} <ChevronDown className="size-3.5 opacity-60" />
+            <CalendarRange className="size-4" /> <span className="text-muted-foreground">Date:</span> {rangeLabel} <ChevronDown className="size-3.5 opacity-60" />
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 space-y-3">
@@ -65,49 +74,17 @@ export function FilterBar({
         </PopoverContent>
       </Popover>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-9">
-            <Bot className="size-4" /> {agentLabel} <ChevronDown className="size-3.5 opacity-60" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-64">
-          <DropdownMenuLabel className="text-meta font-normal text-muted-foreground">Agents (one per WhatsApp number)</DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => onChange({ agents: null })}>
-            <Check className={cn('size-4', filter.numbers.length && 'invisible')} /> All agents together
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {agents.map((a) => (
-            <DropdownMenuCheckboxItem key={a.id} checked={filter.numbers.includes(a.id)} onSelect={(e) => e.preventDefault()} onCheckedChange={() => toggleAgent(a.id)}>
-              {a.label}
-            </DropdownMenuCheckboxItem>
-          ))}
-          {!agents.length && <p className="px-2 py-1.5 text-sm text-muted-foreground">No WhatsApp numbers connected yet.</p>}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {teams.length > 0 && (
-        <Select value={filter.team ?? 'all'} onValueChange={(v) => onChange({ team: v === 'all' ? null : v })}>
-          <SelectTrigger className="h-9 w-40" aria-label="Team">
-            <Users className="size-4 text-muted-foreground" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All teams</SelectItem>
-            {teams.map((t) => (
-              <SelectItem key={t.id} value={t.id}>
-                {t.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
+      {applies.includes('agents') && <AgentsFilter agents={agents} value={filter.numbers} onChange={(next) => onChange({ agents: next.length ? next.join(',') : null })} />}
+      {applies.includes('team') && <TeamFilter teams={teams} value={filter.team} onChange={(team) => onChange({ team })} />}
+      {applies.includes('person') && (
       <Select value={filter.person ?? 'all'} onValueChange={(v) => onChange({ person: v === 'all' ? null : v })}>
-        <SelectTrigger className="h-9 w-40" aria-label="Person">
+        <SelectTrigger className="h-9 w-auto min-w-44" aria-label="Assigned to">
+          <UserRound className="size-4 text-muted-foreground" />
+          <span className="text-muted-foreground">Assigned to:</span>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Everyone</SelectItem>
+          <SelectItem value="all">Anyone</SelectItem>
           {people.map((p) => (
             <SelectItem key={p.userId} value={p.userId}>
               {p.name}
@@ -116,13 +93,75 @@ export function FilterBar({
           <SelectItem value="none">Unassigned</SelectItem>
         </SelectContent>
       </Select>
+      )}
       {narrowed ? (
         <Button variant="ghost" size="sm" className="h-9" onClick={() => onChange({ range: null, from: null, to: null, agents: null, team: null, person: null })}>
-          <X className="size-4" /> Reset
+          <X className="size-4" /> Clear filters
         </Button>
       ) : null}
+    </div>
+    <p className="text-meta text-muted-foreground">
+      {span}
+      {timezone && ` · ${timezone} time`}
+      {note && ` · ${note}`}
+    </p>
     </div>
   )
 }
 
 const fmt = (d: string) => new Date(d + 'T00:00').toLocaleDateString([], { day: 'numeric', month: 'short' })
+const fmtLong = (d: string) => new Date(d + 'T00:00').toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })
+
+/** Agents: all of them together, or any set (an empty `value` means all). */
+export function AgentsFilter({ agents, value, onChange }: { agents: { id: string; label: string }[]; value: string[]; onChange: (next: string[]) => void }) {
+  const chosen = agents.filter((a) => value.includes(a.id))
+  const label = !chosen.length ? 'All' : chosen.length === 1 ? chosen[0].label : `${chosen.length} agents`
+  const toggle = (id: string) => {
+    const next = value.includes(id) ? value.filter((x) => x !== id) : [...value, id]
+    onChange(next.length === agents.length ? [] : next)
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-9">
+          <Bot className="size-4" /> <span className="text-muted-foreground">Agents:</span> {label} <ChevronDown className="size-3.5 opacity-60" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuLabel className="text-meta font-normal text-muted-foreground">Agents (one per WhatsApp number)</DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => onChange([])}>
+          <Check className={cn('size-4', value.length && 'invisible')} /> All agents together
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {agents.map((a) => (
+          <DropdownMenuCheckboxItem key={a.id} checked={value.includes(a.id)} onSelect={(e) => e.preventDefault()} onCheckedChange={() => toggle(a.id)}>
+            {a.label}
+          </DropdownMenuCheckboxItem>
+        ))}
+        {!agents.length && <p className="px-2 py-1.5 text-sm text-muted-foreground">No WhatsApp numbers connected yet.</p>}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** Team: all, or one. Hidden while the workspace has no teams. */
+export function TeamFilter({ teams, value, onChange }: { teams: { id: string; name: string }[]; value: string | null; onChange: (team: string | null) => void }) {
+  if (!teams.length) return null
+  return (
+    <Select value={value ?? 'all'} onValueChange={(v) => onChange(v === 'all' ? null : v)}>
+      <SelectTrigger className="h-9 w-auto min-w-36" aria-label="Team">
+        <Users className="size-4 text-muted-foreground" />
+        <span className="text-muted-foreground">Team:</span>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">All</SelectItem>
+        {teams.map((t) => (
+          <SelectItem key={t.id} value={t.id}>
+            {t.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}

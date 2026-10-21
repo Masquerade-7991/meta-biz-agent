@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { FullSearchTrigger } from 'fumadocs-ui/layouts/shared/slots/search-trigger';
-import { ArrowRight, BookOpen, Code, Inbox, Megaphone, Smartphone, Sparkles } from 'lucide-react';
+import { ArrowRight, BookOpen, Code, FileText, Inbox, Smartphone, Sparkles } from 'lucide-react';
 
 const SECTIONS = [
   {
@@ -21,7 +21,7 @@ const TASKS = [
   { href: '/docs/guide/connect-number', icon: Smartphone, label: 'Connect a number' },
   { href: '/docs/guide/build-agent', icon: Sparkles, label: 'Build your AI agent' },
   { href: '/docs/guide/inbox', icon: Inbox, label: 'Take over a chat' },
-  { href: '/docs/guide/broadcasts', icon: Megaphone, label: 'Send your first broadcast' },
+  { href: '/docs/guide/templates', icon: FileText, label: 'Create a message template' },
 ];
 
 export default function HomePage() {

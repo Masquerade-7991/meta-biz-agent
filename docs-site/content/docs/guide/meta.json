@@ -3,5 +3,5 @@
   "description": "Using the console",
   "root": true,
   "icon": "BookOpen",
-  "pages": ["index", "connect-number", "build-agent", "---Support desk---", "inbox", "tickets", "contacts", "broadcasts", "analytics", "---Workspace---", "settings", "---Help---", "troubleshooting", "glossary"]
+  "pages": ["index", "connect-number", "build-agent", "---Support desk---", "inbox", "tickets", "contacts", "templates", "analytics", "---Workspace---", "settings", "---Help---", "troubleshooting", "glossary"]
 }

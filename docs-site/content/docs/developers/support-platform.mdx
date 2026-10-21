@@ -1,6 +1,6 @@
 ---
 title: Support platform
-description: The server modules behind Inbox, Tickets, Contacts, Broadcasts and Analytics, and their rules.
+description: The server modules behind Inbox, Tickets, Contacts, message templates and Analytics, and their rules.
 ---
 
 ## Modules
@@ -11,7 +11,7 @@ description: The server modules behind Inbox, Tickets, Contacts, Broadcasts and 
 | `tickets.ts` | Tickets, response targets (SLA), satisfaction, support settings, notifications |
 | `supportOps.ts` | Teams, people's skills, limits and availability, routing rules, the escalation matrix and its minute sweep |
 | `contacts.ts` | Contacts, fields, segments, CSV import |
-| `broadcasts.ts` | Templates, broadcasts, the send worker |
+| `templates.ts` | WhatsApp message templates (list, create, delete) and sending one into a chat |
 | `analytics.ts` / `reports.ts` | The Analytics page, CSV downloads, scheduled report emails |
 
 All of them are workspace-scoped. Sending needs `ownsMetaAssets()`.

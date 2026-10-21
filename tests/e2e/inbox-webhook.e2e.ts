@@ -118,7 +118,7 @@ test('a customer who hides their number is keyed by their BSUID and can’t be h
   assert.equal((await s.api(w.owner, 'POST', `/api/inbox/conversations/${bsuid}/control`, { action: 'take' })).status, 400)
 })
 
-test('STOP opts the customer out of broadcasts and START lets them back in', async () => {
+test('STOP opts the customer out of marketing messages and START lets them back in', async () => {
   await s.webhook(inbound(NUM, '919800000005', ' stop '))
   assert.equal((await s.db.collection('contacts').findOne({ phone: '919800000005' }))?.optedOut, true)
   await s.webhook(inbound(NUM, '919800000005', 'START'))

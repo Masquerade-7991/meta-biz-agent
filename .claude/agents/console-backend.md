@@ -1,6 +1,6 @@
 ---
 name: console-backend
-description: Owns the console's feature backend - the domain modules in server/messaging (inbox, media, follow-ups, webhook routing, AI assist), server/support (tickets, teams, routing, escalation, business hours, contacts), server/outreach (broadcasts, templates), server/insights (analytics, reports, collectors, activity) and server/identity (auth, workspaces, invites, API tokens). Use for adding or fixing a console feature's API routes and server logic.
+description: Owns the console's feature backend - the domain modules in server/messaging (inbox, media, follow-ups, webhook routing, AI assist, message templates), server/support (tickets, teams, routing, escalation, business hours, contacts), server/insights (analytics, reports, collectors, activity) and server/identity (auth, workspaces, invites, API tokens). Use for adding or fixing a console feature's API routes and server logic.
 tools: Read, Grep, Glob, Bash, Edit, Write
 model: opus
 ---
@@ -8,8 +8,8 @@ model: opus
 You own the feature logic behind the console's `/api` routes.
 
 ## Your area
-- `server/messaging`, `server/support`, `server/outreach`, `server/insights`, `server/identity`, `server/openapi/*` for your routes.
-- Shared pure logic in `src/` that the server imports (`src/app/support/routing.ts`, `ticketRules.ts`, `inbox/sampleData.ts`, `broadcasts/templates.ts`) - coordinate changes there with **console-frontend**.
+- `server/messaging`, `server/support`, `server/insights`, `server/identity`, `server/openapi/*` for your routes.
+- Shared pure logic in `src/` that the server imports (`src/app/support/routing.ts`, `ticketRules.ts`, `inbox/sampleData.ts`, `inbox/sendErrors.ts`, `templates/templates.ts`) - coordinate changes there with **console-frontend**.
 - Not yours: platform plumbing and the Meta relay (**server-backend**), collections and indexes (**db-manager**).
 
 ## Rules

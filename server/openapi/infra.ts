@@ -92,7 +92,7 @@ export const infra = area('Server', {
       id: 'cron',
       summary: 'Daily jobs (Vercel only)',
       description:
-        'Called by Vercel Cron (03:00 UTC, see vercel.json): resumes broadcasts, schedules billing and health checks, runs due jobs, and collects Meta’s metrics, handoffs, connector logs and traces. Any method works. Not on the local server.',
+        'Called by Vercel Cron (03:00 UTC, see vercel.json): schedules billing and health checks, runs due jobs, and collects Meta’s metrics, handoffs, connector logs and traces. Any method works. Not on the local server.',
       who: { text: 'Vercel Cron: `Authorization: Bearer <CRON_SECRET>`.', public: true },
       ok: o({ 'ok*': 'boolean', 'jobs*': d('integer', 'Jobs run.') }),
       errors: { 401: 'Cron only.', 503: 'MongoDB didn’t answer.' },

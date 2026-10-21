@@ -106,6 +106,16 @@ test('report CSVs: a file for supervisors and up, with Excel’s byte-order mark
   assert.equal((await s.api(w.owner, 'GET', '/api/reports/tickets.csv?from=2026-13-01&to=2026-13-02')).status, 400)
 })
 
+test('reports that ignore team and assignee give the same file with them set (catalog filters match the server)', async () => {
+  const q = 'from=2026-10-05&to=2026-10-06'
+  for (const id of ['consumption', 'charges', 'agent_usage']) {
+    const plain = await s.api(w.owner, 'GET', `/api/reports/${id}.csv?${q}`)
+    const narrowed = await s.api(w.owner, 'GET', `/api/reports/${id}.csv?${q}&team=nope&person=none`)
+    assert.equal(plain.status, 200, plain.text)
+    assert.equal(narrowed.text, plain.text, id)
+  }
+})
+
 test('schedules: who may send outside the workspace, and the limits', async () => {
   const body = { name: 'Weekly review 📊', reports: ['business_review', 'tickets'], cadence: 'weekly', hour: 9, userIds: [w.supervisor.id] }
   const mine = await s.api(w.supervisor, 'POST', '/api/reports/schedules', body)

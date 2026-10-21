@@ -6,7 +6,7 @@ import { mail } from './mail.ts'
 import { trace } from './trace.ts'
 
 /** Where the bell takes you: a Settings tab or a page. */
-type AlertTarget = 'billing' | 'whatsapp' | 'broadcasts' | 'members'
+type AlertTarget = 'billing' | 'whatsapp' | 'members'
 interface Alert {
   key: string
   severity: 'warning' | 'critical'
@@ -15,7 +15,7 @@ interface Alert {
   target: AlertTarget
 }
 const alerts = () => col('alerts')
-const PATH: Record<AlertTarget, string> = { billing: '/settings/billing', whatsapp: '/whatsapp', broadcasts: '/broadcasts', members: '/settings/members' }
+const PATH: Record<AlertTarget, string> = { billing: '/settings/billing', whatsapp: '/whatsapp', members: '/settings/members' }
 
 /** Raises an alert once per key. Returns true when it was new (and owners were emailed). */
 export async function raiseAlert(a: Alert): Promise<boolean> {

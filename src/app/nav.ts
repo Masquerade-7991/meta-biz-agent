@@ -1,30 +1,29 @@
-import { BarChart3, Bot, Contact, FileText, Home, Inbox, Megaphone, Settings, Smartphone, Ticket, type LucideIcon } from 'lucide-react'
+import { BarChart3, Bot, Contact, FileText, Home, Inbox, Settings, Smartphone, Ticket, type LucideIcon } from 'lucide-react'
 import { can, type Action, type Role } from '@/app/lib/permissions'
 
-export type NavId = 'home' | 'inbox' | 'tickets' | 'contacts' | 'ai-agents' | 'broadcasts' | 'whatsapp' | 'analytics' | 'reports' | 'settings'
+export type NavId = 'home' | 'inbox' | 'tickets' | 'contacts' | 'ai-agents' | 'whatsapp' | 'analytics' | 'reports' | 'settings'
 
 interface NavItem {
   id: NavId
   label: string
   icon: LucideIcon
-  /** Sidebar group: the day's work, reaching customers, and setting things up. */
-  group: 'work' | 'grow' | 'setup'
+  /** Sidebar group: the day's work, the AI agent and how it's doing, and setting things up. */
+  group: 'work' | 'agent' | 'setup'
   /** Shown only to roles allowed this (src/app/lib/permissions.ts). */
   need?: Action
 }
 
-// Grouped by job: the day's customer work, then the AI agent and outreach, then setup.
+// Grouped by job: the day's customer work, then the AI agent and how it's doing, then setup.
 // Knowledge lives inside each AI agent, not here.
 export const NAV_ITEMS: NavItem[] = [
   { id: 'home', label: 'Home', icon: Home, group: 'work' },
   { id: 'inbox', label: 'Inbox', icon: Inbox, group: 'work' },
   { id: 'tickets', label: 'Tickets', icon: Ticket, group: 'work' },
   { id: 'contacts', label: 'Contacts', icon: Contact, group: 'work' },
-  { id: 'ai-agents', label: 'AI Agents', icon: Bot, group: 'grow' },
-  { id: 'broadcasts', label: 'Broadcasts', icon: Megaphone, group: 'grow' },
-  { id: 'analytics', label: 'Analytics', icon: BarChart3, need: 'reports.view', group: 'grow' },
-  { id: 'reports', label: 'Reports', icon: FileText, need: 'reports.view', group: 'grow' },
-  { id: 'whatsapp', label: 'WhatsApp', icon: Smartphone, need: 'numbers.view', group: 'setup' },
+  { id: 'ai-agents', label: 'AI Agents', icon: Bot, group: 'agent' },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3, need: 'reports.view', group: 'agent' },
+  { id: 'reports', label: 'Reports', icon: FileText, need: 'reports.view', group: 'agent' },
+  { id: 'whatsapp', label: 'Assets', icon: Smartphone, need: 'numbers.view', group: 'setup' },
   { id: 'settings', label: 'Settings', icon: Settings, group: 'setup' },
 ]
 
@@ -39,7 +38,6 @@ const PAGE_PATHS: Record<NavId, string> = {
   tickets: '/tickets',
   contacts: '/contacts',
   'ai-agents': '/agents',
-  broadcasts: '/broadcasts',
   whatsapp: '/whatsapp',
   analytics: '/analytics',
   reports: '/reports',
@@ -56,6 +54,6 @@ export function navFromPath(pathname: string): NavId | null {
 
 export const NAV_GROUPS: { id: NavItem['group']; label: string }[] = [
   { id: 'work', label: 'Work' },
-  { id: 'grow', label: 'Automate & grow' },
+  { id: 'agent', label: 'AI agent' },
   { id: 'setup', label: 'Setup' },
 ]

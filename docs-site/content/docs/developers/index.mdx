@@ -3,7 +3,7 @@ title: Architecture
 description: What the console is, how a request flows, and where each part lives.
 ---
 
-The Helo.ai console configures Meta's WhatsApp **Business Agent** through Meta's Platform API, and runs a support desk around it. Meta owns the agent. The console is the setup UI plus the inbox, tickets, contacts, broadcasts and analytics.
+The Helo.ai console configures Meta's WhatsApp **Business Agent** through Meta's Platform API, and runs a support desk around it. Meta owns the agent. The console is the setup UI plus the inbox, tickets, contacts, message templates and analytics.
 
 ## Request flow
 
@@ -16,7 +16,7 @@ server/ (node:http, TypeScript run natively by Node)
   ├─ auth.ts                  users, workspaces, memberships, sessions (cookie `sid`)
   ├─ context.ts               per-request workspace + WhatsApp account (AsyncLocalStorage)
   ├─ upstream.ts              callUpstream → Meta, or Helo.ai's server (UPSTREAM picks)
-  ├─ inbox · tickets · supportOps · contacts · broadcasts · analytics · reports
+  ├─ inbox · templates · tickets · supportOps · contacts · analytics · reports
   ├─ whatsapp.ts · accounts.ts  Embedded Signup and per-workspace WhatsApp accounts
   └─ db.ts                    MongoDB collections, indexes, TTLs; ws() scopes every query
 ```

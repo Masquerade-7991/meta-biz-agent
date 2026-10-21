@@ -1,10 +1,10 @@
 // Two instances of the server on one database and one fake Meta (A takes requests, B runs the
 // jobs): what must hold when the API runs as more than one process. Deliveries dedupe across
-// instances, the relay cache is shared, work queued on one is done by the other, and live events
+// instances, the relay cache is shared, work queued on one is done by the other (a reminder), and live events
 // cross instances.
 import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { inbound, startStack, TEMPLATE, type Stack } from './harness.ts'
+import { inbound, startStack, type Stack } from './harness.ts'
 
 let a: Stack
 let b: Stack
@@ -13,7 +13,6 @@ before(async () => {
   a = await startStack('multi', { port: 8797 })
   b = await startStack('multi', { port: 8798, shareWith: a, jobs: true })
   w = await a.seed.workspace()
-  await a.db.collection('contacts').insertOne({ workspaceId: w.id, phone: '919860000011', name: 'Asha', tags: ['vip'], fields: {}, createdAt: new Date(), source: 'manual' })
 })
 after(async () => {
   await b?.stop()
@@ -36,12 +35,12 @@ test('a relayed read cached by one instance is served by the other without askin
   assert.equal(a.fake.find('GET', /\/agent_config\/settings$/).length - before, 1)
 })
 
-test('a broadcast queued on the instance without a worker is sent by the one with it', async () => {
-  const segmentId = (await a.api(w.owner, 'POST', '/api/contacts/segments', { name: 'VIP', filter: { tags: ['vip'] } })).json.id
-  const r = await a.api(w.owner, 'POST', '/api/broadcasts', { name: 'Cross', template: { name: TEMPLATE.name, language: 'en' }, mapping: { 'body:1': { source: 'name', text: 'there' } }, segmentId })
+test('a reminder queued on the instance without a worker is fired by the one with it', async () => {
+  const r = await a.api(w.owner, 'POST', '/api/inbox/conversations/919880000001/remind', { note: 'Cross', at: new Date(Date.now() + 60_000).toISOString() })
   assert.equal(r.status, 200, r.text)
-  await a.until(async () => (await a.api(w.owner, 'GET', `/api/broadcasts/${r.json.id}`)).json.status === 'completed', 30_000)
-  assert.ok(a.fake.find('POST', /\/messages$/).some((c) => c.body?.to === '919860000011'))
+  // Due now rather than in a minute, so the test needn't wait.
+  await a.db.collection('jobs').updateOne({ type: 'reminder.fire', status: 'queued' }, { $set: { runAt: new Date() } })
+  await a.until(async () => !!(await a.db.collection('reminders').findOne({ workspaceId: w.id, note: 'Cross', firedAt: { $ne: null } })), 30_000)
 })
 
 test('a live event raised on one instance reaches a stream open on the other', async () => {

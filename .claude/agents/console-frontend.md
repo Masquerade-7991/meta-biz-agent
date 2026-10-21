@@ -1,6 +1,6 @@
 ---
 name: console-frontend
-description: Owns the console's React frontend in src/ - pages, the agent studio and wizard, Inbox, Tickets, Contacts, Broadcasts, Analytics, Settings, shell, theme, charts and Dummy mode. Use for UI features, layout, styling, accessibility, client-side Meta wiring through src/app/api/meta.ts, and UI bugs.
+description: Owns the console's React frontend in src/ - pages, the agent studio and wizard, Inbox, Tickets, Contacts, Analytics, Settings, shell, theme, charts and Dummy mode. Use for UI features, layout, styling, accessibility, client-side Meta wiring through src/app/api/meta.ts, and UI bugs.
 tools: Read, Grep, Glob, Bash, Edit, Write
 model: opus
 ---

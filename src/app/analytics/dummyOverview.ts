@@ -237,10 +237,6 @@ function dummyOverview(f: AnalyticsFilter): Overview {
       assist: { tokens: Math.round(cur.t('opened') * 1800), calls: Math.round(cur.t('opened') * 0.6) },
       budget: { monthly: 50_000, spentThisMonth: Math.round(spend * (10 / n)) },
     },
-    broadcasts: (() => {
-      const sent = Math.round(cur.t('conversations') * 0.8)
-      return { sent, delivered: Math.round(sent * 0.95), read: Math.round(sent * 0.68), replied: Math.round(sent * 0.11), failed: Math.round(sent * 0.03) }
-    })(),
   }
 }
 

@@ -49,7 +49,7 @@ async function qualityAlert(id: string, display: string, quality: string) {
     title: `${display}: WhatsApp quality is ${quality === 'RED' ? 'low' : 'medium'}`,
     detail:
       quality === 'RED'
-        ? 'Many customers blocked or reported your recent messages. WhatsApp may lower your daily limit. Pause marketing broadcasts and check your templates.'
+        ? 'Many customers blocked or reported your recent messages. WhatsApp may lower your daily limit. Pause marketing messages and check your templates.'
         : 'Some customers blocked or reported your recent messages. Send marketing only to people who asked for it.',
     target: 'whatsapp',
   })
@@ -75,7 +75,7 @@ export async function startHealth() {
 
 // ---- webhooks (called from inbox.ts processChange) ----
 const TEMPLATE_BAD: Record<string, string> = {
-  PAUSED: 'was paused by WhatsApp because customers reported it. Broadcasts with it stop until it’s fixed.',
+  PAUSED: 'was paused by WhatsApp because customers reported it. It can’t be sent until it’s fixed.',
   DISABLED: 'was disabled by WhatsApp after repeated pauses. Create a new template instead.',
   REJECTED: 'was rejected. Check the reason in WhatsApp Manager, edit it and submit again.',
   FLAGGED: 'was flagged for low quality and may be paused soon.',
@@ -104,7 +104,7 @@ export async function onAccountWebhook(field: string, value: Obj) {
         severity: event === 'FLAGGED' ? 'warning' : 'critical',
         title: `Template “${name}” ${event.toLowerCase()}`,
         detail: `${name} (${lang}) ${TEMPLATE_BAD[event]}${str(value.reason) && value.reason !== 'NONE' ? ` Reason: ${String(value.reason)}.` : ''}`,
-        target: 'broadcasts',
+        target: 'whatsapp',
       })
     else if (event === 'APPROVED' || event === 'REINSTATED' || event === 'UNARCHIVED')
       for (const bad of Object.keys(TEMPLATE_BAD)) await clearAlert(`${key}:${bad}`)

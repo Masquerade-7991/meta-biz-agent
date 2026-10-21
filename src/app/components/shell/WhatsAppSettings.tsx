@@ -137,7 +137,7 @@ export function WhatsAppSettings({ onManageNumbers }: { onManageNumbers?: () => 
       <ConfirmDialog
         open={removing !== null}
         title={`Disconnect ${removing?.wabaName}?`}
-        description="Helo.ai stops sending and receiving for its numbers: the AI agent, inbox and broadcasts stop working there. The WhatsApp account stays yours, and you can connect it again later."
+        description="Helo.ai stops sending and receiving for its numbers: the AI agent and inbox stop working there. The WhatsApp account stays yours, and you can connect it again later."
         confirmLabel="Disconnect"
         onCancel={() => setRemoving(null)}
         onConfirm={() => {

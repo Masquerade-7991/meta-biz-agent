@@ -81,8 +81,8 @@ export function ReportPrint() {
             </p>
             <p className="text-sm text-muted-foreground">
               {agentText}
-              {filter.team && ' · one team'}
-              {filter.person && ' · one person'}
+              {filter.team && ` · team ${d.teams.find((t) => t.id === filter.team)?.name ?? ''}`}
+              {filter.person && ` · assigned to ${filter.person === 'none' ? 'nobody' : (d.people.find((p) => p.id === filter.person)?.name ?? 'one person')}`}
             </p>
           </div>
           <img src={mark} alt="Helo.ai" className="size-10" />

@@ -151,7 +151,7 @@ function ContactDialog({
           ))}
           <label className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2.5 text-sm">
             <span>
-              Opted out of broadcasts
+              Opted out of marketing messages
               <span className="block text-muted-foreground text-xs">
                 Set automatically when the customer replies STOP. Chats still work.
               </span>
@@ -317,7 +317,7 @@ function SegmentDialog({ tag, onClose, onSaved }: { tag: string; onClose: () => 
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>New segment</DialogTitle>
-          <DialogDescription>A saved group of contacts that updates itself. Use it to filter here or to send a broadcast.</DialogDescription>
+          <DialogDescription>A saved group of contacts that updates itself. Use it to filter your contacts.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">

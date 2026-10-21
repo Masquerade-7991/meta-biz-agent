@@ -24,12 +24,17 @@ const PAGES: [string, string][] = [
   ['tickets', '/tickets'],
   ['contacts', '/contacts'],
   ['agents', '/agents'],
-  ['broadcasts', '/broadcasts'],
   ['whatsapp', '/whatsapp'],
   ['analytics', '/analytics'],
   ['reports', '/reports'],
+  ['report-summary', '/reports/business_review'],
+  ['report-records', '/reports/tickets'],
+  ['report-schedules', '/reports/schedules'],
   ['settings', '/settings/support'],
 ]
+// Pages that load nothing visible (a fixed list): no loader or error to look for. The Reports library's
+// reports load on their own pages, which are checked.
+const NO_DATA = new Set(['reports'])
 const pages = args.pages ? PAGES.filter(([id]) => args.pages.split(',').includes(id)) : PAGES
 const OUT = path.join(import.meta.dirname, 'out')
 mkdirSync(OUT, { recursive: true })
@@ -154,7 +159,7 @@ try {
   if (MODES.includes('error')) {
     const ctx = await context('light', false)
     await ctx.route(DATA, (r) => r.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ title: 'Server error', detail: 'Injected by the UI checks.', status: 500 }) }))
-    for (const p of pages)
+    for (const p of pages.filter(([name]) => !NO_DATA.has(name)))
       await check(ctx, 'error', p, 1440, 'light', async (page) => {
         // Waits for it (up to 8 s): a page under load can still be between its loader and its message.
         const shown = await page
@@ -169,7 +174,7 @@ try {
     await ctx.route(DATA, () => {
       // never answer: the page must show it's loading
     })
-    for (const p of pages)
+    for (const p of pages.filter(([name]) => !NO_DATA.has(name)))
       await check(ctx, 'loading', p, 1440, 'light', async (page) => {
         const loading = await page.evaluate(() => !!document.querySelector('[role=status], [aria-busy=true], .animate-pulse, .animate-spin'))
         return loading ? [] : ['no loading indicator while data is on its way']

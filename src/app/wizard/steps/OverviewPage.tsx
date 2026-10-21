@@ -62,7 +62,14 @@ export function OverviewPage() {
             </p>
           </div>
           <div className="h-1.5 w-40 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={items.length} aria-valuenow={done}>
-            <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${(done / items.length) * 100}%` }} />
+            {/* Red for the first third (1–2 of 6), amber for the middle (3–4), green near the end (5–6). */}
+            <div
+              className={cn(
+                'h-full rounded-full transition-[width,background-color]',
+                done * 3 <= items.length ? 'bg-destructive' : done * 3 <= items.length * 2 ? 'bg-warning' : 'bg-success',
+              )}
+              style={{ width: `${(done / items.length) * 100}%` }}
+            />
           </div>
         </div>
         <ol className="divide-y divide-border">

@@ -10,7 +10,7 @@ export interface TraceEvent {
   workspaceId: string
   traceId: string | undefined
   userId: string | undefined
-  /** Dotted name: 'broadcast.sent', 'message.received', 'job.failed'… */
+  /** Dotted name: 'message.received', 'ticket.updated', 'job.failed'… */
   kind: string
   entity?: string
   entityId?: string

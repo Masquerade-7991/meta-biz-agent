@@ -1,29 +1,24 @@
 ---
-title: Broadcasts and templates
-description: Create WhatsApp message templates, get them approved, and send them to a group of contacts.
+title: Message templates
+description: Create WhatsApp message templates, get them approved, and send one to restart a chat after the 24-hour window.
 ---
 
-Templates are the pre-approved messages you can use to start a conversation. Broadcasts send one template to many contacts at once.
+Templates are the pre-approved messages WhatsApp lets you send when you write first, or more than 24 hours after a customer last wrote. You manage them on the **WhatsApp** page and send them from a chat in the [Inbox](/docs/guide/inbox).
 
 ## Before you start
 
-- **Role:** supervisors, admins and owners create templates and send broadcasts. Only admins and owners can delete a template.
+- **Role:** supervisors, admins and owners create templates. Only admins and owners can delete one. Anyone who can answer a chat can send an approved template into it.
 - **A connected number.** See [Connect a WhatsApp number](/docs/guide/connect-number).
-- **Contacts who agreed to hear from you.** WhatsApp only lets you message people who opted in. Import or add them in [Contacts](/docs/guide/contacts); anyone marked as opted out is always left out.
-
-<small>Source: [Meta — send messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages)</small>
 
 ## Why templates exist
 
-You can reply freely for 24 hours after a customer last wrote to you. Outside that window, or when you write first, WhatsApp only allows an approved template. Every broadcast is therefore a template.
+You can reply freely for 24 hours after a customer last wrote to you. Outside that window, or when you write first, WhatsApp only allows an approved template.
 
 <small>Source: [Meta — send messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages)</small>
 
 ## Create a template
 
-Open **Broadcasts**, go to the **Templates** tab and click **New template**.
-
-![The Broadcasts page with its Broadcasts and Templates tabs](/screens/broadcasts.webp)
+Open the **WhatsApp** page, go to the **Message templates** tab and click **New template**.
 
 ![The New template dialog with a live phone preview](/screens/template-new.webp)
 
@@ -47,7 +42,7 @@ Open **Broadcasts**, go to the **Templates** tab and click **New template**.
 **Add a footer (optional) and buttons (optional).** Footer: up to 60 characters. The console offers up to 3 buttons, each a **Quick reply** or a **Link**, with a label of up to 25 characters.
 </Step>
 <Step>
-Click **Submit for review**. The template appears in the Templates tab as pending.
+Click **Submit for review**. The template appears in the Message templates tab as pending.
 </Step>
 </Steps>
 
@@ -81,7 +76,7 @@ Meta allows more buttons and button types than the console lets you create. Each
 
 ## Meta's review
 
-Every template is checked by Meta before you can use it. The decision can take up to 24 hours, and you see the result on the card in the Templates tab.
+Every template is checked by Meta before you can use it. The decision can take up to 24 hours, and you see the result on the template's card under **WhatsApp › Message templates**.
 
 | Status on the card | Meaning |
 | --- | --- |
@@ -89,7 +84,7 @@ Every template is checked by Meta before you can use it. The decision can take u
 | approved | You can send it. |
 | rejected | Meta declined it. The card says why, in small red text. |
 
-Only approved templates appear when you create a broadcast.
+Only approved templates can be sent from the Inbox.
 
 ### Common reasons for rejection
 
@@ -113,56 +108,27 @@ After a template is in use, Meta rates its quality from how recipients react (bl
 
 <small>Source: [Meta — template quality](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-quality), [Meta — pausing](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-pausing), [Meta — pacing](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-pacing)</small>
 
-## Send a broadcast
+## Send a template from a chat
 
-Click **New broadcast** on the Broadcasts tab.
-
-![The New broadcast dialog with audience, template, schedule and a phone preview](/screens/broadcast-new.webp)
+When a chat's 24-hour window has closed, the Inbox replaces the reply box with a notice and **Send a template**.
 
 <Steps>
 <Step>
-**Name it.** Only your team sees the name.
+Click **Send a template**.
 </Step>
 <Step>
-**Pick a template.** Only approved ones are listed.
+**Pick an approved template.** Only approved ones are listed.
 </Step>
 <Step>
-**Send to.** Choose **All contacts** (everyone who hasn't opted out) or one of your segments. Make segments in [Contacts](/docs/guide/contacts).
+**Fill in its values.** Each placeholder needs a value; the preview shows the message as the customer will see it.
 </Step>
 <Step>
-**Fill in the template.** For each placeholder, choose where the value comes from: the customer's first name, their number, a contact field, or the same text for everyone. You can add a fallback for contacts who have no value.
-</Step>
-<Step>
-**Check the preview and the numbers.** Before you send, the dialog shows how many people it reaches, an estimated cost based on what WhatsApp charged you for that category in the last 30 days, and a warning if some people already got a marketing message from you today.
-</Step>
-<Step>
-**Send now or schedule.** Choose **Schedule for** and pick a date and time to send later. Then click **Send** (or **Schedule broadcast**).
+Click **Send template**. The chat moves to your team, and once the customer replies you can chat freely again.
 </Step>
 </Steps>
 
-A scheduled broadcast shows as Scheduled until its time comes, then as Sending, and finally Sent. You can cancel one that is scheduled or sending: messages already sent stay sent, and everyone still waiting is skipped.
-
 <Callout type="warn">
-Meta charges for each delivered message, and marketing messages are always charged. Check the audience size and the estimate before you send.
-</Callout>
-
-## Read the results
-
-Click a broadcast in the list to see its numbers.
-
-| Figure | What it counts |
-| --- | --- |
-| Audience | People it was meant for |
-| Sent | Messages handed to WhatsApp |
-| Delivered | Messages that reached the phone |
-| Read | Messages the customer opened |
-| Replied | Customers who wrote back |
-| Failed | Messages that didn't go out, including people skipped |
-
-**What didn't go out** groups the failures by reason, with what to do about each. Some are retried for you: the daily marketing limit is tried again after 24 hours (up to twice), and "slow down" or "WhatsApp unavailable" errors are retried after a short wait. The line says "Trying again" and when.
-
-<Callout type="info">
-Delivered and read figures depend on WhatsApp reporting back to Helo.ai. They can lag the sent count by a short while.
+Meta charges for each delivered template message, and marketing templates are always charged.
 </Callout>
 
 ## Good to know
@@ -198,7 +164,7 @@ Since 1 July 2025 Meta charges per delivered template message. The price depends
 
 ### Permission to message
 
-Only message people who have said you can, and respect every stop request. Anyone who opts out or blocks you is skipped automatically.
+Only message people who have said you can, and respect every stop request. A customer who replies **STOP** is marked as opted out in Contacts.
 
 <small>Source: [Meta — getting opt-in](https://developers.facebook.com/documentation/business-messaging/whatsapp/getting-opt-in), [WhatsApp Business Messaging Policy](https://whatsappbusiness.com/policy/)</small>
 
@@ -209,9 +175,8 @@ Only message people who have said you can, and respect every stop request. Anyon
 | **Template names use lowercase letters, numbers and underscores only** | Rename it, for example `order_update`. |
 | **Add an example for `{{1}}` so Meta can review the template** | Type a realistic sample for every placeholder. |
 | **No approved templates yet** in the template picker | Wait for Meta's review, or create a template. |
-| **Nobody to send to: the segment has no contacts who accept messages** | Pick another segment, or check that contacts haven't all opted out. |
-| **Pick a time in the future** | Choose a later date and time. |
-| **Supervisors, admins and owners send broadcasts** | Ask someone with that role. |
+| **Template … is pending; only approved templates can be sent** | Wait for Meta's review to finish. |
+| **Supervisors, admins and owners create templates** | Ask someone with that role. |
 | A template shows **Rejected** | Read the reason on the card, fix it and resubmit. |
 
-For failures inside a finished broadcast, see [Troubleshooting](/docs/guide/troubleshooting).
+For messages WhatsApp couldn't deliver, see [Troubleshooting](/docs/guide/troubleshooting).

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link } from 'react-router'
-import { AlertTriangle, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import { Link, useLocation } from 'react-router'
+import { AlertTriangle, FileText, RefreshCw } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table'
@@ -10,12 +10,11 @@ import { KpiTile } from '@/app/components/ui/kpi'
 import { TimeSeriesChart } from '@/app/components/charts/TimeSeriesChart'
 import { Donut } from '@/app/components/charts/Donut'
 import { BarList } from '@/app/components/charts/BarList'
-import { Funnel } from '@/app/components/charts/Funnel'
 import { Heatmap } from '@/app/components/charts/Heatmap'
 import { percent } from '@/app/components/charts/chartTheme'
 import { PillTabs } from '@/app/components/Filters'
 import { errorDetail } from '@/app/api/meta'
-import { getLog, getOverview } from '@/app/api/overview'
+import { getOverview } from '@/app/api/overview'
 import { listGaps, type Gap } from '@/app/api/assist'
 import { getSupportSettings, listTeams, type Team } from '@/app/api/tickets'
 import { useMembers } from '@/app/auth/useMembers'
@@ -23,15 +22,16 @@ import { cn } from '@/app/lib/utils'
 import { FilterBar } from './FilterBar'
 import { useAnalyticsFilter } from './useAnalyticsFilter'
 import { change, dur, money, moneyShort, num, pct, pointChange } from './format'
-import { csatScore, LOG_KINDS, LOG_LABEL, type LogKind, type LogPage, type Overview } from './types'
-import { ReportActions } from './ReportActions'
+import { csatScore, LOG_KINDS, LOG_LABEL, type LogKind, type Overview } from './types'
+import { ticketsLink } from '@/app/tickets/ticketsLink'
+import { RecordsTable } from '@/app/reports/RecordsTable'
+import type { ReportId } from '@/app/reports/catalog'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'ai', label: 'AI agent' },
   { id: 'human', label: 'Human support' },
   { id: 'consumption', label: 'Consumption' },
-  { id: 'broadcasts', label: 'Broadcasts' },
   { id: 'logs', label: 'Logs' },
 ] as const
 
@@ -86,12 +86,12 @@ export function AnalyticsDashboard() {
             <Button variant="ghost" size="sm" onClick={() => setReload((n) => n + 1)} aria-label="Refresh">
               <RefreshCw className="size-4" />
             </Button>
-            <ReportActions filter={filter} />
+            {tab !== 'logs' && <OpenAsReport id={TAB_REPORT[tab] ?? 'business_review'} />}
           </>
         }
       />
       <div className="sticky top-0 z-10 -mx-4 mb-5 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-8 sm:px-8">
-        <FilterBar filter={filter} range={range} agents={data?.agents ?? []} teams={teams} people={members} onChange={set} />
+        <FilterBar filter={filter} range={range} agents={data?.agents ?? []} teams={teams} people={members} onChange={set} timezone={timezone} />
         {loading && data && <div role="progressbar" aria-label="Updating" className="absolute inset-x-0 bottom-0 h-0.5 animate-pulse bg-primary" />}
       </div>
       <Tabs value={tab} onValueChange={(v) => set({ tab: v === 'overview' ? null : v })}>
@@ -124,9 +124,6 @@ export function AnalyticsDashboard() {
             </TabsContent>
             <TabsContent value="consumption">
               <ConsumptionTab d={data} />
-            </TabsContent>
-            <TabsContent value="broadcasts">
-              <BroadcastsTab d={data} />
             </TabsContent>
             <TabsContent value="logs">
               <LogsTab filter={filter} />
@@ -494,34 +491,6 @@ function ConsumptionTab({ d }: { d: Overview }) {
   )
 }
 
-function BroadcastsTab({ d }: { d: Overview }) {
-  const b = d.broadcasts
-  return (
-    <div className="space-y-5">
-      <Grid>
-        <KpiTile label="Sent" value={num(b.sent)} />
-        <KpiTile label="Read" value={pct(b.sent ? b.read / b.sent : null)} />
-        <KpiTile label="Replied" value={pct(b.sent ? b.replied / b.sent : null)} help="Customers who wrote back within 3 days." />
-        <KpiTile label="Failed" value={num(b.failed)} better="down" />
-      </Grid>
-      <Panel title="From sent to replied">
-        {b.sent ? (
-          <Funnel
-            steps={[
-              { label: 'Sent', value: b.sent },
-              { label: 'Delivered', value: b.delivered },
-              { label: 'Read', value: b.read },
-              { label: 'Replied', value: b.replied },
-            ]}
-          />
-        ) : (
-          <p className="text-sm text-muted-foreground">No broadcasts sent in this period.</p>
-        )}
-      </Panel>
-    </div>
-  )
-}
-
 /** `links`: where each row's first cell goes (the tickets behind it). */
 function SimpleTable({ head, rows, empty, links }: { head: string[]; rows: (string | number)[][]; empty: string; links?: string[] }) {
   if (!rows.length) return <p className="text-sm text-muted-foreground">{empty}</p>
@@ -559,99 +528,36 @@ function SimpleTable({ head, rows, empty, links }: { head: string[]; rows: (stri
   )
 }
 
-const PAGE = 50
 function LogsTab({ filter }: { filter: ReturnType<typeof useAnalyticsFilter>['filter'] }) {
   const [kind, setKind] = useState<LogKind>('tickets')
-  const [skip, setSkip] = useState(0)
-  const [page, setPage] = useState<LogPage | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [retry, setRetry] = useState(0)
-  const key = JSON.stringify(filter)
   const options = useMemo(() => LOG_KINDS.map((k) => ({ id: k, label: LOG_LABEL[k] })), [])
-  useEffect(() => setSkip(0), [kind, key])
-  useEffect(() => {
-    let live = true
-    setPage(null)
-    setError(null)
-    getLog(kind, filter, skip, PAGE).then(
-      (p) => live && setPage(p),
-      (err) => live && setError(errorDetail(err)),
-    )
-    return () => {
-      live = false
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, skip, key, retry])
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PillTabs label="Log" options={options} value={kind} onChange={setKind} />
-        <ReportActions filter={filter} log={kind} />
+        <OpenAsReport id={kind} />
       </div>
-      <div className="overflow-x-auto rounded-lg border border-border">
-        {error ? (
-          <p className="p-6 text-sm text-destructive">
-            Couldn&rsquo;t load this log. {error}{' '}
-            <button type="button" className="underline" onClick={() => setRetry((n) => n + 1)}>
-              Try again
-            </button>
-          </p>
-        ) : !page ? (
-          <PageLoader context="analytics" className="min-h-[30vh]" />
-        ) : !page.rows.length ? (
-          <p className="p-10 text-center text-sm text-muted-foreground">Nothing in this period.</p>
-        ) : (
-          <Table>
-            <TableHeader className="sticky top-0 bg-card">
-              <TableRow>
-                {page.columns.map((c) => (
-                  <TableHead key={c.key} className={cn('whitespace-nowrap', c.numeric && 'text-right')}>
-                    {c.label}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {page.rows.map((r, i) => (
-                <TableRow key={i} data-density-row>
-                  {page.columns.map((c) => (
-                    <TableCell key={c.key} className={cn('whitespace-nowrap', c.numeric && 'text-right tabular-nums')}>
-                      {c.key === 'ticket' && /^#\d+$/.test(String(r[c.key])) ? (
-                        <Link to={ticketsLink({ view: 'all', n: String(r[c.key]).slice(1) })} className="text-primary hover:underline">
-                          {r[c.key]}
-                        </Link>
-                      ) : (
-                        (r[c.key] ?? '–')
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </div>
-      {page && page.total > PAGE && (
-        <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
-          {skip + 1}–{Math.min(skip + PAGE, page.total)} of {num(page.total)}
-          <Button variant="outline" size="icon-sm" aria-label="Previous page" disabled={!skip} onClick={() => setSkip((s) => Math.max(0, s - PAGE))}>
-            <ChevronLeft className="size-4" />
-          </Button>
-          <Button variant="outline" size="icon-sm" aria-label="Next page" disabled={skip + PAGE >= page.total} onClick={() => setSkip((s) => s + PAGE)}>
-            <ChevronRight className="size-4" />
-          </Button>
-        </div>
-      )}
+      <RecordsTable kind={kind} filter={filter} />
     </div>
   )
 }
 
-/** The Tickets list with these filters (the same names its address uses). */
-const ticketsLink = (p: Record<string, string>) => {
-  const q = new URLSearchParams(Object.entries(p).filter(([k, v]) => v && !(k === 'view' && v === 'open')))
-  const s = q.toString()
-  return `/tickets${s ? `?${s}` : ''}`
+/** The tab's numbers as a report (view, download or schedule it there), with the same filters. */
+const TAB_REPORT: Record<string, ReportId> = { overview: 'business_review', ai: 'agents', human: 'people', consumption: 'consumption' }
+function OpenAsReport({ id }: { id: ReportId }) {
+  const { search } = useLocation()
+  const q = new URLSearchParams(search)
+  q.delete('tab')
+  const rest = q.toString()
+  return (
+    <Button asChild size="sm" variant="outline">
+      <Link to={`/reports/${id}${rest ? `?${rest}` : ''}`}>
+        <FileText className="size-4" /> Open as report
+      </Link>
+    </Button>
+  )
 }
+
 const titleCase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ')
 const fmtRange = (a: string, b: string) => {
   const f = (d: string) => new Date(d + 'T00:00').toLocaleDateString([], { day: 'numeric', month: 'short' })

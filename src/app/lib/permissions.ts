@@ -4,8 +4,8 @@
 export type Role = 'owner' | 'admin' | 'supervisor' | 'agent'
 export const ROLES: { id: Role; label: string; description: string }[] = [
   { id: 'owner', label: 'Owner', description: 'Everything, including WhatsApp accounts, billing and other owners.' },
-  { id: 'admin', label: 'Admin', description: 'Runs the workspace: people, AI agents, settings and broadcasts. Can’t change owners.' },
-  { id: 'supervisor', label: 'Supervisor', description: 'Leads the team: sees every chat, reassigns tickets, sends broadcasts and reads reports.' },
+  { id: 'admin', label: 'Admin', description: 'Runs the workspace: people, AI agents, settings and message templates. Can’t change owners.' },
+  { id: 'supervisor', label: 'Supervisor', description: 'Leads the team: sees every chat, reassigns tickets, creates message templates and reads reports.' },
   { id: 'agent', label: 'Agent', description: 'Answers customers: chats, tickets and contacts.' },
 ]
 const RANK: Record<Role, number> = { owner: 3, admin: 2, supervisor: 1, agent: 0 }
@@ -31,8 +31,7 @@ const MATRIX = {
   'numbers.edit': AT_LEAST('admin'),
   'alerts.receive': AT_LEAST('admin'),
   'traces.read': AT_LEAST('admin'),
-  /** Broadcasts and templates, contact import/delete and segments. */
-  'broadcasts.send': AT_LEAST('supervisor'),
+  /** Message templates, contact import/delete and segments. */
   'templates.create': AT_LEAST('supervisor'),
   'contacts.manage': AT_LEAST('supervisor'),
   /** Every chat and ticket regardless of the workspace's agent restriction; reassign others' work. */

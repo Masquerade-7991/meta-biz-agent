@@ -354,22 +354,6 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
   const [assist] = await col('ai_usage').aggregate([{ $match: { workspaceId: ws(), day: { $gte: f.from, $lte: f.to } } }, { $group: { _id: null, tk: { $sum: { $add: ['$input', '$output'] } }, calls: { $sum: '$calls' } } }]).toArray()
   const [month] = await col('spend_daily').aggregate([{ $match: { workspaceId: ws(), day: { $gte: isoDay(new Date(), 'UTC').slice(0, 8) + '01' } } }, { $group: { _id: null, c: { $sum: '$cost' } } }]).toArray()
 
-  const [b] = await col('broadcast_recipients')
-    .aggregate([
-      { $match: { workspaceId: ws(), sentAt: { $gte: start, $lt: end } } },
-      {
-        $group: {
-          _id: null,
-          sent: { $sum: 1 },
-          delivered: { $sum: { $cond: [{ $in: ['$status', ['delivered', 'read']] }, 1, 0] } },
-          read: { $sum: { $cond: [{ $eq: ['$status', 'read'] }, 1, 0] } },
-          replied: { $sum: { $cond: [{ $ifNull: ['$repliedAt', false] }, 1, 0] } },
-          failed: { $sum: { $cond: [{ $eq: ['$status', 'failed'] }, 1, 0] } },
-        },
-      },
-    ])
-    .toArray()
-
   const openTickets = await col('tickets').find({ workspaceId: ws(), status: { $in: OPEN }, ...byNumber(f) }, { projection: { firstRespondedAt: 1, firstResponseDueAt: 1, resolveDueAt: 1 } }).toArray()
   const overdue = openTickets.filter((t) => +(t.firstRespondedAt ? t.resolveDueAt : t.firstResponseDueAt) < now).length
   const available = await col('memberships').countDocuments({ workspaceId: ws(), $or: [{ availability: 'online' }, { availability: { $exists: false } }] })
@@ -418,7 +402,6 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
       assist: { tokens: Number(assist?.tk ?? 0), calls: Number(assist?.calls ?? 0) },
       budget: { monthly: Number(billing?.budget) || null, spentThisMonth: Number(month?.c ?? 0) },
     },
-    broadcasts: { sent: Number(b?.sent ?? 0), delivered: Number(b?.delivered ?? 0), read: Number(b?.read ?? 0), replied: Number(b?.replied ?? 0), failed: Number(b?.failed ?? 0) },
   }
 }
 

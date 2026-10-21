@@ -103,7 +103,6 @@ export interface Overview {
     assist: { tokens: number; calls: number }
     budget: { monthly: number | null; spentThisMonth: number }
   }
-  broadcasts: { sent: number; delivered: number; read: number; replied: number; failed: number }
 }
 
 export const LOG_KINDS = ['tickets', 'handovers', 'escalations', 'charges', 'agent_usage'] as const

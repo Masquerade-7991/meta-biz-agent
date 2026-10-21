@@ -1,5 +1,5 @@
-// Background jobs stored in MongoDB, so they survive restarts: broadcasts now, and later reminders,
-// snoozes, webhook deliveries, syncs and digests. A job runs in its workspace, under the trace of
+// Background jobs stored in MongoDB, so they survive restarts: reminders, snoozes, media downloads,
+// webhook deliveries, syncs and digests. A job runs in its workspace, under the trace of
 // the request that queued it. Failures retry with backoff, then the job is parked as 'dead'.
 // ponytail: one process polls every second and claims jobs with a lease (lockedUntil), so a crashed
 // run is picked up again after the lease. Enough for several instances too, at low job volume.
@@ -12,7 +12,7 @@ import { INSTANCE, traceId } from './context.ts'
 import { assetsFor } from '../whatsapp/index.ts'
 import { trace } from './trace.ts'
 
-/** What a handler may return: `again` re-queues the same job (e.g. the next batch of a broadcast). */
+/** What a handler may return: `again` re-queues the same job (e.g. a snooze that was moved later). */
 export type JobResult = void | { again: Date }
 type Handler = (payload: Record<string, unknown>) => Promise<JobResult>
 

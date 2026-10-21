@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Bot, Check, ChevronRight, Inbox, Megaphone, MessageCircle, Smartphone, Ticket, UserPlus, Users } from 'lucide-react'
+import { Bot, Check, ChevronRight, Inbox, MessageCircle, Smartphone, Ticket, UserPlus, Users } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { listChats, type ChatSummary } from '@/app/api/inbox'
 import { getSupportSettings, listTickets } from '@/app/api/tickets'
@@ -169,7 +169,7 @@ function GetStarted({
             ? account.needsAttention
               ? 'Some setup steps didn’t finish. Retry them below.'
               : 'Add a payment method so your number can send messages.'
-            : 'Your AI agent, inbox and broadcasts all run on your own WhatsApp number. Connect it with Facebook in a few minutes, right here.'}
+            : 'Your AI agent and inbox run on your own WhatsApp number. Connect it with Facebook in a few minutes, right here.'}
         </Step>
         <Step
           n={2}
@@ -365,7 +365,6 @@ function QuickActions({ onNavigate, hasAgent }: { onNavigate: (id: NavId, tab?: 
   const { me } = useAuth()
   const actions = [
     hasAgent && { icon: MessageCircle, label: 'Test your AI agent', hint: 'Chat with it as a customer would', run: () => navigate('/agents') },
-    can(me?.role, 'broadcasts.send') && { icon: Megaphone, label: 'Send a broadcast', hint: 'A template to a group of contacts', run: () => onNavigate('broadcasts') },
     { icon: UserPlus, label: 'Add a contact', hint: 'Or import a CSV', run: () => onNavigate('contacts') },
     can(me?.role, 'members.manage') && { icon: Users, label: 'Invite a teammate', hint: 'Agents, supervisors or admins', run: () => onNavigate('settings', 'members') },
   ].filter(Boolean) as { icon: typeof Inbox; label: string; hint: string; run: () => void }[]

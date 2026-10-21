@@ -48,7 +48,7 @@ export async function resolveCustomer(phoneIn: unknown, bsuidIn: unknown, extra:
 /** Moves everything stored under `from` (a BSUID) to `to` (the phone number), merging when both exist. */
 async function moveCustomer(from: string, to: string) {
   const q = { workspaceId: ws(), phone: from }
-  for (const name of ['messages', 'tickets', 'broadcast_recipients', 'presence']) await col(name).updateMany(q, { $set: { phone: to } })
+  for (const name of ['messages', 'tickets', 'presence']) await col(name).updateMany(q, { $set: { phone: to } })
 
   const [a, b] = await Promise.all([col('conversations').findOne(q), col('conversations').findOne({ workspaceId: ws(), phone: to })])
   if (a && b) {

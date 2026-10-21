@@ -164,7 +164,7 @@ export function NumberPage({ id, showBack, onBack, backLabel = 'All numbers', in
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="name">Display name</TabsTrigger>
-          <TabsTrigger value="automation">Ice breakers</TabsTrigger>
+          <TabsTrigger value="automation">Automations</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="blocked">Blocked</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>

@@ -16,6 +16,7 @@ import { isoDay, type AnalyticsFilter, type LogPage, type Overview } from '../..
 import {
   isLogReport,
   isReport,
+  MAX_LOG_ROWS,
   nextRunDay,
   REPORTS,
   reportFile,
@@ -29,7 +30,6 @@ import {
 import type { Actor } from '../messaging/index.ts'
 
 const schedules = () => col('report_schedules')
-const MAX_LOG_ROWS = 50_000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 /** One report's CSV for a filter. Logs are read in pages up to 50,000 rows. `o`: the overview

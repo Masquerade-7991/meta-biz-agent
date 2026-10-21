@@ -5,7 +5,6 @@
 import http from 'node:http'
 import { handle, ready } from './app.ts'
 import { startCollectors } from './insights/collectors.ts'
-import { resumeBroadcasts } from './outreach/broadcasts.ts'
 import { releaseLeases, startJobs } from './platform/jobs.ts'
 import { startBilling } from './whatsapp/billing.ts'
 import { startHealth } from './whatsapp/health.ts'
@@ -39,7 +38,6 @@ const stoppers: (() => void)[] = []
 // The background work belongs to the worker role (every role when ROLE is unset).
 const up = await ready()
 if (up && isRole('worker')) {
-  await resumeBroadcasts()
   await startBilling()
   await startHealth()
   // JOBS=off: a second copy of the server (e.g. against a stand-in Meta) must not run real jobs.

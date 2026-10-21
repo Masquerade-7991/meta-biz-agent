@@ -1,22 +1,46 @@
-// The reports anyone with reports.view can download (CSV, opens in Excel), print as a PDF summary,
-// or have emailed on a schedule. Each report is a table built from the Analytics overview or a log,
+// The reports anyone with reports.view can view on screen, download (CSV, opens in Excel; PDF for
+// summaries) or have emailed on a schedule. Each report is a table built from the Analytics overview or a log,
 // the same way on the server (CSV, emails) and in the browser (print view, Dummy mode).
 import { csatScore, type LogKind, type LogPage, type Overview } from '../analytics/types.ts'
 import { csvCell } from '../contacts/csv.ts'
 
+/** Filters a report can be narrowed by besides the date (which every report has). `agents` = the
+ *  WhatsApp numbers; `team` and `person` narrow ticket figures, so reports without tickets ignore them. */
+export type ReportFilter = 'agents' | 'team' | 'person'
+const ALL: readonly ReportFilter[] = ['agents', 'team', 'person']
+const AGENTS_ONLY: readonly ReportFilter[] = ['agents']
+
+/** `group`: summaries are totals for a period (CSV and PDF); records are one row per item (CSV only).
+ *  `filters` must match what the server applies (server/insights/analytics.ts overview and logPage). */
 export const REPORTS = [
-  { id: 'business_review', title: 'Business review', description: 'The headline numbers against the period before: conversations, containment, satisfaction, speed, escalations and spend.', source: 'overview' },
-  { id: 'daily', title: 'Day by day', description: 'Every day in the period: conversations, AI alone, handovers, tickets, response times, satisfaction and spend.', source: 'overview' },
-  { id: 'agents', title: 'Agent performance', description: 'Each AI agent side by side: conversations, containment, handovers, satisfaction and cost.', source: 'overview' },
-  { id: 'people', title: 'Team members', description: 'Resolved and open tickets, first reply, satisfaction and escalations per person.', source: 'overview' },
-  { id: 'teams', title: 'Teams', description: 'Opened, resolved, on-time share and escalations per team.', source: 'overview' },
-  { id: 'consumption', title: 'Consumption and cost', description: 'Spend by message category, the Business Agent’s usage and free service replies per number.', source: 'overview' },
-  { id: 'tickets', title: 'Ticket log', description: 'Every ticket opened in the period with its team, assignee, timings, SLA, escalation and CSAT.', source: 'log' },
-  { id: 'handovers', title: 'Handover log', description: 'Every chat handed to a person: how, to whom and how fast they replied.', source: 'log' },
-  { id: 'escalations', title: 'Escalation log', description: 'Every escalation level reached, why and who was alerted.', source: 'log' },
-  { id: 'charges', title: 'Message charges', description: 'One row per message status Meta priced: category, pricing type and whether it was billable.', source: 'log' },
-  { id: 'agent_usage', title: 'Agent usage by hour', description: 'The Meta Business Agent’s billable replies, tokens and cost, hour by hour.', source: 'log' },
+  { id: 'business_review', group: 'summary', title: 'Business review', description: 'The headline numbers against the period before: conversations, chats handled by AI alone, satisfaction, reply times, escalations and spend.', source: 'overview', filters: ALL },
+  { id: 'daily', group: 'summary', title: 'Day by day', description: 'One row per day: conversations, AI alone, handovers, tickets, reply times, satisfaction and spend.', source: 'overview', filters: ALL },
+  { id: 'agents', group: 'summary', title: 'AI agents', description: 'Each AI agent side by side: conversations, chats handled alone, handovers, satisfaction and cost.', source: 'overview', filters: AGENTS_ONLY },
+  { id: 'people', group: 'summary', title: 'Team members', description: 'Per person: tickets resolved and open, first reply time, satisfaction and escalations.', source: 'overview', filters: ALL },
+  { id: 'teams', group: 'summary', title: 'Teams', description: 'Per team: tickets opened and resolved, how many were resolved on time, and escalations.', source: 'overview', filters: ALL },
+  { id: 'consumption', group: 'summary', title: 'Spend and usage', description: 'What WhatsApp messages and the Business Agent cost, by message type, and free replies used per number.', source: 'overview', filters: AGENTS_ONLY },
+  { id: 'tickets', group: 'records', title: 'Tickets', description: 'Every ticket opened in the period, with its team, assignee, timings, whether it was on time, escalation and rating.', source: 'log', filters: ALL },
+  { id: 'handovers', group: 'records', title: 'Handovers', description: 'Every chat handed to a person: how, to whom and how fast they replied.', source: 'log', filters: ALL },
+  { id: 'escalations', group: 'records', title: 'Escalations', description: 'Every escalation level reached, why, and who was alerted.', source: 'log', filters: ALL },
+  { id: 'charges', group: 'records', title: 'Message charges', description: 'One row per message Meta priced: type, pricing and whether it was billed.', source: 'log', filters: AGENTS_ONLY },
+  { id: 'agent_usage', group: 'records', title: 'AI agent usage by hour', description: 'The Business Agent’s billed replies, tokens and cost, hour by hour.', source: 'log', filters: AGENTS_ONLY },
 ] as const
+
+export const REPORT_GROUPS = [
+  { id: 'summary', title: 'Summaries', description: 'Totals for a period. View them here, or download as CSV or PDF.' },
+  { id: 'records', title: 'Detailed records', description: 'One row per ticket, handover or charge, for spreadsheets. Download as CSV.' },
+] as const
+
+/** Why a report ignores team and assignee, shown where those filters would be. */
+export const FILTER_NOTE: Partial<Record<ReportId, string>> = {
+  agents: 'Team and assignee don’t apply: this report is about the AI agents.',
+  consumption: 'Team and assignee don’t apply: Meta reports spend for the whole account.',
+  charges: 'Team and assignee don’t apply: Meta prices messages for the whole account.',
+  agent_usage: 'Team and assignee don’t apply: this is the AI agent’s own usage.',
+}
+
+/** A record report's CSV holds at most this many rows (server/insights/reports.ts). */
+export const MAX_LOG_ROWS = 50_000
 
 export type ReportId = (typeof REPORTS)[number]['id']
 export const isReport = (v: unknown): v is ReportId => REPORTS.some((r) => r.id === v)
@@ -123,6 +147,8 @@ export interface ReportSchedule {
   lastError?: string | null
   lastFailedAt?: string | null
 }
+/** A new schedule: the weekly business review, to the person creating it. */
+export const blankSchedule = (me: string | undefined): Omit<ReportSchedule, 'id'> => ({ name: 'Weekly business review', reports: ['business_review'], cadence: 'weekly', hour: 9, numbers: [], team: null, userIds: me ? [me] : [], emails: [], enabled: true })
 export const CADENCE_LABEL: Record<Cadence, string> = { daily: 'Every day (yesterday)', weekly: 'Every Monday (last 7 days)', monthly: 'On the 1st (last month)' }
 
 /** The period a scheduled report covers when it goes out on `today` (local YYYY-MM-DD). */

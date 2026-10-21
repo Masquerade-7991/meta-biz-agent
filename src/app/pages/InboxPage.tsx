@@ -726,7 +726,7 @@ function BlockMenu({ chat, onChange }: { chat: ChatDetail; onChange: (d: ChatDet
       <ConfirmDialog
         open={confirm}
         title="Block this customer on WhatsApp?"
-        description="They won’t be able to message this number, and broadcasts skip them. You can unblock them later, here or on the WhatsApp page."
+        description="They won’t be able to message this number, and you can’t message them. You can unblock them later, here or on the WhatsApp page."
         confirmLabel="Block"
         onCancel={() => setConfirm(false)}
         onConfirm={() => {

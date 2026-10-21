@@ -1,7 +1,7 @@
 // Who a WhatsApp customer is. Since WhatsApp usernames (June 2026) a customer may hide their phone
 // number; Meta then names them by a business-scoped user ID (BSUID), e.g. "US.13491208655302741918"
 // (country code, dot, up to 128 letters/digits; parent BSUIDs add ".ENT"). Every chat, contact,
-// ticket and broadcast recipient is keyed by the customer's phone number when known, else their BSUID.
+// and ticket is keyed by the customer's phone number when known, else their BSUID.
 // Shared by the server (keys, sending) and the browser (labels).
 
 const BSUID = /^[A-Z]{2}\.(?:ENT\.)?[A-Za-z0-9]{1,128}$/

@@ -46,13 +46,6 @@ const INDEXES: Record<string, IndexDescription[]> = {
   contacts: [{ key: { workspaceId: 1, phone: 1 }, unique: true }, { key: { workspaceId: 1, lastSeenAt: -1 } }, { key: { workspaceId: 1, tags: 1 } }],
   contact_fields: [{ key: { workspaceId: 1 }, unique: true }],
   segments: [{ key: { workspaceId: 1, name: 1 } }],
-  // Broadcasts (broadcasts.ts): the worker picks due ones; recipients are matched to webhook ticks by wamid.
-  broadcasts: [{ key: { status: 1, scheduledAt: 1 } }, { key: { workspaceId: 1, createdAt: -1 } }],
-  broadcast_recipients: [
-    { key: { workspaceId: 1, broadcastId: 1, status: 1 } },
-    { key: { workspaceId: 1, waMessageId: 1 }, partialFilterExpression: { waMessageId: { $type: 'string' } } },
-    { key: { workspaceId: 1, phone: 1, sentAt: -1 } },
-  ],
   conversations: [{ key: { workspaceId: 1, phone: 1 }, unique: true }, { key: { workspaceId: 1, lastMessageAt: -1 } }],
   messages: [
     { key: { workspaceId: 1, phone: 1, at: 1 } },
@@ -66,7 +59,7 @@ const INDEXES: Record<string, IndexDescription[]> = {
   saved_views: [{ key: { workspaceId: 1, userId: 1, name: 1 }, unique: true }],
   canned_responses: [{ key: { workspaceId: 1, shortcut: 1 }, unique: true }],
   presence: [{ key: { workspaceId: 1, phone: 1, userId: 1 }, unique: true }, { key: { at: 1 }, expireAfterSeconds: 60 }],
-  // Short-lived locks that stop one request running twice (e.g. a broadcast sent with two clicks).
+  // Short-lived locks that stop one request running twice (e.g. a form sent with two clicks).
   request_locks: [{ key: { at: 1 }, expireAfterSeconds: DAY }],
   // Tickets (tickets.ts): numbered per workspace; one open ticket per chat at a time (the database
   // enforces it, so two events at once can't open two).

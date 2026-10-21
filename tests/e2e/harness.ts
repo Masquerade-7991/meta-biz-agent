@@ -253,7 +253,6 @@ export async function serverModules(s: Stack) {
   const ops = await import('../../server/support/supportOps.ts')
   const jobs = await import('../../server/platform/jobs.ts')
   const inbox = await import('../../server/messaging/inbox.ts')
-  const broadcasts = await import('../../server/outreach/broadcasts.ts')
   const locks = await import('../../server/platform/locks.ts')
   return {
     /** Runs the escalation sweep for one workspace as if it were `now`. */
@@ -262,11 +261,10 @@ export async function serverModules(s: Stack) {
     inWorkspace: async <T>(workspaceId: string, fn: () => T) => db.withWorkspace(workspaceId, fn, await accounts.assetsFor(workspaceId)),
     jobs,
     locks,
-    /** One worker pass: every due job, then webhook retries and broadcast resumption. */
+    /** One worker pass: every due job, then webhook retries. */
     tick: async () => {
       const ran = await jobs.jobsTick()
       await inbox.reprocessWebhooks()
-      await broadcasts.resumeBroadcasts()
       return ran
     },
   }

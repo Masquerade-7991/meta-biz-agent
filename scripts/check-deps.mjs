@@ -19,7 +19,6 @@ const DOMAINS = readdirSync(SERVER).filter((d) => statSync(path.join(SERVER, d))
 const KNOWN_CYCLES = new Set([
   'platform↔whatsapp', // jobs → assetsFor, db → migrateEnvAccount; whatsapp → db/context/http
   'messaging↔support', // inbox ↔ tickets: a reply opens a ticket, a release resolves it
-  'messaging↔outreach', // inbox ↔ broadcasts: delivery ticks land on recipients
   'insights↔messaging', // collectors → importTurns; inbox/assist → aiUsage
   'insights↔whatsapp', // analytics/collectors → accounts/record/upstream; billing/store → aiUsage/collectors
 ])

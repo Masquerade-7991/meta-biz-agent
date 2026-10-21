@@ -28,7 +28,7 @@ const qs = (q: ActivityQuery, before?: string) => {
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
 function dummy<T>(_m: string, path: string): Promise<T> {
-  if (path.startsWith('/api/jobs/')) return Promise.resolve({ id: path.split('/')[3], type: 'broadcast.send', status: 'queued', attempts: 0 } as T)
+  if (path.startsWith('/api/jobs/')) return Promise.resolve({ id: path.split('/')[3], type: 'reminder.fire', status: 'queued', attempts: 0 } as T)
   const u = new URL(path, 'http://x')
   const ticket = u.searchParams.get('entity') === 'ticket' ? u.searchParams.get('entityId') : null
   const n = ticket ?? '1042'

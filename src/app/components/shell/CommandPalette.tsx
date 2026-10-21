@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { ArrowLeftRight, BookOpen, FlaskConical, Monitor, Moon, Plus, Rows3, Rows4, Settings, Sun } from 'lucide-react'
+import { ArrowLeftRight, BookOpen, FileText, FlaskConical, Monitor, Moon, Plus, Rows3, Rows4, Settings, Sun } from 'lucide-react'
 import { setDensity } from '@/app/lib/density'
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/app/components/ui/command'
 import { OPEN_COMMAND_PALETTE } from '@/app/lib/commandPalette'
@@ -12,6 +12,7 @@ import { studioPath } from '@/app/wizard/studioPaths'
 import { setTheme } from '@/app/lib/theme'
 import { switchWorkspace } from '@/app/auth/workspaceSwitch'
 import { can } from '@/app/lib/permissions'
+import { REPORTS } from '@/app/reports/catalog'
 
 const SETTINGS: { tab: string; label: string }[] = [
   { tab: 'members', label: 'Members' },
@@ -103,6 +104,16 @@ export function CommandPalette() {
               <CommandItem key={s.id} value={`${agentName} ${s.label}`} onSelect={() => go(studioPath(s.id))}>
                 <s.icon />
                 {s.label}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
+        {can(me.role, 'reports.view') && (
+          <CommandGroup heading="Reports">
+            {REPORTS.map((r) => (
+              <CommandItem key={r.id} value={`report ${r.title}`} onSelect={() => go(`/reports/${r.id}`)}>
+                <FileText />
+                {r.title} report
               </CommandItem>
             ))}
           </CommandGroup>

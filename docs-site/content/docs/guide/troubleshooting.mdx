@@ -26,7 +26,7 @@ If a message includes a **Reference** of 8 letters and numbers, keep it. An owne
 **Do:** ask an admin or owner to send a new invite from **Settings › Members**.
 </Accordion>
 <Accordion title="Your role doesn't allow this. Ask an owner or admin.">
-**Why:** each role can only do some things. Agents answer customers. Supervisors also send broadcasts and read reports. Admins run the workspace. Owners also manage WhatsApp accounts and billing.
+**Why:** each role can only do some things. Agents answer customers. Supervisors also create message templates and read reports. Admins run the workspace. Owners also manage WhatsApp accounts and billing.
 
 **Do:** ask an owner or admin to do it, or to change your role in **Settings › Members**.
 </Accordion>
@@ -129,7 +129,7 @@ The message is added to the chat when WhatsApp refuses a reply. The reason follo
 <Accordion title="Rejected, with a reason on the card">
 **Why:** Meta reviewed the template and declined it. Common causes are mistakes in placeholders, a message that starts or ends with a placeholder, requests for sensitive details, or wording that breaks policy.
 
-**Do:** edit the wording, give a real example for every placeholder and submit again. See [Broadcasts and templates](/docs/guide/broadcasts).
+**Do:** edit the wording, give a real example for every placeholder and submit again. See [Message templates](/docs/guide/templates).
 
 <small>Source: [Meta — template review](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-review)</small>
 </Accordion>
@@ -151,46 +151,22 @@ The message is added to the chat when WhatsApp refuses a reply. The reason follo
 </Accordion>
 </Accordions>
 
-## Broadcasts
+## Messages that didn't go out
 
 <Accordions>
-<Accordion title="Nobody to send to: the segment has no contacts who accept messages.">
-**Why:** the segment is empty, or everyone in it opted out.
+<Accordion title="WhatsApp couldn't deliver a reply to this customer">
+The chat shows this line, with the reason, when WhatsApp refused a message your team or the AI agent sent. Common reasons:
 
-**Do:** choose another segment or **All contacts**. See [Contacts](/docs/guide/contacts).
-</Accordion>
-<Accordion title="Pick a time in the future.">
-**Do:** choose a later time, or send now.
-</Accordion>
-<Accordion title="This broadcast is already being sent. It shows in the list in a moment.">
-**Why:** you clicked twice or a request was repeated. Only one broadcast was created.
+| Reason | What to do |
+| --- | --- |
+| It's more than 24 hours since the customer last wrote | Send a template instead. See [Message templates](/docs/guide/templates). |
+| The customer turned off marketing messages from you | Nothing to do. They can turn it back on from your chat in WhatsApp. |
+| The number isn't on WhatsApp, or their app is too old | Nothing to do. |
+| This is a Meta test number | Add the phone in the Meta app's WhatsApp › API Setup › To list, or use a real number. |
+| Your WhatsApp account needs attention | Fix billing, policy or registration in WhatsApp Manager, then send again. |
+| WhatsApp asked to slow down, or was unavailable | Wait a moment and send again. |
 
-**Do:** wait and check the list.
-</Accordion>
-<Accordion title="What didn't go out (inside a broadcast)">
-Open the broadcast to see failures grouped by reason. Common ones:
-
-| Reason | Meaning | What happens |
-| --- | --- | --- |
-| Meta's daily marketing limit for this person | The person already got many marketing messages from businesses. | Tried again after 24 hours, up to twice. |
-| Turned off marketing messages from you in WhatsApp | They opted out of marketing. | Not retried. They can turn it back on from your chat. |
-| Not on WhatsApp, or their app is too old | They can't receive it. | Not retried. |
-| Test number: this recipient isn't verified for it | Meta test numbers only reach a few verified phones. | Add the phone in Meta's app or use a real number. |
-| Template problem (paused, not approved or wrong values) | The template can't be used right now. | Check it in **Broadcasts › Templates**. |
-| Your WhatsApp account needs attention | Billing, policy or registration. | Fix it in WhatsApp Manager and send again. |
-| Sent too fast; WhatsApp asked to slow down | Throttling. | Retried automatically after a short wait. |
-| WhatsApp was unavailable | Temporary. | Retried automatically. |
-| Opted out of your broadcasts | Skipped by the console. | Nothing to do. |
-| Hides their phone number | The customer uses a WhatsApp username. | Normal messages still reach them. |
-
-A broadcast shows "Trying again" and a time when a retry is waiting.
-
-<small>Source: [Meta — per-user marketing limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/per-user-limits), [Meta — message statuses](https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/status)</small>
-</Accordion>
-<Accordion title="Delivered and read numbers are lower than expected">
-**Why:** delivery and read ticks arrive from WhatsApp afterwards, and a person who is in the chat doesn't always produce a separate delivered tick. Numbers catch up over time.
-
-**Do:** check again later.
+<small>Source: [Meta — message statuses](https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/status)</small>
 </Accordion>
 </Accordions>
 

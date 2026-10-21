@@ -1,6 +1,6 @@
 // Contacts: everyone who has chatted, plus people added by hand or CSV. One contact per phone per
 // workspace. Tags are free text; custom fields follow the workspace's field definitions; segments
-// are saved filters that Contacts and Broadcasts share.
+// are saved filters on the Contacts page.
 import type http from 'node:http'
 import { ObjectId } from 'mongodb'
 import { HttpError, type Obj, type Titles, digits, obj, readJson, serveJson } from '../platform/http.ts'
@@ -68,7 +68,7 @@ function fieldsOf(v: unknown, defs: FieldDef[]): Record<string, string> {
   return out
 }
 
-/** The Mongo query for a segment; Broadcasts uses the same one. */
+/** The Mongo query for a segment. */
 export function segmentQuery(f: SegmentFilter): Obj {
   const q: Obj = { workspaceId: ws() }
   if (f.tags?.length) q.tags = { $all: f.tags }

@@ -1,6 +1,6 @@
 // The API as a Vercel Function (api/server.mjs loads the bundle of this file; see
 // scripts/bundle-server.mjs). vercel.json sends every /api/<path> here as /api/server?p=<path>.
-// There's no long-running process on Vercel, so background jobs (broadcast sending, snoozes,
+// There's no long-running process on Vercel, so background jobs (snoozes,
 // reminders, syncs) run in short bursts after requests, plus a daily cron as a safety net.
 import type http from 'node:http'
 import { reprocessWebhooks } from './messaging/inbox.ts'
@@ -8,7 +8,6 @@ import { handle, ready } from './app.ts'
 import { db } from './platform/db.ts'
 import { jobsTick } from './platform/jobs.ts'
 import { escalateAll } from './support/supportOps.ts'
-import { resumeBroadcasts } from './outreach/broadcasts.ts'
 import { startBilling } from './whatsapp/billing.ts'
 import { startHealth } from './whatsapp/health.ts'
 import { runOnce } from './insights/collectors.ts'
@@ -48,7 +47,6 @@ async function cron(req: http.IncomingMessage, res: http.ServerResponse) {
     res.writeHead(503, { 'content-type': 'application/json' }).end(JSON.stringify({ title: 'Database unavailable', detail: 'MongoDB didn’t answer.' }))
     return
   }
-  await resumeBroadcasts()
   await startBilling()
   await startHealth()
   const ran = await jobsTick(40_000)

@@ -7,9 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog'
 import { FormError } from '@/app/auth/AuthLayout'
 import { errorDetail } from '@/app/api/meta'
-import { listTemplates, sendTemplateToChat, type WaTemplate } from '@/app/api/broadcasts'
-import { renderTemplate, slotsOf } from '@/app/broadcasts/templates'
-import { TemplatePreview } from './BroadcastsPage'
+import { listTemplates, sendTemplateToChat, type WaTemplate } from '@/app/api/templates'
+import { renderTemplate, slotsOf } from '@/app/templates/templates'
+import { TemplatePreview } from '@/app/whatsapp/TemplatePreview'
 import { customerLabel } from '@/app/lib/customer'
 
 /** Reopens a chat after the 24-hour window with one approved template. */

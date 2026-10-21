@@ -26,7 +26,7 @@ export const AREAS = {
   agent: { label: 'AI agent', kinds: ['agent.'] },
   people: { label: 'Team & members', kinds: ['member.', 'team.', 'api_token.'] },
   contacts: { label: 'Contacts', kinds: ['contact.'] },
-  broadcasts: { label: 'Broadcasts & templates', kinds: ['broadcast.created', 'broadcast.started', 'broadcast.completed', 'broadcast.cancelled', 'template.'] },
+  templates: { label: 'Message templates', kinds: ['template.'] },
   reports: { label: 'Reports', kinds: ['report.'] },
   settings: { label: 'Settings', kinds: ['settings.'] },
   whatsapp: { label: 'WhatsApp', kinds: ['whatsapp.', 'number.', 'account.notice', 'alert.', 'webhook.baseline_reset'] },
@@ -198,14 +198,6 @@ export function activityText(e: ActivityEvent, names: Names = {}): string {
       return `${who} submitted the template “${d.name}” for review`
     case 'template.deleted':
       return `${who} deleted the template “${d.name}”`
-    case 'broadcast.created':
-      return `${who} ${d.scheduled ? 'scheduled' : 'created'} a broadcast of “${d.template}” to ${d.audience} contacts`
-    case 'broadcast.started':
-      return `A broadcast started sending to ${d.audience} contacts`
-    case 'broadcast.completed':
-      return 'A broadcast finished sending'
-    case 'broadcast.cancelled':
-      return `${who} cancelled a broadcast`
     case 'report.scheduled':
       return `${who} scheduled the report email “${d.name}”`
     case 'report.schedule_updated':

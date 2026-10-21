@@ -32,7 +32,6 @@ Every figure is compared with the period just before it, of the same length. Day
 | AI agent | How much the AI finished alone, handovers per day, how tickets opened, questions it couldn't answer, and how often each tool worked. |
 | Human support | Tickets opened and resolved, first reply and resolution times, escalations, when customers write, satisfaction, and teams and people. |
 | Consumption | Spend per day, by message category, and the AI agent's usage. |
-| Broadcasts | Sent, delivered, read, replied and failed, with the funnel from sent to replied. |
 | Logs | The individual tickets, handovers and escalations behind the numbers. |
 
 Click a figure that has a link to open the matching list, for example the tickets behind "Resolved on time".
@@ -49,7 +48,6 @@ Click a figure that has a link to open the matching list, for example the ticket
 - **Typical first reply:** the median. Half of first replies were faster.
 - **Resolved on time:** tickets resolved within their resolution target.
 - **Customer satisfaction:** Good answers, with Okay counting half, out of all answers to the feedback question.
-- **Replied (broadcasts):** customers who wrote back within 3 days of the broadcast.
 
 Read containment and satisfaction together: letting the AI handle more only helps while customers stay happy.
 
@@ -80,39 +78,56 @@ Meta's rates, and the date they change, are on Meta's own rate card. They change
 
 ## Reports
 
-Open **Reports** in the sidebar. Each report is a card with a **CSV** button, and the summary reports also have a **PDF** button.
+Open **Reports** in the sidebar. The **Library** lists every report in two groups:
 
-![The Reports page with download buttons and scheduled emails](/screens/reports.webp)
+- **Summaries:** totals for a period. You can read them on screen, or download them as CSV or PDF.
+- **Detailed records:** one row per ticket, handover or charge, for spreadsheets. You can read them on screen, a page at a time, or download them as CSV.
 
-| Report | What it covers |
-| --- | --- |
-| Business review | The headline numbers against the period before: conversations, containment, satisfaction, speed, escalations and spend. |
-| Day by day | Every day in the period: conversations, AI alone, handovers, tickets, response times, satisfaction and spend. |
-| Agent performance | Each AI agent side by side. |
-| Team members | Resolved and open tickets, first reply, satisfaction and escalations per person. |
-| Teams | Opened, resolved, on-time share and escalations per team. |
-| Consumption and cost | Spend by message category, the Business Agent's usage and free service replies per number. |
-| Ticket log | Every ticket opened in the period with its team, assignee, timings, target, escalation and satisfaction. |
-| Handover log | Every chat handed to a person: how, to whom and how fast they replied. |
-| Escalation log | Every escalation level reached, why and who was alerted. |
-| Message charges | One row per message status Meta priced: category, pricing type and whether it was billable. |
-| Agent usage by hour | The Business Agent's billable replies, tokens and cost, hour by hour. |
+![The Reports library with summaries and detailed records](/screens/reports.webp)
 
-The reports use the filters you set on the Analytics page. The **Export** menu on Analytics offers the most-used ones without leaving the page.
+| Report | What it covers | Filters |
+| --- | --- | --- |
+| Business review | The headline numbers against the period before: conversations, chats handled by AI alone, satisfaction, reply times, escalations and spend. | Date, agents, team, assignee |
+| Day by day | One row per day: conversations, AI alone, handovers, tickets, reply times, satisfaction and spend. | Date, agents, team, assignee |
+| AI agents | Each AI agent side by side. | Date, agents |
+| Team members | Per person: tickets resolved and open, first reply time, satisfaction and escalations. | Date, agents, team, assignee |
+| Teams | Per team: tickets opened and resolved, how many were on time, and escalations. | Date, agents, team, assignee |
+| Spend and usage | What WhatsApp messages and the Business Agent cost, by message type, and free replies used per number. | Date, agents |
+| Tickets | Every ticket opened in the period. | Date, agents, team, assignee |
+| Handovers | Every chat handed to a person: how, to whom and how fast they replied. | Date, agents, team, assignee |
+| Escalations | Every escalation level reached, why, and who was alerted. | Date, agents, team, assignee |
+| Message charges | One row per message Meta priced. | Date, agents |
+| AI agent usage by hour | The Business Agent's billed replies, tokens and cost, hour by hour. | Date, agents |
 
-### Download a CSV
+### View a report
 
-Click **CSV** on a report. The file opens in Excel or Google Sheets.
+Click a report to open it. Set the filters at the top: **Date**, **Agents**, **Team** and **Assigned to**. The exact dates and your business hours' time zone show underneath. A report only shows the filters it uses. Spend, for example, can't be split by team because Meta reports it for the whole account, and the page says so.
 
-### Print or save as PDF
+On **Analytics**, **Open as report** opens the matching report with the same filters.
 
-Click **PDF**. A print-ready page opens in a new tab. In the print dialog, choose **Save as PDF**.
+### Download a report
+
+On a report's page, click **Download**. It always uses the filters shown.
+
+- **CSV** opens in Excel or Google Sheets.
+- **PDF** (summaries only) opens a print-ready page. In the print dialog, choose **Save as PDF**.
+
+A CSV of detailed records holds up to 50,000 rows. If there are more, the menu says so: narrow the dates to get the rest.
+
+### Download several at once
+
+On the Library, click **Export…**. Pick the reports, the date and the agents, and choose a format:
+
+- **CSV:** one file per report. Your browser may ask once to allow several downloads.
+- **PDF:** one document with the chosen summaries.
+
+Team and assignee don't apply here. To narrow by them, download from the report's own page.
 
 ### Email reports on a schedule
 
 <Steps>
 <Step>
-On **Reports**, under **Scheduled emails**, click **New schedule**.
+On **Reports**, open the **Scheduled emails** tab and click **New schedule**. Or, on a report's page, choose **Download › Email on a schedule…**: that report and its filters are filled in for you.
 </Step>
 <Step>
 Name it, then choose **How often**: daily, weekly or monthly, and **At** which hour.
@@ -131,9 +146,10 @@ Save. The email has the headline numbers in the body and each report attached as
 When it goes out:
 
 - **Daily** schedules send the day before's figures every day.
-- **Weekly** schedules go out on Mondays and cover the previous 7 days.
+- **Weekly** schedules go out on Mondays and cover the last full week, Monday to Sunday.
 - **Monthly** schedules go out on the 1st and cover the previous month.
 - Times follow your business hours' time zone.
+- To see the same figures on screen, open a report with **Date: Yesterday**, **Last week (Mon–Sun)** or **Last month**.
 
 A schedule has a **Send now** button for a test, and can be paused without deleting it. A workspace can have up to 20 schedules.
 

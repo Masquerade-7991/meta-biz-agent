@@ -8,7 +8,7 @@ import { auth } from './auth.ts'
 import { inbox } from './inbox.ts'
 import { tickets } from './tickets.ts'
 import { contacts } from './contacts.ts'
-import { broadcasts } from './broadcasts.ts'
+import { templates } from './templates.ts'
 import { store } from './store.ts'
 import { assist, billing } from './workspace.ts'
 import { whatsapp } from './whatsapp.ts'
@@ -23,11 +23,11 @@ export const openapi = {
     title: 'Helo.ai Console API',
     version: '1.0.0',
     description: [
-      'The API behind the Helo.ai console: accounts and workspace, the support desk (inbox, tickets, contacts, broadcasts), WhatsApp numbers, and the relay to Meta’s Business Agent API.',
+      'The API behind the Helo.ai console: accounts and workspace, the support desk (inbox, tickets, contacts), WhatsApp numbers and their message templates, and the relay to Meta’s Business Agent API.',
       '**Signing in.** Every route except the public ones needs either the session cookie `sid` from `POST /api/auth/login` (or an emailed link), or an API token: `Authorization: Bearer hk_…`, created in Settings › API tokens. A token acts as its owner, in one workspace, with the owner’s current role; it can read account routes but not change them (password, email, workspaces, tokens). In this page, “Try it out” uses your current session. Routes also need finished setup and a workspace.',
       '**Roles.** Owner › Admin › Supervisor › Agent. Each route says the lowest role that may call it (from src/app/lib/permissions.ts).',
       '**Errors.** `{title, detail, status}`. Every response has an `x-trace-id` header; owners and admins can look up what a request did with `GET /api/trace/{id}`.',
-      '**Repeating a request safely.** Send an `Idempotency-Key` header (any string you choose, up to 10 minutes apart) with a POST, PUT, PATCH or DELETE: the same key from the same person on the same route gets the first answer back (`idempotent-replayed: true`) instead of doing the work twice. Broadcasts are also protected without it.',
+      '**Repeating a request safely.** Send an `Idempotency-Key` header (any string you choose, up to 10 minutes apart) with a POST, PUT, PATCH or DELETE: the same key from the same person on the same route gets the first answer back (`idempotent-replayed: true`) instead of doing the work twice.',
       '**CORS.** The console and the API share a host (Vite proxies `/api` in development, Vercel rewrites it in production). Other sites listed in `DOCS_ORIGINS` (the docs site by default) may call it from a browser with an API token; cookies are never sent cross-origin.',
     ].join('\n\n'),
   },
@@ -41,7 +41,7 @@ export const openapi = {
     { name: 'Workspace', description: 'The activity log: who did what, with before and after for every change.' },
     { name: 'Analytics', description: 'All agents or some: conversations, the team, cost, the logs behind each chart, and reports (CSV downloads and scheduled emails).' },
     { name: 'Contacts', description: 'Contacts, custom fields, tags, segments and CSV import.' },
-    { name: 'Broadcasts & templates', description: 'WhatsApp message templates and template broadcasts.' },
+    { name: 'Templates', description: 'WhatsApp message templates, and sending one into a chat (e.g. after the 24-hour window).' },
     { name: 'WhatsApp', description: 'Connected accounts (Embedded Signup), numbers, profiles and health.' },
     { name: 'Billing', description: 'WhatsApp spend and the budget alert.' },
     { name: 'AI help', description: 'Writing help for the agent’s setup, and questions it couldn’t answer.' },
@@ -53,7 +53,7 @@ export const openapi = {
       externalDocs: { description: 'Meta Business Agent reference', url: 'https://developers.facebook.com/documentation/meta-business-agent' },
     },
   ],
-  paths: { ...infra, ...auth, ...inbox, ...tickets, ...analytics, ...reports, ...activity, ...contacts, ...broadcasts, ...whatsapp, ...billing, ...assist, ...store, ...meta },
+  paths: { ...infra, ...auth, ...inbox, ...tickets, ...analytics, ...reports, ...activity, ...contacts, ...templates, ...whatsapp, ...billing, ...assist, ...store, ...meta },
   components: {
     securitySchemes: {
       session: { type: 'apiKey', in: 'cookie', name: 'sid', description: 'Set by POST /api/auth/login. HttpOnly, so the browser sends it for you.' },

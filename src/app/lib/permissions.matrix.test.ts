@@ -18,7 +18,6 @@ const LOWEST: Record<Action, Role> = {
   'numbers.edit': 'admin',
   'alerts.receive': 'admin',
   'traces.read': 'admin',
-  'broadcasts.send': 'supervisor',
   'templates.create': 'supervisor',
   'contacts.manage': 'supervisor',
   'chats.all': 'supervisor',

@@ -1,6 +1,6 @@
 // Characterisation of the background machinery, in-process against the throwaway database: the job
 // queue (claim, lease, backoff, dead, keys, release on shutdown), the shared locks and rate guard,
-// webhook reprocessing and broadcast resumption. Pins the behaviour the role split depends on.
+// webhook reprocessing. Pins the behaviour the role split depends on.
 import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { inbound, serverModules, startStack, type Stack } from './harness.ts'
@@ -127,13 +127,4 @@ test('a webhook stored but never processed is picked up by the retry sweep', asy
   await m.tick()
   assert.ok((await s.db.collection('webhook_inbox').findOne({ _id: 'late1' as never }))?.processedAt)
   assert.equal(await s.db.collection('messages').countDocuments({ phone: '919870000001' }), 1)
-})
-
-test('a scheduled broadcast without a job (lost at a restart) gets its job back', async () => {
-  const r = await s.db.collection('broadcasts').insertOne({ workspaceId: w.id, name: 'orphan', status: 'scheduled', scheduledAt: new Date(Date.now() + 3_600_000), createdAt: new Date() })
-  await m.tick()
-  const j = await jobs().findOne({ type: 'broadcast.send', 'payload.broadcastId': String(r.insertedId) })
-  assert.equal(j?.status, 'queued')
-  await m.tick()
-  assert.equal(await jobs().countDocuments({ type: 'broadcast.send', 'payload.broadcastId': String(r.insertedId) }), 1, 'resuming again adds nothing')
 })

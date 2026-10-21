@@ -1,4 +1,4 @@
-// One JSON caller per area of the server API (inbox, tickets, contacts, broadcasts). Errors and 401s
+// One JSON caller per area of the server API (inbox, tickets, contacts, templates). Errors and 401s
 // go through parse(), like every Meta call; in dummy mode the area's in-browser stand-in answers.
 import { isDummyMode } from './dummy'
 import { parse } from './meta'

@@ -6,7 +6,7 @@ test('higher roles keep everything lower roles can do', () => {
   assert.ok(can('owner', 'whatsapp.manage'))
   assert.ok(!can('admin', 'whatsapp.manage'))
   assert.ok(can('admin', 'members.manage') && can('owner', 'members.manage'))
-  assert.ok(can('supervisor', 'broadcasts.send') && !can('agent', 'broadcasts.send'))
+  assert.ok(can('supervisor', 'templates.create') && !can('agent', 'templates.create'))
   assert.ok(can('supervisor', 'chats.all') && !can('agent', 'chats.all'))
   assert.ok(!can(null, 'reports.view'))
 })

@@ -3,7 +3,7 @@
   "info": {
     "title": "Helo.ai Console API",
     "version": "1.0.0",
-    "description": "The API behind the Helo.ai console: accounts and workspace, the support desk (inbox, tickets, contacts, broadcasts), WhatsApp numbers, and the relay to Meta’s Business Agent API.\n\n**Signing in.** Every route except the public ones needs either the session cookie `sid` from `POST /api/auth/login` (or an emailed link), or an API token: `Authorization: Bearer hk_…`, created in Settings › API tokens. A token acts as its owner, in one workspace, with the owner’s current role; it can read account routes but not change them (password, email, workspaces, tokens). In this page, “Try it out” uses your current session. Routes also need finished setup and a workspace.\n\n**Roles.** Owner › Admin › Supervisor › Agent. Each route says the lowest role that may call it (from src/app/lib/permissions.ts).\n\n**Errors.** `{title, detail, status}`. Every response has an `x-trace-id` header; owners and admins can look up what a request did with `GET /api/trace/{id}`.\n\n**Repeating a request safely.** Send an `Idempotency-Key` header (any string you choose, up to 10 minutes apart) with a POST, PUT, PATCH or DELETE: the same key from the same person on the same route gets the first answer back (`idempotent-replayed: true`) instead of doing the work twice. Broadcasts are also protected without it.\n\n**CORS.** The console and the API share a host (Vite proxies `/api` in development, Vercel rewrites it in production). Other sites listed in `DOCS_ORIGINS` (the docs site by default) may call it from a browser with an API token; cookies are never sent cross-origin."
+    "description": "The API behind the Helo.ai console: accounts and workspace, the support desk (inbox, tickets, contacts), WhatsApp numbers and their message templates, and the relay to Meta’s Business Agent API.\n\n**Signing in.** Every route except the public ones needs either the session cookie `sid` from `POST /api/auth/login` (or an emailed link), or an API token: `Authorization: Bearer hk_…`, created in Settings › API tokens. A token acts as its owner, in one workspace, with the owner’s current role; it can read account routes but not change them (password, email, workspaces, tokens). In this page, “Try it out” uses your current session. Routes also need finished setup and a workspace.\n\n**Roles.** Owner › Admin › Supervisor › Agent. Each route says the lowest role that may call it (from src/app/lib/permissions.ts).\n\n**Errors.** `{title, detail, status}`. Every response has an `x-trace-id` header; owners and admins can look up what a request did with `GET /api/trace/{id}`.\n\n**Repeating a request safely.** Send an `Idempotency-Key` header (any string you choose, up to 10 minutes apart) with a POST, PUT, PATCH or DELETE: the same key from the same person on the same route gets the first answer back (`idempotent-replayed: true`) instead of doing the work twice.\n\n**CORS.** The console and the API share a host (Vite proxies `/api` in development, Vercel rewrites it in production). Other sites listed in `DOCS_ORIGINS` (the docs site by default) may call it from a browser with an API token; cookies are never sent cross-origin."
   },
   "servers": [
     {
@@ -49,8 +49,8 @@
       "description": "Contacts, custom fields, tags, segments and CSV import."
     },
     {
-      "name": "Broadcasts & templates",
-      "description": "WhatsApp message templates and template broadcasts."
+      "name": "Templates",
+      "description": "WhatsApp message templates, and sending one into a chat (e.g. after the 24-hour window)."
     },
     {
       "name": "WhatsApp",
@@ -535,7 +535,7 @@
           "Server"
         ],
         "summary": "Daily jobs (Vercel only)",
-        "description": "**Who can call:** Vercel Cron: `Authorization: Bearer <CRON_SECRET>`.\n\nCalled by Vercel Cron (03:00 UTC, see vercel.json): resumes broadcasts, schedules billing and health checks, runs due jobs, and collects Meta’s metrics, handoffs, connector logs and traces. Any method works. Not on the local server.",
+        "description": "**Who can call:** Vercel Cron: `Authorization: Bearer <CRON_SECRET>`.\n\nCalled by Vercel Cron (03:00 UTC, see vercel.json): schedules billing and health checks, runs due jobs, and collects Meta’s metrics, handoffs, connector logs and traces. Any method works. Not on the local server.",
         "security": [],
         "responses": {
           "200": {
@@ -6578,7 +6578,7 @@
           "Analytics"
         ],
         "summary": "Reports you can download or schedule",
-        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\nEach with an id, title, description and whether it comes from the overview or a log.",
+        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\nEach with an id, title, description, its group (summary or records), whether it comes from the overview or a log, and the filters it applies besides the date (agents, team, person).",
         "responses": {
           "200": {
             "description": "Success.",
@@ -7182,7 +7182,7 @@
                 "agent",
                 "people",
                 "contacts",
-                "broadcasts",
+                "templates",
                 "reports",
                 "settings",
                 "whatsapp"
@@ -7348,7 +7348,7 @@
                 "agent",
                 "people",
                 "contacts",
-                "broadcasts",
+                "templates",
                 "reports",
                 "settings",
                 "whatsapp"
@@ -8212,11 +8212,11 @@
         }
       }
     },
-    "/api/broadcasts/templates": {
+    "/api/templates": {
       "get": {
         "operationId": "listTemplates",
         "tags": [
-          "Broadcasts & templates"
+          "Templates"
         ],
         "summary": "Message templates",
         "description": "**Who can call:** Any signed-in member of the workspace.\n\nRead live from your WhatsApp account (500 at most). Needs a connected account.",
@@ -8248,7 +8248,7 @@
       "post": {
         "operationId": "createTemplate",
         "tags": [
-          "Broadcasts & templates"
+          "Templates"
         ],
         "summary": "Submit a template for Meta’s review",
         "description": "**Who can call:** Supervisor or above (`templates.create`).",
@@ -8391,11 +8391,11 @@
         }
       }
     },
-    "/api/broadcasts/templates/{name}": {
+    "/api/templates/{name}": {
       "delete": {
         "operationId": "deleteTemplate",
         "tags": [
-          "Broadcasts & templates"
+          "Templates"
         ],
         "summary": "Delete a template",
         "description": "**Who can call:** Admin or above (`templates.delete`).\n\nDeletes every language of it on WhatsApp.",
@@ -8450,11 +8450,11 @@
         }
       }
     },
-    "/api/broadcasts/send-one": {
+    "/api/templates/send-one": {
       "post": {
         "operationId": "sendTemplateToChat",
         "tags": [
-          "Broadcasts & templates"
+          "Templates"
         ],
         "summary": "Send one template to one chat",
         "description": "**Who can call:** Any signed-in member of the workspace.\n\nE.g. to restart a conversation after the 24-hour window. Takes the chat over for the team. Sample contacts and chats are stored but never sent to WhatsApp.",
@@ -8538,361 +8538,6 @@
           },
           "404": {
             "description": "No chat with this number yet. / Template X (en_US) wasn’t found on your WhatsApp account.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "$ref": "#/components/responses/DatabaseUnavailable"
-          }
-        }
-      }
-    },
-    "/api/broadcasts/preflight": {
-      "post": {
-        "operationId": "broadcastPreflight",
-        "tags": [
-          "Broadcasts & templates"
-        ],
-        "summary": "Check a broadcast before sending",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\nWho it reaches, who already got a marketing message today (WhatsApp may hold theirs back), and the estimated cost from your own recent rates.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "segmentId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "Empty: all contacts who accept messages."
-                  },
-                  "category": {
-                    "type": "string",
-                    "enum": [
-                      "MARKETING",
-                      "UTILITY"
-                    ],
-                    "description": "Default MARKETING."
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Preflight"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/NotLoggedIn"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "description": "That segment no longer exists.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "$ref": "#/components/responses/DatabaseUnavailable"
-          }
-        }
-      }
-    },
-    "/api/broadcasts": {
-      "get": {
-        "operationId": "listBroadcasts",
-        "tags": [
-          "Broadcasts & templates"
-        ],
-        "summary": "Broadcasts",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\nNewest first, 200 at most.",
-        "responses": {
-          "200": {
-            "description": "Success.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Broadcast"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/NotLoggedIn"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "503": {
-            "$ref": "#/components/responses/DatabaseUnavailable"
-          }
-        }
-      },
-      "post": {
-        "operationId": "createBroadcast",
-        "tags": [
-          "Broadcasts & templates"
-        ],
-        "summary": "Send or schedule a broadcast",
-        "description": "**Who can call:** Supervisor or above (`broadcasts.send`).\n\nQueues one templated message per contact in the segment; a background worker sends them within WhatsApp’s limits and retries what WhatsApp asks to retry. Sample contacts and chats are stored but never sent to WhatsApp.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "description": "Up to 100 characters."
-                  },
-                  "template": {
-                    "type": "object",
-                    "properties": {
-                      "name": {
-                        "type": "string"
-                      },
-                      "language": {
-                        "type": "string",
-                        "description": "e.g. en_US."
-                      }
-                    },
-                    "required": [
-                      "name",
-                      "language"
-                    ]
-                  },
-                  "mapping": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "object",
-                      "properties": {
-                        "source": {
-                          "type": "string",
-                          "description": "`text`, `name`, `phone` or `field:<key>`."
-                        },
-                        "text": {
-                          "type": "string",
-                          "description": "The fixed value, or the fallback when the contact has none."
-                        }
-                      },
-                      "required": [
-                        "source"
-                      ]
-                    },
-                    "description": "What goes in each template slot."
-                  },
-                  "segmentId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "scheduledAt": {
-                    "type": "string",
-                    "format": "date-time",
-                    "description": "Empty: send now."
-                  },
-                  "idempotencyKey": {
-                    "type": "string",
-                    "description": "One per send dialog. The same key (or, without one, the same content from the same person) within 30 seconds returns the broadcast already created instead of sending twice."
-                  }
-                },
-                "required": [
-                  "name",
-                  "template",
-                  "mapping"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BroadcastDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Give the broadcast a name. / Choose what goes in {{1}}. / Nobody to send to: the segment has no contacts who accept messages. / Pick a time in the future. / That segment id isn’t valid.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/NotLoggedIn"
-          },
-          "403": {
-            "description": "Supervisors, admins and owners send broadcasts.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "That segment no longer exists.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "This broadcast is already being sent. It shows in the list in a moment.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "$ref": "#/components/responses/DatabaseUnavailable"
-          }
-        }
-      }
-    },
-    "/api/broadcasts/{id}": {
-      "get": {
-        "operationId": "getBroadcast",
-        "tags": [
-          "Broadcasts & templates"
-        ],
-        "summary": "One broadcast, with recipients and failures",
-        "description": "**Who can call:** Any signed-in member of the workspace.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "description": "Record id (MongoDB ObjectId).",
-              "pattern": "^[a-f0-9]{24}$"
-            },
-            "description": "Record id (MongoDB ObjectId)."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BroadcastDetail"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/NotLoggedIn"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "description": "That broadcast no longer exists.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "$ref": "#/components/responses/DatabaseUnavailable"
-          }
-        }
-      }
-    },
-    "/api/broadcasts/{id}/cancel": {
-      "post": {
-        "operationId": "cancelBroadcast",
-        "tags": [
-          "Broadcasts & templates"
-        ],
-        "summary": "Cancel a broadcast",
-        "description": "**Who can call:** Supervisor or above (`broadcasts.send`).\n\nMessages not sent yet are skipped.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "description": "Record id (MongoDB ObjectId).",
-              "pattern": "^[a-f0-9]{24}$"
-            },
-            "description": "Record id (MongoDB ObjectId)."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BroadcastDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Only scheduled or sending broadcasts can be cancelled.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/NotLoggedIn"
-          },
-          "403": {
-            "description": "Supervisors, admins and owners send broadcasts.",
             "content": {
               "application/json": {
                 "schema": {
@@ -16581,8 +16226,7 @@
             "type": "string",
             "enum": [
               "billing",
-              "whatsapp",
-              "broadcasts"
+              "whatsapp"
             ],
             "description": "Alerts: which page to open."
           }
@@ -16632,7 +16276,7 @@
           },
           "optedOut": {
             "type": "boolean",
-            "description": "Opted out of broadcasts."
+            "description": "Opted out of marketing messages (sent STOP)."
           },
           "source": {
             "type": "string",
@@ -16896,268 +16540,6 @@
           "status",
           "category",
           "components"
-        ]
-      },
-      "BroadcastStats": {
-        "type": "object",
-        "properties": {
-          "queued": {
-            "type": "integer"
-          },
-          "sent": {
-            "type": "integer"
-          },
-          "delivered": {
-            "type": "integer"
-          },
-          "read": {
-            "type": "integer"
-          },
-          "failed": {
-            "type": "integer"
-          },
-          "skipped": {
-            "type": "integer"
-          },
-          "replied": {
-            "type": "integer"
-          },
-          "retrying": {
-            "type": "integer",
-            "description": "Queued again after a failure WhatsApp asked us to retry (e.g. its daily marketing limit)."
-          }
-        },
-        "required": [
-          "queued",
-          "sent",
-          "delivered",
-          "read",
-          "failed",
-          "skipped",
-          "replied",
-          "retrying"
-        ]
-      },
-      "Broadcast": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "template": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "language": {
-                "type": "string"
-              }
-            }
-          },
-          "segmentId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "segmentName": {
-            "type": "string"
-          },
-          "audienceCount": {
-            "type": "integer"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "scheduled",
-              "sending",
-              "completed",
-              "cancelled"
-            ]
-          },
-          "scheduledAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "startedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "completedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "createdByName": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "stats": {
-            "$ref": "#/components/schemas/BroadcastStats"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "template",
-          "segmentId",
-          "segmentName",
-          "audienceCount",
-          "status",
-          "scheduledAt",
-          "createdByName",
-          "createdAt",
-          "stats"
-        ]
-      },
-      "BroadcastDetail": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Broadcast"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "preview": {
-                "type": "string",
-                "description": "The message as the first recipient sees it."
-              },
-              "failures": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "reason": {
-                      "type": "string"
-                    },
-                    "retrying": {
-                      "type": "boolean"
-                    },
-                    "count": {
-                      "type": "integer"
-                    },
-                    "nextAt": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
-                      "format": "date-time"
-                    }
-                  }
-                }
-              },
-              "recipients": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "phone": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "status": {
-                      "type": "string"
-                    },
-                    "reason": {
-                      "type": "string"
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "retryAt": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "sentAt": {
-                      "type": "string",
-                      "format": "date-time"
-                    }
-                  }
-                }
-              }
-            },
-            "required": [
-              "preview",
-              "failures",
-              "recipients"
-            ]
-          }
-        ]
-      },
-      "Preflight": {
-        "type": "object",
-        "properties": {
-          "audience": {
-            "type": "integer"
-          },
-          "sample": {
-            "type": "integer",
-            "description": "Sample contacts: stored, never sent to WhatsApp."
-          },
-          "hiddenNumbers": {
-            "type": "integer",
-            "description": "Customers who hide their number."
-          },
-          "gotMarketingToday": {
-            "type": "integer",
-            "description": "Already got a marketing message from you in the last 24 hours."
-          },
-          "estimate": {
-            "type": "object",
-            "properties": {
-              "currency": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "total": {
-                "type": "number"
-              },
-              "unpriced": {
-                "type": "integer",
-                "description": "People whose country has no recent rate, so they aren’t in `total`."
-              },
-              "countries": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "country": {
-                      "type": "string"
-                    },
-                    "people": {
-                      "type": "integer"
-                    },
-                    "rate": {
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "required": [
-          "audience",
-          "sample",
-          "hiddenNumbers",
-          "gotMarketingToday",
-          "estimate"
         ]
       },
       "StoredAgent": {

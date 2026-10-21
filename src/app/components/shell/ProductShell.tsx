@@ -33,7 +33,6 @@ const HomePage = lazy(() => import('@/app/pages/HomePage').then((m) => ({ defaul
 const InboxPage = lazy(() => import('@/app/pages/InboxPage').then((m) => ({ default: m.InboxPage })))
 const TicketsPage = lazy(() => import('@/app/pages/TicketsPage').then((m) => ({ default: m.TicketsPage })))
 const ContactsPage = lazy(() => import('@/app/pages/ContactsPage').then((m) => ({ default: m.ContactsPage })))
-const BroadcastsPage = lazy(() => import('@/app/pages/BroadcastsPage').then((m) => ({ default: m.BroadcastsPage })))
 const ReportsPage = lazy(() => import('@/app/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })))
 const AnalyticsDashboard = lazy(() => import('@/app/analytics/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard })))
 const WhatsAppPage = lazy(() => import('@/app/pages/WhatsAppPage').then((m) => ({ default: m.WhatsAppPage })))
@@ -111,8 +110,6 @@ export function ProductShell({
         return <TicketsPage onOpenChat={openChat} />
       case 'contacts':
         return <ContactsPage onOpenChat={openChat} />
-      case 'broadcasts':
-        return <BroadcastsPage />
       case 'whatsapp':
         return (
           <WhatsAppPage />
@@ -177,8 +174,8 @@ export function ProductShell({
             <NotificationsBell
               onOpenChat={openChat}
               onOpenTarget={(target) => {
-                // Number alerts (quality, names) open the WhatsApp page; billing opens Settings.
-                if (target === 'broadcasts' || target === 'whatsapp') return setActive(target)
+                // Number and template alerts open the WhatsApp page; billing opens Settings.
+                if (target === 'whatsapp') return setActive(target)
                 openSettings(target)
               }}
             />

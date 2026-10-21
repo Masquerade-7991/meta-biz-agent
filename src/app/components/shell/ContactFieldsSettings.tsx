@@ -46,7 +46,7 @@ export function ContactFieldsSettings() {
       <div className="space-y-1">
         <h2 className="text-section font-semibold">Contact fields</h2>
         <p className="text-muted-foreground text-sm">
-          Extra details you keep on every contact, like city or plan. They show in Contacts, can be filled from a CSV column with the same name, and can fill broadcast variables.
+          Extra details you keep on every contact, like city or plan. They show in Contacts and can be filled from a CSV column with the same name.
         </p>
       </div>
       {!rows ? (

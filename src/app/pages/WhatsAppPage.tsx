@@ -5,6 +5,7 @@ import { EmptyState, PageContainer } from '@/app/components/ui/page'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { FormError } from '@/app/auth/AuthLayout'
 import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
@@ -12,6 +13,7 @@ import { listNumbers, type WaNumber } from '@/app/api/numbers'
 import { ConnectNumberButton } from '@/app/whatsapp/ConnectNumberDialog'
 import { NumberAvatar, NumberPage } from '@/app/whatsapp/NumberPage'
 import { statusHelp } from '@/app/whatsapp/profileRules'
+import { TemplatesTab } from '@/app/whatsapp/TemplatesTab'
 import { can } from '@/app/lib/permissions'
 import { cn } from '@/app/lib/utils'
 
@@ -28,13 +30,15 @@ const readAccount = () => {
 }
 
 /** The workspace's numbers the way WhatsApp Manager shows them: pick the WhatsApp Business account,
- *  see its phone numbers, open one for its profile, name and settings. With none yet, how to connect one. */
+ *  see its phone numbers, open one for its profile, name and settings, and its message templates.
+ *  With none yet, how to connect one. */
 export function WhatsAppPage() {
   const { me } = useAuth()
   const [rows, setRows] = useState<WaNumber[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
+  const [tab, setTab] = useState('numbers')
 
   const load = useCallback((refresh = false) => {
     setRefreshing(refresh)
@@ -78,7 +82,7 @@ export function WhatsAppPage() {
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h1 className="text-title font-semibold">WhatsApp</h1>
-              <p className="mt-1 text-muted-foreground">Your numbers, their profiles, names and settings, as customers see them on WhatsApp.</p>
+              <p className="mt-1 text-muted-foreground">Your numbers, their profiles, names and settings, as customers see them on WhatsApp, and your message templates.</p>
               {account && (
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <span className="text-muted-foreground text-sm">
@@ -126,13 +130,21 @@ export function WhatsAppPage() {
             <EmptyState
               icon={Smartphone}
               title="No WhatsApp number yet"
-              description="Your AI agent, inbox and broadcasts all run on your own WhatsApp number. Connect it with Meta in about 5 minutes: a new number, or the one on your WhatsApp Business app."
+              description="Your AI agent and inbox run on your own WhatsApp number. Connect it with Meta in about 5 minutes: a new number, or the one on your WhatsApp Business app."
               action={can(me?.role, 'whatsapp.manage') ? <ConnectNumberButton onConnected={() => load(true)} /> : <span className="text-sm text-muted-foreground">Ask an owner of {me?.workspace?.name ?? 'this workspace'} to connect one.</span>}
             />
           ) : (
-            <div className="space-y-2">
-              <h2 className="text-base font-semibold">
-                Phone numbers in {account?.name} ({shown.length})
+            <Tabs value={tab} onValueChange={setTab}>
+              <TabsList>
+                <TabsTrigger value="numbers">Phone numbers ({shown.length})</TabsTrigger>
+                <TabsTrigger value="templates">Message templates</TabsTrigger>
+              </TabsList>
+              <TabsContent value="templates" className="pt-4">
+                <TemplatesTab />
+              </TabsContent>
+              <TabsContent value="numbers" className="space-y-2 pt-4">
+              <h2 className="sr-only">
+                Phone numbers in {account?.name}
               </h2>
               <div className="rounded-lg border border-border">
                 <Table>
@@ -186,7 +198,8 @@ export function WhatsAppPage() {
                   </TableBody>
                 </Table>
               </div>
-            </div>
+              </TabsContent>
+            </Tabs>
           )}
         </div>
       )}

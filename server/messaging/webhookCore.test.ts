@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createHmac } from 'node:crypto'
 import { chargeOf, deliveryId, replaceable, signedBy } from './webhookCore.ts'
-import { reasonOf, undeliveredLine } from '../../src/app/broadcasts/sendErrors.ts'
+import { reasonOf, undeliveredLine } from '../../src/app/inbox/sendErrors.ts'
 
 const sign = (body: string, secret: string) => 'sha256=' + createHmac('sha256', secret).update(body).digest('hex')
 

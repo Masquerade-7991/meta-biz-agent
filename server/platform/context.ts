@@ -1,5 +1,5 @@
 // Who a piece of work is for: the workspace, and the WhatsApp account it acts through. Set per
-// request (index.ts), per webhook event (inbox.ts) and per background job (collectors, broadcasts).
+// request (index.ts), per webhook event (inbox.ts) and per background job (collectors, reminders).
 // Imports nothing from the app, so upstream.ts can read it without a cycle.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'

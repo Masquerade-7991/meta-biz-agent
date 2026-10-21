@@ -68,8 +68,8 @@ browser (React, src/)
   ├─ src/app/api/meta.ts       every Meta call (metaFetch / graphFetch / parse); 401 → helo:unauthorized
   ├─ src/app/api/store.ts      /api/store/* and /api/analytics/* (MongoDB-backed)
   ├─ src/app/api/dummy*.ts     dummy mode: answers everything in the browser, no server
-  ├─ src/app/api/{inbox,tickets,contacts,broadcasts}.ts  support platform clients (+ supportDummy.ts)
-  ├─ src/app/pages/*           Home, Inbox, Tickets, Contacts, Broadcasts, Analytics pages
+  ├─ src/app/api/{inbox,tickets,contacts,templates}.ts  support platform clients (+ supportDummy.ts)
+  ├─ src/app/pages/*           Home, Inbox, Tickets, Contacts, Analytics pages
   └─ src/app/auth/*            AuthContext (me), login / sign-up / verify / in-app setup screens
         │  /api/*  (Vite proxies to :8787)
 server/ (node:http, Node runs TS natively; domains under server/<domain>/, each with index.ts = its public surface)
@@ -83,7 +83,6 @@ server/ (node:http, Node runs TS natively; domains under server/<domain>/, each 
   ├─ messaging/  inbox (chats, replies, thread control, webhook routing), media, followups, customers,
   │              webhookCore, assist
   ├─ support/    tickets, supportOps (teams, routing, escalation), businessHours, contacts
-  ├─ outreach/   broadcasts (templates, send worker)
   ├─ insights/   analytics, reports, aiUsage, collectors, activity
   └─ openapi/    the spec, one file per area
 api/shopify-mcp.ts  Vercel function: Meta MCP connector → Shopify UCP MCP bridge

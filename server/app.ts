@@ -17,7 +17,7 @@ import { handleInbox, handleWebhook } from './messaging/inbox.ts'
 import { handleTickets } from './support/tickets.ts'
 import { handleContacts } from './support/contacts.ts'
 import { handleAssist } from './messaging/assist.ts'
-import { handleBroadcasts } from './outreach/broadcasts.ts'
+import { handleTemplates } from './messaging/templates.ts'
 import { handleBilling } from './whatsapp/billing.ts'
 import { handleHealth } from './whatsapp/health.ts'
 import { handleNumbers } from './whatsapp/numbers.ts'
@@ -86,7 +86,7 @@ function cors(req: http.IncomingMessage, res: http.ServerResponse): boolean {
 }
 /** `Idempotency-Key`: the same key from the same person on the same route within 10 minutes gets the
  *  first answer back (header `idempotent-replayed: true`) instead of doing the work again. True when
- *  replayed; otherwise the answer is captured as it goes out. Broadcasts keep their own lock too. */
+ *  replayed; otherwise the answer is captured as it goes out. */
 async function idempotency(req: http.IncomingMessage, res: http.ServerResponse, scope: string): Promise<boolean> {
   const header = req.headers['idempotency-key']
   if (typeof header !== 'string' || !header || !IDEMPOTENT.has(req.method ?? '') || !db) return false
@@ -307,7 +307,7 @@ export async function handle(req: http.IncomingMessage, res: http.ServerResponse
     else if (await handleActivity(req, res, me)) return
     else if (await handleContacts(req, res, me)) return
     else if (await handleAssist(req, res, me)) return
-    else if (await handleBroadcasts(req, res, me)) return
+    else if (await handleTemplates(req, res, me)) return
     else if (await handleBilling(req, res, me)) return
     else if (await handleJobs(req, res, me)) return
     else if (!(await handleStore(req, res))) res.writeHead(404).end()

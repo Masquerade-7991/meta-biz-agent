@@ -55,7 +55,7 @@ const SCHEDULE_ERRORS = {
 
 export const reports = area('Analytics', {
   '/api/reports': {
-    get: { id: 'listReports', summary: 'Reports you can download or schedule', description: 'Each with an id, title, description and whether it comes from the overview or a log.', who: WHO, ok: 'object[]' },
+    get: { id: 'listReports', summary: 'Reports you can download or schedule', description: 'Each with an id, title, description, its group (summary or records), whether it comes from the overview or a log, and the filters it applies besides the date (agents, team, person).', who: WHO, ok: 'object[]' },
   },
   '/api/reports/{id}.csv': {
     get: {
@@ -87,7 +87,7 @@ export const reports = area('Analytics', {
 const ACTIVITY_FILTER = {
   entity: d('ticket|agent|number', 'One item’s history. Readable by anyone who can see the item (a restricted agent: only their own or unassigned tickets; a number: supervisors and up). Without it, the whole workspace’s log: owners and admins.'),
   entityId: d('string', 'The ticket number, or the number id (`PHONE_NUMBER_ID` = the workspace’s default number).'),
-  area: d('tickets|chats|agent|people|contacts|broadcasts|reports|settings|whatsapp', 'One area. Default: all of them.'),
+  area: d('tickets|chats|agent|people|contacts|templates|reports|settings|whatsapp', 'One area. Default: all of them.'),
   userId: d('string', 'One person, or `system` for what happened on its own (webhooks, timers, the AI agent).'),
   from: d('string', 'From this date (YYYY-MM-DD) or time (ISO).'),
   to: d('string', 'Up to and including this date, or up to this time.'),

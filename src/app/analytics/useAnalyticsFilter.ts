@@ -1,13 +1,20 @@
 import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router'
 import { addDays, type AnalyticsFilter } from './types'
+import { scheduleRange } from '../reports/catalog'
 
+/** Period presets. Yesterday, Last week and Last month are exactly what daily, weekly and monthly
+ *  scheduled emails cover (scheduleRange), so what you see is what gets emailed. */
 export const PRESETS = [
-  { id: '7', label: 'Last 7 days', days: 7 },
-  { id: '30', label: 'Last 30 days', days: 30 },
-  { id: '90', label: 'Last 90 days', days: 90 },
-  { id: 'mtd', label: 'This month', days: 0 },
+  { id: 'yesterday', label: 'Yesterday' },
+  { id: '7', label: 'Last 7 days' },
+  { id: '30', label: 'Last 30 days' },
+  { id: '90', label: 'Last 90 days' },
+  { id: 'lastweek', label: 'Last week (Mon–Sun)' },
+  { id: 'mtd', label: 'This month' },
+  { id: 'lastmonth', label: 'Last month' },
 ] as const
+const DAYS: Record<string, number> = { '7': 7, '30': 30, '90': 90 }
 
 /** Today in the workspace's time zone (its support hours), so "today" is the business's day, not the
  *  viewer's: someone in New York reading an Indian workspace's numbers in the evening. */
@@ -15,8 +22,15 @@ const today = (tz?: string) => new Intl.DateTimeFormat('en-CA', tz ? { timeZone:
 const presetRange = (id: string, tz?: string) => {
   const to = today(tz)
   if (id === 'mtd') return { from: to.slice(0, 8) + '01', to }
-  const p = PRESETS.find((x) => x.id === id) ?? PRESETS[1]
-  return { from: addDays(to, -(p.days - 1)), to }
+  if (id === 'yesterday') return scheduleRange('daily', to)
+  if (id === 'lastmonth') return scheduleRange('monthly', to)
+  if (id === 'lastweek') {
+    // The last full Monday-to-Sunday week.
+    const dow = (new Date(to + 'T12:00:00Z').getUTCDay() + 6) % 7
+    const sunday = addDays(to, -dow - 1)
+    return { from: addDays(sunday, -6), to: sunday }
+  }
+  return { from: addDays(to, -((DAYS[id] ?? 30) - 1)), to }
 }
 
 /** The page's filters live in the address, so a view can be bookmarked or shared. `tz`: the
