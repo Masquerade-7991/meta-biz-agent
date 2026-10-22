@@ -25,3 +25,7 @@ yarn-error.log*
 .vercel
 next-env.d.ts
 .env*
+
+# Written by next dev for AI tools; local only
+AGENTS.md
+CLAUDE.md

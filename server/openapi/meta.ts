@@ -1,5 +1,5 @@
 // The relay to Meta (server/app.ts forward, upstream.ts) and the Meta Business Agent endpoints the
-// console calls through it (src/app/api/meta.ts), with what we learned the hard way (CLAUDE.md).
+// console calls through it (src/app/api/meta.ts), with what we learned the hard way.
 // These document Meta's API as we use it; Meta's reference is the source of truth.
 import { area, d, o, type Op } from './helpers.ts'
 

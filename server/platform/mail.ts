@@ -7,10 +7,12 @@ import { env } from './env.ts'
 import { ROLES, roleLabel, type Role } from '../../src/app/lib/permissions.ts'
 import { HttpError } from './http.ts'
 
-const user = env('SMTP_USER') || 'soumik.choudhury@helo.ai'
+// Both come from the environment; with either missing, emails (magic links too) print to the log.
+const user = env('SMTP_USER')
 const pass = env('SMTP_PASS').replace(/\s+/g, '')
+if (pass && !user) console.warn('Email: SMTP_PASS is set but SMTP_USER isn’t, so emails print to the log instead of sending.')
 export const appUrl = (env('APP_URL') || 'http://localhost:5175').replace(/\/+$/, '')
-const transport = pass ? nodemailer.createTransport({ host: 'smtp.gmail.com', port: 465, secure: true, auth: { user, pass } }) : null
+const transport = pass && user ? nodemailer.createTransport({ host: 'smtp.gmail.com', port: 465, secure: true, auth: { user, pass } }) : null
 // Gmail and Outlook don't show SVG images, so emails carry PNGs of the official logo and partner badge, inline.
 const logo = readFileSync(new URL('./assets/helo-logo.png', import.meta.url))
 const badge = readFileSync(new URL('./assets/meta-partner.png', import.meta.url))

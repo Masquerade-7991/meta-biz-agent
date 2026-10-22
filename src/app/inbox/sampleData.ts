@@ -50,7 +50,7 @@ export const SAMPLE_CHATS: SampleChat[] = [
     messages: [
       { ago: 1620, author: 'customer', body: 'Our WhatsApp templates keep getting rejected. Can someone help?' },
       { ago: 1619, author: 'ai', body: 'Template rejections usually come from formatting or policy issues. Let me connect you with a specialist who can review them with you.' },
-      { ago: 1560, author: 'agent', body: 'Hi Ananya, I’m Soumik from Helo.ai. Could you share the template names that were rejected?' },
+      { ago: 1560, author: 'agent', body: 'Hi Ananya, I’m Riya from Helo.ai. Could you share the template names that were rejected?' },
       { ago: 1530, author: 'customer', body: 'order_update_v2 and festive_offer_oct' },
     ],
   },

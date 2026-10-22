@@ -76,11 +76,6 @@ playwright/.cache/
 .vercel
 .netlify
 
-# Claude Code: keep shared project config (skills) tracked; personal settings stay local.
-.claude/settings.local.json
-.claude/*.local.*
-# Serena (code-intelligence tool): local cache and memories
-.serena/
 
 # ---------------------------------------------------------------------------------------------
 # Editors and OS
@@ -106,8 +101,18 @@ WEBHOOK_SETUP.txt
 # Local design export, not used by the app
 src/assets/helo-conversations.webp
 
-# Agent worktrees (isolated copies for background agents)
-.claude/worktrees/
+# ---------------------------------------------------------------------------------------------
+# Local AI and code-intelligence tooling: never in the public repo (kept on your own disk)
+# ---------------------------------------------------------------------------------------------
+.claude/
+.serena/
+.cursor/
+.windsurf/
+.codex/
+.aider*
+.mcp.json
+CLAUDE.md
+AGENTS.md
 
-# Agent loop ledgers (per-task working notes; the protocol itself is tracked)
-.claude/loop/tasks/
+# Internal QA notes (known bugs and security findings)
+tests/QA_REPORT.md

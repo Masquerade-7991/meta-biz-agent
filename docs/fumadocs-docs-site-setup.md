@@ -49,7 +49,7 @@ The source of truth is always the code in `docs-site/`. When this guide and the 
 
 **`fumadocs-ui` is an alias.** Install it as `"fumadocs-ui": "npm:@fumadocs/base-ui@16.17.1"`, so every `import … from 'fumadocs-ui/…'` resolves to the Base UI build.
 
-**Next 16 is not the Next.js most examples show.** Read the guides in `node_modules/next/dist/docs/` before writing Next code. `next dev` writes an `AGENTS.md` (and a `CLAUDE.md` that includes it) into the app saying this; keep both committed.
+**Next 16 is not the Next.js most examples show.** Read the guides in `node_modules/next/dist/docs/` before writing Next code. `next dev` writes an `AGENTS.md` (and a `CLAUDE.md` that includes it) into the app saying this; keep them git-ignored (local AI-tool notes, not part of the public repo).
 
 ---
 
@@ -108,7 +108,7 @@ docs-site/
 ├── vercel.json
 ├── package.json
 ├── README.md
-└── AGENTS.md / CLAUDE.md             # Written by next dev; keep them
+└── AGENTS.md / CLAUDE.md             # Written by next dev for AI tools; git-ignored, local only
 ```
 
 There is **no `source.config.ts`**. Content is declared in `lib/source.ts` with `defineDocs` from `fumadocs-mdx/macro`.

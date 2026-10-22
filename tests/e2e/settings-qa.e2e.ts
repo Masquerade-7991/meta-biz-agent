@@ -2,7 +2,7 @@
 // revamp's own journeys (settings.e2e.ts) leave out: two saves at the same moment on every settings
 // document, the budget's validation and 409, the activity log's day filter near midnight in the
 // workspace's time zone, role changes by an admin, sessions of someone else, and what a removed
-// contact field does to a segment. Known, unfixed bugs are `todo` with their QA id (tests/QA_REPORT.md).
+// contact field does to a segment. Known, unfixed bugs are `todo` with their QA id.
 import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { startStack, type Stack } from './harness.ts'

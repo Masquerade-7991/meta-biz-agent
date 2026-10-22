@@ -92,7 +92,7 @@ for (;;) {
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null)
   if (live?.commit === commit) break
-  if (Date.now() > until) stop(`The hosted docs aren't serving ${commit.slice(0, 7)} after 5 minutes. Check the build: https://vercel.com/soumikchoudhury-7216s-projects/helo-docs/deployments (a failed build leaves the previous version live).`)
+  if (Date.now() > until) stop(`The hosted docs aren't serving ${commit.slice(0, 7)} after 5 minutes. Check the helo-docs project's deployments on Vercel (a failed build leaves the previous version live).`)
   await new Promise((done) => setTimeout(done, 10_000))
   process.stdout.write('.')
 }
