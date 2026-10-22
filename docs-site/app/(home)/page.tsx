@@ -29,10 +29,10 @@ export default function HomePage() {
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 pt-20 pb-24 sm:pt-28">
       <p className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border bg-fd-card/70 px-3 py-1 text-xs text-fd-muted-foreground backdrop-blur">
         <span className="size-1.5 rounded-full bg-fd-primary" />
-        WhatsApp Business Agent, run by Meta, set up in Helo.ai
+        WhatsApp Business Agent, run by Meta, set up in Helo.ai's console
       </p>
       <h1 className="max-w-2xl font-display text-4xl font-bold tracking-tight text-(--text-strong) text-balance sm:text-5xl">
-        Everything you need to run WhatsApp support with AI and your team.
+        Everything you need to setup your agent and get started
       </h1>
       <p className="mt-5 max-w-xl text-base text-fd-muted-foreground sm:text-lg">
         Step-by-step guides for the Helo.ai console, written from Meta&rsquo;s rules and our own product.
