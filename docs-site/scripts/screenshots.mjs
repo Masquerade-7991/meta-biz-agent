@@ -46,7 +46,7 @@ const SHOTS = [
   ['analytics', '/analytics'],
   ['reports', '/reports'],
   ['whatsapp', '/whatsapp'],
-  ['connect-number', '/whatsapp', click(/Connect a number/), dialog, 1150],
+  ['connect-number', '/whatsapp', click(/^Connect$/), dialog, 900],
   ['whatsapp-account', '/whatsapp?tab=account'],
   ...['identity', 'knowledge', 'abilities', 'connections', 'safety', 'test', 'publish'].map((s) => [`studio-${s}`, ...studio(s)]),
   ['settings-home', '/settings'],

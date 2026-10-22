@@ -158,7 +158,7 @@ function GetStarted({
               {connected ? (
                 <AccountSteps account={account} canEdit={manage} onChange={onAccountChange} />
               ) : manage ? (
-                <ConnectNumberButton size="lg" label="Connect WhatsApp" onConnected={onAccountChange} />
+                <ConnectNumberButton size="lg" onConnected={onAccountChange} />
               ) : (
                 <p className="rounded-md bg-muted px-3 py-2.5 text-sm text-muted-foreground">Ask an owner of {me?.workspace?.name ?? 'this workspace'} to connect a WhatsApp number. Only owners can connect accounts.</p>
               )}

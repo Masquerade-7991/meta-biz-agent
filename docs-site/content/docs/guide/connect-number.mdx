@@ -7,43 +7,44 @@ Connecting links your WhatsApp number to your workspace so your AI agent and tea
 
 ## Before you start
 
-- **Role:** only a workspace **owner** can connect numbers. For everyone else the **Connect a number** button is greyed out with "Only owners connect numbers."
+- **Role:** only a workspace **owner** can connect numbers. For everyone else the **Connect** button is greyed out with "Only owners connect numbers."
 - **A Facebook login** with admin access to your business on Meta.
-- **The number.** Either a new number that can receive a text or call and isn't on WhatsApp yet, or the phone that has your WhatsApp Business app.
-- **Payment.** Decide who pays Meta for messages: Helo.ai on your invoice (when offered), or you directly.
+- **The number.** A new number that can receive a text or call and isn't on WhatsApp yet, the phone that has your WhatsApp Business app, or a number you use with another WhatsApp provider.
+- **Payment.** Messages are billed through Helo.ai when your plan includes it. Otherwise you add a payment method in WhatsApp Manager afterwards ([Assets › Account](#the-account-tab) shows the step).
 
 <small>Source: [Meta — phone numbers](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/phone-numbers)</small>
 
 ## Steps
 
-Click **Connect a number** on Home or on the WhatsApp page (**Assets** in the sidebar).
+Click **Connect** on Home or on the WhatsApp page (**Assets** in the sidebar).
 
-![The Connect a WhatsApp number dialog with the choice of number, billing and what gets connected](/screens/connect-number.webp)
+![The Connect your WhatsApp number dialog with its three choices](/screens/connect-number.webp)
 
 <Steps>
 <Step>
 
-**Choose the number.** Pick **A new number** (Meta checks it by text or call) or **My WhatsApp Business app number** (you keep using the app, and your contacts and recent chats sync here).
+**Pick the kind of number:** **New number**, **WhatsApp Business app number** (you keep using the app; chats and contacts sync here) or **Move from another provider**.
 
 </Step>
 <Step>
 
-**Choose who pays Meta** for messages, when the dialog asks: **Through Helo.ai** (on your Helo.ai invoice) or **I'll pay Meta myself** (you add a payment method afterwards).
+**Read what to know and tick each box.** **Connect** turns on once every box is ticked. Use the back arrow to pick again.
+
+| Kind | You confirm |
+| --- | --- |
+| New number | The number isn't using WhatsApp, and you're ready to receive a code. |
+| WhatsApp Business app number | The number is on the WhatsApp Business app, and you have the phone with you. |
+| Move from another provider | You've turned off two-step verification (your current provider can do it), and you're ready to receive a code. The display name, quality rating and messaging limit stay; message history doesn't move, and the number stops working with your old provider. |
 
 </Step>
 <Step>
 
-**Check "What gets connected".** The dialog shows how Meta's pieces land in Helo.ai (see below).
+**Click Connect** and finish Meta's signup (about 5 minutes). Depending on your setup it opens in a window, and this page updates by itself (allow pop-ups for the site), or in this tab.
 
 </Step>
 <Step>
 
-**Click Open Meta's signup.** Depending on your setup, Meta's signup opens in a window or in this tab. It takes about 5 minutes. Finish it in Meta's pages. If it opens in a window, this page updates by itself; allow pop-ups for the site.
-
-</Step>
-<Step>
-
-**Helo.ai finishes the connection.** You see each setup step as it runs (see [Setup steps](#setup-steps)). When it's done you see **WhatsApp connected**, and for a new number your **two-step PIN**.
+**Helo.ai finishes the connection.** You see **WhatsApp connected**, and for a new number your **two-step PIN**. If a step still needs you, the dialog links to **Assets › Account**.
 
 </Step>
 </Steps>
@@ -59,7 +60,7 @@ If Meta's signup opens in this tab, Helo.ai completes the connection on its side
 | Phone number | A number on the WhatsApp page. A new number is registered with a PIN Helo.ai keeps for you and can run one AI agent. A Business app number keeps working on your phone. |
 | Permissions you grant | Helo.ai manages the account and sends messages for you. Meta never shares your login or payment details. |
 
-After you connect, the same map shows the details Meta reported.
+After you connect, **Assets › Account** shows this map with the details Meta reported.
 
 ## What Meta's signup asks you
 
