@@ -22,3 +22,12 @@ export const keyEntry = (r: { id: string; mode: KeyMode; fieldName: string; pref
   r.mode === 'bearer'
     ? { id: r.id, location: 'header', fieldName: 'Authorization', prefix: 'Bearer ', value: r.value, hint: r.savedHint }
     : { id: r.id, location: r.mode === 'query' ? 'query' : 'header', fieldName: r.fieldName.trim(), prefix: r.mode === 'query' ? '' : r.prefix, value: r.value, hint: r.savedHint }
+
+/** A colour per HTTP method, from the status tokens: reading is green, adding blue, changing amber, deleting red. */
+export const METHOD_TONE: Record<string, string> = {
+  GET: 'text-success bg-success/10',
+  POST: 'text-primary bg-primary/10',
+  PUT: 'text-warning-foreground bg-warning/15',
+  PATCH: 'text-warning-foreground bg-warning/15',
+  DELETE: 'text-destructive bg-destructive/10',
+}

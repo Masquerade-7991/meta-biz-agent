@@ -5,18 +5,26 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   disabled,
+  label,
+  title,
 }: {
   options: { id: T; label: string }[]
   value: T
   onChange: (id: T) => void
   disabled?: boolean
+  /** What the choice is, for screen readers. */
+  label?: string
+  /** Why it's disabled, on hover. */
+  title?: string
 }) {
   return (
-    <div className={cn('inline-flex rounded-lg border border-border p-1', disabled && 'opacity-50')}>
+    <div role="radiogroup" aria-label={label} title={title} className={cn('inline-flex rounded-lg border border-border p-1', disabled && 'opacity-50')}>
       {options.map((option) => (
         <button
           key={option.id}
           type="button"
+          role="radio"
+          aria-checked={value === option.id}
           disabled={disabled}
           onClick={() => onChange(option.id)}
           className={cn(

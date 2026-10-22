@@ -9,7 +9,7 @@ Connect a system that has an API, so the agent can check other methods to bring 
 
 ## Before you start
 
-- The system's web address (starting with `https://`) and a key or credentials. You may want your developer nearby. The dialog has **Copy a checklist for your developer** to send them exactly what to find.
+- The system's web address (starting with `https://`) and a key or credentials. You may want your developer nearby: the form has **Copy a checklist for your developer**, listing exactly what to find.
 - The system must be reachable on the public internet over HTTPS.
 
 The **Connections** section has three tabs: **Your systems**, **Ready-made** and **Business events**. Ready-made one-click connections to popular tools are on the way; until then, use **Your systems** for anything with an API.
@@ -26,30 +26,31 @@ The **Connections** section has three tabs: **Your systems**, **Ready-made** and
 ### Connect a system
 Press **Connect a system**.
 
-- **Name**: letters, numbers and underscores only, for example `Shopify_store`.
+- **Name**: type it the way you'd say it, for example "Shopify store". Meta only accepts letters, numbers and underscores, so the form shows what it's saved as (`Shopify_store`).
 - **What is it for?** One sentence. The agent reads it to decide when this system can help.
-- **Connection type**: **API (HTTP)**, where you add each request the agent can make, or **MCP server**, where the server lists its own tools.
-- **Base web address**: the part every request starts with, including any version. It must start with `https://`.
+- **Address**: choose **API**, where you add each request the agent can make, or **MCP server**, where the server lists its own tools. Then enter the base address every request starts with, including any version. It must start with `https://`.
 </Step>
 <Step>
 ### Choose how it signs in
-- **Access key**: a key or token. Choose whether it is sent in a header or as a parameter, then name it exactly as the system's documents say (for example `X-Shopify-Access-Token`). Paste the key; add a prefix if the system needs one.
-- **Client credentials**: an OAuth sign-in with a token address, client ID and secret, and optional scopes.
+- **Access key**: a key or token. In **Send as**, choose **Bearer token** (the most common), **Custom header** or **URL parameter**. For a header or parameter, name it exactly as the system's documents say (for example `X-Shopify-Access-Token`). Paste the key. If the system wants text before the key, choose **Add text before the key**. **Another key** adds a second one.
+- **OAuth (client credentials)**: a token address, client ID and secret, optional scopes, and whether the token request is form-encoded (most systems) or JSON.
 - **None**: public systems only. Anyone can call such a system without a key, so use it only for public information.
 </Step>
 <Step>
 ### Create the connection
-Press **Create connection**.
+Press **Connect**. Problems show under each field once you've filled it in, or all together when you press **Connect**.
 </Step>
 <Step>
 ### Add a tool
 Open the connection and press **Add tool**. For an MCP server, press **Refresh tools** instead and the server lists them.
 
-- **Name**: letters, numbers and underscores, for example `search_products`.
+- **Name**: type it the way you'd say it, for example "look up order". It's saved as `look_up_order`.
 - **When should the agent use it?** Be specific: when to use it, what it needs and what it returns.
-- **Example customer question** (optional) appears in Test & Eval so you can try the tool with one tap.
-- **The request**: the method, and the path after the base address. Put changing parts in curly brackets, like `/orders/{order_id}`.
-- **Values it sends**: for each value, choose where it goes (path, query, header or body), its type, and where it comes from: the agent fills it from the chat, it is always the same, or it is the customer's WhatsApp number.
+- **Request**: the method (colour-coded: GET green, POST blue, PUT and PATCH amber, DELETE red), and the path after the base address. Put changing parts in curly brackets, like `/orders/{order_id}`. Each one appears under **From the path**.
+- **Values it sends**: the tabs **Params** (added to the address, like `?limit=3`), **Headers** and **Body** (JSON; not for GET). Each value is one line: its name, its type, and how it's filled. Click how it's filled to choose: the agent takes it from the chat (say what to take, and whether it's required), it's always the same value, or it's the customer's WhatsApp number.
+- **More** holds an optional example customer question, shown in Test & Eval so you can try the tool with one tap.
+
+Press **Save and test** to save and try it straight away, or choose **Save without testing** from the arrow next to it.
 </Step>
 <Step>
 ### Test it
@@ -79,7 +80,7 @@ Other notes under the status: "Not connected yet: it needs its key", and "The sy
 
 ## Good to know
 
-- Names must be unique, and can use only letters, numbers and underscores. No spaces.
+- Names must be unique. Meta allows only letters, numbers and underscores, so spaces and dashes become underscores when you save.
 - Many similar tools make it harder for the agent to pick the right one. Fewer, clearly described tools work better.
 - A tool can show success while the other system reported a failure. The test result shows what the system actually answered.
 
@@ -87,7 +88,7 @@ Other notes under the status: "Not connected yet: it needs its key", and "The sy
 
 | Message | What to do |
 | --- | --- |
-| **Use only letters, numbers and underscores, e.g. Shopify_store.** | Rename it without spaces or dashes. |
+| **Use some letters or numbers in the name.** | A name written only in another script or symbols has nothing Meta accepts. Add some Latin letters or numbers. |
 | **Use a full https:// address** | The address must start with `https://`. |
 | **Something with this name already exists here. Choose another name.** | Pick a different name. |
 | **Meta didn't accept the connection...** | Check the name, that the address starts with `https://`, and that every key is filled in. |

@@ -1,32 +1,21 @@
-import { useId, type ReactNode } from 'react'
-import { Check } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Input } from '@/app/components/ui/input'
 import { cn } from '@/app/lib/utils'
 import type { ValueLocation } from '@/app/wizard/types'
 import type { RequestPreview } from '@/app/wizard/toolRequest'
-import { PLACE } from './places'
+import { METHOD_TONE, PLACE } from './places'
 
-// Shared pieces of the connection and tool dialogs. Plain building blocks, styled from theme tokens.
+// Shared pieces of the connection and tool editors. Plain building blocks, styled from theme tokens.
 
-
-/** A numbered form section: a short title, one line of help, then its fields. */
-export function FormSection({ n, title, help, children }: { n: number; title: string; help?: ReactNode; children: ReactNode }) {
+/** A group of fields under a small heading, with at most one line of help for the whole group. */
+export function Group({ title, help, children }: { title: string; help?: ReactNode; children: ReactNode }) {
   return (
     <section className="space-y-3">
-      <div className="flex items-start gap-2.5">
-        <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-xs font-semibold">
-          {n}
-        </span>
-        <div className="min-w-0">
-          <h3 className="text-base font-semibold">{title}</h3>
-          {help && (
-            <p className="text-muted-foreground text-xs">
-              {help}
-            </p>
-          )}
-        </div>
+      <div>
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {help && <p className="text-xs text-muted-foreground">{help}</p>}
       </div>
-      <div className="space-y-4 sm:pl-7.5">{children}</div>
+      {children}
     </section>
   )
 }
@@ -50,54 +39,6 @@ export function Field({ label, htmlFor, help, error, children }: { label: ReactN
           </p>
         )
       )}
-    </div>
-  )
-}
-
-/** A row of mutually exclusive options (radio semantics), each with an optional one-line hint. */
-export function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-  disabled,
-  label,
-  columns,
-}: {
-  value: T
-  options: { id: T; title: string; hint?: string }[]
-  onChange: (v: T) => void
-  disabled?: boolean
-  label: string
-  columns?: 2 | 3
-}) {
-  const name = useId()
-  return (
-    <div role="radiogroup" aria-label={label} className={cn('grid gap-2', columns === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
-      {options.map((o) => {
-        const on = o.id === value
-        return (
-          <label
-            key={o.id}
-            className={cn(
-              'relative flex cursor-pointer flex-col gap-0.5 rounded-lg border p-3 transition-colors focus-within:ring-2 focus-within:ring-ring',
-              on ? 'border-primary bg-accent' : 'border-border hover:border-primary/50',
-              disabled && !on && 'cursor-not-allowed opacity-50',
-              disabled && on && 'cursor-default',
-            )}
-          >
-            <input type="radio" name={name} className="sr-only" checked={on} disabled={disabled} onChange={() => onChange(o.id)} />
-            <span className="flex items-center justify-between gap-2 text-sm font-medium">
-              {o.title}
-              {on && <Check className="size-4 shrink-0 text-primary" />}
-            </span>
-            {o.hint && (
-              <span className="text-muted-foreground text-xs">
-                {o.hint}
-              </span>
-            )}
-          </label>
-        )
-      })}
     </div>
   )
 }
@@ -163,13 +104,8 @@ export function PlaceBadge({ place }: { place: ValueLocation }) {
   )
 }
 
-export function MethodBadge({ method }: { method: string }) {
-  const tone = method === 'GET' ? 'var(--chart-1)' : method === 'DELETE' ? 'var(--chart-3)' : 'var(--chart-2)'
-  return (
-    <span className="inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-mono text-xs font-semibold" style={{ color: tone, background: `color-mix(in srgb, ${tone} 12%, transparent)` }}>
-      {method}
-    </span>
-  )
+export function MethodBadge({ method, className }: { method: string; className?: string }) {
+  return <span className={cn('inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-mono text-xs font-semibold', METHOD_TONE[method] ?? 'bg-muted text-muted-foreground', className)}>{method}</span>
 }
 
 /** The request written out, the way it's sent. Agent-filled parts (‹…›) are highlighted. */

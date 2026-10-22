@@ -18,9 +18,9 @@ import { isDummyMode } from '@/app/api/dummy'
 import { INTEGRATION_CATALOG } from '@/app/wizard/mockData'
 import { StatusPill } from '@/app/components/ui/status'
 import { ConnectionCard } from './connections/ConnectionCard'
-import { ConnectionDialog } from './connections/ConnectionDialog'
+import { ConnectionEditor } from './connections/ConnectionEditor'
 import { ErrorsDialog } from './connections/ErrorsDialog'
-import { ToolDialog } from './connections/ToolDialog'
+import { ToolEditor } from './connections/ToolEditor'
 import { ToolTestDialog, type TestOutcome } from './connections/ToolTestDialog'
 import { metaErrorHint } from './connections/helpers'
 
@@ -335,7 +335,7 @@ function CustomConnections() {
       )}
 
       {connectionForm && (
-        <ConnectionDialog
+        <ConnectionEditor
           initial={connectionForm.mode === 'edit' ? connectionForm.connection : undefined}
           replaceKeys={connectionForm.mode === 'edit' && connectionForm.replaceKeys}
           onSave={saveConnection}
@@ -343,7 +343,7 @@ function CustomConnections() {
         />
       )}
       {toolForm && (
-        <ToolDialog
+        <ToolEditor
           connection={toolForm.connection}
           initial={toolForm.tool}
           siblings={toolsOf(toolForm.connection.id)}
