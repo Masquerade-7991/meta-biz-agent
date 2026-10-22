@@ -395,7 +395,7 @@ function AboutSection({ saveSlot }: { saveSlot?: HTMLElement | null } = {}) {
         <div className="space-y-1.5">
           {isDraftFromDocument && (
             <p className="text-primary text-xs font-medium">
-              Suggested from your document, please review and edit
+              Suggested from your document. Please review and edit.
             </p>
           )}
           <Textarea

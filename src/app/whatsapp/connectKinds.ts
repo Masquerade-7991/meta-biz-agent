@@ -1,8 +1,10 @@
 import type { Flow } from '@/app/api/whatsapp'
 
 /** The three ways into Meta's signup that the connect dialog offers: what to know, and what to confirm
- *  before Connect. Moving from another provider runs Meta's standard (new number) flow. Every line is
- *  something Meta states; nothing here promises more than its signup does. */
+ *  before Connect. A number already with another provider isn't moved (Meta's account model no longer
+ *  supports moving numbers between providers); the business shares its WhatsApp account through Meta's
+ *  standard (new number) flow. Every line is something Meta states; nothing here promises more than its
+ *  signup does. */
 export interface ConnectKind {
   id: 'new' | 'app' | 'move'
   flow: Flow
@@ -26,19 +28,20 @@ export const CONNECT_KINDS: ConnectKind[] = [
     flow: 'coexistence',
     title: 'WhatsApp Business app number',
     line: 'Keep using the app on your phone; chats sync here.',
-    know: ['The WhatsApp Business app keeps working on your phone.', 'Your chats and contacts sync here.', 'You’ll scan a QR code with the app.'],
+    know: ['The WhatsApp Business app keeps working on your phone.', 'Your chats and contacts sync here.', 'Meta’s signup shows a code. You confirm it in the app and paste it back.'],
     confirm: ['This number is on the WhatsApp Business app', 'I have my phone with me'],
   },
   {
     id: 'move',
     flow: 'new',
-    title: 'Move from another provider',
-    line: 'Bring a number you use with another WhatsApp provider.',
+    title: 'Already with another provider',
+    line: 'Your number works with another WhatsApp provider today.',
     know: [
-      'Turn off two-step verification for the number first. Your current provider can do it.',
-      'Its display name, quality rating and messaging limit stay. Message history doesn’t move.',
-      'A number works with one provider at a time, so it stops working with your current one.',
+      'In Meta’s signup, use the number you already have. It doesn’t move and your chats carry on.',
+      'Your current provider can stay on the number. Removing them is up to you.',
+      'Templates stay with your current provider. Helo.ai gets its own messaging account.',
+      'A WhatsApp account can be shared with up to 5 providers.',
     ],
-    confirm: ['I’ve turned off two-step verification', 'I’m ready to receive a code'],
+    confirm: ['This number works with another provider today', 'I’ll use this number in Meta’s signup'],
   },
 ]

@@ -164,7 +164,7 @@ export function SecurityTab({ detail, onSaved }: TabProps) {
       </Section>
 
       {isOwner && (
-        <Section title="Two-step verification PIN" description="WhatsApp asks for this 6-digit PIN whenever the number is registered again. It can’t be turned off.">
+        <Section title="Two-step verification PIN" description="WhatsApp asks for this 6-digit PIN whenever the number is registered again. You can’t turn it off here; Meta is phasing it out for some numbers.">
           {!detail.pinStorage && (
             <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground text-xs">
               Helo.ai can&rsquo;t remember PINs for this workspace yet, so keep yours somewhere safe. You&rsquo;ll type it when registering.
