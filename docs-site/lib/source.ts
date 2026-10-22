@@ -2,6 +2,8 @@ import { llms, loader } from 'fumadocs-core/source';
 import { lucideIconsPlugin } from 'fumadocs-core/source/lucide-icons';
 import { docsContentRoute, docsImageRoute, docsRoute } from './shared';
 import { defineDocs } from 'fumadocs-mdx/macro';
+import { applyMdxPreset } from 'fumadocs-mdx/config';
+import { CODE_THEMES } from './codeTheme';
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 import { openapi } from './openapi';
 
@@ -9,6 +11,7 @@ const docs = defineDocs({
   dir: 'content/docs',
   docs: {
     schema: pageSchema,
+    mdxOptions: applyMdxPreset({ rehypeCodeOptions: { themes: CODE_THEMES } }),
     postprocess: {
       includeProcessedMarkdown: true,
     },

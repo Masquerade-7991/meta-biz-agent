@@ -3,8 +3,8 @@
 @import 'fumadocs-ui/css/preset.css';
 @import 'fumadocs-openapi/css/preset.css';
 
-/* Helo.ai tokens (the console's src/styles/theme.css): neutral greys, hairline borders, the Helo blue
-   for actions and focus. Helo red stays on the logo only. */
+/* Helo.ai tokens: neutral greys, hairline borders and one accent for links, actions and focus:
+   the Helo blue in light mode, the Helo brand red in dark mode (the .dark block and its backdrop). */
 @theme {
   --color-fd-background: #ffffff;
   --color-fd-foreground: #1f2937;
@@ -39,13 +39,13 @@
   --color-fd-card: #17181b;
   --color-fd-card-foreground: #ececea;
   --color-fd-border: #2a2b2f;
-  --color-fd-primary: #4c93ea;
-  --color-fd-primary-foreground: #0b1220;
+  --color-fd-primary: #f0434a;
+  --color-fd-primary-foreground: #1a0507;
   --color-fd-secondary: #232427;
   --color-fd-secondary-foreground: #ececea;
-  --color-fd-accent: #1a2a40;
-  --color-fd-accent-foreground: #8fbcf5;
-  --color-fd-ring: #4c93ea;
+  --color-fd-accent: #3a1a1d;
+  --color-fd-accent-foreground: #f5a3a8;
+  --color-fd-ring: #f0434a;
 }
 
 .dark #nd-sidebar {
@@ -60,7 +60,7 @@
 
 /* ---------------------------------------------------------------------------------------------
    Backdrop: fixed layers behind everything, CSS and inline SVG only.
-   1. body: a soft multi-colour gradient wash (Helo blue, a cool violet, a warm sand).
+   1. body: a soft multi-colour gradient wash (light: Helo blue, a cool violet, a warm sand; dark: brand red, rose, a warm amber).
    2. body::before: a fine dot grid with an isometric lattice, faded out behind the reading column.
    3. body::after: film grain over everything (dithers the gradient so it never bands) plus
       outline geometry in two corners: hexagons and a dotted arc top-right, rings, a triangle and
@@ -80,15 +80,15 @@
 }
 
 .dark {
-  --bd-wash-a: rgb(76 147 234 / 0.24);
-  --bd-wash-b: rgb(140 110 240 / 0.16);
-  --bd-wash-c: rgb(64 180 170 / 0.10);
-  --bd-glow: rgb(76 147 234 / 0.18);
+  --bd-wash-a: rgb(240 67 74 / 0.20);
+  --bd-wash-b: rgb(190 50 80 / 0.12);
+  --bd-wash-c: rgb(214 120 80 / 0.08);
+  --bd-glow: rgb(240 67 74 / 0.16);
   --bd-pattern-opacity: 1;
   --bd-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.32 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --bd-grain-opacity: 0.16;
-  --bd-shapes-tr: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='640' viewBox='0 0 640 640' fill='none' stroke='%238fbcf5' stroke-opacity='0.26'%3E%3Cpolygon points='420,40 590,138 590,334 420,432 250,334 250,138' stroke-width='1.2'/%3E%3Cpolygon points='420,130 512,183 512,289 420,342 328,289 328,183' stroke-width='1' transform='rotate(30 420 236)'/%3E%3Ccircle cx='420' cy='236' r='36' stroke-width='1'/%3E%3Ccircle cx='250' cy='460' r='120' stroke-width='1' stroke-dasharray='2 7'/%3E%3Cline x1='590' y1='334' x2='640' y2='363' stroke-width='1'/%3E%3C/svg%3E");
-  --bd-shapes-bl: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='560' viewBox='0 0 560 560' fill='none' stroke='%238fbcf5' stroke-opacity='0.22'%3E%3Ccircle cx='60' cy='500' r='170' stroke-width='1.2'/%3E%3Ccircle cx='60' cy='500' r='240' stroke-width='1'/%3E%3Ccircle cx='60' cy='500' r='310' stroke-width='1' stroke-dasharray='1 6'/%3E%3Cpolygon points='330,150 420,306 240,306' stroke-width='1.2'/%3E%3C/svg%3E");
+  --bd-shapes-tr: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='640' viewBox='0 0 640 640' fill='none' stroke='%23f5a3a8' stroke-opacity='0.26'%3E%3Cpolygon points='420,40 590,138 590,334 420,432 250,334 250,138' stroke-width='1.2'/%3E%3Cpolygon points='420,130 512,183 512,289 420,342 328,289 328,183' stroke-width='1' transform='rotate(30 420 236)'/%3E%3Ccircle cx='420' cy='236' r='36' stroke-width='1'/%3E%3Ccircle cx='250' cy='460' r='120' stroke-width='1' stroke-dasharray='2 7'/%3E%3Cline x1='590' y1='334' x2='640' y2='363' stroke-width='1'/%3E%3C/svg%3E");
+  --bd-shapes-bl: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='560' viewBox='0 0 560 560' fill='none' stroke='%23f5a3a8' stroke-opacity='0.22'%3E%3Ccircle cx='60' cy='500' r='170' stroke-width='1.2'/%3E%3Ccircle cx='60' cy='500' r='240' stroke-width='1'/%3E%3Ccircle cx='60' cy='500' r='310' stroke-width='1' stroke-dasharray='1 6'/%3E%3Cpolygon points='330,150 420,306 240,306' stroke-width='1.2'/%3E%3C/svg%3E");
   --bd-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.06' stroke-width='.6'%3E%3Cpath d='M0 0l56 32.3M56 0L0 32.3M0 64.7l56 32.3M56 64.7L0 97M28 0v97'/%3E%3C/g%3E%3Cg fill='%23ffffff' fill-opacity='.18'%3E%3Ccircle cx='0' cy='0' r='.9'/%3E%3Ccircle cx='56' cy='0' r='.9'/%3E%3Ccircle cx='28' cy='16.2' r='.9'/%3E%3Ccircle cx='0' cy='32.3' r='.9'/%3E%3Ccircle cx='56' cy='32.3' r='.9'/%3E%3Ccircle cx='28' cy='48.5' r='.9'/%3E%3Ccircle cx='0' cy='64.7' r='.9'/%3E%3Ccircle cx='56' cy='64.7' r='.9'/%3E%3Ccircle cx='28' cy='80.8' r='.9'/%3E%3Ccircle cx='0' cy='97' r='.9'/%3E%3Ccircle cx='56' cy='97' r='.9'/%3E%3C/g%3E%3C/svg%3E");
 }
 
@@ -337,6 +337,9 @@ a[data-card="true"]:hover {
   border-color: color-mix(in oklab, var(--color-fd-primary) 35%, var(--color-fd-border));
   box-shadow: 0 1px 2px rgb(28 27 25 / 0.04), 0 10px 28px -12px rgb(34 112 208 / 0.25);
 }
+.dark a[data-card="true"]:hover {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 28px -12px rgb(240 67 74 / 0.3);
+}
 
 :focus-visible {
   outline-color: var(--color-fd-ring);
@@ -367,7 +370,62 @@ html > body[data-scroll-locked] {
   box-shadow: 0 1px 2px rgb(28 27 25 / 0.04), 0 12px 32px -16px rgb(28 27 25 / 0.18);
 }
 
-/* The syntax theme's comment grey is too dim on the dark code background (3.7:1); lift it to AA. */
-.dark .shiki code span[style][style*='--shiki-dark:#6A737D'] {
-  color: #9ca3af;
+/* Catppuccin Latte (lib/codeTheme.ts) is pastel: these token colours sit under 4.5:1 on the light code
+   backgrounds (#f4f4f2 and lighter), so light mode shows the same hue a step darker (AA). Mocha passes
+   as it is. Shiki writes the variable with or without a space, in either case: both selectors, i flag. */
+:root:not(.dark) .shiki span[style*='--shiki-light:#7c7f93' i],
+:root:not(.dark) .shiki span[style*='--shiki-light: #7c7f93' i] {
+  color: #6b6d7e;
+}
+:root:not(.dark) .shiki span[style*='--shiki-light:#40a02b' i],
+:root:not(.dark) .shiki span[style*='--shiki-light: #40a02b' i] {
+  color: #327d22;
+}
+:root:not(.dark) .shiki span[style*='--shiki-light:#ea76cb' i],
+:root:not(.dark) .shiki span[style*='--shiki-light: #ea76cb' i] {
+  color: #a1518c;
+}
+:root:not(.dark) .shiki span[style*='--shiki-light:#fe640b' i],
+:root:not(.dark) .shiki span[style*='--shiki-light: #fe640b' i] {
+  color: #bc4a08;
+}
+:root:not(.dark) .shiki span[style*='--shiki-light:#179299' i],
+:root:not(.dark) .shiki span[style*='--shiki-light: #179299' i] {
+  color: #13797f;
+}
+:root:not(.dark) .shiki span[style*='--shiki-light:#1e66f5' i],
+:root:not(.dark) .shiki span[style*='--shiki-light: #1e66f5' i] {
+  color: #1d64f0;
+}
+:root:not(.dark) .shiki span[style*='--shiki-light:#df8e1d' i],
+:root:not(.dark) .shiki span[style*='--shiki-light: #df8e1d' i] {
+  color: #9a6214;
+}
+:root:not(.dark) .shiki span[style*='--shiki-light:#e64553' i],
+:root:not(.dark) .shiki span[style*='--shiki-light: #e64553' i] {
+  color: #c63b47;
+}
+:root:not(.dark) .shiki span[style*='--shiki-light:#04a5e5' i],
+:root:not(.dark) .shiki span[style*='--shiki-light: #04a5e5' i] {
+  color: #0375a3;
+}
+:root:not(.dark) .shiki span[style*='--shiki-light:#dd7878' i],
+:root:not(.dark) .shiki span[style*='--shiki-light: #dd7878' i] {
+  color: #a15858;
+}
+:root:not(.dark) .shiki span[style*='--shiki-light:#dc8a78' i],
+:root:not(.dark) .shiki span[style*='--shiki-light: #dc8a78' i] {
+  color: #985f53;
+}
+:root:not(.dark) .shiki span[style*='--shiki-light:#7287fd' i],
+:root:not(.dark) .shiki span[style*='--shiki-light: #7287fd' i] {
+  color: #5767c0;
+}
+:root:not(.dark) .shiki span[style*='--shiki-light:#209fb5' i],
+:root:not(.dark) .shiki span[style*='--shiki-light: #209fb5' i] {
+  color: #18798a;
+}
+:root:not(.dark) .shiki span[style*='--shiki-light:#6c6f85' i],
+:root:not(.dark) .shiki span[style*='--shiki-light: #6c6f85' i] {
+  color: #6a6d82;
 }

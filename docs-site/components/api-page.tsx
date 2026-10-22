@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { createOpenAPIPage } from 'fumadocs-openapi/ui';
 import { useOperation } from 'fumadocs-openapi/operation';
 import { useComponents, useOpenAPI } from 'fumadocs-openapi';
+import { CODE_THEMES } from '@/lib/codeTheme';
 
 // Laid out like Meta's reference: an endpoints table on top, then each endpoint with its parameters,
 // body and every response (child attributes fold away), and the code samples pinned beside it.
@@ -11,17 +12,19 @@ import { useComponents, useOpenAPI } from 'fumadocs-openapi';
 export const OpenAPIPage = createOpenAPIPage({
   playground: {
     enabled: true,
-    // The field starts as "Bearer "; a token pasted over it still goes out as "Bearer hk_…".
     authProviders: [
       {
         on: 'apiToken',
+        // Whatever is in the field ("Bearer ", "hk_…", "Bearer hk_…"), send "Bearer <token>" exactly once;
+        // until a token is pasted the samples show the placeholder, never "Bearer Bearer".
         onRequest(data, value) {
-          const v = String(value ?? '').trim();
-          data.header.Authorization = /^bearer\s/i.test(v) ? v : `Bearer ${v}`;
+          const token = String(value ?? '').trim().replace(/^bearer\b\s*/i, '');
+          data.header.Authorization = `Bearer ${token || '<token>'}`;
         },
       },
     ],
   },
+  shikiOptions: { themes: CODE_THEMES },
   // The token and chosen server are remembered in this browser only.
   storageKeyPrefix: 'helo-docs:',
   // Shown by <Responses /> instead: all of them at once, not one at a time.
