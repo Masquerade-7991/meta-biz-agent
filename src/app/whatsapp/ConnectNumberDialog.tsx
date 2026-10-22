@@ -208,7 +208,7 @@ function ConnectNumberDialog({ open, onOpenChange, onConnected }: { open: boolea
                     <Copy className="size-4" />
                   </Button>
                 </p>
-                <p className="text-xs text-muted-foreground">Keep it safe: Meta asks for it if the number is ever moved. Owners can see it again in Settings › WhatsApp.</p>
+                <p className="text-xs text-muted-foreground">Keep it safe: Meta asks for it if the number is ever moved. Owners can see it again on the number’s Security tab in Assets.</p>
               </div>
             )}
           </div>

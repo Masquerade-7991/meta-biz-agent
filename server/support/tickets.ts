@@ -13,6 +13,7 @@ import { dismissAlert, openAlerts } from '../platform/alerts.ts'
 import { dismissReminder, dueReminders } from '../messaging/index.ts'
 import { addBusinessMinutes, DAYS, DEFAULT_HOURS, isOpen, type Hours } from './businessHours.ts'
 import { contactNames } from './contacts.ts'
+import { changedBy, needFresh, saveChecked, staleAware } from './stale.ts'
 import { addMessage, conversations, currentNumber, sendInteractive, sendText, setControl, type Actor } from '../messaging/index.ts'
 import { can, mayAssign } from '../../src/app/lib/permissions.ts'
 import { getTeams, routeTicket, supportOpsRoute } from './supportOps.ts'
@@ -75,46 +76,152 @@ export function needCanAssign(me: Actor, to: string | null, from: unknown) {
 }
 
 // ---- validation of the settings form ----
+// A PUT is partial: top-level keys left out keep what's stored; `hours` may also leave out its own keys.
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
-function parseSettings(b: Obj, members: Set<string>, teamIds: Set<string>, legacyTeams: SupportSettings['teams']): SupportSettings {
-  const h = obj(b.hours)
-  const tz = String(h.timezone ?? '')
+const CLOSE = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/
+const DAY_NAME: Record<string, string> = { sun: 'Sunday', mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday' }
+const PRIORITY_NAME: Record<Priority, string> = { urgent: 'Urgent', high: 'High', normal: 'Normal', low: 'Low' }
+const ROUTING_MODES = ['unassigned', 'round_robin', 'fixed'] as const
+/** A real calendar date: 2026-02-31 matches the pattern but isn't one. */
+const realDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(d + 'T00:00:00Z')) && new Date(d + 'T00:00:00Z').toISOString().slice(0, 10) === d
+/** Any IANA zone name the runtime knows ("Asia/Kolkata", "UTC"), not an offset like "+05:30". */
+export function validTimeZone(tz: string) {
+  if (!/^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+)*$/.test(tz)) return false
   try {
     new Intl.DateTimeFormat('en', { timeZone: tz })
+    return true
   } catch {
-    throw new HttpError(400, `${tz || 'That'} isn’t a time zone we recognise.`)
+    return false
   }
+}
+const todayIn = (tz: string) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date())
+
+function parseHours(v: unknown, before: Hours, confirmNoHours: boolean): Hours {
+  // Days left out keep their stored hours; a day sent as null closes it (QA-41).
+  const h = { ...before, ...obj(v), week: { ...before.week, ...obj(obj(v).week) } } as Obj
+  const tz = String(h.timezone ?? '')
+  if (!validTimeZone(tz)) throw new HttpError(400, `${tz || 'That'} isn’t a time zone we recognise. Pick one from the list.`)
+  if (h.twentyFourSeven !== undefined && typeof h.twentyFourSeven !== 'boolean') throw new HttpError(400, 'twentyFourSeven must be true or false.')
   const week = Object.fromEntries(
     DAYS.map((d) => {
       const w = obj(obj(h.week)[d])
       if (!w.open && !w.close) return [d, null]
-      if (!HHMM.test(String(w.open)) || !HHMM.test(String(w.close)) || String(w.close) <= String(w.open)) throw new HttpError(400, `Check the hours for ${d}: closing must be after opening (HH:MM).`)
+      if (!HHMM.test(String(w.open)) || !CLOSE.test(String(w.close))) throw new HttpError(400, `${DAY_NAME[d]}: enter opening and closing times like 09:30 (24:00 for midnight).`)
+      if (String(w.close) <= String(w.open)) throw new HttpError(400, `${DAY_NAME[d]}: closing must be after opening.`)
       return [d, { open: String(w.open), close: String(w.close) }]
     }),
   ) as Hours['week']
-  const holidays = (Array.isArray(h.holidays) ? h.holidays : []).map(String).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
-  const sla = Object.fromEntries(
+  const twentyFourSeven = h.twentyFourSeven === true
+  if (!twentyFourSeven && DAYS.every((d) => !week[d]) && !confirmNoHours)
+    throw new HttpError(400, 'Every day is closed, so response deadlines would never run. Open at least one day, turn on 24/7, or confirm with confirmNoHours: true.')
+  const known = new Set((before.holidays ?? []).map((x) => (typeof x === 'string' ? x : x.date)))
+  const today = todayIn(tz)
+  const holidays = (Array.isArray(h.holidays) ? h.holidays : []).slice(0, 200).map((raw) => {
+    const x = typeof raw === 'string' ? { date: raw } : obj(raw)
+    const date = String(x.date ?? '')
+    if (!realDate(date)) throw new HttpError(400, `${date || 'A holiday'} isn’t a date (YYYY-MM-DD).`)
+    const yearly = x.yearly === true
+    // A date already in the past can't be a day off any more; ones saved earlier are kept as they were.
+    if (!yearly && date < today && !known.has(date)) throw new HttpError(400, `${date} is in the past. Pick a date from today on, or mark it as every year.`)
+    const name = String(x.name ?? '').trim().slice(0, 80)
+    return typeof raw === 'string' ? date : { date, ...(name && { name }), ...(yearly && { yearly }) }
+  })
+  return { timezone: tz, week, holidays, ...(twentyFourSeven && { twentyFourSeven }) }
+}
+
+function parseSla(v: unknown, before: SupportSettings['sla']): SupportSettings['sla'] {
+  const b = obj(v)
+  return Object.fromEntries(
     PRIORITIES.map((p) => {
-      const v = obj(obj(b.sla)[p])
-      const first = Number(v.firstResponse)
-      const resolve = Number(v.resolve)
-      if (!(first > 0 && resolve >= first && resolve <= 60 * 24 * 60)) throw new HttpError(400, `Check the ${p} targets: both above zero, and resolution at least as long as first response.`)
-      return [p, { firstResponse: Math.round(first), resolve: Math.round(resolve) }]
+      const x = { ...before[p], ...obj(b[p]) } as Obj
+      const name = PRIORITY_NAME[p]
+      const num = (k: string, what: string) => {
+        const n = x[k] === '' || x[k] === null ? NaN : Number(x[k])
+        if (!Number.isFinite(n) || n <= 0) throw new HttpError(400, `${name}: enter the ${what} target in minutes, above zero.`)
+        if (n > 60 * 24 * 60) throw new HttpError(400, `${name}: keep the ${what} target to 60 days or less.`)
+        return Math.round(n)
+      }
+      const first = num('firstResponse', 'first reply')
+      const resolve = num('resolve', 'resolution')
+      if (resolve < first) throw new HttpError(400, `${name}: resolution can’t be shorter than first reply.`)
+      return [p, { firstResponse: first, resolve }]
     }),
   ) as SupportSettings['sla']
-  const r = obj(b.routing)
-  const mode = r.mode === 'fixed' || r.mode === 'unassigned' ? r.mode : 'round_robin'
-  const routing = { mode, teamId: teamIds.has(String(r.teamId)) ? String(r.teamId) : null, userId: members.has(String(r.userId)) ? String(r.userId) : null } as SupportSettings['routing']
-  if (mode === 'fixed' && !routing.userId) throw new HttpError(400, 'Pick who gets every new ticket.')
-  const c = obj(b.csat)
+}
+
+/** The stored settings with what the request sent applied over them, checked. */
+function parseSettings(b: Obj, before: SupportSettings, members: Set<string>, teamIds: Set<string>): SupportSettings {
+  const has = (k: string) => b[k] !== undefined
+  const next: SupportSettings = { ...before }
+  // 24/7 may come at the top level too; it lives with the hours.
+  if (has('hours') || has('twentyFourSeven')) next.hours = parseHours({ ...obj(b.hours), ...(has('twentyFourSeven') && { twentyFourSeven: b.twentyFourSeven }) }, before.hours, b.confirmNoHours === true)
+  if (has('awayMessage')) {
+    if (typeof b.awayMessage !== 'string') throw new HttpError(400, 'The away message must be text (empty for none).')
+    if (b.awayMessage.trim().length > 1000) throw new HttpError(400, 'Keep the away message to 1,000 characters.')
+    next.awayMessage = b.awayMessage.trim()
+  }
+  if (has('sla')) next.sla = parseSla(b.sla, before.sla)
+  if (has('routing')) {
+    const r = { ...before.routing, ...obj(b.routing) } as Obj
+    if (!ROUTING_MODES.includes(r.mode as never)) throw new HttpError(400, 'Routing mode must be unassigned, round_robin or fixed.')
+    const teamId = r.teamId ? String(r.teamId) : null
+    if (teamId && !teamIds.has(teamId)) throw new HttpError(400, 'That team no longer exists. Pick another, or everyone.')
+    const userId = r.userId ? String(r.userId) : null
+    if (userId && !members.has(userId)) throw new HttpError(400, 'That person isn’t in this workspace any more.')
+    if (r.mode === 'fixed' && !userId) throw new HttpError(400, 'Pick who gets every new ticket.')
+    next.routing = { mode: r.mode as SupportSettings['routing']['mode'], teamId, userId }
+  }
+  if (has('csat')) {
+    const c = { ...before.csat, ...obj(b.csat) } as Obj
+    if (typeof c.enabled !== 'boolean') throw new HttpError(400, 'csat.enabled must be true or false.')
+    const question = String(c.question ?? '').trim()
+    if (question.length > 200) throw new HttpError(400, 'Keep the feedback question to 200 characters.')
+    next.csat = { enabled: c.enabled, question: question || DEFAULT_SETTINGS.csat.question }
+  }
+  if (has('restrictAgents')) {
+    if (typeof b.restrictAgents !== 'boolean') throw new HttpError(400, 'restrictAgents must be true or false.')
+    next.restrictAgents = b.restrictAgents
+  }
+  return next
+}
+
+/** Settings flattened one level into what people recognise (each day, each target), for the activity log. */
+function settingsFacts(s: SupportSettings): Obj {
   return {
-    hours: { timezone: tz, week, holidays },
-    awayMessage: String(b.awayMessage ?? '').trim().slice(0, 1000),
-    sla,
-    routing,
-    teams: legacyTeams,
-    csat: { enabled: c.enabled !== false, question: String(c.question ?? '').trim().slice(0, 200) || DEFAULT_SETTINGS.csat.question },
-    restrictAgents: b.restrictAgents === true,
+    'hours.timezone': s.hours.timezone,
+    'hours.twentyFourSeven': !!s.hours.twentyFourSeven,
+    ...Object.fromEntries(DAYS.map((d) => [`hours.week.${d}`, s.hours.week[d]])),
+    'hours.holidays': s.hours.holidays,
+    ...Object.fromEntries(PRIORITIES.map((p) => [`sla.${p}`, s.sla[p]])),
+    awayMessage: s.awayMessage,
+    routing: s.routing,
+    csat: s.csat,
+    restrictAgents: s.restrictAgents,
+  }
+}
+
+/** Puts current deadlines on every open ticket (after the hours or targets changed). */
+async function recomputeDues() {
+  const s = await getSettings()
+  const open = await tickets().find({ workspaceId: ws(), status: OPEN }, { projection: { clockStartAt: 1, createdAt: 1, priority: 1, pausedMs: 1 } }).toArray()
+  let updated = 0
+  for (const t of open) {
+    const r = await tickets().updateOne({ _id: t._id, status: OPEN }, { $set: duesFrom(clockStart(t), t.priority as Priority, s, Number(t.pausedMs ?? 0)) })
+    updated += r.modifiedCount
+  }
+  trace('support.recomputed', { updated })
+  return { updated }
+}
+
+async function settingsView() {
+  const doc = await settingsCol().findOne({ workspaceId: ws() }, { projection: { updatedAt: 1, updatedBy: 1 } })
+  return {
+    ...(await getSettings()),
+    aiSummary: !!env('ANTHROPIC_API_KEY'),
+    listenOnly: listenOnly(),
+    saved: !!doc,
+    openTickets: await tickets().countDocuments({ workspaceId: ws(), status: OPEN }),
+    ...(await changedBy(doc)),
   }
 }
 
@@ -218,6 +325,7 @@ async function reopenSet(t: Obj, status: 'open' | 'pending', now: Date): Promise
     ...duesFrom(now, t.priority as Priority, s),
     firstRespondedAt: null,
     escalationLevel: 0,
+    escalationLevelId: null,
     csatRequestedAt: null,
     updatedAt: now,
   }
@@ -448,7 +556,7 @@ async function notifications(me: Actor) {
 }
 
 // ---- routes ----
-async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unknown> {
+async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL, me: Actor): Promise<unknown> {
   const path = u.pathname
   const m = req.method ?? 'GET'
   let seg: RegExpMatchArray | null
@@ -489,17 +597,25 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     }
     if (m === 'PATCH') return update(n, obj(await readJson(req)), me)
   }
-  if (path === '/api/support/settings' && m === 'GET')
-    return { ...(await getSettings()), aiSummary: !!env('ANTHROPIC_API_KEY'), listenOnly: listenOnly(), saved: !!(await settingsCol().findOne({ workspaceId: ws() }, { projection: { _id: 1 } })) }
+  if (path === '/api/support/settings' && m === 'GET') return settingsView()
   if (path === '/api/support/settings' && m === 'PUT') {
     if (!can(me.role, 'settings.manage')) throw new HttpError(403, 'Only owners and admins can change support settings.')
+    const stored = await settingsCol().findOne({ workspaceId: ws() }, { projection: { updatedAt: 1 } })
+    needFresh(req, stored?.updatedAt)
     const members = new Set((await col('memberships').find({ workspaceId: ws() }).toArray()).map((x) => String(x.userId)))
     const teamIds = new Set((await getTeams()).map((t) => t.id))
     const before = await getSettings()
-    const settings = parseSettings(obj(await readJson(req)), members, teamIds, before.teams)
-    await settingsCol().updateOne({ workspaceId: ws() }, { $set: { settings, updatedAt: new Date(), updatedBy: me._id } }, { upsert: true })
-    trace('settings.updated', { area: 'support' }, undefined, diff(before as unknown as Obj, settings as unknown as Obj))
-    return { ...settings, aiSummary: !!env('ANTHROPIC_API_KEY'), listenOnly: listenOnly() }
+    const settings = parseSettings(obj(await readJson(req)), before, members, teamIds)
+    const now = new Date()
+    // Saved only over the copy that was checked, so two saves at the same moment can't both pass.
+    await saveChecked(settingsCol(), req, stored, { settings, updatedAt: now, updatedBy: me._id })
+    const changes = diff(settingsFacts(before), settingsFacts(settings))
+    if (changes) trace('settings.updated', { area: 'support', fields: Object.keys(changes) }, undefined, changes)
+    return settingsView()
+  }
+  if (path === '/api/support/settings/recompute' && m === 'POST') {
+    if (!can(me.role, 'settings.manage')) throw new HttpError(403, 'Only owners and admins can change support settings.')
+    return recomputeDues()
   }
   if (path === '/api/support/notifications' && m === 'GET') return notifications(me)
   if ((seg = path.match(/^\/api\/support\/notifications\/reminder:([a-f0-9]{24})\/dismiss$/)) && m === 'POST') {
@@ -510,7 +626,7 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     await dismissAlert(decodeURIComponent(seg[1]), me._id)
     return { ok: true }
   }
-  const ops = await supportOpsRoute(req, u, me)
+  const ops = await supportOpsRoute(req, res, u, me)
   if (ops !== undefined) return ops
   throw new HttpError(404, 'Not found.')
 }
@@ -519,5 +635,6 @@ const TITLES: Titles = { 400: 'Check the details', 403: 'Not allowed', 404: 'Not
 export async function handleTickets(req: http.IncomingMessage, res: http.ServerResponse, me: Actor): Promise<boolean> {
   const u = new URL(req.url ?? '/', 'http://x')
   if (!u.pathname.startsWith('/api/tickets') && !u.pathname.startsWith('/api/support/')) return false
-  return serveJson(req, res, { titles: TITLES, db, noDb: { title: dbOffReason, detail: 'Tickets need the database.' } }, () => route(req, u, me))
+  const [titles, run] = staleAware(TITLES, () => route(req, res, u, me))
+  return serveJson(req, res, { titles, db, noDb: { title: dbOffReason, detail: 'Tickets need the database.' } }, run)
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { ChevronRight, Loader2, RefreshCw, Smartphone } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { EmptyState, PageContainer } from '@/app/components/ui/page'
@@ -14,6 +15,7 @@ import { ConnectNumberButton } from '@/app/whatsapp/ConnectNumberDialog'
 import { NumberAvatar, NumberPage } from '@/app/whatsapp/NumberPage'
 import { statusHelp } from '@/app/whatsapp/profileRules'
 import { TemplatesTab } from '@/app/whatsapp/TemplatesTab'
+import { AccountTab } from '@/app/whatsapp/AccountTab'
 import { can } from '@/app/lib/permissions'
 import { cn } from '@/app/lib/utils'
 
@@ -38,7 +40,21 @@ export function WhatsAppPage() {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
-  const [tab, setTab] = useState('numbers')
+  // The tab is in the address (?tab=templates, ?tab=account) so links can open it; Account is the owner's.
+  const [params, setParams] = useSearchParams()
+  const owner = can(me?.role, 'whatsapp.manage')
+  const asked = params.get('tab')
+  const tab = asked === 'templates' || (asked === 'account' && owner) ? asked : 'numbers'
+  const setTab = (t: string) =>
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p)
+        if (t === 'numbers') next.delete('tab')
+        else next.set('tab', t)
+        return next
+      },
+      { replace: true },
+    )
 
   const load = useCallback((refresh = false) => {
     setRefreshing(refresh)
@@ -138,7 +154,19 @@ export function WhatsAppPage() {
               <TabsList>
                 <TabsTrigger value="numbers">Phone numbers ({shown.length})</TabsTrigger>
                 <TabsTrigger value="templates">Message templates</TabsTrigger>
+                {owner && <TabsTrigger value="account">Account</TabsTrigger>}
               </TabsList>
+              {owner && (
+                <TabsContent value="account" className="pt-4">
+                  <AccountTab
+                    wabaId={account?.id ?? null}
+                    onDisconnected={() => {
+                      setTab('numbers')
+                      load(true)
+                    }}
+                  />
+                </TabsContent>
+              )}
               <TabsContent value="templates" className="pt-4">
                 <TemplatesTab />
               </TabsContent>

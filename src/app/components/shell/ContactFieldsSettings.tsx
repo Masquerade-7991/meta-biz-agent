@@ -1,103 +1,172 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, Plus, Trash2 } from 'lucide-react'
+import { Plus, Tags, Trash2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
+import { EmptyState } from '@/app/components/ui/page'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
-import { FormError } from '@/app/auth/AuthLayout'
+import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
 import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
-import { listFields, saveFields, type FieldDef } from '@/app/api/contacts'
+import { FIELD_LIMITS, fieldKey, fieldUsage, getFields, saveFields, type FieldDef } from '@/app/api/contacts'
 import { can } from '@/app/lib/permissions'
+import { SettingsSection } from './SettingsSection'
+import { FormFooter, LoadGate, ReadOnlyNote } from './settings/SettingsUi'
+import { useSettingsForm } from './settings/useSettingsForm'
 
-type Row = { key: string; label: string; type: FieldDef['type']; options: string }
+/** One row as edited: `key` is empty until the server names a new field. `uid` keeps React's rows apart. */
+type Row = { uid: string; key: string; label: string; type: FieldDef['type']; options: string }
+let uid = 0
+const rowOf = (x: FieldDef): Row => ({ uid: `f${++uid}`, key: x.key, label: x.label, type: x.type, options: x.options?.join(', ') ?? '' })
+const TYPE_LABEL: Record<FieldDef['type'], string> = { text: 'Text', number: 'Number', date: 'Date', select: 'Choice' }
+const choices = (r: Row) => r.options.split(',').map((o) => o.trim()).filter(Boolean)
 
-/** Settings → Contact fields: extra details kept on every contact (city, plan, renewal date…). */
+function validate(rows: Row[]) {
+  const e: Record<string, string> = {}
+  const keys = new Map<string, string>()
+  for (const r of rows) {
+    const label = r.label.trim()
+    if (!label) e[r.uid] = 'Give the field a name.'
+    else if (label.length > FIELD_LIMITS.label) e[r.uid] = `Keep the name to ${FIELD_LIMITS.label} characters.`
+    else if (r.type === 'select' && !choices(r).length) e[r.uid] = 'Add the choices, separated by commas.'
+    const k = r.key || fieldKey(label)
+    if (k && keys.has(k)) e[r.uid] = `“${label}” would share the CSV column ${k} with “${keys.get(k)}”.`
+    if (k) keys.set(k, label)
+  }
+  if (rows.length > FIELD_LIMITS.fields) e.count = `Keep it to ${FIELD_LIMITS.fields} fields.`
+  return e
+}
+
+/** Settings › Contact fields: extra details kept on every contact (city, plan, renewal date…). */
 export function ContactFieldsSettings() {
   const { me } = useAuth()
   const canEdit = can(me?.role, 'settings.manage')
-  const [rows, setRows] = useState<Row[] | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  useEffect(() => {
-    listFields().then(
-      (f) => setRows(f.map((x) => ({ key: x.key, label: x.label, type: x.type, options: x.options?.join(', ') ?? '' }))),
-      (err) => setError(errorDetail(err)),
-    )
-  }, [])
-  const set = (i: number, patch: Partial<Row>) => setRows((prev) => prev!.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  // A removed field or a new type clears contacts' values: ask first, with how many it touches.
+  const [asking, setAsking] = useState<{ title: string; description: string } | null>(null)
+  const [checking, setChecking] = useState(false)
+  const form = useSettingsForm<Row[]>({
+    load: () => getFields().then((r) => ({ value: r.fields.map(rowOf), stamp: r.stamp })),
+    save: async (rows, since) => {
+      const r = await saveFields(rows.map((x) => ({ ...(x.key && { key: x.key }), label: x.label.trim(), type: x.type, ...(x.type === 'select' && { options: choices(x) }) })), since)
+      return { value: r.fields.map(rowOf), stamp: r.stamp }
+    },
+    validate,
+  })
+  if (form.state !== 'ready' || !form.draft || !form.saved) return <LoadGate error={form.loadError} onRetry={form.reload} what="the contact fields" />
+  const rows = form.draft
+  const before = form.saved
+  const set = (u: string, patch: Partial<Row>) => form.set((prev) => prev.map((r) => (r.uid === u ? { ...r, ...patch } : r)))
 
-  async function save() {
-    setBusy(true)
-    setError(null)
+  /** Works out what the save would clear, asks if anything, then saves. */
+  async function save(): Promise<boolean> {
+    if (form.invalid) return form.save()
+    const removed = before.filter((b) => b.key && !rows.some((r) => r.key === b.key))
+    const retyped = before.filter((b) => rows.some((r) => r.key === b.key && (r.type !== b.type || (r.type === 'select' && choices(r).join() !== choices(b).join()))))
+    if (!removed.length && !retyped.length) return form.save()
+    setChecking(true)
     try {
-      const saved = await saveFields(rows!.map((r) => ({ key: r.key, label: r.label, type: r.type, ...(r.type === 'select' && { options: r.options.split(',').map((o) => o.trim()).filter(Boolean) }) })))
-      setRows(saved.map((x) => ({ key: x.key, label: x.label, type: x.type, options: x.options?.join(', ') ?? '' })))
-      toast.success('Contact fields saved.')
+      const usage = await Promise.all([...removed, ...retyped].map((f) => fieldUsage(f.key).then((u) => ({ f, u }))))
+      const touched = usage.filter((x) => x.u.contacts > 0 || x.u.segments.length > 0)
+      if (!touched.length) return form.save()
+      const lines = touched.map(({ f, u }) => {
+        const gone = removed.includes(f)
+        const what = gone ? `Remove ${f.label} from ${u.contacts.toLocaleString()} contact${u.contacts === 1 ? '' : 's'}` : `${f.label}: values that don’t fit the new type are cleared (up to ${u.contacts.toLocaleString()} contact${u.contacts === 1 ? '' : 's'})`
+        return u.segments.length && gone ? `${what}; the segment${u.segments.length === 1 ? '' : 's'} ${u.segments.map((x) => `“${x.name}”`).join(', ')} stop filtering on it (a segment with no other filter is deleted).` : `${what}.`
+      })
+      setAsking({ title: removed.length === 1 && !retyped.length ? `Remove ${removed[0].label} from ${touched[0].u.contacts.toLocaleString()} contacts?` : 'Clear these values?', description: `${lines.join(' ')} This can’t be undone.` })
+      return false
     } catch (err) {
-      setError(errorDetail(err))
+      toast.error('Couldn’t check which contacts use these fields', { description: errorDetail(err) })
+      return false
     } finally {
-      setBusy(false)
+      setChecking(false)
     }
   }
 
   return (
-    <div className="max-w-3xl space-y-6 py-2">
-      <div className="space-y-1">
-        <h2 className="text-section font-semibold">Contact fields</h2>
-        <p className="text-muted-foreground text-sm">
-          Extra details you keep on every contact, like city or plan. They show in Contacts and can be filled from a CSV column with the same name.
-        </p>
-      </div>
-      {!rows ? (
-        error ? <FormError>{error}</FormError> : <Loader2 className="size-4 animate-spin text-muted-foreground" />
-      ) : (
-        <fieldset disabled={!canEdit} className="space-y-3">
-          {!canEdit && (
-            <p className="rounded-md bg-muted px-3 py-2 text-muted-foreground text-sm">
-              Only owners and admins can change contact fields.
-            </p>
-          )}
+    <div className="min-w-0">
+      {!canEdit && <ReadOnlyNote>Only owners and admins can change contact fields.</ReadOnlyNote>}
+      <SettingsSection
+        stacked
+        title="Contact fields"
+        description={`Extra details you keep on every contact, like city or plan. They show in Contacts, and a contacts CSV fills each from the column named below. Up to ${FIELD_LIMITS.fields} fields, names up to ${FIELD_LIMITS.label} characters.`}
+      >
+        <fieldset disabled={!canEdit || checking} className="max-w-3xl space-y-3">
           {rows.length === 0 && (
-            <p className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground text-sm">
-              No custom fields yet.
-            </p>
+            <EmptyState
+              icon={Tags}
+              title="No custom fields yet"
+              description="Add the details you keep about customers, like City, Plan or Renewal date."
+              action={
+                canEdit && (
+                  <Button size="sm" onClick={() => form.set((p) => [...p, { uid: `f${++uid}`, key: '', label: '', type: 'text', options: '' }])}>
+                    <Plus className="size-4" /> Add field
+                  </Button>
+                )
+              }
+            />
           )}
-          {rows.map((r, i) => (
-            <div key={r.key || i} className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-3">
-              <Input value={r.label} onChange={(e) => set(i, { label: e.target.value })} placeholder="Field name, e.g. City" className="h-9 w-48" aria-label="Field name" />
-              <Select value={r.type} onValueChange={(v) => set(i, { type: v as Row['type'] })}>
-                <SelectTrigger className="h-9 w-32" aria-label="Field type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="text">Text</SelectItem>
-                  <SelectItem value="number">Number</SelectItem>
-                  <SelectItem value="date">Date</SelectItem>
-                  <SelectItem value="select">Choice</SelectItem>
-                </SelectContent>
-              </Select>
-              {r.type === 'select' && <Input value={r.options} onChange={(e) => set(i, { options: e.target.value })} placeholder="Choices, separated by commas" className="h-9 min-w-48 flex-1" aria-label="Choices" />}
-              <Button type="button" variant="ghost" size="sm" className="ml-auto" aria-label={`Remove ${r.label || 'field'}`} onClick={() => setRows(rows.filter((_, j) => j !== i))}>
-                <Trash2 className="size-4" />
-              </Button>
-            </div>
-          ))}
-          {canEdit && (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setRows([...rows, { key: '', label: '', type: 'text', options: '' }])}>
+          {rows.map((r) => {
+            const column = r.key || fieldKey(r.label)
+            const err = form.liveErrors[r.uid]
+            const was = before.find((b) => b.key && b.key === r.key)
+            return (
+              <div key={r.uid} className="space-y-2 rounded-lg border border-border p-3" data-density-row>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input value={r.label} maxLength={FIELD_LIMITS.label} onChange={(e) => set(r.uid, { label: e.target.value })} placeholder="Field name, e.g. City" className="h-9 w-48" aria-label="Field name" aria-invalid={!!err && form.dirty} />
+                  <Select value={r.type} onValueChange={(v) => set(r.uid, { type: v as Row['type'] })}>
+                    <SelectTrigger className="h-9 w-32" aria-label="Field type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(TYPE_LABEL) as FieldDef['type'][]).map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {TYPE_LABEL[t]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {r.type === 'select' && <Input value={r.options} onChange={(e) => set(r.uid, { options: e.target.value })} placeholder="Choices, separated by commas" className="h-9 min-w-48 flex-1" aria-label="Choices" />}
+                  {canEdit && (
+                    <Button type="button" variant="ghost" size="sm" className="ml-auto" aria-label={`Remove ${r.label || 'field'}`} onClick={() => form.set((p) => p.filter((x) => x.uid !== r.uid))}>
+                      <Trash2 className="size-4" />
+                    </Button>
+                  )}
+                </div>
+                <p className="text-meta text-muted-foreground">
+                  CSV column: {column ? <code className="font-mono">{column}</code> : 'named when saved'}
+                  {was && was.type !== r.type && <span className="text-warning-foreground"> · was {TYPE_LABEL[was.type]}: values that don’t fit are cleared when you save</span>}
+                </p>
+                {err && form.dirty && <p className="text-xs text-destructive">{err}</p>}
+              </div>
+            )
+          })}
+          {form.liveErrors.count && <p className="text-sm text-destructive">{form.liveErrors.count}</p>}
+          {canEdit && rows.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="button" variant="outline" size="sm" disabled={rows.length >= FIELD_LIMITS.fields} onClick={() => form.set((p) => [...p, { uid: `f${++uid}`, key: '', label: '', type: 'text', options: '' }])}>
                 <Plus className="size-4" />
                 Add field
               </Button>
-              <Button type="button" size="sm" onClick={() => void save()} disabled={busy}>
-                {busy && <Loader2 className="size-4 animate-spin" />}
-                Save fields
-              </Button>
-              {error && <FormError>{error}</FormError>}
+              <span className="text-meta text-muted-foreground">
+                {rows.length} of {FIELD_LIMITS.fields} fields
+              </span>
             </div>
           )}
         </fieldset>
-      )}
+        {canEdit && <FormFooter form={form} onSave={save} />}
+      </SettingsSection>
+      <ConfirmDialog
+        open={!!asking}
+        title={asking?.title ?? ''}
+        description={asking?.description}
+        confirmLabel="Save and clear"
+        onCancel={() => setAsking(null)}
+        onConfirm={() => {
+          setAsking(null)
+          void form.save()
+        }}
+      />
     </div>
   )
 }

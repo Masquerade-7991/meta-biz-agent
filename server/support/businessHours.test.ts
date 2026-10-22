@@ -35,3 +35,22 @@ test('no open hours never comes due', () => {
   const closed = { ...h, week: { sun: null, mon: null, tue: null, wed: null, thu: null, fri: null, sat: null } }
   assert.ok(addBusinessMinutes(ist('2026-10-05T10:00'), 10, closed).getTime() > Date.now() + 365 * 86_400_000)
 })
+
+test('24/7 is always open and ignores holidays', () => {
+  const always = { ...h, twentyFourSeven: true, holidays: ['2026-10-04'] }
+  assert.equal(isOpen(ist('2026-10-04T03:00'), always), true) // Sunday night, a holiday
+  assert.equal(addBusinessMinutes(ist('2026-10-04T23:30'), 60, always).getTime(), ist('2026-10-05T00:30').getTime())
+})
+
+test('a day open 00:00–24:00 counts the whole day', () => {
+  const allSun = { ...h, week: { ...h.week, sun: { open: '00:00', close: '24:00' } } }
+  assert.equal(isOpen(ist('2026-10-04T23:59'), allSun), true)
+  assert.equal(addBusinessMinutes(ist('2026-10-04T00:00'), 24 * 60, allSun).getTime(), ist('2026-10-05T00:00').getTime()) // all of Sunday, ending at midnight
+})
+
+test('yearly holidays repeat; named one-off holidays do not', () => {
+  const hol = { ...h, holidays: [{ date: '2020-10-06', name: 'Founders day', yearly: true }, { date: '2020-10-07', name: 'Once' }] }
+  assert.equal(isOpen(ist('2026-10-06T12:00'), hol), false)
+  assert.equal(isOpen(ist('2026-10-07T12:00'), hol), true)
+  assert.equal(isOpen(ist('2020-10-07T12:00'), hol), false)
+})

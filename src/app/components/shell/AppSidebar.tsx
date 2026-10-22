@@ -15,7 +15,7 @@ import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { NAV_GROUPS, navFor, type NavId } from '@/app/nav'
 import { cn } from '@/app/lib/utils'
 import { useAuth } from '@/app/auth/AuthContext'
-import type { SettingsTab } from './SettingsPage'
+import type { SettingsTab } from './settings/areas'
 import { can, roleLabel } from '@/app/lib/permissions'
 
 const initial = (name?: string) => name?.trim()[0]?.toUpperCase() || '?'

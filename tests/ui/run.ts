@@ -31,10 +31,28 @@ const PAGES: [string, string][] = [
   ['report-records', '/reports/tickets'],
   ['report-schedules', '/reports/schedules'],
   ['settings', '/settings/support'],
+  // Settings: the home, each area's first tab, the new tabs, and the addresses that redirect.
+  ['settings-home', '/settings'],
+  ['settings-general', '/settings/general'],
+  ['settings-members', '/settings/members'],
+  ['settings-profile', '/settings/profile'],
+  ['settings-notifications', '/settings/notifications'],
+  ['settings-security', '/settings/security'],
+  ['settings-routing', '/settings/routing'],
+  ['settings-escalation', '/settings/escalation'],
+  ['settings-fields', '/settings/fields'],
+  ['whatsapp-account', '/whatsapp?tab=account'],
+  ['settings-whatsapp', '/settings/whatsapp'],
+  ['settings-unknown', '/settings/nonsense'],
 ]
+/** Addresses that must land somewhere else (path + query). */
+const REDIRECTS: Record<string, string> = { '/settings/whatsapp': '/whatsapp?tab=account', '/settings/nonsense': '/settings' }
 // Pages that load nothing visible (a fixed list): no loader or error to look for. The Reports library's
 // reports load on their own pages, which are checked.
-const NO_DATA = new Set(['reports'])
+const NO_DATA = new Set(['reports', 'settings-home', 'settings-unknown'])
+// Pages whose data is the account and workspace routes, which the error and loading modes keep
+// working (DATA below): they're checked in dummy and empty modes only.
+for (const id of ['settings-general', 'settings-members', 'settings-profile', 'settings-notifications', 'settings-security']) NO_DATA.add(id)
 const pages = args.pages ? PAGES.filter(([id]) => args.pages.split(',').includes(id)) : PAGES
 const OUT = path.join(import.meta.dirname, 'out')
 mkdirSync(OUT, { recursive: true })
@@ -98,11 +116,22 @@ async function check(ctx: BrowserContext, mode: string, [id, url]: [string, stri
   const layout = await page.evaluate(() => ({
     scroll: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     raw: (document.body.innerText.match(/\b(undefined|NaN)\b|\[object Object\]|Invalid Date/g) ?? []).slice(0, 3),
-    path: location.pathname,
+    path: location.pathname + location.search,
   }))
   if (layout.scroll > 1) problems.push(`horizontal scroll: ${layout.scroll}px`)
   if (layout.raw.length) problems.push(`raw values on screen: ${layout.raw.join(', ')}`)
-  if (layout.path !== url && !(url === '/agents' && layout.path.startsWith('/agents'))) problems.push(`redirected to ${layout.path}`)
+  const want = REDIRECTS[url] ?? url
+  if (layout.path !== want && !(url === '/agents' && layout.path.startsWith('/agents'))) problems.push(`${REDIRECTS[url] ? 'expected a redirect to ' + want + ', got' : 'redirected to'} ${layout.path}`)
+  // A narrow screen starts a deep-linked Settings tab scrolled into view.
+  if (width < 500 && /^\/settings\/[a-z]+$/.test(want)) {
+    const offscreen = await page.evaluate(() => {
+      const el = document.querySelector('[data-slot=tabs-trigger][data-state=active]')
+      if (!el) return false
+      const r = el.getBoundingClientRect()
+      return r.left < 0 || r.right > window.innerWidth
+    })
+    if (offscreen) problems.push('the active Settings tab is off screen')
+  }
   if (extra) problems.push(...(await extra(page)))
   let contrast: number | undefined
   if (axe) {

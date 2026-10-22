@@ -151,7 +151,7 @@ function Steps({ labels, current }: { labels: string[]; current: number }) {
 
 /** In-app account setup after the email is verified: details, password, then workspace (or join). */
 export function AccountSetupScreen() {
-  const { me, setMe, logout } = useAuth()
+  const { me, setMe, logout, refresh } = useAuth()
   const joining = me?.joining
   const labels = joining ? ['Your details', 'Password'] : ['Your details', 'Password', 'Workspace']
   const [step, setStep] = useState(0)
@@ -177,6 +177,12 @@ export function AccountSetupScreen() {
     } catch (err) {
       setError(errorDetail(err))
       setBusy(false)
+      // The invite was withdrawn while setting up (410): the account stays, and setup now asks for
+      // a workspace of their own instead. Keep what they typed and go to that step.
+      if ((err as { status?: number }).status === 410 && joining) {
+        await refresh()
+        setStep(2)
+      }
     }
   }
 

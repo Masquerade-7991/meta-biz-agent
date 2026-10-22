@@ -54,6 +54,33 @@ const CASES: [ActivityEvent, string][] = [
   [sys('account.notice', { data: { field: 'account_update', event: 'DISABLED_UPDATE', detail: null } }), 'Meta sent an account notice'],
   [sys('alert.raised', { data: { key: 'member_left:u2', severity: 'warning', target: 'members' } }), 'Alert raised: member left'],
   [ev('webhook.baseline_reset'), 'Priya marked the apps receiving events as expected'],
+  // Settings revamp (2026-10-22): data as server/identity/auth.ts, messaging/inbox.ts and support/* send it.
+  [ev('workspace.renamed', { entity: 'workspace', entityId: 'w1', data: { name: 'Helo Store' }, changes: { name: ['Helo', 'Helo Store'] } }), 'Priya renamed the workspace to “Helo Store”'],
+  [ev('workspace.transferred', { entity: 'member', entityId: 'u2', data: { name: 'Arjun', stepDown: true }, changes: { ownerId: ['u1', 'u2'], role: ['admin', 'owner'] } }), 'Priya made Arjun an owner and stepped down to admin'],
+  [ev('workspace.transferred', { entity: 'member', entityId: 'u2', data: { name: 'Arjun', stepDown: false } }), 'Priya made Arjun an owner'],
+  [ev('member.invite_resent', { data: { email: 'a@b.co', role: 'agent' } }), 'Priya resent the invite to a@b.co'],
+  [ev('member.signup_cancelled', { data: { email: 'a@b.co' } }), "Priya cancelled a@b.co's sign-up"],
+  [ev('profile.name_changed', { entity: 'member', entityId: 'u1' }), 'Priya changed their name'],
+  [ev('profile.email_changed', { entity: 'member', entityId: 'u1' }), 'Priya changed their login email and was logged out elsewhere'],
+  [ev('profile.password_changed', { data: { tokensRevoked: 2 } }), 'Priya changed their password (2 API tokens revoked)'],
+  [ev('profile.password_changed', { data: { reset: true, tokensRevoked: 0 } }), 'Priya reset their password'],
+  [ev('session.revoked', { data: { count: 2, others: true } }), 'Priya signed out 2 other devices'],
+  [ev('session.revoked', { data: { count: 1, current: false } }), 'Priya signed out a device'],
+  [ev('session.revoked', { data: { count: 1, current: true } }), 'Priya signed out this device'],
+  [ev('canned.created', { entity: 'canned', entityId: 'c1', data: { title: 'Refunds', shortcut: '/refund', shared: true } }), 'Priya created the shared canned response /refund'],
+  [ev('canned.updated', { entity: 'canned', entityId: 'c1', data: { title: 'Refunds', shortcut: '/refund' }, changes: { shared: [true, false] } }), 'Priya changed the canned response /refund: sharing from on to off'],
+  [ev('canned.updated', { entity: 'canned', entityId: 'c1', data: { title: 'Refunds', shortcut: '/refund', bodyChanged: true } }), 'Priya changed the canned response /refund: the message'],
+  [ev('canned.deleted', { entity: 'canned', entityId: 'c1', data: { title: 'Refunds', shortcut: '/refund', shared: false } }), 'Priya deleted the canned response /refund'],
+  [sys('canned.deleted', { entity: 'member', entityId: 'u2', data: { count: 3, reason: 'member_left' } }), '3 private canned responses removed: their owner left'],
+  [ev('segment.created', { entity: 'segment', entityId: 's1', data: { name: 'VIPs' } }), 'Priya saved the segment “VIPs”'],
+  [ev('segment.deleted', { entity: 'segment', entityId: 's1', data: { name: 'VIPs' } }), 'Priya deleted the segment “VIPs”'],
+  [ev('segment.deleted', { entity: 'segment', entityId: 's2', data: { name: 'North only', reason: 'field_removed' } }), 'The segment “North only” was deleted: its only filter was a contact field that was removed'],
+  [ev('support.recomputed', { data: { updated: 12 } }), 'Priya applied new hours and targets to 12 open tickets'],
+  [ev('settings.updated', { data: { area: 'support', fields: ['hours.week.mon', 'sla.urgent'] }, changes: { 'hours.week.mon': [{ open: '09:00', close: '18:00' }, null], 'sla.urgent': [{ firstResponse: 15 }, { firstResponse: 10 }] } }), "Priya changed support settings: Monday's hours and urgent response times"],
+  [ev('settings.updated', { data: { area: 'routing_rules', count: 3, added: ['Refunds'], removed: ['Old'], changed: [], reordered: true } }), 'Priya changed routing rules: added “Refunds”, removed “Old” and changed the order'],
+  [ev('settings.updated', { data: { area: 'contact_fields', count: 1, added: [], removed: ['City'], valuesCleared: 40 } }), 'Priya changed contact fields: removed “City” and cleared 40 contact values'],
+  [ev('settings.updated', { data: { area: 'escalation', enabled: true }, changes: { 'levels.urgent': [[], [{ percent: 75 }]] } }), 'Priya changed escalation rules: urgent escalation levels'],
+  [ev('settings.updated', { data: { area: 'billing' }, changes: { budget: [5000, 8000] } }), 'Priya changed billing settings: budget from 5000 to 8000'],
 ]
 
 test('every emitted event reads as the sentence people expect', () => {
@@ -73,6 +100,20 @@ test('number history events (block, PIN, registration) belong to an area of the 
   const prefixes = Object.values(AREAS).flatMap((a) => a.kinds as readonly string[])
   for (const kind of ['number.blocked', 'number.unblocked', 'number.pin_viewed', 'number.pin_changed', 'number.registered', 'number.deregistered', 'number.profile_updated'])
     assert.ok(prefixes.some((p) => kind.startsWith(p)), kind)
+})
+
+test('every kind the settings revamp added is in an area (the log hides kinds no area lists)', () => {
+  const prefixes = Object.values(AREAS).flatMap((a) => a.kinds as readonly string[])
+  for (const kind of ['workspace.renamed', 'workspace.transferred', 'member.invite_resent', 'member.signup_cancelled', 'profile.name_changed', 'profile.email_changed', 'profile.password_changed', 'canned.created', 'canned.updated', 'canned.deleted', 'segment.created', 'segment.deleted', 'session.revoked', 'support.recomputed'])
+    assert.ok(prefixes.some((p) => kind.startsWith(p)), kind)
+})
+
+test('sign-ins have their own area, not Team & members', () => {
+  const inArea = (area: keyof typeof AREAS, kind: string) => (AREAS[area].kinds as readonly string[]).some((p) => kind.startsWith(p))
+  assert.ok(inArea('signins', 'member.logged_in'))
+  assert.ok(!inArea('people', 'member.logged_in'))
+  assert.ok(!inArea('people', 'member.switched_in'))
+  for (const kind of ['member.invited', 'member.invite_revoked', 'member.joined', 'member.left', 'member.removed', 'member.role_changed', 'member.updated']) assert.ok(inArea('people', kind), kind)
 })
 
 test('an area name from the query string is checked against the list, not the prototype', () => {

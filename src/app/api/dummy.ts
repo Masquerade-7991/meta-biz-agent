@@ -29,3 +29,8 @@ export function setDummyMode(next: boolean) {
   }
   location.reload()
 }
+
+// The role Dummy mode is playing (Demo controls → Role), so its answers refuse what the server would.
+let demoRole: string | null = 'owner'
+export const setDemoRole = (role: string | null) => void (demoRole = role)
+export const demoRoleNow = () => demoRole

@@ -14,7 +14,7 @@ import { handleStore } from './whatsapp/store.ts'
 import { HttpError, send, sendError } from './platform/http.ts'
 import { docsPage, openapi } from './openapi/index.ts'
 import { handleInbox, handleWebhook } from './messaging/inbox.ts'
-import { handleTickets } from './support/tickets.ts'
+import { getSettings, handleTickets } from './support/tickets.ts'
 import { handleContacts } from './support/contacts.ts'
 import { handleAssist } from './messaging/assist.ts'
 import { handleTemplates } from './messaging/templates.ts'
@@ -32,6 +32,10 @@ import { handleWhatsApp } from './whatsapp/whatsapp.ts'
 import { readTrace, trace } from './platform/trace.ts'
 import { handleStream } from './platform/stream.ts'
 import { can } from '../src/app/lib/permissions.ts'
+import { setTimeZoneSource } from './platform/timezone.ts'
+
+// Billing (whatsapp) reads the workspace's zone without importing support, which imports whatsapp.
+setTimeZoneSource(async () => (await getSettings()).hours.timezone)
 
 let starting: Promise<boolean> | null = null
 let failedAt = 0

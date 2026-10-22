@@ -37,7 +37,7 @@ export function ActivitySettings() {
     <SettingsSection
       stacked
       title="Activity"
-      description="Who did what in this workspace, and what the system did on its own: ticket changes, AI agent edits, members, settings and more. Kept for two years."
+      description="Who did what in this workspace, and what the system did on its own: ticket changes, AI agent edits, members, settings and more. Dates are in the workspace’s time zone (Hours & targets). Kept for two years."
     >
       <div className="flex flex-wrap items-end gap-2">
         <Select value={userId} onValueChange={setUserId}>
@@ -92,7 +92,7 @@ export function ActivitySettings() {
           </Button>
         )}
         {csv && !dateError && (
-          <Button variant="outline" size="sm" className="ml-auto" asChild>
+          <Button variant="outline" size="sm" className="ml-auto" asChild title="Up to 10,000 rows. If there are more, the file says so on its last line: narrow the dates.">
             <a href={csv} download>
               <Download className="size-4" />
               Download CSV
@@ -100,6 +100,7 @@ export function ActivitySettings() {
           </Button>
         )}
       </div>
+      {csv && !dateError && !from && !to && <p className="text-xs text-muted-foreground">A download holds up to 10,000 rows, newest first; pick dates to get older ones.</p>}
       {ref && !refOk && <p className="text-xs text-muted-foreground">A reference is the 8 letters and numbers shown after “Reference:” in an error.</p>}
       {dateError ? (
         <p className="text-sm text-destructive">{dateError}</p>

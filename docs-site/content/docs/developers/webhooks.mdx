@@ -41,4 +41,4 @@ Failures are retried after each delivery, every 5 minutes locally, and by the da
 
 ## Owners only
 
-**Settings › WhatsApp** (accounts, webhook status, apps receiving events) needs `whatsapp.manage`. The first list of subscribed apps seen is kept as a baseline. After an intended change, owners can mark the new list as expected.
+**Assets › Account** (`/whatsapp?tab=account`: accounts, webhook status, apps receiving events) needs `whatsapp.manage`; `GET /api/whatsapp/accounts` answers 403 to everyone else. The first list of subscribed apps seen is kept as a baseline. After an intended change, owners can mark the new list as expected.

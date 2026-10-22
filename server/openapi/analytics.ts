@@ -89,8 +89,8 @@ const ACTIVITY_FILTER = {
   entityId: d('string', 'The ticket number, or the number id (`PHONE_NUMBER_ID` = the workspace’s default number).'),
   area: d('tickets|chats|agent|people|contacts|templates|reports|settings|whatsapp', 'One area. Default: all of them.'),
   userId: d('string', 'One person, or `system` for what happened on its own (webhooks, timers, the AI agent).'),
-  from: d('string', 'From this date (YYYY-MM-DD) or time (ISO).'),
-  to: d('string', 'Up to and including this date, or up to this time.'),
+  from: d('string', 'From this date (YYYY-MM-DD, a whole day in the support hours’ time zone) or time (ISO).'),
+  to: d('string', 'Up to and including this date (in the support hours’ time zone), or up to this time.'),
   ref: d('string', 'An error reference (the 8 characters after “Reference:”): everything behind that error, including plumbing events the areas leave out.'),
 }
 export const activity = area('Workspace', {
@@ -109,7 +109,8 @@ export const activity = area('Workspace', {
     get: {
       id: 'downloadActivity',
       summary: 'Download the activity log as CSV',
-      description: 'The same filters, up to 10,000 rows: when (UTC), who, what (as a sentence), the item and the error reference.',
+      description:
+        'The same filters, up to 10,000 rows: when (UTC), who, what (as a sentence), the item and the error reference. When there are more, the file ends with the line `First 10000 rows of N; narrow the dates` and the response has the header `x-truncated: N`.',
       who: { text: 'As GET /api/activity.' },
       query: ACTIVITY_FILTER,
       ok: 'string',

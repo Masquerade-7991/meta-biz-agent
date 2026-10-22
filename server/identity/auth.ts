@@ -21,7 +21,8 @@ import { appUrl, mail } from '../platform/mail.ts'
 import { HttpError, readJson, serveJson, type Titles } from '../platform/http.ts'
 import { migrateEnvAccount } from '../whatsapp/index.ts'
 import { can, canSetRole, isRole, roleLabel, type Action, type Role } from '../../src/app/lib/permissions.ts'
-import { traceIn } from '../platform/trace.ts'
+import { diff, traceIn } from '../platform/trace.ts'
+import type { NotifyPref } from '../platform/alerts.ts'
 import { cleanUpMember } from '../support/index.ts'
 
 type Obj = Record<string, unknown>
@@ -58,7 +59,10 @@ interface Membership {
   userId: string
   role: Role
   createdAt: Date
+  /** Emails this person wants from this workspace (You › Notifications); missing = on. */
+  notify?: Partial<Record<NotifyPref, boolean>>
 }
+const NOTIFY_PREFS = ['escalations', 'assigned', 'slaBreach', 'budget', 'digest'] as const satisfies readonly NotifyPref[]
 interface MagicLink {
   tokenHash: string
   email: string
@@ -74,6 +78,10 @@ interface MagicLink {
   revokedAt?: Date
   /** The invited person said no (an invite revoked by them rather than by the workspace). */
   declinedAt?: Date
+  /** Invites only: set while the invite can still be used; the database allows one per person per workspace. */
+  live?: true
+  /** Invites only: when the first invite to this person was sent (a resend makes a new link). */
+  invitedAt?: Date
 }
 
 const MIN = 60_000
@@ -87,7 +95,18 @@ const workspaces = () => col<Workspace>('workspaces')
 const memberships = () => col<Membership>('memberships')
 const links = () => col<MagicLink>('magic_links')
 /** `workspaceId`: the workspace this session works in; unset falls back to the most recent membership. */
-const sessions = () => col<{ tokenHash: string; userId: string; createdAt: Date; expiresAt: Date; workspaceId?: string }>('sessions')
+interface SessionRow {
+  tokenHash: string
+  userId: string
+  createdAt: Date
+  expiresAt: Date
+  workspaceId?: string
+  /** The browser that signed in, its address and when it was last used (You › Security). */
+  userAgent?: string
+  ip?: string
+  lastSeenAt?: Date
+}
+const sessions = () => col<SessionRow>('sessions')
 interface ApiToken {
   _id: string
   tokenHash: string
@@ -150,10 +169,21 @@ const cookieValue = (req: http.IncomingMessage) =>
 const cookie = (value: string, maxAgeMs: number) =>
   `${COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(maxAgeMs / 1000)}${secure ? '; Secure' : ''}`
 
-async function startSession(res: http.ServerResponse, userId: string, workspaceId?: string) {
+/** The caller's address: the first hop a proxy reports, else the socket's. Shown to the person only. */
+const clientIp = (req: http.IncomingMessage) => String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || ''
+async function startSession(req: http.IncomingMessage, res: http.ServerResponse, userId: string, workspaceId?: string) {
   const token = newToken()
   const now = new Date()
-  await sessions().insertOne({ tokenHash: sha256(token), userId, createdAt: now, expiresAt: new Date(now.getTime() + SESSION_TTL), ...(workspaceId && { workspaceId }) })
+  await sessions().insertOne({
+    tokenHash: sha256(token),
+    userId,
+    createdAt: now,
+    expiresAt: new Date(now.getTime() + SESSION_TTL),
+    lastSeenAt: now,
+    userAgent: String(req.headers['user-agent'] ?? '').slice(0, 300),
+    ip: clientIp(req).slice(0, 64),
+    ...(workspaceId && { workspaceId }),
+  })
   res.setHeader('set-cookie', cookie(token, SESSION_TTL))
   return sha256(token)
 }
@@ -182,6 +212,10 @@ export async function getSession(req: http.IncomingMessage): Promise<Session | n
   // Pin what was resolved (older sessions, and ones that lost their workspace, have none stored), so
   // joining or creating a workspace in another session never moves this one: "other sessions keep theirs".
   if (active.workspace && active.workspace._id !== s.workspaceId) await sessions().updateOne({ tokenHash: s.tokenHash }, { $set: { workspaceId: active.workspace._id } })
+  // Last active, for You › Security: at most one write every 5 minutes per session, not one per request.
+  const now = Date.now()
+  if (!s.lastSeenAt || now - +s.lastSeenAt > 5 * MIN)
+    void sessions().updateOne({ tokenHash: s.tokenHash, $or: [{ lastSeenAt: { $exists: false } }, { lastSeenAt: { $lt: new Date(now - 5 * MIN) } }] }, { $set: { lastSeenAt: new Date(now) } }).catch(() => {})
   return { user, ...active, setup: setupOf(user), sessionHash: s.tokenHash }
 }
 
@@ -253,6 +287,7 @@ async function me(s: Pick<Session, 'user' | 'workspace' | 'role'>) {
     joining: pending ? { workspaceName: pending.name, inviterName: inviter?.name ?? null } : null,
     workspaces: ms.filter((mm) => wName.has(mm.workspaceId)).map((mm) => ({ id: mm.workspaceId, name: wName.get(mm.workspaceId)!, role: mm.role })),
     invites: setupOf(s.user) === 'complete' ? await invitesFor(s.user) : [],
+    pendingEmail: (await links().find({ userId: s.user._id, purpose: 'email_change', ...live() }).sort({ createdAt: -1 }).limit(1).next())?.email ?? null,
   }
 }
 
@@ -260,16 +295,22 @@ async function me(s: Pick<Session, 'user' | 'workspace' | 'role'>) {
 async function createLink(l: Omit<MagicLink, 'tokenHash' | 'expiresAt' | 'createdAt'>) {
   const token = newToken()
   const now = new Date()
-  await links().insertOne({ ...l, tokenHash: sha256(token), createdAt: now, expiresAt: new Date(now.getTime() + LINK_TTL[l.purpose]) })
+  await links().insertOne({ ...l, tokenHash: sha256(token), createdAt: now, expiresAt: new Date(now.getTime() + LINK_TTL[l.purpose]), ...(l.purpose === 'invite' && { live: true as const }) })
   return token
 }
+/** Before a new invite: invites to this person that ran out stop counting as live (the one-live-invite index). */
+const retireExpiredInvites = (workspaceId: string, email: string) =>
+  links().updateMany({ workspaceId, email, purpose: 'invite', live: true, expiresAt: { $lte: new Date() } }, { $unset: { live: '' } })
+/** The database refused a second live invite to the same person in the same workspace. */
+const ALREADY_INVITED = 'This person is already invited. Resend the invite from the list.'
+const isDuplicate = (err: unknown) => (err as { code?: number })?.code === 11000
 /** Creates a link and emails it; if the email fails the link is withdrawn, so no unsent invite lingers as pending. */
 async function mailLink(l: Parameters<typeof createLink>[0], deliver: (token: string) => Promise<void>) {
   const token = await createLink(l)
   try {
     await deliver(token)
   } catch (err) {
-    await links().updateOne({ tokenHash: sha256(token) }, { $set: { revokedAt: new Date() } })
+    await links().updateOne({ tokenHash: sha256(token) }, { $set: { revokedAt: new Date() }, $unset: { live: '' } })
     throw err
   }
 }
@@ -281,9 +322,29 @@ async function findLink(token: unknown) {
 }
 /** Marks the link used; only one request can win. */
 async function consumeLink(l: MagicLink) {
-  const r = await links().updateOne({ tokenHash: l.tokenHash, ...live() }, { $set: { usedAt: new Date() } })
+  const r = await links().updateOne({ tokenHash: l.tokenHash, ...live() }, { $set: { usedAt: new Date() }, $unset: { live: '' } })
   if (!r.modifiedCount) throw new HttpError(410, 'This link has expired or was already used.')
 }
+
+/** An email about a change that already happened: a failure is logged, never answered as an error. */
+const notice = (what: string, send: Promise<unknown>) =>
+  send.catch((err) => console.log(`email not sent (${what}): ${err instanceof Error ? err.message : err}`))
+
+/** Everything that stops working when a password changes: other devices and every API token. */
+async function afterPasswordChange(userId: string, keepSession?: string) {
+  await sessions().deleteMany({ userId, ...(keepSession && { tokenHash: { $ne: keepSession } }) })
+  const tokens = await apiTokens().deleteMany({ userId })
+  return tokens.deletedCount
+}
+/** Records a change to the person themselves in each workspace they belong to (those owners see it). */
+async function traceSelf(userId: string, kind: string, data: Record<string, unknown> = {}) {
+  for (const mm of await memberships().find({ userId }).toArray()) traceIn(mm.workspaceId, userId, kind, data, { entity: 'member', id: userId })
+}
+/** Only the browser session may read or change these (sessions, notifications): never an API token. */
+function needCookie(req: http.IncomingMessage) {
+  if (usesApiToken(req)) throw new HttpError(403, 'Not available with an API token. Sign in to the console instead.')
+}
+const notifyOf = (mm: Membership | null) => Object.fromEntries(NOTIFY_PREFS.map((k) => [k, mm?.notify?.[k] !== false])) as Record<NotifyPref, boolean>
 
 // ---- workspaces ----
 /** Creates a workspace owned by the user. The first workspace ever adopts the records made before accounts existed. */
@@ -363,7 +424,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     return { ok: true }
   }
   // POST, not GET: email scanners that pre-open links don't use them up.
-  if (path === '/api/auth/verify' && m === 'POST') return verify(res, body.token)
+  if (path === '/api/auth/verify' && m === 'POST') return verify(req, res, body.token)
   if (path === '/api/auth/login' && m === 'POST') {
     const e = email(body.email)
     await limit(`login|${e}|${ip}`, 10, 'Too many login attempts. Try again in an hour, or reset your password.')
@@ -375,7 +436,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     if (!user?.passwordHash || !ok) throw new HttpError(401, 'Email or password is incorrect.')
     // Start in the workspace they were most recently added to, and stay there.
     const start = await sessionFor(user._id)
-    await startSession(res, user._id, start?.workspace?._id)
+    await startSession(req, res, user._id, start?.workspace?._id)
     if (start?.workspace) traceIn(start.workspace._id, user._id, 'member.logged_in', {}, { entity: 'member', id: user._id })
     return me(start!)
   }
@@ -391,8 +452,10 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     const x = needSession(await getSession(req))
     if (x.setup !== 'password') throw new HttpError(400, 'Use Settings to change your password.')
     await users().updateOne({ _id: x.user._id }, { $set: { passwordHash: await hashPassword(password(body.password)) }, $unset: { mustSetPassword: '' } })
-    await sessions().deleteMany({ userId: x.user._id, tokenHash: { $ne: x.sessionHash } }) // every other device logs out
-    await mail.passwordChanged(x.user.email)
+    // Every other device logs out and every API token stops working: the old password may be known to someone else.
+    const tokensRevoked = await afterPasswordChange(x.user._id, x.sessionHash)
+    await traceSelf(x.user._id, 'profile.password_changed', { reset: true, tokensRevoked })
+    await notice('password changed', mail.passwordChanged(x.user.email))
     return me((await sessionFor(x.user._id))!)
   }
   if (path === '/api/auth/forgot' && m === 'POST') {
@@ -410,17 +473,21 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
   // -- account --
   if (path === '/api/account' && m === 'PUT') {
     const x = needReady(s)
-    await users().updateOne({ _id: x.user._id }, { $set: { name: text(body.name, 'your name') } })
-    return me((await sessionFor(x.user._id))!)
+    const name = text(body.name, 'your name')
+    await users().updateOne({ _id: x.user._id }, { $set: { name } })
+    if (name !== x.user.name) await traceSelf(x.user._id, 'profile.name_changed')
+    return me((await sessionFor(x.user._id, x.workspace?._id))!)
   }
   if (path === '/api/account/password' && m === 'POST') {
     const x = needReady(s)
     await limit(`pw|${x.user._id}`, 10, 'Too many attempts. Try again in an hour.')
     if (!(await verifyPassword(String(body.currentPassword ?? ''), x.user.passwordHash))) throw new HttpError(400, 'Your current password is incorrect.')
     await users().updateOne({ _id: x.user._id }, { $set: { passwordHash: await hashPassword(password(body.newPassword)) } })
-    await sessions().deleteMany({ userId: x.user._id, tokenHash: { $ne: x.sessionHash } }) // other devices log out
-    await mail.passwordChanged(x.user.email)
-    return { ok: true }
+    // Other devices log out and API tokens stop working (they'd outlive the old password otherwise).
+    const tokensRevoked = await afterPasswordChange(x.user._id, x.sessionHash)
+    await traceSelf(x.user._id, 'profile.password_changed', { tokensRevoked })
+    await notice('password changed', mail.passwordChanged(x.user.email))
+    return { ok: true, tokensRevoked }
   }
   if (path === '/api/account/email' && m === 'POST') {
     const x = needReady(s)
@@ -429,8 +496,65 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     const e = email(body.newEmail)
     if (e === x.user.email) throw new HttpError(400, 'That’s already your email.')
     if (await users().findOne({ email: e })) throw new HttpError(409, 'Another account already uses that email.')
+    // One pending change at a time: an earlier link stops working.
+    await links().updateMany({ userId: x.user._id, purpose: 'email_change', ...live() }, { $set: { revokedAt: new Date() } })
     await mailLink({ email: e, purpose: 'email_change', userId: x.user._id }, (t) => mail.emailChange(e, t))
     return { ok: true }
+  }
+  if (path === '/api/account/email/cancel' && m === 'POST') {
+    const x = needReady(s)
+    await links().updateMany({ userId: x.user._id, purpose: 'email_change', ...live() }, { $set: { revokedAt: new Date() } })
+    return me((await sessionFor(x.user._id, x.workspace?._id))!)
+  }
+
+  // -- sessions (You › Security): the person's own signed-in browsers --
+  if (path === '/api/account/sessions' && m === 'GET') {
+    needCookie(req)
+    const x = needReady(s)
+    const rows = await sessions().find({ userId: x.user._id, expiresAt: { $gt: new Date() } }).sort({ lastSeenAt: -1 }).limit(100).toArray()
+    return {
+      sessions: rows.map((r) => ({
+        id: String((r as SessionRow & { _id: ObjectId })._id),
+        userAgent: r.userAgent ?? null,
+        ip: r.ip ?? null,
+        lastSeenAt: r.lastSeenAt ?? r.createdAt,
+        createdAt: r.createdAt,
+        current: r.tokenHash === x.sessionHash,
+      })),
+    }
+  }
+  if (path === '/api/account/sessions/revoke-others' && m === 'POST') {
+    const x = needReady(s)
+    const r = await sessions().deleteMany({ userId: x.user._id, tokenHash: { $ne: x.sessionHash } })
+    if (x.workspace && r.deletedCount) traceIn(x.workspace._id, x.user._id, 'session.revoked', { count: r.deletedCount, others: true }, { entity: 'member', id: x.user._id })
+    return { revoked: r.deletedCount }
+  }
+  if ((seg = path.match(/^\/api\/account\/sessions\/([a-f0-9]{24})$/)) && m === 'DELETE') {
+    const x = needReady(s)
+    const gone = await sessions().findOneAndDelete({ _id: new ObjectId(seg[1]), userId: x.user._id } as never)
+    if (!gone) throw new HttpError(404, 'That device is already signed out.')
+    const current = gone.tokenHash === x.sessionHash
+    if (current) res.setHeader('set-cookie', cookie('', 0))
+    if (x.workspace) traceIn(x.workspace._id, x.user._id, 'session.revoked', { count: 1, current }, { entity: 'member', id: x.user._id })
+    return { ok: true, current }
+  }
+
+  // -- notifications (You › Notifications): which emails this person gets from this workspace --
+  if (path === '/api/account/notifications' && m === 'GET') {
+    needCookie(req)
+    const x = needWorkspace(s)
+    return notifyOf(await memberships().findOne({ workspaceId: x.workspace._id, userId: x.user._id }))
+  }
+  if (path === '/api/account/notifications' && m === 'PUT') {
+    const x = needWorkspace(s)
+    const set: Record<string, boolean> = {}
+    for (const k of NOTIFY_PREFS) {
+      if (body[k] === undefined) continue
+      if (typeof body[k] !== 'boolean') throw new HttpError(400, `${k} must be true or false.`)
+      set[`notify.${k}`] = body[k] as boolean
+    }
+    const r = await memberships().findOneAndUpdate({ workspaceId: x.workspace._id, userId: x.user._id }, { $set: set }, { returnDocument: 'after' })
+    return notifyOf(r)
   }
 
   if (path === '/api/account/workspace' && m === 'POST') {
@@ -480,22 +604,40 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
   // -- invites to someone who already has an account --
   if ((seg = path.match(/^\/api\/account\/invites\/([a-f0-9]{24})\/(accept|decline)$/)) && m === 'POST') {
     const x = needReady(s)
+    // Accepted a moment ago (a double click, two tabs): the same answer as the first time.
+    if (seg[2] === 'accept') {
+      const used = await links().findOne({ _id: new ObjectId(seg[1]), purpose: 'invite', usedAt: { $exists: true }, revokedAt: { $exists: false } })
+      if (used?.workspaceId && used.email === x.user.email && (await memberships().findOne({ userId: x.user._id, workspaceId: used.workspaceId }))) {
+        await sessions().updateOne({ tokenHash: x.sessionHash }, { $set: { workspaceId: used.workspaceId } })
+        return me((await sessionFor(x.user._id, used.workspaceId))!)
+      }
+    }
     const inv = await links().findOne({ _id: new ObjectId(seg[1]), purpose: 'invite', ...live() })
     // Only the invited email can answer; anyone else gets the same answer as an expired link.
     if (!inv || inv.email !== x.user.email || !inv.workspaceId) throw new HttpError(410, 'This invite was revoked, has expired or was already answered.')
     const w = await workspaces().findOne({ _id: inv.workspaceId })
     if (!w) throw new HttpError(410, 'This workspace no longer exists.')
     if (seg[2] === 'decline') {
-      await links().updateOne({ tokenHash: inv.tokenHash, ...live() }, { $set: { revokedAt: new Date(), declinedAt: new Date() } })
+      await links().updateOne({ tokenHash: inv.tokenHash, ...live() }, { $set: { revokedAt: new Date(), declinedAt: new Date() }, $unset: { live: '' } })
       traceIn(w._id, x.user._id, 'member.invite_declined', { email: x.user.email }, { entity: 'member', id: x.user._id })
       return me((await sessionFor(x.user._id, x.workspace?._id))!)
     }
-    await consumeLink(inv)
+    try {
+      await consumeLink(inv)
+    } catch (err) {
+      // The other request of a double accept used the link first (not revoked): joining is that one's answer too.
+      const won = await links().findOne({ tokenHash: inv.tokenHash, usedAt: { $exists: true }, revokedAt: { $exists: false } })
+      if (!won) throw err
+    }
     if (!(await memberships().findOne({ userId: x.user._id, workspaceId: w._id })))
-      await memberships().insertOne({ workspaceId: w._id, userId: x.user._id, role: inv.role ?? 'agent', createdAt: new Date() })
+      await memberships()
+        .insertOne({ workspaceId: w._id, userId: x.user._id, role: inv.role ?? 'agent', createdAt: new Date() })
+        .catch((err) => {
+          if (!isDuplicate(err)) throw err // already joined: the unique membership index said so
+        })
     await sessions().updateOne({ tokenHash: x.sessionHash }, { $set: { workspaceId: w._id } })
     const inviter = inv.invitedBy ? await users().findOne({ _id: inv.invitedBy }) : null
-    if (inviter) await mail.memberJoined(inviter.email, x.user.name, w.name).catch(() => {})
+    if (inviter) await notice('member joined', mail.memberJoined(inviter.email, x.user.name, w.name))
     traceIn(w._id, x.user._id, 'member.joined', { role: inv.role ?? 'agent', name: x.user.name }, { entity: 'member', id: x.user._id })
     return me((await sessionFor(x.user._id, w._id))!)
   }
@@ -508,6 +650,51 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     await sessions().updateOne({ tokenHash: x.sessionHash }, { $set: { workspaceId: w._id } })
     return me((await sessionFor(x.user._id, w._id))!)
   }
+  if (path === '/api/workspace' && m === 'GET') {
+    const x = needWorkspace(s)
+    return { id: x.workspace._id, name: x.workspace.name, createdAt: x.workspace.createdAt, ownerId: x.workspace.ownerId || null }
+  }
+  if (path === '/api/workspace' && m === 'PUT') {
+    const x = needWorkspace(s)
+    if (x.role !== 'owner') throw new HttpError(403, 'Only owners can rename the workspace.')
+    const name = text(body.name, 'a workspace name')
+    if (name !== x.workspace.name) {
+      await workspaces().updateOne({ _id: x.workspace._id }, { $set: { name } })
+      traceIn(x.workspace._id, x.user._id, 'workspace.renamed', { name }, { entity: 'workspace', id: x.workspace._id }, diff({ name: x.workspace.name }, { name }))
+    }
+    return me((await sessionFor(x.user._id, x.workspace._id))!)
+  }
+  if (path === '/api/workspace/transfer' && m === 'POST') {
+    const x = needWorkspace(s)
+    if (x.role !== 'owner') throw new HttpError(403, 'Only owners can hand over the workspace.')
+    await limit(`pw|${x.user._id}`, 10, 'Too many attempts. Try again in an hour.')
+    if (!(await verifyPassword(String(body.password ?? ''), x.user.passwordHash))) throw new HttpError(400, 'Your password is incorrect.')
+    const to = typeof body.userId === 'string' ? body.userId : ''
+    if (to === x.user._id) throw new HttpError(400, 'Pick someone else to make owner.')
+    const target = await memberships().findOne({ workspaceId: x.workspace._id, userId: to })
+    const person = target && (await users().findOne({ _id: to }))
+    if (!target || !person) throw new HttpError(404, 'This person isn’t in your workspace.')
+    if (body.stepDown !== undefined && typeof body.stepDown !== 'boolean') throw new HttpError(400, 'stepDown must be true or false.')
+    const stepDown = body.stepDown === true
+    if (target.role !== 'owner') await memberships().updateOne({ workspaceId: x.workspace._id, userId: to }, { $set: { role: 'owner' } })
+    await workspaces().updateOne({ _id: x.workspace._id }, { $set: { ownerId: to } })
+    if (stepDown) {
+      await memberships().updateOne({ workspaceId: x.workspace._id, userId: x.user._id }, { $set: { role: 'admin' } })
+      await keepAnOwner(x.workspace._id, () => memberships().updateOne({ workspaceId: x.workspace._id, userId: x.user._id }, { $set: { role: 'owner' } }))
+    }
+    traceIn(x.workspace._id, x.user._id, 'workspace.transferred', { name: person.name, stepDown }, { entity: 'member', id: to }, { ownerId: [x.workspace.ownerId || null, to], ...(target.role !== 'owner' && { role: [target.role, 'owner'] }) })
+    if (target.role !== 'owner') await notice('role changed', mail.roleChanged(person.email, x.workspace.name, 'owner'))
+    return me((await sessionFor(x.user._id, x.workspace._id))!)
+  }
+  if ((seg = path.match(/^\/api\/workspace\/joining\/([0-9a-f-]{36})$/)) && m === 'DELETE') {
+    const x = needCan(s, 'members.manage')
+    const j = await users().findOne({ _id: seg[1], pendingWorkspaceId: x.workspace._id })
+    if (!j) throw new HttpError(404, 'This person already finished joining or was cancelled.')
+    if (!canSetRole(x.role, 'agent', j.pendingRole ?? 'agent')) throw new HttpError(403, 'Only owners can cancel someone joining as an owner.')
+    await cancelJoining(x.workspace._id, j.email)
+    traceIn(x.workspace._id, x.user._id, 'member.signup_cancelled', { email: j.email })
+    return { ok: true }
+  }
   if (path === '/api/workspace/leave' && m === 'POST') {
     const x = needWorkspace(s)
     if (x.role === 'owner' && (await ownersLeft(x.workspace._id, x.user._id)) === 0)
@@ -518,7 +705,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     await sessions().updateMany({ userId: x.user._id, workspaceId: x.workspace._id }, { $unset: { workspaceId: '' } })
     await apiTokens().deleteMany({ userId: x.user._id, workspaceId: x.workspace._id })
     const owners = await memberships().find({ workspaceId: x.workspace._id, role: 'owner' }).toArray()
-    for (const o of await users().find({ _id: { $in: owners.map((mm) => mm.userId) } }).toArray()) await mail.memberLeft(o.email, x.user.name, x.workspace.name).catch(() => {})
+    for (const o of await users().find({ _id: { $in: owners.map((mm) => mm.userId) } }).toArray()) await notice('member left', mail.memberLeft(o.email, x.user.name, x.workspace.name))
     traceIn(x.workspace._id, x.user._id, 'member.left', { name: x.user.name }, { entity: 'member', id: x.user._id })
     await withWorkspace(x.workspace._id, () => cleanUpMember(x.user._id, x.user.name), null, { userId: x.user._id })
     return me((await sessionFor(x.user._id))!)
@@ -530,44 +717,68 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
     const byId = new Map(people.map((p) => [p._id, p]))
     const members = ms.map((mm) => ({ userId: mm.userId, name: byId.get(mm.userId)?.name ?? '', email: byId.get(mm.userId)?.email ?? '', role: mm.role, joinedAt: mm.createdAt }))
     if (!can(x.role, 'members.manage')) return { members, invites: [], joining: [] }
-    const inv = await links().find({ workspaceId: x.workspace._id, purpose: 'invite', ...live() }).sort({ createdAt: -1 }).toArray()
+    // Unanswered invites, expired ones too (they can be resent); the newest per person.
+    const inv = await links().find({ workspaceId: x.workspace._id, purpose: 'invite', usedAt: { $exists: false }, revokedAt: { $exists: false } }).sort({ createdAt: -1 }).toArray()
+    const seen = new Set<string>()
+    const now = Date.now()
     // Opened their invite (email verified) but haven't finished setup yet.
     const joining = await users().find({ pendingWorkspaceId: x.workspace._id }).toArray()
     return {
       members,
-      invites: inv.map((i) => ({ id: String((i as MagicLink & { _id: ObjectId })._id), email: i.email, role: i.role ?? 'agent', invitedAt: i.createdAt, expiresAt: i.expiresAt })),
-      joining: joining.map((j) => ({ email: j.email, verifiedAt: j.emailVerifiedAt })),
+      invites: inv
+        .filter((i) => !seen.has(i.email) && !!seen.add(i.email))
+        .map((i) => ({ id: String((i as MagicLink & { _id: ObjectId })._id), email: i.email, role: i.role ?? 'agent', invitedAt: i.invitedAt ?? i.createdAt, sentAt: i.createdAt, expiresAt: i.expiresAt, expired: +i.expiresAt <= now })),
+      joining: joining.map((j) => ({ userId: j._id, email: j.email, role: j.pendingRole ?? 'agent', verifiedAt: j.emailVerifiedAt })),
     }
   }
   if (path === '/api/workspace/invites' && m === 'POST') {
     const x = needCan(s, 'members.manage')
     const e = email(body.email)
+    if (body.role !== undefined && !isRole(body.role)) throw new HttpError(400, 'Role must be owner, admin, supervisor or agent.')
     const role: Role = isRole(body.role) ? body.role : 'agent'
     if (!canSetRole(x.role, 'agent', role)) throw new HttpError(403, `Your role can’t invite someone as ${roleLabel(role)}.`)
     await limit(`invite|${x.workspace._id}`, 50, 'Too many invites sent. Try again in an hour.')
+    await limit(`send|${e}`, 5, 'Too many emails sent to this address. Try again in an hour.')
     const existing = await users().findOne({ email: e })
     if (existing && (await memberships().findOne({ userId: existing._id, workspaceId: x.workspace._id }))) throw new HttpError(409, 'This person is already in this workspace.')
-    if (await links().findOne({ email: e, workspaceId: x.workspace._id, purpose: 'invite', ...live() }))
-      throw new HttpError(409, 'This person is already invited. Resend the invite from the list.')
+    if (await links().findOne({ email: e, workspaceId: x.workspace._id, purpose: 'invite', ...live() })) throw new HttpError(409, ALREADY_INVITED)
+    if (existing?.pendingWorkspaceId === x.workspace._id) throw new HttpError(409, 'This person is already joining. Cancel their sign-up from the list first.')
+    await retireExpiredInvites(x.workspace._id, e)
     const send = existing?.passwordHash ? mail.inviteExisting : mail.invite
-    await mailLink({ email: e, purpose: 'invite', workspaceId: x.workspace._id, invitedBy: x.user._id, role }, (t) => send(e, t, x.user.name, x.workspace.name))
+    // Two invites at the same moment: the one-live-invite index lets only one in.
+    await mailLink({ email: e, purpose: 'invite', workspaceId: x.workspace._id, invitedBy: x.user._id, role }, (t) => send(e, t, x.user.name, x.workspace.name)).catch((err) => {
+      throw isDuplicate(err) ? new HttpError(409, ALREADY_INVITED) : err
+    })
     traceIn(x.workspace._id, x.user._id, 'member.invited', { role, email: e })
     return { ok: true }
   }
   if ((seg = path.match(/^\/api\/workspace\/invites\/([a-f0-9]{24})(\/resend)?$/))) {
     const x = needCan(s, 'members.manage')
-    const inv = await links().findOne({ _id: new ObjectId(seg[1]), workspaceId: x.workspace._id, purpose: 'invite', ...live() })
-    if (!inv) throw new HttpError(404, 'This invite was already accepted, revoked or has expired.')
+    // Expired ones count: they're listed so they can be resent (or cleared).
+    const inv = await links().findOne({ _id: new ObjectId(seg[1]), workspaceId: x.workspace._id, purpose: 'invite', usedAt: { $exists: false }, revokedAt: { $exists: false } })
+    if (!inv) throw new HttpError(404, 'This invite was already accepted or revoked.')
+    if (!canSetRole(x.role, 'agent', inv.role ?? 'agent')) throw new HttpError(403, `Your role can’t manage an invite as ${roleLabel(inv.role ?? 'agent')}.`)
     if (m === 'DELETE' && !seg[2]) {
-      await links().updateOne({ tokenHash: inv.tokenHash }, { $set: { revokedAt: new Date() } })
+      await links().updateOne({ tokenHash: inv.tokenHash }, { $set: { revokedAt: new Date() }, $unset: { live: '' } })
+      // Someone who already opened an earlier link and is still setting up doesn't join either.
+      await cancelJoining(x.workspace._id, inv.email)
       traceIn(x.workspace._id, x.user._id, 'member.invite_revoked', { email: inv.email })
       return { ok: true }
     }
     if (m === 'POST' && seg[2]) {
       await limit(`send|${inv.email}`, 5, 'Too many emails sent to this address. Try again in an hour.')
       const send = (await users().findOne({ email: inv.email }))?.passwordHash ? mail.inviteExisting : mail.invite
-      await mailLink({ email: inv.email, purpose: 'invite', workspaceId: x.workspace._id, invitedBy: x.user._id, role: inv.role }, (t) => send(inv.email, t, x.user.name, x.workspace.name))
+      // The old link steps aside so the new one can be the live invite; if sending fails it's back as it was.
+      await links().updateOne({ tokenHash: inv.tokenHash }, { $unset: { live: '' } })
+      await retireExpiredInvites(x.workspace._id, inv.email)
+      try {
+        await mailLink({ email: inv.email, purpose: 'invite', workspaceId: x.workspace._id, invitedBy: x.user._id, role: inv.role, invitedAt: inv.invitedAt ?? inv.createdAt }, (t) => send(inv.email, t, x.user.name, x.workspace.name))
+      } catch (err) {
+        if (+inv.expiresAt > Date.now()) await links().updateOne({ tokenHash: inv.tokenHash, revokedAt: { $exists: false } }, { $set: { live: true } }).catch(() => {})
+        throw isDuplicate(err) ? new HttpError(409, ALREADY_INVITED) : err
+      }
       await links().updateOne({ tokenHash: inv.tokenHash }, { $set: { revokedAt: new Date() } }) // sent: the old link stops working
+      traceIn(x.workspace._id, x.user._id, 'member.invite_resent', { email: inv.email, role: inv.role ?? 'agent' })
       return { ok: true }
     }
   }
@@ -598,7 +809,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
       await apiTokens().deleteMany({ userId: target.userId, workspaceId: x.workspace._id })
       traceIn(x.workspace._id, x.user._id, 'member.removed', { name: person.name, email: person.email }, { entity: 'member', id: target.userId })
       await withWorkspace(x.workspace._id, () => cleanUpMember(target.userId, person.name), null, { userId: x.user._id })
-      await mail.removed(person.email, x.workspace.name)
+      await notice('removed', mail.removed(person.email, x.workspace.name))
       return { ok: true }
     }
     if (m === 'PUT') {
@@ -609,8 +820,13 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL
       if (target.role === 'owner' && (await ownersLeft(x.workspace._id, target.userId)) === 0) throw new HttpError(400, 'A workspace needs at least one owner.')
       await memberships().updateOne({ workspaceId: x.workspace._id, userId: target.userId }, { $set: { role } })
       if (target.role === 'owner') await keepAnOwner(x.workspace._id, () => memberships().updateOne({ workspaceId: x.workspace._id, userId: target.userId }, { $set: { role: 'owner' } }))
+      // The named owner stepped down: the record points at an owner still there.
+      if (target.role === 'owner' && x.workspace.ownerId === target.userId) {
+        const other = await memberships().find({ workspaceId: x.workspace._id, role: 'owner' }).sort({ createdAt: 1 }).limit(1).next()
+        if (other) await workspaces().updateOne({ _id: x.workspace._id }, { $set: { ownerId: other.userId } })
+      }
       traceIn(x.workspace._id, x.user._id, 'member.role_changed', { name: person.name }, { entity: 'member', id: target.userId }, { role: [target.role, role] })
-      await mail.roleChanged(person.email, x.workspace.name, role)
+      await notice('role changed', mail.roleChanged(person.email, x.workspace.name, role))
       return { ok: true }
     }
   }
@@ -625,7 +841,7 @@ async function sessionFor(userId: string, workspaceId?: string) {
 
 /** What an emailed link does: verifies the email, uses the link up, and signs the person in.
  *  Sign-up and invites leave an unfinished account the app then completes (finishSetup). */
-async function verify(res: http.ServerResponse, token: unknown) {
+async function verify(req: http.IncomingMessage, res: http.ServerResponse, token: unknown) {
   const l = await findLink(token)
   const existing = await users().findOne({ email: l.email })
   const now = new Date()
@@ -636,7 +852,11 @@ async function verify(res: http.ServerResponse, token: unknown) {
     if (existing) throw new HttpError(409, 'Another account already uses that email.')
     await consumeLink(l)
     await users().updateOne({ _id: user._id }, { $set: { email: l.email, emailVerifiedAt: now } })
-    await mail.emailChanged(user.email, l.email)
+    // Other devices log out; the browser that opened the link stays signed in if it was this person's.
+    const mine = cookieValue(req)
+    await sessions().deleteMany({ userId: user._id, ...(mine && { tokenHash: { $ne: sha256(mine) } }) })
+    await traceSelf(user._id, 'profile.email_changed')
+    await notice('email changed', mail.emailChanged(user.email, l.email))
     return { purpose: l.purpose, email: l.email }
   }
 
@@ -644,8 +864,10 @@ async function verify(res: http.ServerResponse, token: unknown) {
     if (!existing?.passwordHash) throw new HttpError(410, 'This link has expired or was already used.')
     await consumeLink(l)
     await users().updateOne({ _id: existing._id }, { $set: { mustSetPassword: true } })
-    await sessions().deleteMany({ userId: existing._id }) // the old password may be known to someone else
-    await startSession(res, existing._id)
+    // The old password may be known to someone else: every device and API token stops working.
+    const tokensRevoked = await afterPasswordChange(existing._id)
+    if (tokensRevoked) await traceSelf(existing._id, 'profile.password_changed', { reset: true, tokensRevoked })
+    await startSession(req, res, existing._id)
     return { purpose: l.purpose, me: await me((await sessionFor(existing._id))!) }
   }
 
@@ -667,7 +889,7 @@ async function verify(res: http.ServerResponse, token: unknown) {
     const id = existing?._id ?? randomUUID()
     if (existing) await users().updateOne({ _id: id }, { $set: pending })
     else await users().insertOne({ _id: id, email: l.email, name: '', createdAt: now, ...pending })
-    await startSession(res, id)
+    await startSession(req, res, id)
     return { purpose: l.purpose, me: await me((await sessionFor(id))!) }
   }
 
@@ -677,7 +899,7 @@ async function verify(res: http.ServerResponse, token: unknown) {
   const id = existing?._id ?? randomUUID()
   if (existing) await users().updateOne({ _id: id }, { $set: { emailVerifiedAt: now }, $unset: { pendingWorkspaceId: '', pendingInvitedBy: '' } })
   else await users().insertOne({ _id: id, email: l.email, name: '', emailVerifiedAt: now, createdAt: now })
-  await startSession(res, id)
+  await startSession(req, res, id)
   return { purpose: l.purpose, me: await me((await sessionFor(id))!) }
 }
 
@@ -687,21 +909,51 @@ async function finishSetup(x: Session, body: Obj) {
   if (x.setup !== 'account') throw new HttpError(400, 'Your account is already set up.')
   const name = text(body.name, 'your name')
   const pw = password(body.password)
-  const joining = x.user.pendingWorkspaceId ? await workspaces().findOne({ _id: x.user.pendingWorkspaceId }) : null
+  const pendingId = x.user.pendingWorkspaceId
+  const joining = pendingId ? await workspaces().findOne({ _id: pendingId }) : null
+  // The invite must still stand: revoked (or the sign-up cancelled) since the link was opened means no joining.
+  const invite = joining ? await usedInvite(joining._id, x.user.email) : null
+  if (joining && !invite) {
+    await users().updateOne({ _id: x.user._id }, { $unset: { pendingWorkspaceId: '', pendingInvitedBy: '', pendingRole: '' } })
+    throw new HttpError(410, `Your invite to ${joining.name} was withdrawn. Ask for a new one, or create your own workspace.`)
+  }
   const workspaceName = joining ? null : text(body.workspaceName, 'a workspace name')
   await users().updateOne(
     { _id: x.user._id },
     { $set: { name, passwordHash: await hashPassword(pw) }, $unset: { pendingWorkspaceId: '', pendingInvitedBy: '', pendingRole: '' } },
   )
   if (joining) {
-    if (!(await memberships().findOne({ userId: x.user._id, workspaceId: joining._id })))
-      await memberships().insertOne({ workspaceId: joining._id, userId: x.user._id, role: x.user.pendingRole ?? 'agent', createdAt: new Date() })
+    const role = x.user.pendingRole ?? 'agent'
+    const added = !(await memberships().findOne({ userId: x.user._id, workspaceId: joining._id }))
+    if (added)
+      await memberships()
+        .insertOne({ workspaceId: joining._id, userId: x.user._id, role, createdAt: new Date() })
+        .catch((err) => {
+          if (!isDuplicate(err)) throw err
+        })
+    // Revoked at the same moment: undo, so a cancelled invite never ends in a membership.
+    if (!(await usedInvite(joining._id, x.user.email))) {
+      if (added) await memberships().deleteOne({ workspaceId: joining._id, userId: x.user._id })
+      throw new HttpError(410, `Your invite to ${joining.name} was withdrawn. Ask for a new one, or create your own workspace.`)
+    }
+    traceIn(joining._id, x.user._id, 'member.joined', { role, name }, { entity: 'member', id: x.user._id })
     const inviter = x.user.pendingInvitedBy ? await users().findOne({ _id: x.user.pendingInvitedBy }) : null
-    if (inviter) await mail.memberJoined(inviter.email, name, joining.name)
+    if (inviter) await notice('member joined', mail.memberJoined(inviter.email, name, joining.name))
   } else await createWorkspace(x.user._id, workspaceName!)
   const after = (await sessionFor(x.user._id, joining?._id))!
-  await mail.welcome(x.user.email, name, after.workspace?.name ?? '')
+  await notice('welcome', mail.welcome(x.user.email, name, after.workspace?.name ?? ''))
   return me(after)
+}
+
+/** The invite link this person opened to join `workspaceId`, while it hasn't been revoked. */
+const usedInvite = (workspaceId: string, email: string) =>
+  links().findOne({ workspaceId, email, purpose: 'invite', usedAt: { $exists: true }, revokedAt: { $exists: false } }, { sort: { usedAt: -1 } })
+
+/** Stops someone who opened an invite (and is still setting up) from joining: their pending join is cleared
+ *  and the link they used is marked revoked, so finishing setup can't bring it back. */
+async function cancelJoining(workspaceId: string, email: string) {
+  await users().updateMany({ email, pendingWorkspaceId: workspaceId }, { $unset: { pendingWorkspaceId: '', pendingInvitedBy: '', pendingRole: '' } })
+  await links().updateMany({ workspaceId, email, purpose: 'invite', usedAt: { $exists: true }, revokedAt: { $exists: false } }, { $set: { revokedAt: new Date() } })
 }
 
 const TITLES: Titles = {

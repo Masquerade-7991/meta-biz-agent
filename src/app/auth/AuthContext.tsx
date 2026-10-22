@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { isDummyMode } from '@/app/api/dummy'
+import { isDummyMode, setDemoRole } from '@/app/api/dummy'
 import { UNAUTHORIZED_EVENT } from '@/app/api/meta'
 import { authApi, demoMe, type Me } from './api'
 
@@ -47,6 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMe(null)
   }, [])
 
+  // Dummy mode's answers follow the role being tried out (Demo controls → Role).
+  if (isDummyMode()) setDemoRole(me?.role ?? null)
   const value = useMemo(() => ({ me, setMe, refresh, logout, serverDown, databaseDown }), [me, refresh, logout, serverDown, databaseDown])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

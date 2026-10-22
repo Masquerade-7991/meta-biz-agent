@@ -57,6 +57,8 @@ export interface CannedResponse {
   shortcut: string
   body: string
   shared: boolean
+  /** Who made it (a member's id). */
+  createdBy?: string
   /** A macro: what happens to the ticket after it's sent. */
   actions?: CannedActions | null
 }

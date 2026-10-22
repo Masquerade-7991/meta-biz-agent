@@ -60,6 +60,7 @@ Round: 0 / 8
 Rules:
 - Every agent **reads the whole ledger first** and **appends its report to `## Log` last**. An agent's chat reply repeats the same block; the ledger is what counts.
 - Entries are append-only. Nobody edits or deletes another entry; corrections are new entries.
+- Agents append with one shell append (`cat >> <ledger> <<'EOF' … EOF`), never with Write or Edit, so agents running in parallel can't overwrite each other. Only the coordinator edits the ledger in place (status, ticks, plan, decisions).
 - Acceptance criteria are fixed once work starts. Changing one is a Decision the coordinator records, with the reason; if it changes what the user asked for, it needs the user (§7).
 - Each criterion has a runnable check or an exact observation. "Looks good" is not a check.
 

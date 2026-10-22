@@ -15,8 +15,8 @@ import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail, errorText, getAgentOnNumber, type AgentOnNumber } from '@/app/api/meta'
 import { can } from '@/app/lib/permissions'
 import type { NavId } from '@/app/nav'
-import type { SettingsTab } from '@/app/components/shell/SettingsPage'
-import { listAccounts, type WaAccount } from '@/app/api/whatsapp'
+import type { SettingsTab } from '@/app/components/shell/settings/areas'
+import { workspaceAccounts, type WaAccount } from '@/app/api/whatsapp'
 import { AccountSteps } from '@/app/whatsapp/AccountSteps'
 import { ConnectNumberButton } from '@/app/whatsapp/ConnectNumberDialog'
 import { isDummyMode } from '@/app/api/dummy'
@@ -47,7 +47,7 @@ async function loadSnapshot(accounts: WaAccount[]): Promise<Snapshot> {
   )
   const pick = withAgents.find((x) => x.agent) ?? withAgents[0]
   return {
-    number: pick ? { id: pick.n.id, display: pick.n.display || pick.n.id, name: pick.n.verifiedName } : null,
+    number: pick ? { id: pick.n.id, display: pick.n.display, name: pick.n.verifiedName } : null,
     agent: pick?.agent ?? null,
     lookupError: pick?.agent ? null : (withAgents.find((x) => x.error)?.error ?? null),
   }
@@ -142,7 +142,7 @@ function GetStarted({
             number && (
               <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <span>
-                  {number.verifiedName || account.wabaName} · {number.display || number.id}
+                  {[number.verifiedName || account.wabaName, number.display].filter(Boolean).join(' · ')}
                 </span>
                 {can(me?.role, 'numbers.view') && (
                   <button type="button" className={link} onClick={() => onNavigate('whatsapp')}>
@@ -181,7 +181,7 @@ function GetStarted({
               <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <AgentPill agent={agent} />
                 <span>
-                  On {snap.number?.name} · {snap.number?.display}
+                  On {[snap.number?.name, snap.number?.display].filter(Boolean).join(' · ')}
                 </span>
                 <button type="button" className={link} onClick={() => onNavigate('ai-agents')}>
                   Open your agent &rarr;
@@ -500,6 +500,7 @@ function ThisWeek({ onNavigate }: { onNavigate: (id: NavId) => void }) {
 /** Home: connect WhatsApp and build the agent; once that's done, what needs attention today. */
 export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigate: (id: NavId) => void; onOpenSettings: (tab: SettingsTab) => void; onOpenChat: (phone: string) => void }) {
   const { me } = useAuth()
+  const role = me?.role
   const navigate = useNavigate()
   const [snap, setSnap] = useState<Snapshot | null>(null)
   // Signs this isn't a first visit: agents saved in the console (any number), and chats.
@@ -535,7 +536,7 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
     let cancelled = false
     setError(null)
     Promise.all([
-      listAccounts().then(async (a) => [a, await loadSnapshot(a)] as const),
+      workspaceAccounts(role).then(async (a) => [a, await loadSnapshot(a)] as const),
       listStoredAgents().catch(() => null),
       loadChats(),
     ]).then(
@@ -550,7 +551,7 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
     return () => {
       cancelled = true
     }
-  }, [attempt, loadChats])
+  }, [attempt, loadChats, role])
 
   const account = accounts[0]
   const billed = !!account && billingDone(account)

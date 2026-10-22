@@ -1,8 +1,8 @@
 // Calls to the server's account, workspace and member routes (server/auth.ts).
 import { MetaError, parse } from '@/app/api/meta'
-import { isDummyMode, storageKey } from '@/app/api/dummy'
+import { demoRoleNow, isDummyMode, storageKey } from '@/app/api/dummy'
 
-import type { Role } from '@/app/lib/permissions'
+import { can, canSetRole, isRole, type Role } from '@/app/lib/permissions'
 export type { Role }
 export interface Me {
   user: { id: string; name: string; email: string }
@@ -16,6 +16,8 @@ export interface Me {
   workspaces: { id: string; name: string; role: Role }[]
   /** Invites to further workspaces, answered in the app (Accept / Decline). */
   invites: PendingInvite[]
+  /** A new login email waiting for its confirmation link. */
+  pendingEmail?: string | null
 }
 export interface PendingInvite {
   id: string
@@ -60,6 +62,39 @@ export interface Invite {
   role: Role
   invitedAt: string
   expiresAt: string
+  /** When the email last went out (a resend moves it). */
+  sentAt?: string
+  /** Past its 7 days: the link no longer works, but it can be resent. */
+  expired?: boolean
+}
+/** Someone who opened their invite and is still setting up their account. */
+export interface Joining {
+  userId?: string
+  email: string
+  role?: Role
+  verifiedAt: string
+}
+export interface WorkspaceInfo {
+  id: string
+  name: string
+  createdAt: string
+  ownerId: string | null
+}
+/** Which emails this person gets from this workspace (the bell always shows everything). */
+export interface NotificationPrefs {
+  escalations: boolean
+  assigned: boolean
+  slaBreach: boolean
+  budget: boolean
+  digest: boolean
+}
+export interface SessionRow {
+  id: string
+  userAgent: string | null
+  ip: string | null
+  lastSeenAt: string | null
+  createdAt: string
+  current: boolean
 }
 
 // Dummy mode has no server: members and invites live in this tab, with the same role rules.
@@ -68,7 +103,11 @@ let demoMembers: Member[] = [
   { userId: 'demo-2', name: 'Riya Mehta', email: 'riya@example.com', role: 'supervisor', joinedAt: new Date(Date.now() - 12 * 86_400_000).toISOString() },
   { userId: 'demo-3', name: 'Arjun Das', email: 'arjun@example.com', role: 'agent', joinedAt: new Date(Date.now() - 3 * 86_400_000).toISOString() },
 ]
-let demoInvites: Invite[] = []
+const DAY = 86_400_000
+let demoInvites: Invite[] = [
+  { id: 'inv-demo-old', email: 'kabir@example.com', role: 'agent', invitedAt: new Date(Date.now() - 9 * DAY).toISOString(), sentAt: new Date(Date.now() - 9 * DAY).toISOString(), expiresAt: new Date(Date.now() - 2 * DAY).toISOString(), expired: true },
+]
+let demoJoining: Joining[] = [{ userId: 'demo-joining', email: 'meera@example.com', role: 'agent', verifiedAt: new Date(Date.now() - 3_600_000).toISOString() }]
 /** The demo workspace's people, for other dummy areas (teams, routing). */
 export const demoMemberList = () => demoMembers
 
@@ -137,27 +176,139 @@ function dummyAccount(method: string, path: string, body: Record<string, unknown
 }
 
 function dummyWorkspace(method: string, path: string, body: Record<string, unknown>): unknown {
-  if (path === '/api/workspace/members') return { members: demoMembers, invites: demoInvites, joining: [] }
+  const actor = demoRoleNow() as Role
+  const deny = (detail: string): never => {
+    throw new MetaError(403, 'Not allowed', detail)
+  }
+  if (path === '/api/workspace/members') {
+    const now = Date.now()
+    return { members: demoMembers, invites: demoInvites.map((i) => ({ ...i, expired: Date.parse(i.expiresAt) < now })), joining: demoJoining }
+  }
+  if (!can(actor, 'members.manage')) deny('Only owners and admins manage members.')
   if (path === '/api/workspace/invites') {
     const email = String(body.email ?? '').trim().toLowerCase()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new MetaError(400, 'Check your details', 'Enter a valid email address.')
-    if (demoInvites.some((i) => i.email === email) || demoMembers.some((m) => m.email === email)) throw new MetaError(409, 'Already exists', 'This person is already invited or in the workspace.')
-    demoInvites = [{ id: `inv${Date.now()}`, email, role: (body.role as Role) ?? 'agent', invitedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString() }, ...demoInvites]
+    if (!isRole(body.role)) throw new MetaError(400, 'Check your details', 'Pick a role.')
+    if (!canSetRole(actor, 'agent', body.role)) deny('Only owners can invite owners.')
+    if (demoInvites.some((i) => i.email === email && Date.parse(i.expiresAt) > Date.now()) || demoMembers.some((m) => m.email === email)) throw new MetaError(409, 'Already exists', 'This person is already invited or in the workspace.')
+    const now = new Date().toISOString()
+    demoInvites = [{ id: `inv${Date.now()}`, email, role: body.role, invitedAt: now, sentAt: now, expiresAt: new Date(Date.now() + 7 * DAY).toISOString() }, ...demoInvites.filter((i) => i.email !== email)]
     return { ok: true }
   }
-  const inv = path.match(/^\/api\/workspace\/invites\/([^/]+)/)
+  const inv = path.match(/^\/api\/workspace\/invites\/([^/]+)(\/resend)?$/)
   if (inv) {
-    if (method === 'DELETE') demoInvites = demoInvites.filter((i) => i.id !== inv[1])
+    const i = demoInvites.find((x) => x.id === inv[1])
+    if (!i) throw new MetaError(404, 'Not found', 'That invite was already answered or revoked.')
+    if (!canSetRole(actor, i.role, i.role)) deny('Only owners can change an invite to be an owner.')
+    if (method === 'DELETE') demoInvites = demoInvites.filter((x) => x.id !== i.id)
+    else {
+      const now = new Date().toISOString()
+      demoInvites = demoInvites.map((x) => (x.id === i.id ? { ...x, sentAt: now, expiresAt: new Date(Date.now() + 7 * DAY).toISOString(), expired: false } : x))
+    }
+    return { ok: true }
+  }
+  const join = path.match(/^\/api\/workspace\/joining\/([^/]+)$/)
+  if (join && method === 'DELETE') {
+    demoJoining = demoJoining.filter((j) => j.userId !== join[1])
     return { ok: true }
   }
   const mem = path.match(/^\/api\/workspace\/members\/([^/]+)$/)
-  if (mem && method === 'DELETE') demoMembers = demoMembers.filter((m) => m.userId !== mem[1])
-  if (mem && method === 'PUT') {
-    const target = demoMembers.find((m) => m.userId === mem[1])
-    if (target?.role === 'owner' && body.role !== 'owner' && demoMembers.filter((m) => m.role === 'owner').length === 1) throw new MetaError(400, 'Check your details', 'A workspace needs at least one owner.')
+  const target = mem && demoMembers.find((m) => m.userId === mem[1])
+  if (mem && !target) throw new MetaError(404, 'Not found', 'That person isn’t in this workspace.')
+  if (mem && target && method === 'DELETE') {
+    if (!canSetRole(actor, target.role, 'agent')) deny('Only owners can remove owners.')
+    demoMembers = demoMembers.filter((m) => m.userId !== mem[1])
+  }
+  if (mem && target && method === 'PUT') {
+    if (!isRole(body.role)) throw new MetaError(400, 'Check your details', 'That isn’t a role.')
+    if (!canSetRole(actor, target.role, body.role)) deny('Only owners can change owners.')
+    if (target.role === 'owner' && body.role !== 'owner' && demoMembers.filter((m) => m.role === 'owner').length === 1) throw new MetaError(400, 'Check your details', 'A workspace needs at least one owner.')
     demoMembers = demoMembers.map((m) => (m.userId === mem[1] ? { ...m, role: body.role as Role } : m))
   }
   return { ok: true }
+}
+
+// The demo workspace's own details, and the demo person's profile, notifications and devices.
+const demoWorkspaceCreated = new Date(Date.now() - 40 * DAY).toISOString()
+let demoNotify: NotificationPrefs = { escalations: true, assigned: true, slaBreach: true, budget: true, digest: false }
+let demoSessions: SessionRow[] = [
+  { id: 'sess-this', userAgent: navigator.userAgent, ip: '203.0.113.10', lastSeenAt: new Date().toISOString(), createdAt: new Date(Date.now() - 2 * DAY).toISOString(), current: true },
+  { id: 'sess-phone', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1', ip: '198.51.100.24', lastSeenAt: new Date(Date.now() - 5 * 3_600_000).toISOString(), createdAt: new Date(Date.now() - 9 * DAY).toISOString(), current: false },
+  { id: 'sess-laptop', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141.0 Safari/537.36', ip: '192.0.2.77', lastSeenAt: new Date(Date.now() - 6 * DAY).toISOString(), createdAt: new Date(Date.now() - 30 * DAY).toISOString(), current: false },
+]
+const DEMO_PASSWORD = 'demo-password'
+const checkPassword = (p: unknown) => {
+  if (String(p ?? '') !== DEMO_PASSWORD) throw new MetaError(400, 'Check your details', `That password isn’t right. (Demo: the password is “${DEMO_PASSWORD}”.)`)
+}
+function dummyWorkspaceInfo(method: string, path: string, body: Record<string, unknown>): unknown {
+  const me = demoMe()
+  const owner = demoMembers.find((m) => m.role === 'owner')?.userId ?? null
+  const info = (): WorkspaceInfo => ({ id: me.workspace?.id ?? 'demo', name: demoMe().workspace?.name ?? '', createdAt: demoWorkspaceCreated, ownerId: owner })
+  if (method === 'GET') return info()
+  if (demoRoleNow() !== 'owner') throw new MetaError(403, 'Not allowed', 'Only owners can do this.')
+  if (path === '/api/workspace' && method === 'PUT') {
+    const name = String(body.name ?? '').trim()
+    if (!name) throw new MetaError(400, 'Check your details', 'Enter a workspace name.')
+    if (name.length > 80) throw new MetaError(400, 'Check your details', 'Keep the name to 80 characters.')
+    const id = me.workspace?.id
+    return saveDemo({ ...me, workspace: me.workspace && { ...me.workspace, name }, workspaces: me.workspaces.map((w) => (w.id === id ? { ...w, name } : w)) })
+  }
+  if (path === '/api/workspace/transfer') {
+    checkPassword(body.password)
+    const to = demoMembers.find((m) => m.userId === body.userId)
+    if (!to || to.userId === me.user.id) throw new MetaError(400, 'Check your details', 'Pick someone else in the workspace.')
+    const stepDown = body.stepDown === true
+    demoMembers = demoMembers.map((m) => (m.userId === to.userId ? { ...m, role: 'owner' } : m.userId === me.user.id && stepDown ? { ...m, role: 'admin' } : m))
+    if (!stepDown) return me
+    const id = me.workspace?.id
+    return saveDemo({ ...me, role: 'admin', workspaces: me.workspaces.map((w) => (w.id === id ? { ...w, role: 'admin' } : w)) })
+  }
+  return info()
+}
+function dummyProfile(method: string, path: string, body: Record<string, unknown>): unknown {
+  const me = demoMe()
+  if (path === '/api/account' && method === 'PUT') {
+    const name = String(body.name ?? '').trim()
+    if (!name) throw new MetaError(400, 'Check your details', 'Enter your name.')
+    demoMembers = demoMembers.map((m) => (m.userId === me.user.id ? { ...m, name } : m))
+    return saveDemo({ ...me, user: { ...me.user, name } })
+  }
+  if (path === '/api/account/password') {
+    checkPassword(body.currentPassword)
+    if (String(body.newPassword ?? '').length < 8) throw new MetaError(400, 'Check your details', 'Use at least 8 characters.')
+    demoSessions = demoSessions.filter((x) => x.current)
+    const tokensRevoked = demoTokens.length
+    demoTokens = []
+    return { ok: true, tokensRevoked }
+  }
+  if (path === '/api/account/email') {
+    checkPassword(body.password)
+    const email = String(body.newEmail ?? '').trim().toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new MetaError(400, 'Check your details', 'Enter a valid email address.')
+    if (email === me.user.email) throw new MetaError(400, 'Check your details', 'That’s already your email.')
+    saveDemo({ ...me, pendingEmail: email })
+    return { ok: true }
+  }
+  if (path === '/api/account/email/cancel') {
+    saveDemo({ ...me, pendingEmail: null })
+    return { ok: true }
+  }
+  if (path === '/api/account/notifications') {
+    if (method === 'PUT') demoNotify = { ...demoNotify, ...Object.fromEntries(Object.entries(body).filter(([k, v]) => Object.hasOwn(demoNotify, k) && typeof v === 'boolean')) }
+    return demoNotify
+  }
+  if (path === '/api/account/sessions/revoke-others') {
+    demoSessions = demoSessions.filter((x) => x.current)
+    return { ok: true }
+  }
+  const one = path.match(/^\/api\/account\/sessions\/([^/]+)$/)
+  if (one && method === 'DELETE') {
+    if (demoSessions.find((x) => x.id === one[1])?.current) throw new MetaError(400, 'Check your details', 'To sign out here, use Log out.')
+    demoSessions = demoSessions.filter((x) => x.id !== one[1])
+    return { ok: true }
+  }
+  if (path === '/api/account/sessions') return { sessions: demoSessions }
+  throw new MetaError(404, 'Not found', path)
 }
 
 // Dummy mode: tokens live in this tab and never work anywhere.
@@ -181,11 +332,23 @@ function dummyTokens(method: string, path: string, body: Record<string, unknown>
   return { tokens: demoTokens.map((t) => (all ? { ...t, userId: 'demo', ownerName: 'Demo User', ownerEmail: 'demo@helo.ai' } : t)) }
 }
 
+/** Dummy mode answers every account and workspace route in this browser, with the server's rules. */
+function dummyAnswer(method: string, path: string, body: Record<string, unknown>): unknown {
+  if (/^\/api\/(account|workspace)\/tokens(\/|$)/.test(path)) return dummyTokens(method, path, body)
+  if (/^\/api\/account\/(workspace|invites\/)/.test(path) || (path === '/api/workspace' && method === 'POST') || path === '/api/workspace/leave') return dummyAccount(method, path, body)
+  if (path === '/api/workspace' || path === '/api/workspace/transfer') return dummyWorkspaceInfo(method, path, body)
+  if (path === '/api/account' || path.startsWith('/api/account/')) return dummyProfile(method, path, body)
+  if (path === '/api/auth/me') return demoMe()
+  if (path === '/api/auth/logout') return { ok: true }
+  if (path.startsWith('/api/workspace/')) return dummyWorkspace(method, path, body)
+  return undefined
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-  if (isDummyMode() && /^\/api\/(account|workspace)\/tokens(\/|$)/.test(path)) return dummyTokens(method, path, (body ?? {}) as Record<string, unknown>) as T
-  if (isDummyMode() && (/^\/api\/account\/(workspace|invites\/)/.test(path) || path === '/api/workspace' || path === '/api/workspace/leave'))
-    return dummyAccount(method, path, (body ?? {}) as Record<string, unknown>) as T
-  if (isDummyMode() && path.startsWith('/api/workspace/')) return dummyWorkspace(method, path, (body ?? {}) as Record<string, unknown>) as T
+  if (isDummyMode()) {
+    const answer = dummyAnswer(method, path, (body ?? {}) as Record<string, unknown>)
+    if (answer !== undefined) return answer as T
+  }
   return parse<T>(
     await fetch(path, {
       method,
@@ -211,9 +374,19 @@ export const authApi = {
   leaveWorkspace: () => call<Me>('POST', '/api/workspace/leave'),
   updateName: (name: string) => call<Me>('PUT', '/api/account', { name }),
   changePassword: (currentPassword: string, newPassword: string) =>
-    call<{ ok: true }>('POST', '/api/account/password', { currentPassword, newPassword }),
+    call<{ ok: true; tokensRevoked?: number }>('POST', '/api/account/password', { currentPassword, newPassword }),
   changeEmail: (newEmail: string, password: string) => call<{ ok: true }>('POST', '/api/account/email', { newEmail, password }),
-  members: () => call<{ members: Member[]; invites: Invite[]; joining: { email: string; verifiedAt: string }[] }>('GET', '/api/workspace/members'),
+  cancelEmailChange: () => call<{ ok: true }>('POST', '/api/account/email/cancel'),
+  notifications: () => call<NotificationPrefs>('GET', '/api/account/notifications'),
+  saveNotifications: (p: Partial<NotificationPrefs>) => call<NotificationPrefs>('PUT', '/api/account/notifications', p),
+  sessions: () => call<{ sessions: SessionRow[] }>('GET', '/api/account/sessions'),
+  revokeSession: (id: string) => call<{ ok: true; current?: boolean }>('DELETE', `/api/account/sessions/${encodeURIComponent(id)}`),
+  revokeOtherSessions: () => call<{ ok: true }>('POST', '/api/account/sessions/revoke-others'),
+  workspace: () => call<WorkspaceInfo>('GET', '/api/workspace'),
+  renameWorkspace: (name: string) => call<Me>('PUT', '/api/workspace', { name }),
+  transferOwnership: (userId: string, password: string, stepDown: boolean) => call<Me>('POST', '/api/workspace/transfer', { userId, password, stepDown }),
+  members: () => call<{ members: Member[]; invites: Invite[]; joining: Joining[] }>('GET', '/api/workspace/members'),
+  cancelJoining: (userId: string) => call<{ ok: true }>('DELETE', `/api/workspace/joining/${encodeURIComponent(userId)}`),
   invite: (email: string, role: Role) => call<{ ok: true }>('POST', '/api/workspace/invites', { email, role }),
   resendInvite: (id: string) => call<{ ok: true }>('POST', `/api/workspace/invites/${id}/resend`),
   revokeInvite: (id: string) => call<{ ok: true }>('DELETE', `/api/workspace/invites/${id}`),

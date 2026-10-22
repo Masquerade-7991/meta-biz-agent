@@ -40,6 +40,7 @@ export const whatsapp = area('WhatsApp', {
       ok: o({
         'mode*': 'sdk|hosted|none',
         'partnerCredit*': d('boolean', 'Billing through Helo.ai is offered.'),
+        'connected*': d('boolean', 'The workspace has at least one WhatsApp account. Sent to every member; the accounts themselves are the owner’s.'),
         appId: 'string',
         configId: 'string',
         sdkVersion: 'string',
@@ -49,7 +50,7 @@ export const whatsapp = area('WhatsApp', {
     },
   },
   '/api/whatsapp/accounts': {
-    get: { id: 'listWaAccounts', summary: 'Connected WhatsApp accounts', description: 'Never includes tokens or PINs.', ok: 'WaAccount[]' },
+    get: { id: 'listWaAccounts', summary: 'Connected WhatsApp accounts', description: 'Never includes tokens or PINs. Owners only; everyone else reads the numbers from `GET /api/whatsapp/numbers`.', who: 'whatsapp.manage', ok: 'WaAccount[]', errors: { 403: 'Only workspace owners can see WhatsApp accounts.' } },
   },
   '/api/whatsapp/connect': {
     post: {

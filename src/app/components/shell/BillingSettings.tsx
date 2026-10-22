@@ -1,16 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
-import { FormError } from '@/app/auth/AuthLayout'
 import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
-import { getBilling, setBudget, syncBilling, type Billing } from '@/app/api/billing'
+import { getBilling, MAX_BUDGET, setBudget, syncBilling, type Billing } from '@/app/api/billing'
 import { formatMoney } from '@/app/lib/money'
 import { SettingsSection } from './SettingsSection'
 import { can } from '@/app/lib/permissions'
+import { FormFooter, LoadGate } from './settings/SettingsUi'
+import { stampOf } from './settings/formCore'
+import { useSettingsForm } from './settings/useSettingsForm'
 
 const FEATURE: Record<string, string> = { chat_summary: 'Chat summaries' }
 const CATEGORY: Record<string, string> = { MARKETING: 'Marketing', UTILITY: 'Utility', AUTHENTICATION: 'Login codes', SERVICE: 'Service replies' }
@@ -37,52 +39,63 @@ function SpendBars({ days, currency }: { days: Billing['days']; currency: string
   )
 }
 
+const budgetText = (b: number | null) => (b === null || b === 0 ? '' : String(b))
+/** The budget as typed: empty = none; otherwise a plain number (no "1.2.3", no thousands commas). */
+function budgetError(text: string) {
+  const t = text.trim()
+  if (!t) return undefined
+  if (!/^\d+(\.\d{1,2})?$/.test(t)) return 'Enter a number, like 5000 or 2500.50.'
+  if (Number(t) > MAX_BUDGET) return `Keep it under ${MAX_BUDGET.toLocaleString()}.`
+  return undefined
+}
+
 /** Settings → Billing: what WhatsApp charged this month (Meta's own figures) and the budget alert. */
 export function BillingSettingsTab() {
   const { me } = useAuth()
   const isOwner = can(me?.role, 'billing.manage')
   const [b, setB] = useState<Billing | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [budget, setBudgetText] = useState('')
-  const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
-
-  useEffect(() => {
-    getBilling().then(
-      (r) => {
+  const form = useSettingsForm<{ budget: string }>({
+    load: () =>
+      getBilling().then((r) => {
         setB(r)
-        setBudgetText(r.budget === null ? '' : String(r.budget))
-      },
-      (err) => setError(errorDetail(err)),
-    )
-  }, [])
+        return { value: { budget: budgetText(r.budget) }, stamp: stampOf(r) }
+      }),
+    save: async (v, since) => {
+      const t = v.budget.trim()
+      const r = await setBudget(t === '' ? null : Number(t), since)
+      setB(r)
+      if (r.budget === null) toast.info('No budget now: you won’t get spend alerts.')
+      return { value: { budget: budgetText(r.budget) }, stamp: stampOf(r) }
+    },
+    validate: (v) => ({ budget: budgetError(v.budget) }),
+  })
 
-  if (error) return <FormError>{error}</FormError>
-  if (!b) return <Loader2 className="size-5 animate-spin text-muted-foreground" />
+  if (!b || !form.draft) return <LoadGate error={form.loadError} onRetry={form.reload} what="billing" />
   const used = b.budget ? Math.min(1, b.month.total / b.budget) : 0
+  // Figures come from Meta once an account is connected; before that there's nothing to fetch.
+  const connected = b.currency !== null || b.lastSyncAt !== null
+  const sync = () => {
+    setSyncing(true)
+    syncBilling()
+      .then(setB, (err) => toast.error((err as { status?: number }).status === 429 ? 'Updated a moment ago' : 'Couldn’t update the figures', { description: errorDetail(err) }))
+      .finally(() => setSyncing(false))
+  }
 
   return (
     <div>
-      <SettingsSection title="This month" description="What WhatsApp charged for messages since the 1st, from Meta’s billing figures. Replies to customers within 24 hours are free." wide>
+      <SettingsSection title="This month" description={`What WhatsApp charged for messages since the 1st${b.timezone ? ` (${b.timezone.replace(/_/g, ' ')} time)` : ''}, from Meta’s billing figures, updated every 6 hours. Replies to customers within 24 hours are free.`} wide>
         <div className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <p className="text-[1.75rem] font-semibold">{formatMoney(b.month.total, b.currency)}</p>
             <div className="flex items-center gap-2 text-muted-foreground text-xs">
               {b.lastSyncError ? <span className="text-destructive">Last update failed: {b.lastSyncError}</span> : b.lastSyncAt ? <span>Updated {ago(b.lastSyncAt)}</span> : <span>Not updated yet</span>}
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={syncing}
-                onClick={() => {
-                  setSyncing(true)
-                  syncBilling()
-                    .then(setB, (err) => toast.error(errorDetail(err)))
-                    .finally(() => setSyncing(false))
-                }}
-              >
-                {syncing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-                Update now
-              </Button>
+              {isOwner && connected && (
+                <Button size="sm" variant="ghost" disabled={syncing} onClick={sync}>
+                  {syncing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                  Update now
+                </Button>
+              )}
             </div>
           </div>
           {b.budget ? (
@@ -174,35 +187,13 @@ export function BillingSettingsTab() {
           )}
         </dl>
       </SettingsSection>
-      <SettingsSection title="Monthly budget" description="Owners get an email and a notification at 80% and 100%. Messages keep sending; the budget only alerts you.">
-        <form
-          className="space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault()
-            setSaving(true)
-            setBudget(budget.trim() === '' ? null : Number(budget))
-              .then((r) => {
-                setB(r)
-                toast.success(r.budget === null ? 'Budget removed.' : 'Budget saved.')
-              }, (err) => toast.error(errorDetail(err)))
-              .finally(() => setSaving(false))
-          }}
-        >
-          <div className="space-y-1.5">
-            <Label htmlFor="budget">Budget per month{b.currency ? ` (${b.currency})` : ''}</Label>
-            <Input id="budget" inputMode="decimal" value={budget} onChange={(e) => setBudgetText(e.target.value.replace(/[^\d.]/g, ''))} placeholder="No budget" disabled={!isOwner} />
-          </div>
-          {isOwner ? (
-            <Button type="submit" disabled={saving}>
-              {saving && <Loader2 className="size-4 animate-spin" />}
-              Save budget
-            </Button>
-          ) : (
-            <p className="text-muted-foreground text-xs">
-              Only owners can change the budget.
-            </p>
-          )}
-        </form>
+      <SettingsSection title="Monthly budget" description="Owners and admins get an email and a notification at 80% and 100%. Messages keep sending; the budget only alerts you. Leave it empty (or 0) for no budget.">
+        <div className="space-y-1.5">
+          <Label htmlFor="budget">Budget per month{b.currency ? ` (${b.currency})` : ''}</Label>
+          <Input id="budget" inputMode="decimal" value={form.draft.budget} onChange={(e) => form.set({ budget: e.target.value.replace(/[^\d.]/g, '') })} placeholder="No budget" disabled={!isOwner} aria-invalid={!!form.liveErrors.budget} />
+          {form.liveErrors.budget ? <p className="text-xs text-destructive">{form.liveErrors.budget}</p> : form.draft.budget.trim() === '' || Number(form.draft.budget) === 0 ? <p className="text-xs text-muted-foreground">No budget: you won’t get spend alerts.</p> : null}
+        </div>
+        {isOwner ? <FormFooter form={form} can="billing.manage" label="Save budget" /> : <p className="text-xs text-muted-foreground">Only owners can change the budget.</p>}
       </SettingsSection>
     </div>
   )

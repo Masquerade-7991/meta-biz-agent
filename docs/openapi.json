@@ -1337,6 +1337,16 @@
           "403": {
             "$ref": "#/components/responses/Forbidden"
           },
+          "410": {
+            "description": "Your invite to X was withdrawn. Ask for a new one, or create your own workspace. (The invite was revoked or the sign-up cancelled; sending again with a workspaceName creates your own.)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "503": {
             "$ref": "#/components/responses/DatabaseUnavailable"
           }
@@ -1350,7 +1360,7 @@
           "Accounts & workspace"
         ],
         "summary": "Set a new password from a reset link",
-        "description": "**Who can call:** Signed in from a reset link (setup at the `password` step).\n\nAlso logs out every other device.",
+        "description": "**Who can call:** Signed in from a reset link (setup at the `password` step).\n\nAlso logs out every other device and revokes every API token you have.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1412,7 +1422,7 @@
           "Accounts & workspace"
         ],
         "summary": "Change your name",
-        "description": "**Who can call:** Signed in with setup finished.",
+        "description": "**Who can call:** Signed in with setup finished.\n\nRecorded in the activity log (the event, not the name).",
         "requestBody": {
           "required": true,
           "content": {
@@ -1473,7 +1483,7 @@
           "Accounts & workspace"
         ],
         "summary": "Change your password",
-        "description": "**Who can call:** Signed in with setup finished.",
+        "description": "**Who can call:** Signed in with setup finished.\n\nOther devices log out and every API token you have stops working (`tokensRevoked` says how many). The confirmation email is best effort: a failed email never fails the change.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1510,10 +1520,14 @@
                     "ok": {
                       "type": "boolean",
                       "const": true
+                    },
+                    "tokensRevoked": {
+                      "type": "integer"
                     }
                   },
                   "required": [
-                    "ok"
+                    "ok",
+                    "tokensRevoked"
                   ]
                 }
               }
@@ -1558,7 +1572,7 @@
           "Accounts & workspace"
         ],
         "summary": "Change your email",
-        "description": "**Who can call:** Signed in with setup finished.\n\nEmails a confirmation link to the new address; the change happens when it’s opened (POST /api/auth/verify).",
+        "description": "**Who can call:** Signed in with setup finished.\n\nEmails a confirmation link to the new address; the change happens when it’s opened (POST /api/auth/verify), which logs out your other devices. Until then `pendingEmail` on Me shows it; asking again replaces the earlier link.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1645,6 +1659,281 @@
         }
       }
     },
+    "/api/account/email/cancel": {
+      "post": {
+        "operationId": "cancelEmailChange",
+        "tags": [
+          "Accounts & workspace"
+        ],
+        "summary": "Withdraw a pending email change",
+        "description": "**Who can call:** Signed in with setup finished.\n\nThe emailed link stops working.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/account/sessions": {
+      "get": {
+        "operationId": "listSessions",
+        "tags": [
+          "Accounts & workspace"
+        ],
+        "summary": "Your signed-in devices",
+        "description": "**Who can call:** Signed in with setup finished.\n\nEvery live session of yours, last used first. Needs the session cookie: an API token gets 403.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Session"
+                      }
+                    }
+                  },
+                  "required": [
+                    "sessions"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/account/sessions/{sessionId}": {
+      "delete": {
+        "operationId": "revokeSession",
+        "tags": [
+          "Accounts & workspace"
+        ],
+        "summary": "Sign out one device",
+        "description": "**Who can call:** Signed in with setup finished.\n\nSigning out the current session also clears its cookie (`current: true`). Needs the session cookie: an API token gets 403.",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Session id.",
+              "pattern": "^[a-f0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "current": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "current"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "That device is already signed out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/account/sessions/revoke-others": {
+      "post": {
+        "operationId": "revokeOtherSessions",
+        "tags": [
+          "Accounts & workspace"
+        ],
+        "summary": "Sign out everywhere else",
+        "description": "**Who can call:** Signed in with setup finished.\n\nEvery session but this one. Needs the session cookie: an API token gets 403.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revoked": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "revoked"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/account/notifications": {
+      "get": {
+        "operationId": "getNotificationPrefs",
+        "tags": [
+          "Accounts & workspace"
+        ],
+        "summary": "Your email notifications",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nFor the workspace this session works in. Needs the session cookie: an API token gets 403.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPrefs"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "setNotificationPrefs",
+        "tags": [
+          "Accounts & workspace"
+        ],
+        "summary": "Change your email notifications",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nPartial: keys left out keep their value. Needs the session cookie: an API token gets 403.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "escalations": {
+                    "type": "boolean"
+                  },
+                  "assigned": {
+                    "type": "boolean"
+                  },
+                  "slaBreach": {
+                    "type": "boolean"
+                  },
+                  "budget": {
+                    "type": "boolean"
+                  },
+                  "digest": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPrefs"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "escalations must be true or false.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
     "/api/account/workspace": {
       "post": {
         "operationId": "switchWorkspace",
@@ -1711,7 +2000,7 @@
           "Accounts & workspace"
         ],
         "summary": "Accept an invite",
-        "description": "**Who can call:** Signed in with setup finished, as the invited email.\n\nJoins the workspace with the invited role and switches this session to it. Emails the inviter.",
+        "description": "**Who can call:** Signed in with setup finished, as the invited email.\n\nJoins the workspace with the invited role and switches this session to it. Emails the inviter. Accepting the same invite again (a double click) answers the same Me.",
         "parameters": [
           {
             "name": "id",
@@ -1813,6 +2102,101 @@
       }
     },
     "/api/workspace": {
+      "get": {
+        "operationId": "getWorkspace",
+        "tags": [
+          "Accounts & workspace"
+        ],
+        "summary": "This workspace",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nIts id and creation date (for support), and the owner named on it.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      },
+      "put": {
+        "operationId": "renameWorkspace",
+        "tags": [
+          "Accounts & workspace"
+        ],
+        "summary": "Rename the workspace",
+        "description": "**Who can call:** An owner of the workspace.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Up to 80 characters.",
+                    "maxLength": 80
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Enter a workspace name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "description": "Only owners can rename the workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      },
       "post": {
         "operationId": "createWorkspace",
         "tags": [
@@ -1859,6 +2243,183 @@
           },
           "429": {
             "description": "Too many workspaces created (5 an hour).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/workspace/transfer": {
+      "post": {
+        "operationId": "transferOwnership",
+        "tags": [
+          "Accounts & workspace"
+        ],
+        "summary": "Hand over the workspace",
+        "description": "**Who can call:** An owner of the workspace.\n\nMakes another member an owner and the workspace’s named owner. `stepDown: true` also makes you an admin. Needs your password.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "description": "The member to make owner.",
+                    "format": "uuid"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "stepDown": {
+                    "type": "boolean",
+                    "description": "Become an admin afterwards.",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "userId",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Your password is incorrect. / Pick someone else to make owner.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "description": "Only owners can hand over the workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "This person isn’t in your workspace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A workspace needs at least one owner. Someone else changed the owners at the same moment; try again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/workspace/joining/{userId}": {
+      "delete": {
+        "operationId": "cancelJoining",
+        "tags": [
+          "Accounts & workspace"
+        ],
+        "summary": "Cancel someone’s sign-up",
+        "description": "**Who can call:** Admin or above (`members.manage`).\n\nFor a person who opened their invite and hasn’t finished setting up: they won’t join (finishing setup creates their own workspace instead).",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Member user id (UUID).",
+              "format": "uuid"
+            },
+            "description": "Member user id (UUID)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "description": "Only owners can cancel someone joining as an owner.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "This person already finished joining or was cancelled.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2234,7 +2795,7 @@
           "Accounts & workspace"
         ],
         "summary": "Invite someone",
-        "description": "**Who can call:** Admin or above (`members.manage`).\n\nEmails an invite link (valid 7 days). Someone who already has an account keeps their other workspaces and answers the invite in the app.",
+        "description": "**Who can call:** Admin or above (`members.manage`).\n\nEmails an invite link (valid 7 days). Someone who already has an account keeps their other workspaces and answers the invite in the app. One live invite per person per workspace.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2286,6 +2847,16 @@
               }
             }
           },
+          "400": {
+            "description": "Enter a valid email address. / Role must be owner, admin, supervisor or agent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
             "$ref": "#/components/responses/NotLoggedIn"
           },
@@ -2300,7 +2871,7 @@
             }
           },
           "409": {
-            "description": "Already in this workspace, or already invited.",
+            "description": "This person is already in this workspace. / This person is already invited. Resend the invite from the list. / This person is already joining.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2310,7 +2881,17 @@
             }
           },
           "429": {
-            "description": "Too many invites (50 an hour per workspace).",
+            "description": "Too many invites (50 an hour per workspace, 5 emails an hour per address).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Email not sent (the invite is withdrawn).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2332,7 +2913,7 @@
           "Accounts & workspace"
         ],
         "summary": "Revoke an invite",
-        "description": "**Who can call:** Admin or above (`members.manage`).",
+        "description": "**Who can call:** Admin or above (`members.manage`).\n\nExpired invites can be revoked too. Someone who already opened an earlier link and is still setting up won’t join either.",
         "parameters": [
           {
             "name": "id",
@@ -2370,10 +2951,17 @@
             "$ref": "#/components/responses/NotLoggedIn"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "Your role can’t manage an invite as Owner.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "404": {
-            "description": "This invite was already accepted, revoked or has expired.",
+            "description": "This invite was already accepted or revoked.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2395,7 +2983,7 @@
           "Accounts & workspace"
         ],
         "summary": "Resend an invite",
-        "description": "**Who can call:** Admin or above (`members.manage`).",
+        "description": "**Who can call:** Admin or above (`members.manage`).\n\nSends a new link (valid 7 days, expired invites too); the old link stops working. If the email fails, the old invite stays as it was.",
         "parameters": [
           {
             "name": "id",
@@ -2433,10 +3021,17 @@
             "$ref": "#/components/responses/NotLoggedIn"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "Your role can’t manage an invite as Owner.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "404": {
-            "description": "This invite was already accepted, revoked or has expired.",
+            "description": "This invite was already accepted or revoked.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2446,7 +3041,17 @@
             }
           },
           "429": {
-            "description": "Too many invites.",
+            "description": "Too many emails sent to this address.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Email not sent.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2468,7 +3073,7 @@
           "Accounts & workspace"
         ],
         "summary": "Change a member’s role",
-        "description": "**Who can call:** Admin or above (`members.manage`).",
+        "description": "**Who can call:** Admin or above (`members.manage`).\n\nThe email to the person is best effort: a failed email never fails the change.",
         "parameters": [
           {
             "name": "userId",
@@ -4458,7 +5063,7 @@
           "Inbox"
         ],
         "summary": "Add a canned response",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\n`shared: true` only takes effect with `settings.manage` (admin+).",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nPrivate unless `shared: true`, which needs `settings.manage` (admin+).",
         "requestBody": {
           "required": true,
           "content": {
@@ -4476,10 +5081,13 @@
                     "pattern": "^[a-z0-9_-]{1,40}$"
                   },
                   "body": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Up to 4096 characters.",
+                    "maxLength": 4096
                   },
                   "shared": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "Default false."
                   },
                   "actions": {
                     "type": "object",
@@ -4547,10 +5155,17 @@
             "$ref": "#/components/responses/NotLoggedIn"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "Only owners and admins can share responses with the team.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "409": {
-            "description": "/refund is already used by “Refund policy”.",
+            "description": "/refund is already used by “Refund policy”. (Someone else’s private response isn’t named: /refund is already taken.)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4572,7 +5187,7 @@
           "Inbox"
         ],
         "summary": "Edit a canned response",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\nEditing a shared response needs `settings.manage`.",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nEditing a shared response needs `settings.manage`; a private one, being the person who has it. `shared` left out keeps its current value. Un-sharing someone else’s response makes it yours.",
         "parameters": [
           {
             "name": "id",
@@ -4600,7 +5215,9 @@
                     "type": "string"
                   },
                   "body": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Up to 4096 characters.",
+                    "maxLength": 4096
                   },
                   "shared": {
                     "type": "boolean"
@@ -4636,10 +5253,27 @@
             "$ref": "#/components/responses/NotLoggedIn"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "Only owners and admins can change the team’s shared responses.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "404": {
             "description": "That response no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "/refund is already taken.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4659,7 +5293,7 @@
           "Inbox"
         ],
         "summary": "Delete a canned response",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\nYour own, or a shared one with `settings.manage`.",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nThe same rules as editing: a shared one with `settings.manage`, a private one if it’s yours.",
         "parameters": [
           {
             "name": "id",
@@ -4697,7 +5331,14 @@
             "$ref": "#/components/responses/NotLoggedIn"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "Only owners and admins can delete the team’s shared responses.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "404": {
             "description": "That response no longer exists.",
@@ -5564,7 +6205,7 @@
             }
           },
           "400": {
-            "description": "Give the team a name.",
+            "description": "Give the team a name. / The team lead must be one of the team’s members.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5578,6 +6219,16 @@
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "description": "There’s already a team called “X”. Pick another name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "503": {
             "$ref": "#/components/responses/DatabaseUnavailable"
@@ -5628,7 +6279,7 @@
             }
           },
           "400": {
-            "description": "Give the team a name.",
+            "description": "Give the team a name. / The team lead must be one of the team’s members.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5653,6 +6304,16 @@
               }
             }
           },
+          "409": {
+            "description": "There’s already a team called “X”.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "503": {
             "$ref": "#/components/responses/DatabaseUnavailable"
           }
@@ -5664,7 +6325,7 @@
           "Tickets & support"
         ],
         "summary": "Delete a team",
-        "description": "**Who can call:** Admin or above (`settings.manage`).\n\nIts tickets leave the team’s queue and stay with whoever has them.",
+        "description": "**Who can call:** Admin or above (`settings.manage`).\n\nIts open tickets leave the team’s queue and stay with whoever has them; resolved tickets keep the team (analytics history).",
         "parameters": [
           {
             "name": "id",
@@ -5884,7 +6545,7 @@
           "Tickets & support"
         ],
         "summary": "Routing rules",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\nChecked top to bottom when a ticket opens; the first match decides. Otherwise the default routing in support settings applies.",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nChecked top to bottom when a ticket opens; the first match decides. Otherwise the default routing in support settings applies. Rules that point at a removed team or person come back `inactive` and don’t run. The answer carries `x-updated-at` (ISO) and `x-updated-by` (URL-encoded name) headers: send x-updated-at back as If-Unmodified-Since.",
         "responses": {
           "200": {
             "description": "Success.",
@@ -5916,7 +6577,19 @@
           "Tickets & support"
         ],
         "summary": "Replace the routing rules",
-        "description": "**Who can call:** Admin or above (`settings.manage`).\n\nThe whole ordered list (50 at most).",
+        "description": "**Who can call:** Admin or above (`settings.manage`).\n\nThe whole ordered list (50 at most). A rule that already pointed at a removed team or person may stay in it (it stays inactive); a new reference to one is refused. The answer carries `x-updated-at` (ISO) and `x-updated-by` (URL-encoded name) headers: send x-updated-at back as If-Unmodified-Since.",
+        "parameters": [
+          {
+            "name": "If-Unmodified-Since",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "The `updatedAt` you read. When someone saved after it, the answer is 409 “Changed by someone else”. Leave it out to save anyway (Keep mine)."
+            },
+            "description": "The `updatedAt` you read. When someone saved after it, the answer is 409 “Changed by someone else”. Leave it out to save anyway (Keep mine)."
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -5945,7 +6618,7 @@
             }
           },
           "400": {
-            "description": "“X” needs at least one action. / “X” sends tickets to a team that no longer exists. / …",
+            "description": "“X” needs at least one action. / “X” sends tickets to a team that no longer exists. / Keep it to 50 rules or fewer. / …",
             "content": {
               "application/json": {
                 "schema": {
@@ -5960,6 +6633,16 @@
           "403": {
             "$ref": "#/components/responses/Forbidden"
           },
+          "409": {
+            "description": "Changed by someone else: someone saved after the If-Unmodified-Since you sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "503": {
             "$ref": "#/components/responses/DatabaseUnavailable"
           }
@@ -5973,7 +6656,7 @@
           "Tickets & support"
         ],
         "summary": "Escalation matrix",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\nOff until saved with enabled: true. When on, open tickets are checked every minute.",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\nOff until saved with enabled: true. When on, open tickets are checked every minute. Every level has a stable `id`; tickets remember the id of the level they reached.",
         "responses": {
           "200": {
             "description": "Success.",
@@ -6002,7 +6685,19 @@
           "Tickets & support"
         ],
         "summary": "Save the escalation matrix",
-        "description": "**Who can call:** Admin or above (`settings.manage`).",
+        "description": "**Who can call:** Admin or above (`settings.manage`).\n\nSend each level’s `id` back: in-flight tickets carry on from the level they reached, whatever was added, removed or reordered.",
+        "parameters": [
+          {
+            "name": "If-Unmodified-Since",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "The `updatedAt` you read. When someone saved after it, the answer is 409 “Changed by someone else”. Leave it out to save anyway (Keep mine)."
+            },
+            "description": "The `updatedAt` you read. When someone saved after it, the answer is 409 “Changed by someone else”. Leave it out to save anyway (Keep mine)."
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -6039,6 +6734,16 @@
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "description": "Changed by someone else: someone saved after the If-Unmodified-Since you sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "503": {
             "$ref": "#/components/responses/DatabaseUnavailable"
@@ -6082,13 +6787,42 @@
           "Tickets & support"
         ],
         "summary": "Save support settings",
-        "description": "**Who can call:** Admin or above (`settings.manage`).",
+        "description": "**Who can call:** Admin or above (`settings.manage`).\n\nPartial: top-level keys left out keep what’s stored (and `hours` keys left out keep theirs). Changed targets and hours apply to new tickets; open ones keep their deadlines until recomputeSupportDeadlines. A week with every day closed and no 24/7 is refused unless `confirmNoHours: true` (deadlines would never run).",
+        "parameters": [
+          {
+            "name": "If-Unmodified-Since",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "The `updatedAt` you read. When someone saved after it, the answer is 409 “Changed by someone else”. Leave it out to save anyway (Keep mine)."
+            },
+            "description": "The `updatedAt` you read. When someone saved after it, the answer is 409 “Changed by someone else”. Leave it out to save anyway (Keep mine)."
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SupportSettings"
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/SupportSettings"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "twentyFourSeven": {
+                        "type": "boolean",
+                        "description": "Same as hours.twentyFourSeven."
+                      },
+                      "confirmNoHours": {
+                        "type": "boolean",
+                        "description": "Save a week with no open hours anyway."
+                      }
+                    }
+                  }
+                ]
               }
             }
           }
@@ -6105,11 +6839,68 @@
             }
           },
           "400": {
-            "description": "X isn’t a time zone we recognise. / Check the hours for mon: closing must be after opening (HH:MM). / Check the urgent targets… / Pick who gets every new ticket.",
+            "description": "X isn’t a time zone we recognise. / Monday: closing must be after opening. / Urgent: resolution can’t be shorter than first reply. / Every day is closed… / 2026-01-02 is in the past… / Routing mode must be unassigned, round_robin or fixed. / Pick who gets every new ticket.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "description": "Only owners and admins can change support settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Changed by someone else: someone saved after the If-Unmodified-Since you sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/support/settings/recompute": {
+      "post": {
+        "operationId": "recomputeSupportDeadlines",
+        "tags": [
+          "Tickets & support"
+        ],
+        "summary": "Apply the current targets to open tickets",
+        "description": "**Who can call:** Admin or above (`settings.manage`).\n\nRecomputes the deadlines of every open and waiting ticket from when its clock started, with the current hours and targets.",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "updated": {
+                      "type": "integer",
+                      "description": "Tickets whose deadlines changed."
+                    }
+                  },
+                  "required": [
+                    "updated"
+                  ]
                 }
               }
             }
@@ -7207,9 +7998,9 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "From this date (YYYY-MM-DD) or time (ISO)."
+              "description": "From this date (YYYY-MM-DD, a whole day in the support hours’ time zone) or time (ISO)."
             },
-            "description": "From this date (YYYY-MM-DD) or time (ISO)."
+            "description": "From this date (YYYY-MM-DD, a whole day in the support hours’ time zone) or time (ISO)."
           },
           {
             "name": "to",
@@ -7217,9 +8008,9 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "Up to and including this date, or up to this time."
+              "description": "Up to and including this date (in the support hours’ time zone), or up to this time."
             },
-            "description": "Up to and including this date, or up to this time."
+            "description": "Up to and including this date (in the support hours’ time zone), or up to this time."
           },
           {
             "name": "ref",
@@ -7309,7 +8100,7 @@
           "Workspace"
         ],
         "summary": "Download the activity log as CSV",
-        "description": "**Who can call:** As GET /api/activity.\n\nThe same filters, up to 10,000 rows: when (UTC), who, what (as a sentence), the item and the error reference.",
+        "description": "**Who can call:** As GET /api/activity.\n\nThe same filters, up to 10,000 rows: when (UTC), who, what (as a sentence), the item and the error reference. When there are more, the file ends with the line `First 10000 rows of N; narrow the dates` and the response has the header `x-truncated: N`.",
         "parameters": [
           {
             "name": "entity",
@@ -7373,9 +8164,9 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "From this date (YYYY-MM-DD) or time (ISO)."
+              "description": "From this date (YYYY-MM-DD, a whole day in the support hours’ time zone) or time (ISO)."
             },
-            "description": "From this date (YYYY-MM-DD) or time (ISO)."
+            "description": "From this date (YYYY-MM-DD, a whole day in the support hours’ time zone) or time (ISO)."
           },
           {
             "name": "to",
@@ -7383,9 +8174,9 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "Up to and including this date, or up to this time."
+              "description": "Up to and including this date (in the support hours’ time zone), or up to this time."
             },
-            "description": "Up to and including this date, or up to this time."
+            "description": "Up to and including this date (in the support hours’ time zone), or up to this time."
           },
           {
             "name": "ref",
@@ -7732,7 +8523,7 @@
           "Contacts"
         ],
         "summary": "Custom contact fields",
-        "description": "**Who can call:** Any signed-in member of the workspace.",
+        "description": "**Who can call:** Any signed-in member of the workspace.\n\n`key` is also the CSV column a field imports from. The answer carries `x-updated-at` (ISO) and `x-updated-by` (URL-encoded name) headers.",
         "responses": {
           "200": {
             "description": "Success.",
@@ -7764,7 +8555,19 @@
           "Contacts"
         ],
         "summary": "Replace the custom fields",
-        "description": "**Who can call:** Admin or above (`settings.manage`).\n\nThe whole list (30 at most). A field without a key is new; its key is made from the label.",
+        "description": "**Who can call:** Admin or above (`settings.manage`).\n\nThe whole list (30 at most, names up to 60 characters). A field without a key is new; its key is made from the label. A field left out is removed: its values are cleared from every contact and segments stop filtering on it; a segment with no other filter is deleted. A changed type or choices clears the values that no longer fit. The answer carries `x-updated-at` (ISO) and `x-updated-by` (URL-encoded name) headers.",
+        "parameters": [
+          {
+            "name": "If-Unmodified-Since",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "The `x-updated-at` you read. When someone saved after it, the answer is 409 “Changed by someone else”. Leave it out to save anyway."
+            },
+            "description": "The `x-updated-at` you read. When someone saved after it, the answer is 409 “Changed by someone else”. Leave it out to save anyway."
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -7828,7 +8631,7 @@
             }
           },
           "400": {
-            "description": "Every field needs a name. / Two fields would both be called “X”. / Add the choices for X, separated by commas.",
+            "description": "Every field needs a name. / Keep it to 30 fields or fewer. / Keep field names to 60 characters. / Two fields would both be called “X”. / Add the choices for X, separated by commas.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7842,6 +8645,97 @@
           },
           "403": {
             "description": "Only owners and admins can change contact fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Changed by someone else: someone saved after the If-Unmodified-Since you sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/DatabaseUnavailable"
+          }
+        }
+      }
+    },
+    "/api/contacts/fields/usage": {
+      "get": {
+        "operationId": "fieldUsage",
+        "tags": [
+          "Contacts"
+        ],
+        "summary": "What removing a field would clear",
+        "description": "**Who can call:** Any signed-in member of the workspace.",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "The field’s key."
+            },
+            "description": "The field’s key."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contacts": {
+                      "type": "integer",
+                      "description": "Contacts with a value for it."
+                    },
+                    "segments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "contacts",
+                    "segments"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/NotLoggedIn"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "That field no longer exists.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8580,6 +9474,10 @@
                       "type": "boolean",
                       "description": "Billing through Helo.ai is offered."
                     },
+                    "connected": {
+                      "type": "boolean",
+                      "description": "The workspace has at least one WhatsApp account. Sent to every member; the accounts themselves are the owner’s."
+                    },
                     "appId": {
                       "type": "string"
                     },
@@ -8612,7 +9510,8 @@
                   },
                   "required": [
                     "mode",
-                    "partnerCredit"
+                    "partnerCredit",
+                    "connected"
                   ]
                 }
               }
@@ -8637,7 +9536,7 @@
           "WhatsApp"
         ],
         "summary": "Connected WhatsApp accounts",
-        "description": "**Who can call:** Any signed-in member of the workspace.\n\nNever includes tokens or PINs.",
+        "description": "**Who can call:** Owner (`whatsapp.manage`).\n\nNever includes tokens or PINs. Owners only; everyone else reads the numbers from `GET /api/whatsapp/numbers`.",
         "responses": {
           "200": {
             "description": "Success.",
@@ -8656,7 +9555,14 @@
             "$ref": "#/components/responses/NotLoggedIn"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "Only workspace owners can see WhatsApp accounts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "503": {
             "$ref": "#/components/responses/DatabaseUnavailable"
@@ -10681,7 +11587,7 @@
           "Billing"
         ],
         "summary": "WhatsApp spend this month",
-        "description": "**Who can call:** Admin or above (`billing.view`).\n\nFrom Meta’s pricing analytics, synced daily, plus AI usage.",
+        "description": "**Who can call:** Admin or above (`billing.view`).\n\nFrom Meta’s pricing analytics, synced every 6 hours, plus AI usage. The month runs in the workspace’s support time zone (`timezone`); Meta’s spend comes per UTC day. `updatedAt` / `updatedBy` say when the budget was last set.",
         "responses": {
           "200": {
             "description": "Success.",
@@ -10717,7 +11623,20 @@
           "Billing"
         ],
         "summary": "Set the monthly budget alert",
-        "description": "**Who can call:** Owner (`billing.manage`).",
+        "description": "**Who can call:** Owner (`billing.manage`).\n\nSend `If-Unmodified-Since: <updatedAt>` from the last read to refuse overwriting someone else’s change (409); without the header the save always wins.",
+        "parameters": [
+          {
+            "name": "If-Unmodified-Since",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "description": "The `updatedAt` you read."
+            },
+            "description": "The `updatedAt` you read."
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -10730,7 +11649,7 @@
                       "number",
                       "null"
                     ],
-                    "description": "Positive amount in the account currency, or null for none."
+                    "description": "Amount in the account currency, 0 to 1,000,000,000. 0 or null means no budget. Strings are refused."
                   }
                 },
                 "required": [
@@ -10752,7 +11671,7 @@
             }
           },
           "400": {
-            "description": "The budget must be a positive amount, or empty for none.",
+            "description": "The budget must be an amount from 0 to 1,000,000,000, or null for none (0 also means none).",
             "content": {
               "application/json": {
                 "schema": {
@@ -10774,6 +11693,16 @@
               }
             }
           },
+          "409": {
+            "description": "Someone else changed this just now. Reload to see their changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "503": {
             "$ref": "#/components/responses/DatabaseUnavailable"
           }
@@ -10787,7 +11716,7 @@
           "Billing"
         ],
         "summary": "Refresh spend from Meta now",
-        "description": "**Who can call:** Admin or above (`billing.view`).",
+        "description": "**Who can call:** Owner (`billing.manage`).\n\nSpend also refreshes on its own every 6 hours. Once a minute per workspace.",
         "responses": {
           "200": {
             "description": "Success.",
@@ -10803,7 +11732,17 @@
             "$ref": "#/components/responses/NotLoggedIn"
           },
           "403": {
-            "description": "Connect a WhatsApp account first.",
+            "description": "Only owners can update spend now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Spend was updated a moment ago. Try again in a minute.",
             "content": {
               "application/json": {
                 "schema": {
@@ -14900,6 +15839,13 @@
               "$ref": "#/components/schemas/PendingInvite"
             },
             "description": "Invites to further workspaces, answered with acceptInvite / declineInvite. Empty until setup is finished."
+          },
+          "pendingEmail": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A new email waiting to be confirmed from its link (changeEmail); null when none. cancelEmailChange withdraws it."
           }
         },
         "required": [
@@ -14909,8 +15855,114 @@
           "setup",
           "joining",
           "workspaces",
-          "invites"
+          "invites",
+          "pendingEmail"
         ]
+      },
+      "Workspace": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ownerId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The owner named on the workspace (transferOwnership changes it). Other members may be owners too."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "createdAt",
+          "ownerId"
+        ]
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Session id, for signing it out."
+          },
+          "userAgent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The browser that signed in, as it described itself."
+          },
+          "ip": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The address it signed in from."
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last used; updated at most every 5 minutes."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "current": {
+            "type": "boolean",
+            "description": "The session making this request."
+          }
+        },
+        "required": [
+          "id",
+          "userAgent",
+          "ip",
+          "lastSeenAt",
+          "createdAt",
+          "current"
+        ]
+      },
+      "NotificationPrefs": {
+        "type": "object",
+        "properties": {
+          "escalations": {
+            "type": "boolean",
+            "description": "Emails when a ticket escalates to you."
+          },
+          "assigned": {
+            "type": "boolean",
+            "description": "Emails when work is assigned to you."
+          },
+          "slaBreach": {
+            "type": "boolean",
+            "description": "Emails when a response deadline is missed."
+          },
+          "budget": {
+            "type": "boolean",
+            "description": "Budget alerts (owners)."
+          },
+          "digest": {
+            "type": "boolean",
+            "description": "The daily digest."
+          }
+        },
+        "required": [
+          "escalations",
+          "assigned",
+          "slaBreach",
+          "budget",
+          "digest"
+        ],
+        "description": "Which emails you get from this workspace. Missing = on. The bell in the app shows everything either way."
       },
       "PendingInvite": {
         "type": "object",
@@ -14970,8 +16022,20 @@
             "items": {
               "type": "object",
               "properties": {
+                "userId": {
+                  "type": "string"
+                },
                 "email": {
                   "type": "string"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "owner",
+                    "admin",
+                    "supervisor",
+                    "agent"
+                  ]
                 },
                 "verifiedAt": {
                   "type": "string",
@@ -14979,7 +16043,7 @@
                 }
               }
             },
-            "description": "Invited people who verified their email but haven’t finished setting up. Empty unless you can manage members."
+            "description": "Invited people who verified their email but haven’t finished setting up (`userId` cancels with cancelJoining). Empty unless you can manage members."
           }
         },
         "required": [
@@ -15112,11 +16176,21 @@
           },
           "invitedAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "The first invite to this person."
+          },
+          "sentAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The latest email (a resend sends a new link)."
           },
           "expiresAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "expired": {
+            "type": "boolean",
+            "description": "The link ran out; resend it, or revoke it."
           }
         },
         "required": [
@@ -15124,7 +16198,9 @@
           "email",
           "role",
           "invitedAt",
-          "expiresAt"
+          "sentAt",
+          "expiresAt",
+          "expired"
         ]
       },
       "MessageMedia": {
@@ -15509,11 +16585,16 @@
             "type": "string"
           },
           "body": {
-            "type": "string"
+            "type": "string",
+            "description": "Up to 4096 characters."
           },
           "shared": {
             "type": "boolean",
             "description": "Shared with the whole workspace (else only yours)."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "Whose it is: who made it, or the admin who last un-shared it."
           },
           "actions": {
             "type": [
@@ -15783,7 +16864,14 @@
           },
           "escalationLevel": {
             "type": "integer",
-            "description": "0 = not escalated; 1–3 = the escalation matrix level reached."
+            "description": "0 = not escalated; 1–3 = the position of the escalation level reached, when it was reached."
+          },
+          "escalationLevelId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The id of the last escalation level reached (EscalationLevel.id); null after a reopen. Editing the matrix never makes a ticket skip or repeat a level."
           },
           "escalations": {
             "type": "array",
@@ -15792,6 +16880,9 @@
               "properties": {
                 "level": {
                   "type": "integer"
+                },
+                "levelId": {
+                  "type": "string"
                 },
                 "at": {
                   "type": "string",
@@ -15960,7 +17051,7 @@
             "items": {
               "type": "object"
             },
-            "description": "Conditions: {field: \"keyword\", any: string[]} · {field: \"contactTag\", any: string[]} · {field: \"source\", in: [\"handoff\"|\"takeover\"|\"reply\"|\"manual\"]} · {field: \"priority\", in: [...]} · {field: \"hours\", is: \"open\"|\"closed\"} · {field: \"number\", in: string[]}."
+            "description": "Conditions: {field: \"keyword\", any: string[]} · {field: \"contactTag\", any: string[]} · {field: \"source\", in: [\"handoff\"|\"takeover\"|\"reply\"|\"manual\"|\"customer\"]} · {field: \"priority\", in: [...]} · {field: \"hours\", is: \"open\"|\"closed\"} · {field: \"number\", in: string[]}."
           },
           "then": {
             "type": "array",
@@ -15968,6 +17059,14 @@
               "type": "object"
             },
             "description": "Actions: {do: \"assignTeam\", teamId, skill?} · {do: \"assignUser\", userId} · {do: \"leaveUnassigned\"} · {do: \"setPriority\", priority} · {do: \"addTags\", tags}."
+          },
+          "inactive": {
+            "type": "boolean",
+            "description": "Read-only: the rule sends work to a team or person that’s gone, so it doesn’t run. It can still be saved with the others."
+          },
+          "inactiveReason": {
+            "type": "string",
+            "description": "Read-only: why it doesn’t run."
           }
         },
         "required": [
@@ -15994,6 +17093,21 @@
               }
             },
             "description": "Per priority (urgent, high, normal, low): up to three levels, fired in order."
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Read-only: last saved; send it back as If-Unmodified-Since."
+          },
+          "updatedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Read-only: who saved it last."
           }
         },
         "required": [
@@ -16004,6 +17118,10 @@
       "EscalationLevel": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable id (letters, numbers, - and _). Send it back when saving; a level without one gets one (the stored level with the same clock and percent keeps its id)."
+          },
           "clock": {
             "type": "string",
             "enum": [
@@ -16054,7 +17172,7 @@
             "properties": {
               "timezone": {
                 "type": "string",
-                "description": "IANA time zone, e.g. Asia/Kolkata."
+                "description": "Any IANA time zone, e.g. Asia/Kolkata (not an offset like +05:30)."
               },
               "week": {
                 "type": "object",
@@ -16076,14 +17194,41 @@
                     }
                   ]
                 },
-                "description": "Keys sun…sat; times HH:MM; null = closed."
+                "description": "Keys sun…sat; times HH:MM, close up to 24:00 (00:00–24:00 = all day); null = closed."
               },
               "holidays": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string",
+                          "description": "Up to 80 characters."
+                        },
+                        "yearly": {
+                          "type": "boolean",
+                          "description": "The same day every year."
+                        }
+                      },
+                      "required": [
+                        "date"
+                      ]
+                    }
+                  ]
                 },
-                "description": "Dates (YYYY-MM-DD)."
+                "description": "Days off: a date (YYYY-MM-DD), or {date, name?, yearly?}. New dates in the past are refused unless yearly."
+              },
+              "twentyFourSeven": {
+                "type": "boolean",
+                "description": "Always open, holidays included."
               }
             }
           },
@@ -16176,6 +17321,25 @@
           "listenOnly": {
             "type": "boolean",
             "description": "Read-only: the business’s own number, where the console sends nothing on its own (no away message, no feedback question)."
+          },
+          "openTickets": {
+            "type": "integer",
+            "description": "Read-only: open and waiting tickets now; they keep their deadlines until recomputeSupportDeadlines."
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Read-only: last saved; send it back as If-Unmodified-Since."
+          },
+          "updatedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Read-only: who saved it last."
           }
         },
         "required": [
@@ -16202,6 +17366,7 @@
               "due",
               "assigned",
               "unassigned",
+              "escalated",
               "alert",
               "alert_critical",
               "reminder"
@@ -16745,6 +17910,23 @@
               "null"
             ]
           },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updatedBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timezone": {
+            "type": "string",
+            "description": "The workspace’s support time zone; the month runs in it."
+          },
           "month": {
             "type": "object",
             "properties": {
@@ -16885,6 +18067,9 @@
           "budget",
           "lastSyncAt",
           "lastSyncError",
+          "updatedAt",
+          "updatedBy",
+          "timezone",
           "month",
           "days",
           "ai"

@@ -6,7 +6,8 @@ import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTit
 import { AGENT_STATUS, agentStatusOf } from '@/app/lib/status'
 import { readiness } from '@/app/wizard/readiness'
 import { cn } from '@/app/lib/utils'
-import { listAccounts } from '@/app/api/whatsapp'
+import { workspaceAccounts } from '@/app/api/whatsapp'
+import { useAuth } from '@/app/auth/AuthContext'
 import { listChats } from '@/app/api/inbox'
 import { listTickets } from '@/app/api/tickets'
 import { Button } from '@/app/components/ui/button'
@@ -124,12 +125,14 @@ interface Live {
 function LiveOnWhatsApp({ phoneId, onGoLive }: { phoneId: string | null; onGoLive: () => void }) {
   const exitTo = useExitWizard()
   const { state } = useWizard()
+  const role = useAuth().me?.role
   const [live, setLive] = useState<Live | null>(null)
   const [error, setError] = useState<string | null>(null)
   const load = useCallback(() => {
     setError(null)
     // The agent's own status came from Meta when the studio opened (state.publish); no second ask.
-    Promise.all([listAccounts(), listTickets(), listChats()]).then(
+    // The number's name is a nice-to-have: a role that can't read it still sees the rest.
+    Promise.all([workspaceAccounts(role).catch(() => []), listTickets(), listChats()]).then(
       ([accounts, tickets, chats]) => {
         const n = accounts.flatMap((a) => a.phoneNumbers).find((x) => x.id === phoneId)
         setLive({
@@ -139,7 +142,7 @@ function LiveOnWhatsApp({ phoneId, onGoLive }: { phoneId: string | null; onGoLiv
       },
       (err) => setError(errorText(err)),
     )
-  }, [phoneId])
+  }, [phoneId, role])
   useEffect(load, [load])
 
   if (error)

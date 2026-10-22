@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react'
-import { Check, ChevronsUpDown, LogOut, Mail, Plus, Settings } from 'lucide-react'
+import { Check, ChevronsUpDown, Mail, Plus, Settings } from 'lucide-react'
 import mark from '@/assets/helo-mark.svg'
 import { useAuth } from '@/app/auth/AuthContext'
-import { answerInvite, createWorkspace, leaveWorkspace, switchWorkspace } from '@/app/auth/workspaceSwitch'
+import { answerInvite, createWorkspace, switchWorkspace } from '@/app/auth/workspaceSwitch'
 import { errorDetail } from '@/app/api/meta'
 import { roleLabel } from '@/app/lib/permissions'
 import { cn } from '@/app/lib/utils'
@@ -18,8 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/app/components/ui/dropdown-menu'
-import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
-import type { SettingsTab } from './SettingsPage'
+import type { SettingsTab } from './settings/areas'
 
 const initial = (name?: string) => name?.trim()[0]?.toUpperCase() || '?'
 
@@ -27,7 +26,6 @@ const initial = (name?: string) => name?.trim()[0]?.toUpperCase() || '?'
 export function WorkspaceSwitcher({ collapsed, onOpenSettings }: { collapsed: boolean; onOpenSettings: (tab: SettingsTab) => void }) {
   const { me, setMe } = useAuth()
   const [creating, setCreating] = useState(false)
-  const [leaving, setLeaving] = useState(false)
   const invites = me?.invites ?? []
   const others = (me?.workspaces ?? []).filter((w) => w.id !== me?.workspace?.id)
 
@@ -57,7 +55,7 @@ export function WorkspaceSwitcher({ collapsed, onOpenSettings }: { collapsed: bo
         <DropdownMenuContent align="start" side={collapsed ? 'right' : 'bottom'} className="w-72">
           <DropdownMenuLabel className="text-meta font-normal text-muted-foreground">Workspaces</DropdownMenuLabel>
           {me?.workspace && (
-            <DropdownMenuItem onSelect={() => onOpenSettings('members')}>
+            <DropdownMenuItem onSelect={() => onOpenSettings('general')}>
               <WorkspaceBadge name={me.workspace.name} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate">{me.workspace.name}</span>
@@ -114,28 +112,13 @@ export function WorkspaceSwitcher({ collapsed, onOpenSettings }: { collapsed: bo
           <DropdownMenuItem onSelect={() => setCreating(true)}>
             <Plus className="size-4" /> Create workspace
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onOpenSettings('members')}>
-            <Settings className="size-4" /> Workspace members
+          {/* Leaving the workspace is on Settings › Profile, with the rest of your own account. */}
+          <DropdownMenuItem onSelect={() => onOpenSettings('general')}>
+            <Settings className="size-4" /> Workspace settings
           </DropdownMenuItem>
-          {me?.workspace && (
-            <DropdownMenuItem onSelect={() => setLeaving(true)}>
-              <LogOut className="size-4" /> Leave {me.workspace.name}
-            </DropdownMenuItem>
-          )}
         </DropdownMenuContent>
       </DropdownMenu>
       <CreateWorkspaceDialog open={creating} onClose={() => setCreating(false)} />
-      <ConfirmDialog
-        open={leaving}
-        title={`Leave ${me?.workspace?.name ?? 'this workspace'}?`}
-        description="You’ll lose access to its chats, tickets and agents. An owner can invite you again. Your other workspaces aren’t affected."
-        confirmLabel="Leave workspace"
-        onConfirm={() => {
-          setLeaving(false)
-          void leaveWorkspace()
-        }}
-        onCancel={() => setLeaving(false)}
-      />
     </>
   )
 }

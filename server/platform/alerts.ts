@@ -1,6 +1,7 @@
 // Workspace alerts for owners: things about the account (budget reached, number quality dropped,
 // template paused) rather than one chat. Each alert has a key, so the same condition raises it once
-// (until `cleared`). Owners see it in the bell and get one email; anyone can dismiss it for themselves.
+// (until `cleared`). Owners see it in the bell and get one email (unless their membership's
+// notification switch for that kind is off); anyone can dismiss it for themselves.
 import { col, ws } from './db.ts'
 import { mail } from './mail.ts'
 import { trace } from './trace.ts'
@@ -13,12 +14,17 @@ interface Alert {
   title: string
   detail: string
   target: AlertTarget
+  /** The switch in You › Notifications (`memberships.notify.<pref>`, missing = on) that decides the
+   *  email; the bell shows the alert either way. Without one, everyone above gets the email. */
+  pref?: NotifyPref
 }
+/** Per-membership email switches (`memberships.notify`); a missing switch counts as on. */
+export type NotifyPref = 'escalations' | 'assigned' | 'slaBreach' | 'budget' | 'digest'
 const alerts = () => col('alerts')
 const PATH: Record<AlertTarget, string> = { billing: '/settings/billing', whatsapp: '/whatsapp', members: '/settings/members' }
 
 /** Raises an alert once per key. Returns true when it was new (and owners were emailed). */
-export async function raiseAlert(a: Alert): Promise<boolean> {
+export async function raiseAlert({ pref, ...a }: Alert): Promise<boolean> {
   const r = await alerts().updateOne(
     { workspaceId: ws(), key: a.key },
     { $setOnInsert: { workspaceId: ws(), ...a, createdAt: new Date(), dismissedBy: [] } },
@@ -26,7 +32,9 @@ export async function raiseAlert(a: Alert): Promise<boolean> {
   )
   if (!r.upsertedCount) return false
   trace('alert.raised', { key: a.key, severity: a.severity, target: a.target })
-  const owners = await col('memberships').find({ workspaceId: ws(), role: { $in: ['owner', 'admin'] } }, { projection: { userId: 1 } }).toArray()
+  const owners = await col('memberships')
+    .find({ workspaceId: ws(), role: { $in: ['owner', 'admin'] }, ...(pref && { [`notify.${pref}`]: { $ne: false } }) }, { projection: { userId: 1 } })
+    .toArray()
   const people = await col('users').find({ _id: { $in: owners.map((o) => o.userId) } }, { projection: { email: 1 } }).toArray()
   for (const p of people) await mail.alert(String(p.email), a.title, a.detail, { label: 'Open Helo.ai', path: PATH[a.target] }).catch(() => {})
   return true

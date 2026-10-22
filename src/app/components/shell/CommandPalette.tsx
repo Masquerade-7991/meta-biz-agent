@@ -13,21 +13,8 @@ import { setTheme } from '@/app/lib/theme'
 import { switchWorkspace } from '@/app/auth/workspaceSwitch'
 import { can } from '@/app/lib/permissions'
 import { REPORTS } from '@/app/reports/catalog'
-
-const SETTINGS: { tab: string; label: string }[] = [
-  { tab: 'members', label: 'Members' },
-  { tab: 'activity', label: 'Activity log' },
-  { tab: 'billing', label: 'Billing' },
-  { tab: 'whatsapp', label: 'WhatsApp settings' },
-  { tab: 'support', label: 'Hours & response targets' },
-  { tab: 'teams', label: 'Teams & people' },
-  { tab: 'routing', label: 'Routing rules' },
-  { tab: 'escalation', label: 'Escalation matrix' },
-  { tab: 'canned', label: 'Canned responses' },
-  { tab: 'fields', label: 'Contact fields' },
-  { tab: 'profile', label: 'Your profile' },
-  { tab: 'tokens', label: 'API tokens' },
-]
+import { visibleAreas } from './settings/areas'
+import { confirmLeave } from './settings/leaveGuard'
 
 /** ⌘K / Ctrl+K anywhere: jump to any page, setting or agent section, or run a quick action. */
 export function CommandPalette() {
@@ -55,7 +42,7 @@ export function CommandPalette() {
   if (!me?.workspace) return null
   const go = (path: string) => {
     setOpen(false)
-    navigate(path)
+    void confirmLeave().then((ok) => ok && navigate(path))
   }
   const agentName = state.gate.gatePassed ? state.identity.agentName.trim() || 'Your agent' : null
 
@@ -118,13 +105,28 @@ export function CommandPalette() {
             ))}
           </CommandGroup>
         )}
+        {/* The same catalog as the Settings home and its tabs (settings/areas.ts). */}
         <CommandGroup heading="Settings">
-          {SETTINGS.filter((s) => (s.tab !== 'billing' || can(me.role, 'billing.view')) && (s.tab !== 'whatsapp' || can(me.role, 'whatsapp.manage')) && (s.tab !== 'activity' || can(me.role, 'traces.read'))).map((s) => (
-            <CommandItem key={s.tab} value={`settings ${s.label}`} onSelect={() => go(pathFor('settings', s.tab))}>
+          <CommandItem value="settings home all settings" onSelect={() => go(pathFor('settings'))}>
+            <Settings />
+            All settings
+          </CommandItem>
+          {visibleAreas(me.role).flatMap((a) =>
+            a.tabs.map((t) => (
+              <CommandItem key={t.slug} value={`settings ${a.label} ${t.label} ${t.keywords ?? ''}`} onSelect={() => go(pathFor('settings', t.slug))}>
+                <Settings />
+                {t.label}
+                <span className="ml-auto text-meta text-muted-foreground">{a.label}</span>
+              </CommandItem>
+            )),
+          )}
+          {can(me.role, 'whatsapp.manage') && (
+            <CommandItem value="whatsapp account webhooks live events disconnect assets" onSelect={() => go('/whatsapp?tab=account')}>
               <Settings />
-              {s.label}
+              WhatsApp account
+              <span className="ml-auto text-meta text-muted-foreground">Assets</span>
             </CommandItem>
-          ))}
+          )}
         </CommandGroup>
         {me.workspaces.length > 1 && (
           <CommandGroup heading="Workspaces">

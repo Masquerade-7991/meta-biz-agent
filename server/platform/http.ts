@@ -43,6 +43,18 @@ export async function readJson(req: http.IncomingMessage): Promise<unknown> {
   }
 }
 
+/** Saving a settings document: with `If-Unmodified-Since: <updatedAt the client read>`, refuses with 409
+ *  when someone saved after that. No header means no check (the UI's "Keep mine"). Give 409 the title
+ *  'Changed by someone else' in the module's Titles. */
+export function needUnmodified(req: http.IncomingMessage, stored: unknown) {
+  const h = req.headers['if-unmodified-since']
+  if (!h) return
+  const since = Date.parse(String(h))
+  if (Number.isNaN(since)) throw new HttpError(400, 'If-Unmodified-Since must be the updatedAt you read.')
+  const at = stored ? new Date(stored as string | Date).getTime() : NaN
+  if (at > since) throw new HttpError(409, 'Someone else changed this just now. Reload to see their changes.')
+}
+
 /** Titles shown above an error's detail, per status; each module adds its own wording. */
 export type Titles = Record<number, string>
 

@@ -3,6 +3,9 @@ import { area, d, o } from './helpers.ts'
 
 const SCOPE = 'When agents are restricted, an agent only reaches tickets assigned to them or unassigned (403 “This chat is assigned to someone else.”).'
 const GONE = (n = 'n') => `Ticket #${n} doesn’t exist.`
+const UNMODIFIED = { 'If-Unmodified-Since': d('string', 'The `updatedAt` you read. When someone saved after it, the answer is 409 “Changed by someone else”. Leave it out to save anyway (Keep mine).') }
+const STALE = 'Changed by someone else: someone saved after the If-Unmodified-Since you sent.'
+const CHANGED_HEADERS = 'The answer carries `x-updated-at` (ISO) and `x-updated-by` (URL-encoded name) headers: send x-updated-at back as If-Unmodified-Since.'
 
 export const tickets = area('Tickets & support', {
   '/api/tickets': {
@@ -75,14 +78,28 @@ export const tickets = area('Tickets & support', {
   },
   '/api/support/teams': {
     get: { id: 'listTeams', summary: 'Teams', description: 'Teams kept in support settings before teams had their own list move over on the first read, keeping their ids.', ok: 'Team[]' },
-    post: { id: 'createTeam', summary: 'Create a team', who: 'settings.manage', body: { $ref: '#/components/schemas/Team' }, ok: 'Team', errors: { 400: 'Give the team a name.' } },
+    post: {
+      id: 'createTeam',
+      summary: 'Create a team',
+      who: 'settings.manage',
+      body: { $ref: '#/components/schemas/Team' },
+      ok: 'Team',
+      errors: { 400: 'Give the team a name. / The team lead must be one of the team’s members.', 409: 'There’s already a team called “X”. Pick another name.' },
+    },
   },
   '/api/support/teams/{id}': {
-    put: { id: 'updateTeam', summary: 'Change a team', who: 'settings.manage', body: { $ref: '#/components/schemas/Team' }, ok: 'Team', errors: { 400: 'Give the team a name.', 404: 'That team no longer exists.' } },
+    put: {
+      id: 'updateTeam',
+      summary: 'Change a team',
+      who: 'settings.manage',
+      body: { $ref: '#/components/schemas/Team' },
+      ok: 'Team',
+      errors: { 400: 'Give the team a name. / The team lead must be one of the team’s members.', 404: 'That team no longer exists.', 409: 'There’s already a team called “X”.' },
+    },
     delete: {
       id: 'deleteTeam',
       summary: 'Delete a team',
-      description: 'Its tickets leave the team’s queue and stay with whoever has them.',
+      description: 'Its open tickets leave the team’s queue and stay with whoever has them; resolved tickets keep the team (analytics history).',
       who: 'settings.manage',
       errors: { 404: 'That team no longer exists.', 409: 'The rule “X” sends tickets to this team. Change the rule first.' },
     },
@@ -100,26 +117,39 @@ export const tickets = area('Tickets & support', {
     },
   },
   '/api/support/rules': {
-    get: { id: 'getRules', summary: 'Routing rules', description: 'Checked top to bottom when a ticket opens; the first match decides. Otherwise the default routing in support settings applies.', ok: 'Rule[]' },
+    get: {
+      id: 'getRules',
+      summary: 'Routing rules',
+      description: `Checked top to bottom when a ticket opens; the first match decides. Otherwise the default routing in support settings applies. Rules that point at a removed team or person come back \`inactive\` and don’t run. ${CHANGED_HEADERS}`,
+      ok: 'Rule[]',
+    },
     put: {
       id: 'saveRules',
       summary: 'Replace the routing rules',
-      description: 'The whole ordered list (50 at most).',
+      description: `The whole ordered list (50 at most). A rule that already pointed at a removed team or person may stay in it (it stays inactive); a new reference to one is refused. ${CHANGED_HEADERS}`,
       who: 'settings.manage',
+      headers: UNMODIFIED,
       body: { type: 'array', items: { $ref: '#/components/schemas/Rule' } },
       ok: 'Rule[]',
-      errors: { 400: '“X” needs at least one action. / “X” sends tickets to a team that no longer exists. / …' },
+      errors: { 400: '“X” needs at least one action. / “X” sends tickets to a team that no longer exists. / Keep it to 50 rules or fewer. / …', 409: STALE },
     },
   },
   '/api/support/escalation': {
-    get: { id: 'getEscalation', summary: 'Escalation matrix', description: 'Off until saved with enabled: true. When on, open tickets are checked every minute.', ok: 'EscalationMatrix' },
+    get: {
+      id: 'getEscalation',
+      summary: 'Escalation matrix',
+      description: 'Off until saved with enabled: true. When on, open tickets are checked every minute. Every level has a stable `id`; tickets remember the id of the level they reached.',
+      ok: 'EscalationMatrix',
+    },
     put: {
       id: 'saveEscalation',
       summary: 'Save the escalation matrix',
+      description: 'Send each level’s `id` back: in-flight tickets carry on from the level they reached, whatever was added, removed or reordered.',
       who: 'settings.manage',
+      headers: UNMODIFIED,
       body: { $ref: '#/components/schemas/EscalationMatrix' },
       ok: 'EscalationMatrix',
-      errors: { 400: 'urgent level 1: fire between 25% and 500% of the target. / … does nothing: notify someone, move the ticket or raise its priority.' },
+      errors: { 400: 'urgent level 1: fire between 25% and 500% of the target. / … does nothing: notify someone, move the ticket or raise its priority.', 409: STALE },
     },
   },
   '/api/support/settings': {
@@ -127,13 +157,27 @@ export const tickets = area('Tickets & support', {
     put: {
       id: 'saveSupportSettings',
       summary: 'Save support settings',
+      description:
+        'Partial: top-level keys left out keep what’s stored (and `hours` keys left out keep theirs). Changed targets and hours apply to new tickets; open ones keep their deadlines until recomputeSupportDeadlines. A week with every day closed and no 24/7 is refused unless `confirmNoHours: true` (deadlines would never run).',
       who: 'settings.manage',
-      body: { $ref: '#/components/schemas/SupportSettings' },
+      headers: UNMODIFIED,
+      body: { allOf: [{ $ref: '#/components/schemas/SupportSettings' }, o({ twentyFourSeven: d('boolean', 'Same as hours.twentyFourSeven.'), confirmNoHours: d('boolean', 'Save a week with no open hours anyway.') })] },
       ok: 'SupportSettings',
       errors: {
-        400: 'X isn’t a time zone we recognise. / Check the hours for mon: closing must be after opening (HH:MM). / Check the urgent targets… / Pick who gets every new ticket.',
+        400: 'X isn’t a time zone we recognise. / Monday: closing must be after opening. / Urgent: resolution can’t be shorter than first reply. / Every day is closed… / 2026-01-02 is in the past… / Routing mode must be unassigned, round_robin or fixed. / Pick who gets every new ticket.',
         403: 'Only owners and admins can change support settings.',
+        409: STALE,
       },
+    },
+  },
+  '/api/support/settings/recompute': {
+    post: {
+      id: 'recomputeSupportDeadlines',
+      summary: 'Apply the current targets to open tickets',
+      description: 'Recomputes the deadlines of every open and waiting ticket from when its clock started, with the current hours and targets.',
+      who: 'settings.manage',
+      ok: o({ 'updated*': d('integer', 'Tickets whose deadlines changed.') }),
+      errors: { 403: 'Only owners and admins can change support settings.' },
     },
   },
   '/api/support/notifications': {

@@ -1,5 +1,7 @@
 // The workspace's WhatsApp accounts and Embedded Signup (/api/whatsapp/*). Dummy mode answers in this browser.
 import { jsonClient, supportDummy } from './client'
+import { listNumbers } from './numbers'
+import { can, type Role } from '@/app/lib/permissions'
 
 export type StepName = 'exchange' | 'subscribe' | 'register' | 'billing' | 'sync' | 'details'
 export interface Step {
@@ -41,6 +43,8 @@ export interface SignupConfig {
   /** hosted, owners only: Meta's signup page as configured (what Connect opens), and for each flow. */
   link?: string
   links?: Record<Flow, string>
+  /** Whether the workspace has a WhatsApp number (everyone; lets agents' Home tell). */
+  connected?: boolean
 }
 export type Billing = 'partner_credit' | 'own'
 export type Flow = 'new' | 'coexistence'
@@ -48,7 +52,40 @@ export type Flow = 'new' | 'coexistence'
 const call = jsonClient(supportDummy('dummyWhatsApp'))
 
 export const getSignupConfig = () => call<SignupConfig>('/api/whatsapp/config')
+/** Owners only (the server answers 403 to everyone else): how each account was set up, its steps and billing. */
 export const listAccounts = () => call<WaAccount[]>('/api/whatsapp/accounts')
+
+/** The workspace's accounts as this role may see them. Owners get the full accounts; supervisors and
+ *  admins get them rebuilt from the numbers list (setup and billing are the owner's, so they read as
+ *  done); agents, who see no numbers, get one stand-in for the workspace's number when it has one
+ *  (the server fills in PHONE_NUMBER_ID). Never throws for a read the role isn't allowed. */
+export async function workspaceAccounts(role: Role | null | undefined): Promise<WaAccount[]> {
+  if (can(role, 'whatsapp.manage')) return listAccounts()
+  const view = (wabaId: string, wabaName: string, phoneNumbers: WaAccount['phoneNumbers']): WaAccount => ({
+    wabaId,
+    wabaName,
+    businessId: '',
+    phoneNumbers,
+    source: 'signup',
+    billing: { mode: 'own', state: 'confirmed' },
+    steps: {},
+    hasPin: false,
+    canDisconnect: false,
+    needsAttention: false,
+    createdAt: '',
+  })
+  if (can(role, 'numbers.view')) {
+    const byWaba = new Map<string, WaAccount>()
+    for (const n of await listNumbers()) {
+      const a = byWaba.get(n.wabaId) ?? view(n.wabaId, n.wabaName, [])
+      a.phoneNumbers.push({ id: n.id, display: n.display, verifiedName: n.verifiedName, sandbox: n.sandbox })
+      byWaba.set(n.wabaId, a)
+    }
+    return [...byWaba.values()]
+  }
+  const c = await getSignupConfig().catch(() => null)
+  return c?.connected === false ? [] : [view('WABA_ID', '', [{ id: 'PHONE_NUMBER_ID', display: '', verifiedName: 'Your WhatsApp number' }])]
+}
 export const connectAccount = (b: { code: string; wabaId: string; phoneNumberId: string; businessId: string; flow: Flow; billing: Billing }) =>
   call<{ account: WaAccount; pin?: string }>('/api/whatsapp/connect', 'POST', b)
 export const retryAccount = (wabaId: string) => call<WaAccount>(`/api/whatsapp/accounts/${wabaId}/retry`, 'POST', {})

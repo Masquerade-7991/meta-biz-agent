@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type Keybo
 import { toast } from 'sonner'
 import { Ban, Bot, ChevronDown, Download, Check, CheckCheck, Clock, Zap, FileText, GraduationCap, Hand, ListChecks, Loader2, MessageSquareText, MoreHorizontal, PanelRight, Paperclip, Send, Sparkles, StickyNote, Undo2, Wrench, X } from 'lucide-react'
 import { isDummyMode } from '@/app/api/dummy'
-import { listAccounts } from '@/app/api/whatsapp'
+import { workspaceAccounts } from '@/app/api/whatsapp'
 import { Sheet, SheetBody, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
 import { Button } from '@/app/components/ui/button'
 import { Badge } from '@/app/components/ui/badge'
@@ -671,13 +671,15 @@ function Composer({ chat, canned, aiSummary, ticket, onSent, onSummary }: { chat
 /** On a Meta test number (sandbox) the AI agent answers, but WhatsApp delivers only to up to 5 verified
  *  recipients, so say so above the chats instead of leaving people wondering where the reply went. */
 function TestNumberNote() {
+  const { me } = useAuth()
+  const role = me?.role
   const [test, setTest] = useState(false)
   useEffect(() => {
-    listAccounts().then(
+    workspaceAccounts(role).then(
       (rows) => setTest(rows.some((a) => a.phoneNumbers.some((n) => n.sandbox))),
       () => null,
     )
-  }, [])
+  }, [role])
   if (!test) return null
   return (
     <p className="border-b border-border bg-warning/10 px-4 py-2 text-xs text-warning-foreground">

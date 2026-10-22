@@ -11,7 +11,7 @@ import { col, db, dbOffReason, needMetaAssets, ownsMetaAssets, withWorkspace, ws
 import { callUpstream, env, metaJson, parseJson, resolveIds } from '../whatsapp/index.ts'
 import { currentAssets } from '../platform/context.ts'
 import { parseActions } from '../../src/app/inbox/macros.ts'
-import { trace } from '../platform/trace.ts'
+import { diff, trace } from '../platform/trace.ts'
 import { contactFor, resolveCustomer, webhookContacts } from './customers.ts'
 import { onAccountWebhook } from '../whatsapp/index.ts'
 import { inboundMedia, MEDIA_TYPES, saveMedia, serveMedia, uploadToMeta } from './media.ts'
@@ -705,24 +705,46 @@ export async function setControl(me: Actor, phone: string, action: 'take' | 'rel
 // ---- canned responses ----
 const canned = () => col('canned_responses')
 const cannedOut = ({ _id, workspaceId: _w, ...c }: Obj) => ({ id: String(_id), ...c })
+/** What the activity log keeps about a canned response: no reply text, only that it changed. */
+const cannedFacts = (c: Obj | null) => (c ? { title: c.title, shortcut: c.shortcut, shared: !!c.shared, actions: c.actions ?? null } : {})
 async function saveCanned(me: Actor, body: Obj, id?: string) {
   const shortcut = text(body.shortcut, 'a shortcut', 40).replace(/^\/?/, '/').toLowerCase()
   if (!/^\/[a-z0-9-_]+$/.test(shortcut)) throw new HttpError(400, 'Shortcuts use letters, numbers, - and _ only, like /refund.')
+  if (body.shared !== undefined && typeof body.shared !== 'boolean') throw new HttpError(400, 'shared must be true or false.')
   // Shared responses are the team's; only roles that manage settings can share or change them.
   const admin = can(me.role, 'settings.manage')
   const actions = parseActions(body.actions)
-  const doc = { title: text(body.title, 'a title', 80), shortcut, body: text(body.body, 'the reply'), shared: body.shared !== false && admin, actions: actions ?? null, updatedAt: new Date() }
-  if (id && !admin && (await canned().findOne({ _id: new ObjectId(id), workspaceId: ws(), shared: true }))) throw new HttpError(403, 'Only owners and admins can change the team’s shared responses.')
+  const before = id ? await canned().findOne({ _id: new ObjectId(id), workspaceId: ws() }) : null
+  // Shared ones are for admins; private ones only for whoever made them (others get the same answer as a missing one).
+  if (id && (!before || (!before.shared && before.createdBy !== me._id))) throw new HttpError(404, 'That response no longer exists.')
+  if (before?.shared && !admin) throw new HttpError(403, 'Only owners and admins can change the team’s shared responses.')
+  if (body.shared === true && !admin) throw new HttpError(403, 'Only owners and admins can share responses with the team.')
+  // Left out: an edit keeps what it was, a new one stays private.
+  const shared = body.shared === undefined ? !!before?.shared : body.shared
+  const doc: Obj = { title: text(body.title, 'a title', 80), shortcut, body: text(body.body, 'the reply'), shared, actions: actions ?? null, updatedAt: new Date() }
+  // Un-sharing someone else's response keeps it with the admin who did it, so it doesn't vanish into nobody's list.
+  if (before?.shared && !shared && before.createdBy !== me._id) doc.createdBy = me._id
   const clash = await canned().findOne({ workspaceId: ws(), shortcut, ...(id && { _id: { $ne: new ObjectId(id) } }) })
-  if (clash) throw new HttpError(409, `${shortcut} is already used by “${clash.title}”.`)
+  // Someone else's private response isn't named: its title is theirs.
+  if (clash) throw new HttpError(409, clash.shared || clash.createdBy === me._id ? `${shortcut} is already used by “${String(clash.title)}”.` : `${shortcut} is already taken. Pick another shortcut.`)
   if (id) {
-    const r = await canned().findOneAndUpdate({ _id: new ObjectId(id), workspaceId: ws(), $or: [{ shared: true }, { createdBy: me._id }] }, { $set: doc }, { returnDocument: 'after' })
+    const r = await canned().findOneAndUpdate({ _id: new ObjectId(id), workspaceId: ws() }, { $set: doc }, { returnDocument: 'after' })
     if (!r) throw new HttpError(404, 'That response no longer exists.')
+    const changes = diff(cannedFacts(before), cannedFacts(r))
+    const bodyChanged = before?.body !== r.body
+    if (changes || bodyChanged) trace('canned.updated', { title: r.title, shortcut: r.shortcut, ...(bodyChanged && { bodyChanged }) }, { entity: 'canned', id }, changes)
     return cannedOut(r)
   }
   const full = { ...doc, workspaceId: ws(), createdBy: me._id, createdAt: new Date() }
   const r = await canned().insertOne(full)
+  trace('canned.created', { title: doc.title, shortcut, shared }, { entity: 'canned', id: String(r.insertedId) })
   return cannedOut({ ...full, _id: r.insertedId })
+}
+
+/** A member left or was removed: their private responses go, which frees their shortcuts. Shared ones stay the team's. */
+export async function forgetMemberResponses(userId: string) {
+  const r = await canned().deleteMany({ workspaceId: ws(), createdBy: userId, shared: { $ne: true } })
+  if (r.deletedCount) trace('canned.deleted', { count: r.deletedCount, reason: 'member_left' }, { entity: 'member', id: userId })
 }
 
 // ---- demo data ----
@@ -872,8 +894,12 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   if ((seg = path.match(/^\/api\/inbox\/canned\/([a-f0-9]{24})$/))) {
     if (m === 'PUT') return saveCanned(me, obj(await readJson(req)), seg[1])
     if (m === 'DELETE') {
-      const r = await canned().deleteOne({ _id: new ObjectId(seg[1]), workspaceId: ws(), $or: [{ createdBy: me._id }, ...(can(me.role, 'settings.manage') ? [{ shared: true }] : [])] })
-      if (!r.deletedCount) throw new HttpError(404, 'That response no longer exists.')
+      // The same rules as editing: shared ones are for admins, private ones for whoever made them.
+      const c = await canned().findOne({ _id: new ObjectId(seg[1]), workspaceId: ws() })
+      if (!c || (!c.shared && c.createdBy !== me._id)) throw new HttpError(404, 'That response no longer exists.')
+      if (c.shared && !can(me.role, 'settings.manage')) throw new HttpError(403, 'Only owners and admins can delete the team’s shared responses.')
+      await canned().deleteOne({ _id: c._id })
+      trace('canned.deleted', { title: c.title, shortcut: c.shortcut, shared: !!c.shared }, { entity: 'canned', id: seg[1] })
       return { ok: true }
     }
   }

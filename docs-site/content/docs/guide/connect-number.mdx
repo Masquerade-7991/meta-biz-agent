@@ -16,7 +16,7 @@ Connecting links your WhatsApp number to your workspace so your AI agent and tea
 
 ## Steps
 
-Click **Connect a number** on Home, on the WhatsApp page, or in **Settings › WhatsApp**.
+Click **Connect a number** on Home or on the WhatsApp page (**Assets** in the sidebar).
 
 ![The Connect a WhatsApp number dialog with the choice of number, billing and what gets connected](/screens/connect-number.webp)
 
@@ -55,7 +55,7 @@ If Meta's signup opens in this tab, Helo.ai completes the connection on its side
 | From Meta | Lands in Helo.ai as |
 | --- | --- |
 | Business portfolio | The business behind your workspace |
-| WhatsApp Business account | An account in **Settings › WhatsApp**. Its access is stored encrypted. Messages reach Helo.ai through a listening app, and your own webhook stays as it is. |
+| WhatsApp Business account | The account on **Assets › Account**. Its access is stored encrypted. Messages reach Helo.ai through a listening app, and your own webhook stays as it is. |
 | Phone number | A number on the WhatsApp page. A new number is registered with a PIN Helo.ai keeps for you and can run one AI agent. A Business app number keeps working on your phone. |
 | Permissions you grant | Helo.ai manages the account and sends messages for you. Meta never shares your login or payment details. |
 
@@ -123,6 +123,23 @@ If billing is waiting on you, click **Add a payment method** to open WhatsApp Ma
 ![The WhatsApp page listing numbers with status, quality and daily limit](/screens/whatsapp.webp)
 
 The WhatsApp page (**Assets** in the sidebar) lists your numbers with **Status**, **Quality** and **Daily limit**. Open a number for its tabs: Profile, Display name, Automations (ice breakers and commands), Security, Blocked and Activity.
+
+### The Account tab
+
+![Assets › Account with the account card and Live events](/screens/whatsapp-account.webp)
+
+Owners see a third tab on the WhatsApp page, **Account**, next to **Phone numbers** and **Message templates**. It holds what used to be under Settings › WhatsApp:
+
+- **The account:** its name, how it was connected, whether it is **Connected** or **Needs attention**, how it is billed (**Billed through Helo.ai** or **Pays Meta directly**) and its numbers.
+- **Setup steps:** what happened when the account was connected, with a tick for each step that finished. If a step failed you get **Retry the failed steps**. If billing is waiting on you, click **Add a payment method**, add one in Meta's WhatsApp Manager, then click **I've added it** (see [Setup steps](#setup-steps)).
+- **How this account maps to Helo.ai:** how your Meta business, WhatsApp account and number are linked to your workspace.
+- **Live events:** how WhatsApp delivers customers' messages, replies and delivery ticks to the console, and which other apps also receive them.
+- **Disconnect:** Helo.ai stops sending and receiving for the account's numbers, so the AI agent and inbox stop working there. You type the name to confirm. The account stays yours and you can connect it again.
+- Accounts set up by Helo.ai show **Managed by Helo.ai**: the console reads them and configures the AI agent, but never changes their webhooks, registration, PIN or billing, so they have no setup steps or Disconnect.
+
+Admins, supervisors and agents don't see the Account tab. A link to the old Settings › WhatsApp address takes owners here.
+
+Each number's two-step PIN is on that number's **Security** tab (see [Two-step verification PIN](#two-step-verification-pin)).
 
 ### Display name
 

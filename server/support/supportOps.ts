@@ -34,8 +34,10 @@ import {
   type TicketSource,
 } from '../../src/app/support/routing.ts'
 import type { Actor } from '../messaging/index.ts'
-import { addMessage, conversations, currentNumber } from '../messaging/index.ts'
+import { addMessage, conversations, currentNumber, forgetMemberResponses } from '../messaging/index.ts'
 import { duesFrom, getSettings } from './tickets.ts'
+import { changedBy, needFresh, saveChecked, setChangedHeaders } from './stale.ts'
+import { assignLevelIds, ensureLevelIds, reachedCount, type LevelWithId, type MatrixWithIds } from './escalationIds.ts'
 
 const teamsCol = () => col('teams')
 const rulesCol = () => col('routing_rules')
@@ -77,9 +79,32 @@ async function getRules(): Promise<Rule[]> {
   return ((await rulesCol().findOne({ workspaceId: ws() }))?.rules as Rule[] | undefined) ?? []
 }
 
-async function getMatrix(): Promise<EscalationMatrix> {
-  const m = (await matrixCol().findOne({ workspaceId: ws() }))?.matrix as EscalationMatrix | undefined
-  return m ?? DEFAULT_MATRIX
+/** A rule shown with why it can't run: it sends work to a team or person that's gone. */
+export type ShownRule = Rule & { inactive?: true; inactiveReason?: string }
+/** Why a rule can't run with the current teams and members, or null. */
+function staleReason(r: Rule, teams: Set<string>, members: Set<string>): string | null {
+  for (const a of r.then) {
+    if (a.do === 'assignTeam' && !teams.has(a.teamId)) return 'Sends tickets to a team that no longer exists.'
+    if (a.do === 'assignUser' && !members.has(a.userId)) return 'Assigns to someone who isn’t in the workspace any more.'
+  }
+  return null
+}
+async function shownRules(rules: Rule[]): Promise<ShownRule[]> {
+  const teams = new Set((await getTeams()).map((t) => t.id))
+  const members = await memberIds()
+  return rules.map((r) => {
+    const why = staleReason(r, teams, members)
+    return why ? { ...r, inactive: true, inactiveReason: why } : r
+  })
+}
+
+/** The matrix with stable level ids; levels saved before ids get theirs here, once. */
+async function getMatrix(): Promise<MatrixWithIds> {
+  const doc = await matrixCol().findOne({ workspaceId: ws() })
+  const { matrix, changed } = ensureLevelIds((doc?.matrix as EscalationMatrix | undefined) ?? DEFAULT_MATRIX)
+  // Stored as is (updatedAt unchanged, so nobody's open form turns stale).
+  if (doc && changed) await matrixCol().updateOne({ _id: doc._id, matrix: doc.matrix }, { $set: { matrix } })
+  return matrix
 }
 
 const memberIds = async () => new Set((await memberships().find({ workspaceId: ws() }).toArray()).map((m) => String(m.userId)))
@@ -125,7 +150,7 @@ async function forgetTeam(teamId: string) {
         l.reassignTeamId = null
         changed = true
       }
-  if (changed) await matrixCol().updateOne({ workspaceId: ws() }, { $set: { matrix: m, updatedAt: new Date() } })
+  if (changed) await matrixCol().updateOne({ workspaceId: ws() }, { $set: { matrix: m } })
 }
 
 /**
@@ -149,6 +174,8 @@ export async function cleanUpMember(userId: string, name: string) {
     return { ...r, then, enabled: r.enabled && then.length > 0 }
   })
   if (rulesChanged) await rulesCol().updateOne({ workspaceId: ws() }, { $set: { rules: kept, updatedAt: new Date() } })
+  // Their private canned responses go too, which frees their shortcuts.
+  await forgetMemberResponses(userId)
   const fixed = await col('support_settings').updateOne(
     { workspaceId: ws(), 'settings.routing.mode': 'fixed', 'settings.routing.userId': userId },
     { $set: { 'settings.routing.mode': 'round_robin', 'settings.routing.userId': null } },
@@ -191,7 +218,8 @@ export async function routeTicket(input: { phone: string; source: TicketSource; 
     open: isOpen(new Date(), s.hours),
     phoneNumberId: currentNumber(),
   }
-  const rule = firstMatch(await getRules(), facts)
+  // Rules that point at a removed team or person don't run.
+  const rule = firstMatch((await shownRules(await getRules())).filter((r) => !r.inactive), facts)
   const a = applyRule(rule, facts)
   const priority = input.explicitPriority ? input.priority : a.priority
   const base = { priority, tags: a.tags, rule: rule?.name ?? null }
@@ -228,7 +256,15 @@ export async function escalateDue(now = Date.now()): Promise<number> {
   let moved = 0
   for (const t of open) {
     const levels = matrix.levels[t.priority as Priority] ?? []
-    const current = Number(t.escalationLevel ?? 0)
+    // Before level ids: the position reached maps to the level there, once.
+    if (!t.escalationLevelId && Number(t.escalationLevel ?? 0) > 0) {
+      const legacy = levels[Math.min(levels.length, Number(t.escalationLevel)) - 1]?.id
+      if (legacy) {
+        await tickets().updateOne({ _id: t._id, escalationLevelId: null }, { $set: { escalationLevelId: legacy } })
+        t.escalationLevelId = legacy
+      }
+    }
+    const current = reachedCount(levels, t as never)
     const clock = {
       // A reopened ticket's clocks start at the reopen.
       createdAt: +(t.clockStartAt ?? t.createdAt),
@@ -239,8 +275,8 @@ export async function escalateDue(now = Date.now()): Promise<number> {
     }
     const next = nextEscalation(clock, levels, current, now)
     if (!next) continue
-    const level = levels[next - 1]
-    const set: Obj = { escalationLevel: next, escalatedAt: new Date(now), updatedAt: new Date(now) }
+    const level: LevelWithId = levels[next - 1]
+    const set: Obj = { escalationLevel: next, escalationLevelId: level.id, escalatedAt: new Date(now), updatedAt: new Date(now) }
     if (level.raisePriority) {
       const raised = raise(t.priority as Priority)
       if (raised !== t.priority) {
@@ -256,8 +292,8 @@ export async function escalateDue(now = Date.now()): Promise<number> {
     const notifyIds = await recipients({ ...t, ...set }, level.notify, teams)
     // Only one sweep wins a level, so nobody hears about it twice.
     const r = await tickets().updateOne(
-      { _id: t._id, ...(current ? { escalationLevel: current } : { $or: [{ escalationLevel: { $exists: false } }, { escalationLevel: 0 }] }) },
-      { $set: set, $push: { escalations: { level: next, at: new Date(now), reason: describeLevel(level), notify: notifyIds, ...(movedTo && { teamId: movedTo.id }) } } as never },
+      { _id: t._id, escalationLevelId: t.escalationLevelId ?? null },
+      { $set: set, $push: { escalations: { level: next, levelId: level.id, at: new Date(now), reason: describeLevel(level), notify: notifyIds, ...(movedTo && { teamId: movedTo.id }) } } as never },
     )
     if (!r.modifiedCount) continue
     moved++
@@ -266,7 +302,9 @@ export async function escalateDue(now = Date.now()): Promise<number> {
     await addMessage({ phone: String(t.phone), direction: 'out', author: 'system', kind: 'event', body: `Ticket #${t.number} escalated to level ${next}: ${what}.`, at: new Date(now) })
     trace('ticket.escalated', { number: t.number, level: next, notified: notifyIds.length }, { entity: 'ticket', id: String(t.number) })
     if (level.email && !t.sample) {
-      const people = await col('users').find({ _id: { $in: notifyIds } as never }).toArray()
+      // Only people who kept escalation emails on (You › Notifications); the bell is for everyone.
+      const off = new Set((await memberships().find({ workspaceId: ws(), userId: { $in: notifyIds }, 'notify.escalations': false }).toArray()).map((x) => String(x.userId)))
+      const people = await col('users').find({ _id: { $in: notifyIds.filter((id) => !off.has(id)) } as never }).toArray()
       const who = customerLabel(String(t.phone))
       for (const p of people) await mail.escalated(String(p.email), { number: Number(t.number), level: next, reason: describeLevel(level), customer: who, subject: String(t.subject) }).catch(() => {})
     }
@@ -294,12 +332,21 @@ export async function escalateAll(force = false) {
 const needManage = (me: Actor) => {
   if (!can(me.role, 'settings.manage')) throw new HttpError(403, 'Only owners and admins can change how work is routed.')
 }
+const needLeadInTeam = (t: Omit<Team, 'id'>) => {
+  if (t.leadId && !t.memberIds.includes(t.leadId)) throw new HttpError(400, 'The team lead must be one of the team’s members.')
+}
+/** Two teams can't share a name (case aside). */
+async function needUniqueTeam(name: string, except?: string) {
+  const re = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+  if (await teamsCol().findOne({ workspaceId: ws(), name: re, ...(except && { _id: { $ne: except as never } }) }, { projection: { _id: 1 } }))
+    throw new HttpError(409, `There’s already a team called “${name}”. Pick another name.`)
+}
 const bad = (err: unknown): never => {
   throw new HttpError(400, err instanceof Error ? err.message : String(err))
 }
 
 /** Answers the routes this module owns; undefined for anything else. */
-export async function supportOpsRoute(req: http.IncomingMessage, u: URL, me: Actor): Promise<unknown> {
+export async function supportOpsRoute(req: http.IncomingMessage, res: http.ServerResponse, u: URL, me: Actor): Promise<unknown> {
   const path = u.pathname
   const m = req.method ?? 'GET'
   let seg: RegExpMatchArray | null
@@ -313,6 +360,8 @@ export async function supportOpsRoute(req: http.IncomingMessage, u: URL, me: Act
     } catch (err) {
       return bad(err)
     }
+    needLeadInTeam(t)
+    await needUniqueTeam(t.name)
     const id = randomUUID()
     await teamsCol().insertOne({ _id: id as never, workspaceId: ws(), ...t, createdAt: new Date() })
     trace('team.created', { name: t.name, members: t.memberIds.length }, { entity: 'team', id })
@@ -331,6 +380,8 @@ export async function supportOpsRoute(req: http.IncomingMessage, u: URL, me: Act
       } catch (err) {
         return bad(err)
       }
+      needLeadInTeam(t)
+      await needUniqueTeam(t.name, seg[1])
       await teamsCol().updateOne(where, { $set: { ...t, updatedAt: new Date() } })
       trace('team.updated', { name: t.name }, ref, diff(before, t))
       return { id: seg[1], ...t }
@@ -339,7 +390,8 @@ export async function supportOpsRoute(req: http.IncomingMessage, u: URL, me: Act
       const used = (await getRules()).find((r) => r.then.some((a) => a.do === 'assignTeam' && a.teamId === seg![1]))
       if (used) throw new HttpError(409, `The rule “${used.name}” sends tickets to this team. Change the rule first.`)
       await teamsCol().deleteOne(where)
-      await tickets().updateMany({ workspaceId: ws(), teamId: seg[1] }, { $set: { teamId: null } })
+      // Resolved tickets keep the team they were handled in (analytics history); open ones leave its queue.
+      await tickets().updateMany({ workspaceId: ws(), teamId: seg[1], status: OPEN }, { $set: { teamId: null } })
       await forgetTeam(seg[1])
       trace('team.deleted', { name: String(before.name) }, ref)
       return { ok: true }
@@ -376,32 +428,68 @@ export async function supportOpsRoute(req: http.IncomingMessage, u: URL, me: Act
     return { ok: true }
   }
 
-  if (path === '/api/support/rules' && m === 'GET') return getRules()
+  if (path === '/api/support/rules' && m === 'GET') {
+    setChangedHeaders(res, await changedBy(await rulesCol().findOne({ workspaceId: ws() }, { projection: { updatedAt: 1, updatedBy: 1 } })))
+    return shownRules(await getRules())
+  }
   if (path === '/api/support/rules' && m === 'PUT') {
     needManage(me)
+    const stored = await rulesCol().findOne({ workspaceId: ws() })
+    needFresh(req, stored?.updatedAt)
+    const raw = await readJson(req)
+    const teams = new Set((await getTeams()).map((t) => t.id))
+    const members = await memberIds()
     let rules: Rule[]
     try {
-      rules = parseRules(await readJson(req), { teams: new Set((await getTeams()).map((t) => t.id)), members: await memberIds() })
+      // A rule pointing at a removed team or person is kept (shown inactive) rather than blocking the whole list.
+      const named = (do_: string, key: 'teamId' | 'userId') =>
+        (Array.isArray(raw) ? raw : []).flatMap((r) => (Array.isArray(obj(r).then) ? (obj(r).then as unknown[]) : [])).filter((a) => obj(a).do === do_).map((a) => String(obj(a)[key]))
+      const before = (stored?.rules as Rule[] | undefined) ?? []
+      const wereThere = (ids: string[], key: 'teamId' | 'userId') => ids.filter((id) => before.some((r) => r.then.some((a) => (a as Record<string, unknown>)[key] === id)))
+      rules = parseRules(raw, {
+        teams: new Set([...teams, ...wereThere(named('assignTeam', 'teamId'), 'teamId')]),
+        members: new Set([...members, ...wereThere(named('assignUser', 'userId'), 'userId')]),
+      })
     } catch (err) {
       return bad(err)
     }
-    await rulesCol().updateOne({ workspaceId: ws() }, { $set: { rules, updatedAt: new Date(), updatedBy: me._id } }, { upsert: true })
-    trace('settings.updated', { area: 'routing_rules', count: rules.length })
-    return rules
+    const now = new Date()
+    await saveChecked(rulesCol(), req, stored, { rules, updatedAt: now, updatedBy: me._id })
+    const before = (stored?.rules as Rule[] | undefined) ?? []
+    const byId = (list: Rule[]) => new Map(list.map((r) => [r.id, r]))
+    const was = byId(before)
+    const now_ = byId(rules)
+    const added = rules.filter((r) => !was.has(r.id)).map((r) => r.name)
+    const removed = before.filter((r) => !now_.has(r.id)).map((r) => r.name)
+    const changedRules = rules.filter((r) => was.has(r.id) && JSON.stringify(was.get(r.id)) !== JSON.stringify(r))
+    const changes = diff(Object.fromEntries(before.map((r) => [r.name, r])), Object.fromEntries(rules.map((r) => [r.name, r]))) ?? {}
+    for (const name of removed) if (!rules.some((r) => r.name === name)) changes[name] = [before.find((r) => r.name === name), null]
+    const moved = JSON.stringify(before.map((r) => r.id)) !== JSON.stringify(rules.map((r) => r.id).filter((id) => was.has(id)))
+    if (added.length || removed.length || changedRules.length || moved)
+      trace('settings.updated', { area: 'routing_rules', count: rules.length, added, removed, changed: changedRules.map((r) => r.name), reordered: moved }, undefined, Object.keys(changes).length ? changes : undefined)
+    setChangedHeaders(res, await changedBy({ updatedAt: now, updatedBy: me._id }))
+    return shownRules(rules)
   }
 
-  if (path === '/api/support/escalation' && m === 'GET') return getMatrix()
+  if (path === '/api/support/escalation' && m === 'GET') return { ...(await getMatrix()), ...(await changedBy(await matrixCol().findOne({ workspaceId: ws() }, { projection: { updatedAt: 1, updatedBy: 1 } }))) }
   if (path === '/api/support/escalation' && m === 'PUT') {
     needManage(me)
-    let matrix: EscalationMatrix
+    const doc = await matrixCol().findOne({ workspaceId: ws() })
+    needFresh(req, doc?.updatedAt)
+    const before = await getMatrix()
+    const raw = await readJson(req)
+    let matrix: MatrixWithIds
     try {
-      matrix = parseMatrix(await readJson(req), new Set((await getTeams()).map((t) => t.id)))
+      matrix = assignLevelIds(parseMatrix(raw, new Set((await getTeams()).map((t) => t.id))), raw, before)
     } catch (err) {
       return bad(err)
     }
-    await matrixCol().updateOne({ workspaceId: ws() }, { $set: { matrix, updatedAt: new Date(), updatedBy: me._id } }, { upsert: true })
-    trace('settings.updated', { area: 'escalation', enabled: matrix.enabled })
-    return matrix
+    const now = new Date()
+    await saveChecked(matrixCol(), req, doc, { matrix, updatedAt: now, updatedBy: me._id })
+    const facts = (x: MatrixWithIds) => ({ enabled: x.enabled, ...Object.fromEntries(Object.entries(x.levels).map(([p, l]) => [`levels.${p}`, l])) })
+    const changes = diff(facts(before), facts(matrix))
+    if (changes) trace('settings.updated', { area: 'escalation', enabled: matrix.enabled }, undefined, changes)
+    return { ...matrix, ...(await changedBy({ updatedAt: now, updatedBy: me._id })) }
   }
   return undefined
 }

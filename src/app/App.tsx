@@ -11,11 +11,13 @@ import { DevControlsButton } from '@/app/components/wizard/DevControlsButton'
 import { LoaderPreview } from '@/app/components/wizard/LoaderPreview'
 import { navFromPath, NAV_ITEMS, pathFor, type NavId } from '@/app/nav'
 import { sectionFromSlug, STUDIO_BASE, studioPath } from '@/app/wizard/studioPaths'
-import type { SettingsTab } from '@/app/components/shell/SettingsPage'
 import { CommandPalette } from '@/app/components/shell/CommandPalette'
 import { isDummyMode } from '@/app/api/dummy'
 import { AuthProvider, useAuth } from '@/app/auth/AuthContext'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
+import { LeaveGuardHost, RedirectWithMessage } from '@/app/components/shell/settings/RouteGuards'
+import { resolveSettings } from '@/app/components/shell/settings/areas'
+import { confirmLeave } from '@/app/components/shell/settings/leaveGuard'
 
 // Only the screen someone is on downloads: the console, the agent studio, setup or sign-in.
 const ProductShell = lazy(() => import('@/app/components/shell/ProductShell').then((m) => ({ default: m.ProductShell })))
@@ -127,12 +129,16 @@ function Gate() {
 
   const nav = navFromPath(path)
   if (!nav) return <Navigate to="/" replace />
-  const tab = nav === 'settings' ? (path.split('/')[2] as SettingsTab | undefined) : undefined
+  const tab = nav === 'settings' ? path.split('/')[2] || undefined : undefined
+  // /settings/<unknown or not yours or moved> goes where it belongs before any page code loads.
+  const settings = nav === 'settings' ? resolveSettings(tab, me.role) : null
+  if (settings?.kind === 'redirect') return <RedirectWithMessage to={settings.to} message={settings.message} />
   return (
     <ProductShell
       active={nav}
-      settingsTab={tab ?? 'profile'}
-      onNavigate={(id, settingsTab) => navigate(pathFor(id, settingsTab))}
+      settingsTab={tab}
+      // Unsaved Settings changes are asked about before any page change (leaveGuard.ts).
+      onNavigate={(id, settingsTab) => void confirmLeave().then((ok) => ok && navigate(pathFor(id, settingsTab)))}
       onOpenAgentBuilder={() => navigate(STUDIO_BASE)}
       // Dummy demos fill every field by hand, so the guided setup is skipped.
       onAgentCreated={() => navigate(isDummyMode() ? STUDIO_BASE : '/agents/setup')}
@@ -154,6 +160,7 @@ export default function App() {
               </Suspense>
             </ErrorBoundary>
             <CommandPalette />
+            <LeaveGuardHost />
             {(isDummyMode() || import.meta.env.DEV) && (
               <>
                 <DevControlsButton />

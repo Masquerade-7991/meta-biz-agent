@@ -3,12 +3,14 @@
 // use the rates this workspace actually paid over the last 30 days, per country and category, so
 // nothing here is a hand-kept rate card. A monthly budget alerts owners at 80% and 100%.
 import type http from 'node:http'
-import { HttpError, type Titles, arr, obj, readJson, serveJson, str } from '../platform/http.ts'
+import { HttpError, type Titles, arr, needUnmodified, obj, readJson, serveJson, str } from '../platform/http.ts'
 import { col, db, dbOffReason, ownsMetaAssets, withWorkspace, ws } from '../platform/db.ts'
 import { metaJson } from './upstream.ts'
 import { defineJob, enqueue } from '../platform/jobs.ts'
 import { raiseAlert } from '../platform/alerts.ts'
-import { trace } from '../platform/trace.ts'
+import { diff, trace } from '../platform/trace.ts'
+import { tryLock } from '../platform/locks.ts'
+import { monthIn, workspaceTimeZone } from '../platform/timezone.ts'
 import { countryOf } from '../platform/dialCodes.ts'
 import type { Actor } from '../messaging/index.ts'
 import { can } from '../../src/app/lib/permissions.ts'
@@ -18,10 +20,13 @@ const DAY = 86_400_000
 const spend = () => col('spend_daily')
 const settings = () => col('billing')
 const isoDay = (d: Date) => d.toISOString().slice(0, 10)
-const month = (d = new Date()) => d.toISOString().slice(0, 7)
+/** This month in the workspace's time zone: its label (YYYY-MM) and the instant it began. */
+const thisMonth = async () => monthIn(await workspaceTimeZone())
+/** Above this the number is a typo, not a budget (big enough for any currency's monthly spend). */
+const MAX_BUDGET = 1_000_000_000
 
 // ---- sync ----
-async function syncSpend() {
+async function syncSpend(manual = false) {
   if (!ownsMetaAssets()) return
   const end = Math.floor(Date.now() / 1000)
   const start = end - 35 * 86_400
@@ -39,7 +44,7 @@ async function syncSpend() {
       await spend().updateOne(key, { $set: { ...key, volume: Number(p.volume) || 0, cost: Number(p.cost) || 0, currency, syncedAt: new Date() } }, { upsert: true })
     }
     await settings().updateOne({ workspaceId: ws() }, { $set: { currency, lastSyncAt: new Date(), lastSyncError: null } }, { upsert: true })
-    trace('billing.synced', { points: points.length })
+    trace('billing.synced', { points: points.length, ...(manual && { manual: true }) })
     await checkBudget()
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -67,9 +72,11 @@ async function ensureSync() {
 }
 
 // ---- budget ----
+// Meta's spend comes per UTC day, so the month's first day is the closest boundary there is.
 async function monthToDate() {
+  const { month } = await thisMonth()
   const rows = await spend()
-    .aggregate([{ $match: { workspaceId: ws(), day: { $gte: `${month()}-01` } } }, { $group: { _id: '$category', cost: { $sum: '$cost' }, volume: { $sum: '$volume' } } }])
+    .aggregate([{ $match: { workspaceId: ws(), day: { $gte: `${month}-01` } } }, { $group: { _id: '$category', cost: { $sum: '$cost' }, volume: { $sum: '$volume' } } }])
     .toArray()
   return { total: rows.reduce((n, r) => n + r.cost, 0), byCategory: rows.map((r) => ({ category: String(r._id), cost: r.cost, volume: r.volume })).sort((a, z) => z.cost - a.cost) }
 }
@@ -78,12 +85,13 @@ async function checkBudget() {
   const s = await settings().findOne({ workspaceId: ws() })
   const budget = Number(s?.budget) || 0
   if (!budget) return
-  const { total } = await monthToDate()
+  const [{ total }, { month }] = await Promise.all([monthToDate(), thisMonth()])
   const money = (n: number) => `${n.toFixed(2)} ${s?.currency ?? ''}`.trim()
   for (const [pct, severity] of [[100, 'critical'], [80, 'warning']] as const) {
     if (total < (budget * pct) / 100) continue
     await raiseAlert({
-      key: `budget:${month()}:${pct}`,
+      key: `budget:${month}:${pct}`,
+      pref: 'budget',
       severity,
       title: pct === 100 ? 'WhatsApp spend reached this month’s budget' : 'WhatsApp spend passed 80% of this month’s budget',
       detail: `This month so far: ${money(total)} of your ${money(budget)} budget. Messages keep sending; the budget only alerts you.`,
@@ -141,6 +149,10 @@ async function overview() {
   return {
     currency: s?.currency ?? null,
     budget: s?.budget ?? null,
+    // When the budget was last set, and by whom (a save sends If-Unmodified-Since: updatedAt).
+    updatedAt: s?.updatedAt ? new Date(s.updatedAt).toISOString() : null,
+    updatedBy: s?.updatedBy ?? null,
+    timezone: await workspaceTimeZone(),
     lastSyncAt: s?.lastSyncAt ?? null,
     lastSyncError: s?.lastSyncError ?? null,
     month: await monthToDate(),
@@ -153,7 +165,7 @@ async function overview() {
 /** This month's messages as Meta priced them in their status webhooks (message_charges): billable or
  *  free, by category. Counted once per message. Shown next to Meta's own daily totals above. */
 async function chargesMonth() {
-  const from = new Date(new Date().toISOString().slice(0, 7) + '-01T00:00:00Z')
+  const { start: from } = await thisMonth()
   const rows = await col('message_charges')
     .aggregate<{ _id: { category: string | null; billable: boolean | null }; n: number }>([
       { $match: { workspaceId: ws(), at: { $gte: from } } },
@@ -180,22 +192,35 @@ async function route(req: http.IncomingMessage, path: string, me: Actor) {
   if (path === '/api/billing' && m === 'PUT') {
     if (!can(me.role, 'billing.manage')) throw new HttpError(403, 'Only owners can set the budget.')
     const b = obj(await readJson(req))
-    const budget = b.budget === null || b.budget === '' ? null : Number(b.budget)
-    if (budget !== null && (!Number.isFinite(budget) || budget < 0)) throw new HttpError(400, 'The budget must be a positive amount, or empty for none.')
-    await settings().updateOne({ workspaceId: ws() }, { $set: { budget } }, { upsert: true })
-    trace('settings.updated', { area: 'billing', budget: budget !== null })
+    // A number (0 means no budget) or null; strings and NaN are refused, never read as "none".
+    if (b.budget !== null && (typeof b.budget !== 'number' || !Number.isFinite(b.budget) || b.budget < 0 || b.budget > MAX_BUDGET))
+      throw new HttpError(400, `The budget must be an amount from 0 to ${MAX_BUDGET.toLocaleString('en-US')}, or null for none (0 also means none).`)
+    const budget = b.budget === null || b.budget === 0 ? null : Math.round(b.budget * 100) / 100
+    const before = await settings().findOne({ workspaceId: ws() })
+    needUnmodified(req, before?.updatedAt)
+    // Written only over the copy that was checked, so two saves at the same moment can't both pass.
+    const set = { $set: { budget, updatedAt: new Date(), updatedBy: me.name } }
+    const r = await settings().updateOne({ workspaceId: ws(), ...(before ? { updatedAt: before.updatedAt ?? null } : {}) }, set, { upsert: !before })
+    if (before && !r.matchedCount) {
+      if (req.headers['if-unmodified-since']) throw new HttpError(409, 'Someone else changed this just now. Reload to see their changes.')
+      await settings().updateOne({ workspaceId: ws() }, set)
+    }
+    trace('settings.updated', { area: 'billing', budget: budget !== null }, undefined, diff({ budget: before?.budget ?? null }, { budget }))
     await checkBudget()
     return overview()
   }
   if (path === '/api/billing/sync' && m === 'POST') {
+    if (!can(me.role, 'billing.manage')) throw new HttpError(403, 'Only owners can update spend now.')
     if (!ownsMetaAssets()) throw new HttpError(403, 'Connect a WhatsApp account first.')
-    await syncSpend()
+    // Each refresh is one pricing_analytics read on the shared Meta rate limit: once a minute per workspace.
+    if (!(await tryLock(`billing.sync:${ws()}`, 60_000))) throw new HttpError(429, 'Spend was updated a moment ago. Try again in a minute.')
+    await syncSpend(true)
     return overview()
   }
   throw new HttpError(404, 'Not found.')
 }
 
-const TITLES: Titles = { 400: 'Check the details', 403: 'Not allowed', 404: 'Not found', 502: 'WhatsApp didn’t answer' }
+const TITLES: Titles = { 400: 'Check the details', 403: 'Not allowed', 404: 'Not found', 409: 'Changed by someone else', 429: 'Too soon', 502: 'WhatsApp didn’t answer' }
 export async function handleBilling(req: http.IncomingMessage, res: http.ServerResponse, me: Actor): Promise<boolean> {
   const path = new URL(req.url ?? '/', 'http://x').pathname
   if (!path.startsWith('/api/billing')) return false

@@ -226,12 +226,16 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     return {
       mode,
       partnerCredit: !!c.creditLineId,
+      // Everyone may know a number exists (the account list itself is the owner's).
+      connected: !!(await accounts().findOne({ workspaceId: ws() }, { projection: { _id: 1 } })),
       ...(owner && mode === 'sdk' && { appId: c.appId, configId: c.configId, sdkVersion: c.sdkVersion }),
       // The link exactly as configured: the console opens it in the same tab.
       ...(owner && mode === 'hosted' && { link: env('EMBEDDED_SIGNUP_LINK'), links }),
     }
   }
   if (path === '/api/whatsapp/accounts' && m === 'GET') {
+    // How each account was set up, its steps and billing are the owner's; others read numbers from /api/whatsapp/numbers.
+    if (!can(me.role, 'whatsapp.manage')) throw new HttpError(403, 'Only workspace owners can see WhatsApp accounts.')
     const list = await accounts().find({ workspaceId: ws() }).sort({ createdAt: 1 }).toArray()
     // Whether a number is a Meta test number comes from the number sync; ask for one when it isn't known yet.
     if (list.some((a) => a.phoneNumbers.some((n) => n.sandbox === undefined))) void queueNumbersSync().catch(() => null)

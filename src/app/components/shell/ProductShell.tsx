@@ -26,7 +26,7 @@ import { Button } from '@/app/components/ui/button'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { ROLES } from '@/app/lib/permissions'
-import type { SettingsTab } from './SettingsPage'
+import type { SettingsTab } from './settings/areas'
 
 // Each page's code downloads when it's first opened, not all of them with the first screen.
 const HomePage = lazy(() => import('@/app/pages/HomePage').then((m) => ({ default: m.HomePage })))
@@ -49,8 +49,8 @@ export function ProductShell({
 }: {
   /** The page in the address bar (App.tsx). */
   active: NavId
-  /** The Settings tab in the address bar (/settings/<tab>). */
-  settingsTab: SettingsTab
+  /** The Settings address after /settings/ (a tab, or something to redirect); none = the Settings home. */
+  settingsTab?: string
   onNavigate: (id: NavId, settingsTab?: SettingsTab) => void
   onOpenAgentBuilder: () => void
   onAgentCreated: () => void
@@ -127,7 +127,7 @@ export function ProductShell({
           />
         )
       case 'settings':
-        return <SettingsPage tab={settingsTab} onTabChange={openSettings} onManageNumbers={() => setActive('whatsapp')} />
+        return <SettingsPage slug={settingsTab} />
     }
   }
 

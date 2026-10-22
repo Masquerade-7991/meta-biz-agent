@@ -1,14 +1,23 @@
 // Business-hours arithmetic for SLAs: deadlines only count minutes when the team is working.
-// Hours are local to the workspace's time zone; holidays are whole local dates.
+// Hours are local to the workspace's time zone; holidays are whole local dates (or the same day
+// every year). A day may run all day ('00:00'–'24:00'); `twentyFourSeven` means always open, holidays too.
 
 export type Day = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'
 export const DAYS: Day[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 export interface Hours {
   timezone: string
-  /** Per weekday: opening and closing time as "HH:MM"; null = closed all day. */
+  /** Per weekday: opening and closing time as "HH:MM" (close '24:00' = until midnight); null = closed all day. */
   week: Record<Day, { open: string; close: string } | null>
-  /** Local dates ("YYYY-MM-DD") when the team is off. */
-  holidays: string[]
+  /** Local dates when the team is off: "YYYY-MM-DD" (older settings), or named and optionally every year. */
+  holidays: Holiday[]
+  /** Always open, every day, holidays included. */
+  twentyFourSeven?: boolean
+}
+export type Holiday = string | { date: string; name?: string; yearly?: boolean }
+
+/** Whether a local date ("YYYY-MM-DD") is one of the holidays; a yearly one matches its month and day. */
+export function isHoliday(date: string, holidays: Holiday[]): boolean {
+  return holidays.some((h) => (typeof h === 'string' ? h === date : h.yearly ? h.date.slice(5) === date.slice(5) : h.date === date))
 }
 
 const MIN = 60_000
@@ -33,8 +42,9 @@ function local(t: Date, tz: string) {
 /** The working window [from, to) in local minutes for the day containing `t`, or null. */
 function windowOf(t: Date, h: Hours) {
   const l = local(t, h.timezone)
+  if (h.twentyFourSeven) return { l, win: { open: 0, close: 24 * 60 } }
   const w = h.week[l.day]
-  if (!w || h.holidays.includes(l.date)) return { l, win: null }
+  if (!w || isHoliday(l.date, h.holidays ?? [])) return { l, win: null }
   const open = toMin(w.open)
   const close = toMin(w.close)
   return { l, win: close > open ? { open, close } : null }

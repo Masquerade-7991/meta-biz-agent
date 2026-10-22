@@ -1,5 +1,5 @@
 // WhatsApp spend and the monthly budget (/api/billing, server/billing.ts). Dummy mode answers in this browser.
-import { jsonClient, supportDummy } from './client'
+import { guard, jsonClient, supportDummy } from './client'
 
 export interface Billing {
   currency: string | null
@@ -15,11 +15,18 @@ export interface Billing {
     /** Meta Business Agent usage reported by Meta (business_agent_insights), this month. */
     agentUsage?: { state: string | null; checkedAt: string | null; billableMessages: number; billableTokens: number; cost: number }
   }
+  /** When the budget was last changed and by whom; the workspace time zone the month is counted in. */
+  updatedAt?: string | null
+  updatedBy?: string | null
+  timezone?: string
   /** This month's messages as Meta priced them in status webhooks. */
   messages?: { billable: number; free: number; byCategory: { category: string; billable: number; free: number }[] }
 }
 
 const call = jsonClient(supportDummy('dummyBilling'))
 export const getBilling = () => call<Billing>('/api/billing')
-export const setBudget = (budget: number | null) => call<Billing>('/api/billing', 'PUT', { budget })
+/** A number or null; 0 and null both mean no budget. */
+export const setBudget = (budget: number | null, updatedAt?: string | null) => call<Billing>('/api/billing', 'PUT', { budget }, guard(updatedAt))
+/** Owners only; the server limits how often (429). */
 export const syncBilling = () => call<Billing>('/api/billing/sync', 'POST', {})
+export const MAX_BUDGET = 1_000_000_000

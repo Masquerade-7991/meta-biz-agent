@@ -9,7 +9,9 @@ import { currentAssets } from '../platform/context.ts'
 import { can } from '../../src/app/lib/permissions.ts'
 import { AREAS, QUIET_ACTIONS, activityText, isArea, type ActivityEvent, type Area } from '../../src/app/activity/activityText.ts'
 import { tableCsv } from '../../src/app/reports/catalog.ts'
-import { needInScope } from '../support/index.ts'
+import { getSettings, needInScope } from '../support/index.ts'
+import { addDays } from './collectors.ts'
+import { dayStart } from './analytics.ts'
 import type { Actor } from '../messaging/index.ts'
 
 const PAGE = 50
@@ -53,8 +55,11 @@ async function queryOf(u: URL, me: Actor): Promise<Obj> {
   const from = p.get('from')
   const to = p.get('to')
   const at: Obj = {}
-  if (from && !Number.isNaN(Date.parse(from))) at.$gte = new Date(from)
-  if (to && !Number.isNaN(Date.parse(to))) at.$lt = new Date(Date.parse(to) + (to.length === 10 ? 86_400_000 : 0)) // a date includes that whole day
+  // A bare date is a whole day in the workspace's time zone (its support hours' zone); a full time is taken as is.
+  const DAY = /^\d{4}-\d{2}-\d{2}$/
+  const tz = (from && DAY.test(from)) || (to && DAY.test(to)) ? (await getSettings()).hours.timezone : 'UTC'
+  if (from && !Number.isNaN(Date.parse(from))) at.$gte = DAY.test(from) ? dayStart(from, tz) : new Date(from)
+  if (to && !Number.isNaN(Date.parse(to))) at.$lt = DAY.test(to) ? dayStart(addDays(to, 1), tz) : new Date(to)
   if (Object.keys(at).length) q.at = at
   const before = p.get('before')
   if (before && ObjectId.isValid(before)) q._id = { $lt: new ObjectId(before) }
@@ -102,10 +107,22 @@ export async function handleActivity(req: http.IncomingMessage, res: http.Server
     })
   try {
     if (!db) throw new HttpError(503, 'The activity log needs the database.')
-    const events = await read(await queryOf(u, me), CSV_MAX)
+    const q = await queryOf(u, me)
+    const events = await read(q, CSV_MAX)
     const names = await namesFor(events)
+    // Capped: say so in the file and in a header, so nobody takes a partial log for the whole one.
+    const total = events.length === CSV_MAX ? await col('events').countDocuments(q) : events.length
+    const truncated = total > CSV_MAX
     const body = tableCsv({ columns: ['When (UTC)', 'Who', 'What', 'Item', 'Reference'], rows: events.map((e) => [e.at.replace('T', ' ').slice(0, 19), e.actor ?? (e.userId ? 'Former member' : 'System'), activityText(e, names), e.entity ? `${e.entity} ${e.entityId}` : '', e.traceId?.slice(0, 8) ?? '']) })
-    res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="helo-activity-${new Date().toISOString().slice(0, 10)}.csv"`, 'cache-control': 'no-store' }).end(body)
+    const tail = truncated ? `${body.endsWith('\n') ? '' : '\r\n'}First ${CSV_MAX} rows of ${total}; narrow the dates\r\n` : ''
+    res
+      .writeHead(200, {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': `attachment; filename="helo-activity-${new Date().toISOString().slice(0, 10)}.csv"`,
+        'cache-control': 'no-store',
+        ...(truncated && { 'x-truncated': String(total), 'access-control-expose-headers': 'x-truncated' }),
+      })
+      .end(body + tail)
   } catch (err) {
     const e = err instanceof HttpError ? err : new HttpError(500, 'The activity log couldn’t be built. Please try again.')
     sendError(res, e.status, TITLES[e.status] ?? (e.status === 503 ? dbOffReason : 'Something went wrong'), e.message)

@@ -20,14 +20,34 @@ export const schemas: Record<string, Schema> = {
     'joining*': { anyOf: [o({ workspaceName: 'string', inviterName: 'string?' }), { type: 'null' }], description: 'Invited and still setting up: the workspace they’ll join.' },
     'workspaces*': d({ type: 'array', items: o({ 'id*': 'string', 'name*': 'string', 'role*': ROLE }) }, 'Every workspace this person belongs to. `workspace` is the one this session works in.'),
     'invites*': d('PendingInvite[]', 'Invites to further workspaces, answered with acceptInvite / declineInvite. Empty until setup is finished.'),
+    'pendingEmail*': d('string?', 'A new email waiting to be confirmed from its link (changeEmail); null when none. cancelEmailChange withdraws it.'),
   }),
+  Workspace: o({ 'id*': 'string', 'name*': 'string', 'createdAt*': 'date-time', 'ownerId*': d('string?', 'The owner named on the workspace (transferOwnership changes it). Other members may be owners too.') }),
+  Session: o({
+    'id*': d('string', 'Session id, for signing it out.'),
+    'userAgent*': d('string?', 'The browser that signed in, as it described itself.'),
+    'ip*': d('string?', 'The address it signed in from.'),
+    'lastSeenAt*': d('date-time', 'Last used; updated at most every 5 minutes.'),
+    'createdAt*': 'date-time',
+    'current*': d('boolean', 'The session making this request.'),
+  }),
+  NotificationPrefs: o(
+    {
+      'escalations*': d('boolean', 'Emails when a ticket escalates to you.'),
+      'assigned*': d('boolean', 'Emails when work is assigned to you.'),
+      'slaBreach*': d('boolean', 'Emails when a response deadline is missed.'),
+      'budget*': d('boolean', 'Budget alerts (owners).'),
+      'digest*': d('boolean', 'The daily digest.'),
+    },
+    'Which emails you get from this workspace. Missing = on. The bell in the app shows everything either way.',
+  ),
   PendingInvite: o({ 'id*': 'string', 'workspaceName*': 'string', 'inviterName*': 'string?', 'role*': ROLE, 'expiresAt*': 'date-time' }),
   Members: o({
     'members*': 'Member[]',
     'invites*': d('Invite[]', 'Empty unless you can manage members.'),
     'joining*': d(
-      { type: 'array', items: o({ email: 'string', verifiedAt: 'date-time' }) },
-      'Invited people who verified their email but haven’t finished setting up. Empty unless you can manage members.',
+      { type: 'array', items: o({ userId: 'string', email: 'string', role: ROLE, verifiedAt: 'date-time' }) },
+      'Invited people who verified their email but haven’t finished setting up (`userId` cancels with cancelJoining). Empty unless you can manage members.',
     ),
   }),
   ApiToken: o({
@@ -43,7 +63,15 @@ export const schemas: Record<string, Schema> = {
   }),
   ApiTokens: o({ 'tokens*': 'ApiToken[]' }),
   Member: o({ 'userId*': 'string', 'name*': 'string', 'email*': 'string', 'role*': ROLE, 'joinedAt*': 'date-time' }),
-  Invite: o({ 'id*': 'string', 'email*': 'string', 'role*': ROLE, 'invitedAt*': 'date-time', 'expiresAt*': 'date-time' }),
+  Invite: o({
+    'id*': 'string',
+    'email*': 'string',
+    'role*': ROLE,
+    'invitedAt*': d('date-time', 'The first invite to this person.'),
+    'sentAt*': d('date-time', 'The latest email (a resend sends a new link).'),
+    'expiresAt*': 'date-time',
+    'expired*': d('boolean', 'The link ran out; resend it, or revoke it.'),
+  }),
 
   // ---- Inbox ----
   MessageMedia: o({
@@ -101,7 +129,7 @@ export const schemas: Record<string, Schema> = {
     },
     'messages*': 'ChatMessage[]',
   }),
-  CannedResponse: o({ 'id*': 'string', 'title*': 'string', 'shortcut*': 'string', 'body*': 'string', 'shared*': d('boolean', 'Shared with the whole workspace (else only yours).'), actions: d('object?', 'A macro: {status?, priority?, tags?, handBack?} applied to the open ticket after sending.') }),
+  CannedResponse: o({ 'id*': 'string', 'title*': 'string', 'shortcut*': 'string', 'body*': d('string', 'Up to 4096 characters.'), 'shared*': d('boolean', 'Shared with the whole workspace (else only yours).'), createdBy: d('string', 'Whose it is: who made it, or the admin who last un-shared it.'), actions: d('object?', 'A macro: {status?, priority?, tags?, handBack?} applied to the open ticket after sending.') }),
   SavedView: o({ 'id*': 'string', 'name*': 'string', 'filter*': 'all|mine|team|unassigned|closing|ai|snoozed', 'q*': 'string' }),
   SearchHit: o({ 'id*': 'string', 'phone*': 'string', 'name*': 'string?', 'body*': 'string', 'at*': 'date-time', 'kind*': 'text|note|media|interactive|template|event', 'author*': 'customer|ai|agent|system' }),
 
@@ -128,8 +156,9 @@ export const schemas: Record<string, Schema> = {
     pausedAt: d('date-time?', 'Waiting on the customer since then.'),
     pausedMs: d('integer', 'Time already spent waiting on the customer; the deadlines are this much later.'),
     teamId: d('string?', 'The team whose queue it’s in (routing rules, escalation, or moved by hand).'),
-    escalationLevel: d('integer', '0 = not escalated; 1–3 = the escalation matrix level reached.'),
-    escalations: d({ type: 'array', items: o({ level: 'integer', at: 'date-time', reason: 'string', notify: d('string[]', 'User ids alerted.'), teamId: 'string' }) }, 'Each level reached, in order.'),
+    escalationLevel: d('integer', '0 = not escalated; 1–3 = the position of the escalation level reached, when it was reached.'),
+    escalationLevelId: d('string?', 'The id of the last escalation level reached (EscalationLevel.id); null after a reopen. Editing the matrix never makes a ticket skip or repeat a level.'),
+    escalations: d({ type: 'array', items: o({ level: 'integer', levelId: 'string', at: 'date-time', reason: 'string', notify: d('string[]', 'User ids alerted.'), teamId: 'string' }) }, 'Each level reached, in order.'),
     sample: 'boolean',
   }),
   Team: o({
@@ -156,12 +185,14 @@ export const schemas: Record<string, Schema> = {
     'match*': d('all|any', 'Every condition, or one of them. No conditions = always.'),
     'when*': d(
       { type: 'array', items: { type: 'object' } },
-      'Conditions: {field: "keyword", any: string[]} · {field: "contactTag", any: string[]} · {field: "source", in: ["handoff"|"takeover"|"reply"|"manual"]} · {field: "priority", in: [...]} · {field: "hours", is: "open"|"closed"} · {field: "number", in: string[]}.',
+      'Conditions: {field: "keyword", any: string[]} · {field: "contactTag", any: string[]} · {field: "source", in: ["handoff"|"takeover"|"reply"|"manual"|"customer"]} · {field: "priority", in: [...]} · {field: "hours", is: "open"|"closed"} · {field: "number", in: string[]}.',
     ),
     'then*': d(
       { type: 'array', items: { type: 'object' } },
       'Actions: {do: "assignTeam", teamId, skill?} · {do: "assignUser", userId} · {do: "leaveUnassigned"} · {do: "setPriority", priority} · {do: "addTags", tags}.',
     ),
+    inactive: d('boolean', 'Read-only: the rule sends work to a team or person that’s gone, so it doesn’t run. It can still be saved with the others.'),
+    inactiveReason: d('string', 'Read-only: why it doesn’t run.'),
   }),
   EscalationMatrix: o({
     'enabled*': 'boolean',
@@ -169,8 +200,11 @@ export const schemas: Record<string, Schema> = {
       { type: 'object', additionalProperties: { type: 'array', items: { $ref: '#/components/schemas/EscalationLevel' } } },
       'Per priority (urgent, high, normal, low): up to three levels, fired in order.',
     ),
+    updatedAt: d('date-time?', 'Read-only: last saved; send it back as If-Unmodified-Since.'),
+    updatedBy: d('string?', 'Read-only: who saved it last.'),
   }),
   EscalationLevel: o({
+    id: d('string', 'Stable id (letters, numbers, - and _). Send it back when saving; a level without one gets one (the stored level with the same clock and percent keeps its id).'),
     'clock*': 'first_response|resolution',
     'percent*': d('integer', 'Share of the target used when the level fires: 75 = three quarters in, 100 = breach, 150 = half again past it. 25–500.'),
     'notify*': d('string[]', 'Any of assignee, team_lead, supervisors, admins (owners and admins).'),
@@ -180,9 +214,13 @@ export const schemas: Record<string, Schema> = {
   }),
   SupportSettings: o({
     'hours*': o({
-      timezone: d('string', 'IANA time zone, e.g. Asia/Kolkata.'),
-      week: d({ type: 'object', additionalProperties: { anyOf: [o({ open: 'string', close: 'string' }), { type: 'null' }] } }, 'Keys sun…sat; times HH:MM; null = closed.'),
-      holidays: d('string[]', 'Dates (YYYY-MM-DD).'),
+      timezone: d('string', 'Any IANA time zone, e.g. Asia/Kolkata (not an offset like +05:30).'),
+      week: d({ type: 'object', additionalProperties: { anyOf: [o({ open: 'string', close: 'string' }), { type: 'null' }] } }, 'Keys sun…sat; times HH:MM, close up to 24:00 (00:00–24:00 = all day); null = closed.'),
+      holidays: d(
+        { type: 'array', items: { anyOf: [t('string'), o({ 'date*': 'string', name: d('string', 'Up to 80 characters.'), yearly: d('boolean', 'The same day every year.') })] } },
+        'Days off: a date (YYYY-MM-DD), or {date, name?, yearly?}. New dates in the past are refused unless yearly.',
+      ),
+      twentyFourSeven: d('boolean', 'Always open, holidays included.'),
     }),
     'awayMessage*': 'string',
     'sla*': d({ type: 'object', additionalProperties: o({ firstResponse: 'number', resolve: 'number' }) }, 'Per priority (urgent, high, normal, low): minutes of business time.'),
@@ -193,11 +231,14 @@ export const schemas: Record<string, Schema> = {
     aiSummary: d('boolean', 'Read-only: the server can write AI summaries (ANTHROPIC_API_KEY is set).'),
     saved: d('boolean', 'Read-only: false until the workspace saves these settings (the values are then Helo.ai’s defaults).'),
     listenOnly: d('boolean', 'Read-only: the business’s own number, where the console sends nothing on its own (no away message, no feedback question).'),
+    openTickets: d('integer', 'Read-only: open and waiting tickets now; they keep their deadlines until recomputeSupportDeadlines.'),
+    updatedAt: d('date-time?', 'Read-only: last saved; send it back as If-Unmodified-Since.'),
+    updatedBy: d('string?', 'Read-only: who saved it last.'),
   }),
   Notice: o(
     {
       'id*': d('string', 'Alerts look like `alert:<key>`, reminders `reminder:<id>`.'),
-      'kind*': 'breached|due|assigned|unassigned|alert|alert_critical|reminder',
+      'kind*': 'breached|due|assigned|unassigned|escalated|alert|alert_critical|reminder',
       'text*': 'string',
       'at*': 'date-time',
       number: d('integer', 'Ticket notices.'),
@@ -295,6 +336,9 @@ export const schemas: Record<string, Schema> = {
     'budget*': d('number?', 'Monthly spending alert threshold.'),
     'lastSyncAt*': 'date-time?',
     'lastSyncError*': 'string?',
+    'updatedAt*': 'date-time?',
+    'updatedBy*': 'string?',
+    'timezone*': d('string', 'The workspace’s support time zone; the month runs in it.'),
     'month*': o({ total: 'number', byCategory: { type: 'array', items: o({ category: 'string', cost: 'number', volume: 'integer' }) } }),
     'days*': { type: 'array', items: o({ day: 'string', cost: 'number', volume: 'integer' }) },
     'ai*': o({

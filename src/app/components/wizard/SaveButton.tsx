@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/app/components/ui/button'
 import { useAuth } from '@/app/auth/AuthContext'
-import { can } from '@/app/lib/permissions'
+import { can, type Action } from '@/app/lib/permissions'
 
 /** The explicit Save affordance every form-style step/tab gets: disabled with nothing to save,
  *  active the moment something changes, disabled again once it lands. `onSave` is whatever the
@@ -15,12 +15,17 @@ export function SaveButton({
   saving,
   onSave,
   onDiscard,
+  can: need = 'agent.edit',
+  label = 'Save',
 }: {
   dirty: boolean
   saving: boolean
   onSave: () => Promise<boolean>
   /** Puts back the last saved values; offered in the floating bar when given. */
   onDiscard?: () => void
+  /** Who may save (hidden for everyone else); null = anyone (their own settings). The studio's default; Settings passes its own. */
+  can?: Action | null
+  label?: string
 }) {
   const { me } = useAuth()
   async function handleClick() {
@@ -28,13 +33,13 @@ export function SaveButton({
     if (ok) toast.success('Saved')
   }
 
-  // Only owners and admins change the agent; the studio says so in its view-only banner.
-  if (!can(me?.role, 'agent.edit')) return null
+  // Only roles allowed to save see it (the studio and Settings say so in their read-only banners).
+  if (need && !can(me?.role, need)) return null
   return (
     <>
       <Button size="sm" onClick={handleClick} disabled={!dirty || saving}>
         {saving && <Loader2 className="size-3.5 animate-spin" />}
-        Save
+        {label}
       </Button>
       {/* While there's something to save, a bar at the bottom of the screen says so, wherever the
           person has scrolled to. */}

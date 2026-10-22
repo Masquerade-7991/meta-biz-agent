@@ -35,17 +35,30 @@ export const assist = area('AI help', {
 
 export const billing = area('Billing', {
   '/api/billing': {
-    get: { id: 'getBilling', summary: 'WhatsApp spend this month', description: 'From Meta’s pricing analytics, synced daily, plus AI usage.', who: 'billing.view', ok: 'Billing', errors: { 403: 'Billing is for owners and admins.' } },
+    get: { id: 'getBilling', summary: 'WhatsApp spend this month', description: 'From Meta’s pricing analytics, synced every 6 hours, plus AI usage. The month runs in the workspace’s support time zone (`timezone`); Meta’s spend comes per UTC day. `updatedAt` / `updatedBy` say when the budget was last set.', who: 'billing.view', ok: 'Billing', errors: { 403: 'Billing is for owners and admins.' } },
     put: {
       id: 'setBudget',
       summary: 'Set the monthly budget alert',
       who: 'billing.manage',
-      body: o({ 'budget*': d('number?', 'Positive amount in the account currency, or null for none.') }),
+      description: 'Send `If-Unmodified-Since: <updatedAt>` from the last read to refuse overwriting someone else’s change (409); without the header the save always wins.',
+      headers: { 'If-Unmodified-Since': d('date-time', 'The `updatedAt` you read.') },
+      body: o({ 'budget*': d('number?', 'Amount in the account currency, 0 to 1,000,000,000. 0 or null means no budget. Strings are refused.') }),
       ok: 'Billing',
-      errors: { 400: 'The budget must be a positive amount, or empty for none.', 403: 'Only owners can set the budget.' },
+      errors: {
+        400: 'The budget must be an amount from 0 to 1,000,000,000, or null for none (0 also means none).',
+        403: 'Only owners can set the budget.',
+        409: 'Someone else changed this just now. Reload to see their changes.',
+      },
     },
   },
   '/api/billing/sync': {
-    post: { id: 'syncBilling', summary: 'Refresh spend from Meta now', who: 'billing.view', ok: 'Billing', errors: { 403: 'Connect a WhatsApp account first.', 502: 'WhatsApp didn’t answer.' } },
+    post: {
+      id: 'syncBilling',
+      summary: 'Refresh spend from Meta now',
+      description: 'Spend also refreshes on its own every 6 hours. Once a minute per workspace.',
+      who: 'billing.manage',
+      ok: 'Billing',
+      errors: { 403: 'Only owners can update spend now.', 429: 'Spend was updated a moment ago. Try again in a minute.', 502: 'WhatsApp didn’t answer.' },
+    },
   },
 })

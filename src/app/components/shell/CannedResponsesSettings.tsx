@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, Pencil, Plus, Trash2, Zap } from 'lucide-react'
+import { Loader2, MessageSquareText, Pencil, Plus, Trash2, Zap } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { TagInput } from '@/app/components/wizard/TagInput'
 import { describeActions, type CannedActions } from '@/app/inbox/macros'
@@ -18,16 +18,29 @@ import { errorDetail } from '@/app/api/meta'
 import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
 import { cn } from '@/app/lib/utils'
-import { PageLoader } from '@/app/components/ui/wavy-loader'
+import { EmptyState } from '@/app/components/ui/page'
+import { SearchInput } from '@/app/components/Filters'
+import { useMembers } from '@/app/auth/useMembers'
+import { SettingsSection } from './SettingsSection'
+import { LoadGate } from './settings/SettingsUi'
+import { confirmLeave, useLeaveGuard } from './settings/leaveGuard'
+import { same } from './settings/formCore'
 
 type Draft = Omit<CannedResponse, 'id'>
-const EMPTY: Draft = { title: '', shortcut: '', body: '', shared: true, actions: null }
+const EMPTY: Draft = { title: '', shortcut: '', body: '', shared: false, actions: null }
+const SHORTCUT = /^\/?[a-z0-9-_]+$/i
+const MAX_BODY = 4096
 
 function Editor({ initial, onClose, onSaved }: { initial: CannedResponse | null; onClose: () => void; onSaved: (c: CannedResponse) => void }) {
   const { me } = useAuth()
   // Shared responses are the team's: owners and admins share them; others keep their own.
   const admin = can(me?.role, 'settings.manage')
-  const [d, setD] = useState<Draft>(initial ? { title: initial.title, shortcut: initial.shortcut, body: initial.body, shared: initial.shared, actions: initial.actions ?? null } : { ...EMPTY, shared: admin })
+  const [start] = useState<Draft>(() => (initial ? { title: initial.title, shortcut: initial.shortcut, body: initial.body, shared: initial.shared, actions: initial.actions ?? null } : { ...EMPTY, shared: admin }))
+  const [d, setD] = useState<Draft>(start)
+  const changed = !same(d, start)
+  useLeaveGuard('canned-editor', changed)
+  const close = () => void confirmLeave().then((ok) => ok && onClose())
+  const shortcutError = d.shortcut.trim() && !SHORTCUT.test(d.shortcut.trim()) ? 'Letters, numbers, - and _ only, like /refund.' : null
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const set = (patch: Partial<Draft>) => setD((p) => ({ ...p, ...patch }))
@@ -43,7 +56,7 @@ function Editor({ initial, onClose, onSaved }: { initial: CannedResponse | null;
     }
   }
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <Dialog open onOpenChange={(o) => !o && close()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{initial ? 'Edit canned response' : 'New canned response'}</DialogTitle>
@@ -63,14 +76,15 @@ function Editor({ initial, onClose, onSaved }: { initial: CannedResponse | null;
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="cr-shortcut">Shortcut</Label>
-              <Input id="cr-shortcut" value={d.shortcut} onChange={(e) => set({ shortcut: e.target.value })} placeholder="/refund" maxLength={40} />
+              <Input id="cr-shortcut" value={d.shortcut} onChange={(e) => set({ shortcut: e.target.value.replace(/\s/g, '') })} placeholder="/refund" maxLength={40} aria-invalid={!!shortcutError} />
+              {shortcutError && <p className="text-xs text-destructive">{shortcutError}</p>}
             </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="cr-body">Message</Label>
-            <Textarea id="cr-body" value={d.body} onChange={(e) => set({ body: e.target.value })} rows={5} placeholder="Hi {{name}}, refunds reach your account in 3 to 5 working days." />
+            <Textarea id="cr-body" value={d.body} maxLength={MAX_BODY} onChange={(e) => set({ body: e.target.value })} rows={5} placeholder="Hi {{name}}, refunds reach your account in 3 to 5 working days." />
             <p className="text-muted-foreground text-xs">
-              {'{{name}}'} becomes the customer&rsquo;s first name and {'{{phone}}'} their number. WhatsApp formatting works: *bold*, _italic_.
+              {'{{name}}'} becomes the customer&rsquo;s first name and {'{{phone}}'} their number. WhatsApp formatting works: *bold*, _italic_. {d.body.length > MAX_BODY - 400 && `${MAX_BODY - d.body.length} characters left.`}
             </p>
           </div>
           <MacroFields value={d.actions ?? null} onChange={(actions) => set({ actions })} />
@@ -85,10 +99,10 @@ function Editor({ initial, onClose, onSaved }: { initial: CannedResponse | null;
           </label>
           {error && <FormError>{error}</FormError>}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={close}>
               Cancel
             </Button>
-            <Button type="submit" disabled={busy || !d.title.trim() || !d.shortcut.trim() || !d.body.trim()}>
+            <Button type="submit" disabled={busy || !d.title.trim() || !d.shortcut.trim() || !!shortcutError || !d.body.trim()}>
               {busy && <Loader2 className="size-4 animate-spin" />}
               {initial ? 'Save changes' : 'Create response'}
             </Button>
@@ -103,71 +117,82 @@ function Editor({ initial, onClose, onSaved }: { initial: CannedResponse | null;
 export function CannedResponsesSettings() {
   const { me } = useAuth()
   const admin = can(me?.role, 'settings.manage')
+  const members = useMembers()
   const [rows, setRows] = useState<CannedResponse[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<CannedResponse | 'new' | null>(null)
   const [removing, setRemoving] = useState<CannedResponse | null>(null)
-  useEffect(() => {
+  const [q, setQ] = useState('')
+  const load = useCallback(() => {
+    setError(null)
     listCanned().then(setRows, (err) => setError(errorDetail(err)))
   }, [])
+  useEffect(load, [load])
+  const nameOf = (id?: string) => (id === me?.user.id ? 'you' : members.find((m) => m.userId === id)?.name)
+  const needle = q.trim().toLowerCase()
+  const shown = (rows ?? []).filter((c) => !needle || `${c.shortcut} ${c.title} ${c.body}`.toLowerCase().includes(needle))
+  const newButton = (
+    <Button size="sm" onClick={() => setEditing('new')}>
+      <Plus className="size-4" />
+      New response
+    </Button>
+  )
 
   return (
-    <div className="space-y-6 py-2">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-xl space-y-1">
-          <h2 className="text-section font-semibold">Canned responses</h2>
-          <p className="text-muted-foreground text-sm">
-            Answers your team sends often. In the inbox, type / and the shortcut to drop one in, then edit it before sending.
-          </p>
-        </div>
-        <Button onClick={() => setEditing('new')}>
-          <Plus className="size-4" />
-          New response
-        </Button>
-      </div>
-      {error ? (
-        <p className="text-destructive text-sm">
-          {error}
-        </p>
-      ) : !rows ? (
-        <PageLoader context="settings" className="min-h-[30vh] py-10" />
-      ) : rows.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border p-8 text-center text-muted-foreground text-sm">
-          No canned responses yet. Create one for the answer you type most.
-        </div>
-      ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border">
-          {rows.map((c) => (
-            <li key={c.id} className="flex items-start gap-4 px-4 py-3">
-              <div className="min-w-0 flex-1 space-y-1">
-                <p className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold">{c.shortcut}</span>
-                  <span className="text-muted-foreground text-sm">
-                    {c.title}
-                  </span>
-                  {!c.shared && <Badge variant="secondary">Only you</Badge>}
-                  {c.actions && (
-                    <Badge variant="info" title={`After sending: ${describeActions(c.actions)}`}>
-                      <Zap className="size-3" /> Macro
-                    </Badge>
-                  )}
-                </p>
-                <p className="line-clamp-2 text-muted-foreground text-xs">
-                  {c.body}
-                </p>
-              </div>
-              <div className={cn('flex shrink-0 gap-1', c.shared && !admin && 'hidden')}>
-                <Button variant="ghost" size="sm" aria-label={`Edit ${c.shortcut}`} onClick={() => setEditing(c)}>
-                  <Pencil className="size-4" />
-                </Button>
-                <Button variant="ghost" size="sm" aria-label={`Delete ${c.shortcut}`} onClick={() => setRemoving(c)}>
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="min-w-0">
+      <SettingsSection
+        stacked
+        title="Canned responses"
+        description={`Answers your team sends often. In the inbox, type / and the shortcut to drop one in, then edit it before sending. ${admin ? 'Shared ones are for everyone; private ones only for whoever made them.' : 'Owners and admins share responses with the team; yours are only for you.'}`}
+      >
+        {!rows ? (
+          <LoadGate error={error} onRetry={load} what="the canned responses" />
+        ) : rows.length === 0 ? (
+          <EmptyState icon={MessageSquareText} title="No canned responses yet" description="Create one for the answer you type most." action={newButton} />
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <SearchInput value={q} onChange={setQ} placeholder="Search shortcuts and text" label="Search canned responses" className="h-9 w-64 max-w-full" />
+              <span className="ml-auto">{newButton}</span>
+            </div>
+            {shown.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nothing matches “{q}”.</p>
+            ) : (
+              <ul className="divide-y divide-border rounded-lg border border-border">
+                {shown.map((c) => {
+                  const by = nameOf(c.createdBy)
+                  return (
+                    <li key={c.id} className="flex items-start gap-4 px-4 py-3" data-density-row>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold">{c.shortcut}</span>
+                          <span className="text-sm text-muted-foreground">{c.title}</span>
+                          {!c.shared && <Badge variant="secondary">Only {c.createdBy && c.createdBy !== me?.user.id && by ? by : 'you'}</Badge>}
+                          {c.actions && (
+                            <Badge variant="info" title={`After sending: ${describeActions(c.actions)}`}>
+                              <Zap className="size-3" /> Macro
+                            </Badge>
+                          )}
+                        </p>
+                        <p className="line-clamp-2 text-xs text-muted-foreground">{c.body}</p>
+                        {c.shared && by && <p className="text-meta text-muted-foreground">Shared by {by}</p>}
+                      </div>
+                      <div className={cn('flex shrink-0 gap-1', c.shared && !admin && 'hidden')}>
+                        <Button variant="ghost" size="sm" aria-label={`Edit ${c.shortcut}`} onClick={() => setEditing(c)}>
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" aria-label={`Delete ${c.shortcut}`} onClick={() => setRemoving(c)}>
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </>
+        )}
+      </SettingsSection>
       {editing && (
         <Editor
           initial={editing === 'new' ? null : editing}
@@ -182,7 +207,7 @@ export function CannedResponsesSettings() {
       <ConfirmDialog
         open={removing !== null}
         title={`Delete ${removing?.shortcut}?`}
-        description="Your team can no longer insert it. Messages already sent aren't affected."
+        description={removing?.shared ? 'Your team can no longer insert it. Messages already sent aren’t affected.' : 'You can no longer insert it. Messages already sent aren’t affected.'}
         confirmLabel="Delete"
         onConfirm={() => {
           const c = removing!

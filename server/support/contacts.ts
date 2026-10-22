@@ -6,7 +6,8 @@ import { ObjectId } from 'mongodb'
 import { HttpError, type Obj, type Titles, digits, obj, readJson, serveJson } from '../platform/http.ts'
 import { createHash } from 'node:crypto'
 import { col, db, dbOffReason, ws } from '../platform/db.ts'
-import { trace } from '../platform/trace.ts'
+import { diff, trace } from '../platform/trace.ts'
+import { changedBy, needFresh, saveChecked, setChangedHeaders, staleAware } from './stale.ts'
 import type { Actor } from '../messaging/index.ts'
 import { can } from '../../src/app/lib/permissions.ts'
 
@@ -52,6 +53,76 @@ async function fieldDefs(): Promise<FieldDef[]> {
   return ((await col('contact_fields').findOne({ workspaceId: ws() }))?.fields as FieldDef[] | undefined) ?? []
 }
 
+/** Why a stored value no longer fits a field's type, or null when it does. */
+function misfit(d: FieldDef, s: string): string | null {
+  if (d.type === 'number' && !Number.isFinite(Number(s))) return `${d.label} must be a number.`
+  if (d.type === 'date' && Number.isNaN(Date.parse(s))) return `${d.label} must be a date.`
+  if (d.type === 'select' && d.options?.length && !d.options.includes(s)) return `${d.label} must be one of: ${d.options.join(', ')}.`
+  return null
+}
+
+/** Contacts holding a value for `key`, and the segments that filter on it. */
+async function fieldUsage(key: string) {
+  const segs = await col('segments').find({ workspaceId: ws(), 'filter.field.key': key }, { projection: { name: 1 } }).toArray()
+  return { contacts: await contacts().countDocuments({ workspaceId: ws(), [`fields.${key}`]: { $exists: true } }), segments: segs.map((x) => ({ id: String(x._id), name: String(x.name) })) }
+}
+
+const MAX_FIELDS = 30
+const MAX_LABEL = 60
+function parseFields(raw: unknown): FieldDef[] {
+  const list = Array.isArray(raw) ? raw : []
+  if (list.length > MAX_FIELDS) throw new HttpError(400, `Keep it to ${MAX_FIELDS} fields or fewer.`)
+  const seen = new Set<string>()
+  return list.map((f): FieldDef => {
+    const x = obj(f)
+    const label = String(x.label ?? '').trim()
+    if (!label) throw new HttpError(400, 'Every field needs a name.')
+    if (label.length > MAX_LABEL) throw new HttpError(400, `Keep field names to ${MAX_LABEL} characters (“${label.slice(0, 20)}…” is longer).`)
+    // Latin labels give readable keys; a label in another script (शहर, مدينة) gets a short stable one.
+    const key = String(x.key || label).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || `field_${createHash('sha256').update(label).digest('hex').slice(0, 6)}`
+    if (seen.has(key)) throw new HttpError(400, `Two fields would both be called “${label}”.`)
+    seen.add(key)
+    if (x.type !== undefined && !['text', 'number', 'date', 'select'].includes(String(x.type))) throw new HttpError(400, `${label}: the type must be text, number, date or select.`)
+    const type = (x.type as FieldDef['type'] | undefined) ?? 'text'
+    const options = type === 'select' ? (Array.isArray(x.options) ? x.options : String(x.options ?? '').split(',')).map((o) => String(o).trim()).filter(Boolean).slice(0, 50) : undefined
+    if (type === 'select' && !options?.length) throw new HttpError(400, `Add the choices for ${label}, separated by commas.`)
+    return { key, label, type, ...(options && { options }) }
+  })
+}
+
+/** After the field list changed: values of removed fields go (and segments stop filtering on them);
+ *  values that no longer fit a field's new type or choices go too, so every contact stays saveable. */
+async function applyFieldChanges(before: FieldDef[], after: FieldDef[]) {
+  const now = new Map(after.map((f) => [f.key, f]))
+  let cleared = 0
+  for (const old of before) {
+    const next = now.get(old.key)
+    if (!next) {
+      cleared += (await contacts().updateMany({ workspaceId: ws(), [`fields.${old.key}`]: { $exists: true } }, { $unset: { [`fields.${old.key}`]: '' } })).modifiedCount
+      await dropFieldFilter({ 'filter.field.key': old.key })
+      continue
+    }
+    if (next.type === old.type && JSON.stringify(next.options ?? null) === JSON.stringify(old.options ?? null)) continue
+    const rows = await contacts().find({ workspaceId: ws(), [`fields.${old.key}`]: { $exists: true } }, { projection: { [`fields.${old.key}`]: 1 } }).toArray()
+    const bad = rows.filter((c) => misfit(next, String(obj(c.fields)[old.key] ?? '')))
+    if (bad.length) cleared += (await contacts().updateMany({ _id: { $in: bad.map((c) => c._id) } }, { $unset: { [`fields.${old.key}`]: '' } })).modifiedCount
+    // A segment filtering on a choice that's gone can't match any more.
+    if (next.type === 'select') await dropFieldFilter({ 'filter.field.key': old.key, 'filter.field.value': { $nin: next.options ?? [] } })
+  }
+  return cleared
+}
+
+/** Segments filtering on a field (or choice) that's gone drop that filter; one left with no other
+ *  filter is deleted, since an empty filter would match every contact (QA-40). */
+async function dropFieldFilter(match: Obj) {
+  const q = { workspaceId: ws(), ...match }
+  const empty = { ...q, 'filter.tags.0': { $exists: false }, 'filter.activeDays': { $not: { $gt: 0 } } }
+  for (const s of await col('segments').find(empty, { projection: { name: 1 } }).toArray()) {
+    if ((await col('segments').deleteOne({ _id: s._id })).deletedCount) trace('segment.deleted', { name: String(s.name), reason: 'field_removed' }, { entity: 'segment', id: String(s._id) })
+  }
+  await col('segments').updateMany(q, { $set: { 'filter.field': null } })
+}
+
 /** Keeps only defined fields, coerced to their type; '' clears a field. */
 function fieldsOf(v: unknown, defs: FieldDef[]): Record<string, string> {
   const raw = obj(v)
@@ -60,9 +131,8 @@ function fieldsOf(v: unknown, defs: FieldDef[]): Record<string, string> {
     if (!(d.key in raw)) continue
     const s = String(raw[d.key] ?? '').trim().slice(0, 500)
     if (!s) continue
-    if (d.type === 'number' && !Number.isFinite(Number(s))) throw new HttpError(400, `${d.label} must be a number.`)
-    if (d.type === 'date' && Number.isNaN(Date.parse(s))) throw new HttpError(400, `${d.label} must be a date.`)
-    if (d.type === 'select' && d.options?.length && !d.options.includes(s)) throw new HttpError(400, `${d.label} must be one of: ${d.options.join(', ')}.`)
+    const why = misfit(d, s)
+    if (why) throw new HttpError(400, why)
     out[d.key] = s
   }
   return out
@@ -174,7 +244,7 @@ async function importRows(b: Obj) {
   return { added, updated, skipped: skipped.slice(0, 100), skippedCount: skipped.length }
 }
 
-async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unknown> {
+async function route(req: http.IncomingMessage, res: http.ServerResponse, u: URL, me: Actor): Promise<unknown> {
   const path = u.pathname
   const m = req.method ?? 'GET'
   let seg: RegExpMatchArray | null
@@ -186,26 +256,30 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
   }
   if (path === '/api/contacts/tags' && m === 'GET')
     return (await contacts().aggregate([{ $match: { workspaceId: ws() } }, { $unwind: '$tags' }, { $group: { _id: '$tags', count: { $sum: 1 } } }, { $sort: { _id: 1 } }]).toArray()).map((t) => ({ tag: t._id, count: t.count }))
-  if (path === '/api/contacts/fields' && m === 'GET') return fieldDefs()
+  if (path === '/api/contacts/fields' && m === 'GET') {
+    setChangedHeaders(res, await changedBy(await col('contact_fields').findOne({ workspaceId: ws() }, { projection: { updatedAt: 1, updatedBy: 1 } })))
+    return fieldDefs()
+  }
+  if (path === '/api/contacts/fields/usage' && m === 'GET') {
+    const key = u.searchParams.get('key') ?? ''
+    if (!(await fieldDefs()).some((f) => f.key === key)) throw new HttpError(404, 'That field no longer exists.')
+    return fieldUsage(key)
+  }
   if (path === '/api/contacts/fields' && m === 'PUT') {
     if (!can(me.role, 'settings.manage')) throw new HttpError(403, 'Only owners and admins can change contact fields.')
-    const raw = obj(await readJson(req)).fields
-    const seen = new Set<string>()
-    const fields = (Array.isArray(raw) ? raw : []).slice(0, 30).map((f): FieldDef => {
-      const x = obj(f)
-      const label = String(x.label ?? '').trim().slice(0, 60)
-      if (!label) throw new HttpError(400, 'Every field needs a name.')
-      // Latin labels give readable keys; a label in another script (शहर, مدينة) gets a short stable one.
-      const key = String(x.key || label).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || `field_${createHash('sha256').update(label).digest('hex').slice(0, 6)}`
-      if (seen.has(key)) throw new HttpError(400, `Two fields would both be called “${label}”.`)
-      seen.add(key)
-      const type = ['number', 'date', 'select'].includes(String(x.type)) ? (x.type as FieldDef['type']) : 'text'
-      const options = type === 'select' ? (Array.isArray(x.options) ? x.options : String(x.options ?? '').split(',')).map((o) => String(o).trim()).filter(Boolean).slice(0, 50) : undefined
-      if (type === 'select' && !options?.length) throw new HttpError(400, `Add the choices for ${label}, separated by commas.`)
-      return { key, label, type, ...(options && { options }) }
-    })
-    await col('contact_fields').updateOne({ workspaceId: ws() }, { $set: { fields, updatedAt: new Date() } }, { upsert: true })
-    trace('settings.updated', { area: 'contact_fields', count: fields.length })
+    const stored = await col('contact_fields').findOne({ workspaceId: ws() })
+    needFresh(req, stored?.updatedAt)
+    const fields = parseFields(obj(await readJson(req)).fields)
+    const before = ((stored?.fields as FieldDef[] | undefined) ?? [])
+    const now = new Date()
+    await saveChecked(col('contact_fields'), req, stored, { fields, updatedAt: now, updatedBy: me._id })
+    const cleared = await applyFieldChanges(before, fields)
+    const byKey = (l: FieldDef[]) => Object.fromEntries(l.map((f) => [f.key, f]))
+    const changes = diff(byKey(before), byKey(fields)) ?? {}
+    for (const f of before) if (!fields.some((x) => x.key === f.key)) changes[f.key] = [f, null]
+    if (Object.keys(changes).length)
+      trace('settings.updated', { area: 'contact_fields', count: fields.length, added: fields.filter((f) => !before.some((x) => x.key === f.key)).map((f) => f.label), removed: before.filter((f) => !fields.some((x) => x.key === f.key)).map((f) => f.label), valuesCleared: cleared }, undefined, changes)
+    setChangedHeaders(res, await changedBy({ updatedAt: now, updatedBy: me._id }))
     return fields
   }
   if (path === '/api/contacts/segments' && m === 'GET')
@@ -219,10 +293,12 @@ async function route(req: http.IncomingMessage, u: URL, me: Actor): Promise<unkn
     if (!name) throw new HttpError(400, 'Give the segment a name.')
     const filter = parseFilter(b.filter)
     const r = await col('segments').insertOne({ workspaceId: ws(), name, filter, createdBy: me._id, createdAt: new Date() })
+    trace('segment.created', { name }, { entity: 'segment', id: String(r.insertedId) })
     return { id: String(r.insertedId), name, filter, count: await contacts().countDocuments(segmentQuery(filter)) }
   }
   if ((seg = path.match(/^\/api\/contacts\/segments\/([a-f0-9]{24})$/)) && m === 'DELETE') {
-    await col('segments').deleteOne({ workspaceId: ws(), _id: new ObjectId(seg[1]) })
+    const gone = await col('segments').findOneAndDelete({ workspaceId: ws(), _id: new ObjectId(seg[1]) })
+    if (gone) trace('segment.deleted', { name: String(gone.name) }, { entity: 'segment', id: seg[1] })
     return { ok: true }
   }
   // A contact is addressed by phone number, or by BSUID for a customer who hides their number.
@@ -249,5 +325,6 @@ const TITLES: Titles = { 400: 'Check the details', 403: 'Not allowed', 404: 'Not
 export async function handleContacts(req: http.IncomingMessage, res: http.ServerResponse, me: Actor): Promise<boolean> {
   const u = new URL(req.url ?? '/', 'http://x')
   if (!u.pathname.startsWith('/api/contacts')) return false
-  return serveJson(req, res, { titles: TITLES, db, noDb: { title: dbOffReason, detail: 'Contacts need the database.' } }, () => route(req, u, me))
+  const [titles, run] = staleAware(TITLES, () => route(req, res, u, me))
+  return serveJson(req, res, { titles, db, noDb: { title: dbOffReason, detail: 'Contacts need the database.' } }, run)
 }

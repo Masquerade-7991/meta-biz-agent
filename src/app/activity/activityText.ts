@@ -24,11 +24,13 @@ export const AREAS = {
   tickets: { label: 'Tickets', kinds: ['ticket.'] },
   chats: { label: 'Chats', kinds: ['conversation.updated', 'customer.'] },
   agent: { label: 'AI agent', kinds: ['agent.'] },
-  people: { label: 'Team & members', kinds: ['member.', 'team.', 'api_token.'] },
-  contacts: { label: 'Contacts', kinds: ['contact.'] },
+  // Members' own comings and goings; sign-ins have their own, quieter area below.
+  people: { label: 'Team & members', kinds: ['member.invite', 'member.joined', 'member.left', 'member.removed', 'member.role_changed', 'member.updated', 'member.signup_cancelled', 'team.', 'api_token.', 'workspace.'] },
+  signins: { label: 'Sign-ins & security', kinds: ['member.logged_in', 'member.switched_in', 'session.', 'profile.'] },
+  contacts: { label: 'Contacts', kinds: ['contact.', 'segment.'] },
   templates: { label: 'Message templates', kinds: ['template.'] },
   reports: { label: 'Reports', kinds: ['report.'] },
-  settings: { label: 'Settings', kinds: ['settings.'] },
+  settings: { label: 'Settings', kinds: ['settings.', 'support.', 'canned.'] },
   whatsapp: { label: 'WhatsApp', kinds: ['whatsapp.', 'number.', 'account.notice', 'alert.', 'webhook.baseline_reset'] },
   operations: { label: 'Operations', kinds: ['job.dead', 'job.retried', 'request.failed'] },
 } as const
@@ -65,6 +67,28 @@ const FIELD: Record<string, string> = {
   recipients: 'recipients',
   enabled: 'on/off',
   filter: 'filters',
+  twentyFourSeven: '24/7',
+  budget: 'budget',
+  ownerId: 'owner',
+  shared: 'sharing',
+  title: 'name',
+  shortcut: 'shortcut',
+  body: 'message',
+  actions: 'what happens after sending',
+  timezone: 'time zone',
+  holidays: 'holidays',
+}
+const DAY: Record<string, string> = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' }
+/** "hours.week.mon" → "Monday's hours", "sla.urgent" → "urgent response times", "levels.high" → "high escalation levels". */
+function fieldLabel(k: string): string {
+  if (Object.hasOwn(FIELD, k)) return FIELD[k]
+  const [head, ...rest] = k.split('.')
+  if (head === 'hours' && rest[0] === 'week' && rest[1]) return `${DAY[rest[1]] ?? rest[1]}'s hours`
+  if (head === 'hours' && rest[0]) return fieldLabel(rest.join('.'))
+  if (head === 'sla' && rest[0]) return `${rest[0]} response times`
+  if (head === 'levels' && rest[0]) return `${rest[0]} escalation levels`
+  if ((head === 'routing' || head === 'csat') && rest[0]) return `${FIELD[head]} (${rest.join(' ')})`
+  return k
 }
 const SETTINGS_AREA: Record<string, string> = {
   support: 'support settings',
@@ -85,6 +109,7 @@ function value(field: string, v: unknown, names: Names): string {
   if (field === 'assigneeId' || field === 'leadId') return someone(names, v)
   if (field === 'teamId') return names[`team:${v}`] ?? 'a team'
   if (field === 'role') return roleLabel(v as Role)
+  if (field === 'ownerId') return someone(names, v)
   if (field === 'memberIds' && Array.isArray(v)) return v.map((id) => someone(names, id)).join(', ') || 'nobody'
   if (Array.isArray(v)) return v.join(', ') || 'none'
   if (typeof v === 'boolean') return v ? 'on' : 'off'
@@ -95,10 +120,24 @@ function value(field: string, v: unknown, names: Names): string {
  *  are named, not spelled out. */
 export function changesText(changes: ActivityEvent['changes'], names: Names = {}): string {
   const parts = Object.entries(changes ?? {}).map(([k, [from, to]]) => {
-    const label = FIELD[k] ?? k
-    const nested = (x: unknown) => x !== null && typeof x === 'object' && !Array.isArray(x)
+    const label = fieldLabel(k)
+    // Objects, and lists of objects (levels, rules), are named, not spelled out.
+    const nested = (x: unknown): boolean => x !== null && typeof x === 'object' && (!Array.isArray(x) || x.some((y) => y !== null && typeof y === 'object'))
     return nested(from) || nested(to) ? label : `${label} from ${value(k, from, names)} to ${value(k, to, names)}`
   })
+  return parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`
+}
+
+const quoted = (v: unknown) => (Array.isArray(v) ? v.filter((x) => x !== null && x !== undefined && x !== '').map((x) => `“${String(x)}”`).join(', ') : '')
+/** "added “Refunds”, removed “VIP” and reordered them" from a settings save's summary. */
+function settingsSummary(d: Record<string, unknown>): string {
+  const parts = [
+    quoted(d.added) && `added ${quoted(d.added)}`,
+    quoted(d.removed) && `removed ${quoted(d.removed)}`,
+    quoted(d.changed) && `changed ${quoted(d.changed)}`,
+    d.reordered === true && 'changed the order',
+    Number(d.valuesCleared) > 0 && `cleared ${d.valuesCleared} contact value${Number(d.valuesCleared) === 1 ? '' : 's'}`,
+  ].filter(Boolean) as string[]
   return parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`
 }
 
@@ -158,6 +197,40 @@ export function activityText(e: ActivityEvent, names: Names = {}): string {
     }
     case 'member.logged_in':
       return `${who} logged in`
+    case 'member.invite_resent':
+      return `${who} resent the invite to ${d.email}`
+    case 'member.signup_cancelled':
+      return `${who} cancelled ${d.email ? `${d.email}'s` : 'a'} sign-up`
+    case 'workspace.renamed':
+      return `${who} renamed the workspace${d.name ? ` to “${d.name}”` : ''}`
+    case 'workspace.transferred':
+      return `${who} made ${d.name || member || 'someone'} an owner${d.stepDown ? ' and stepped down to admin' : ''}`
+    case 'profile.name_changed':
+      return `${who} changed their name`
+    case 'profile.email_changed':
+      return `${who} changed their login email and was logged out elsewhere`
+    case 'profile.password_changed': {
+      const n = Number(d.tokensRevoked) || 0
+      return `${who} ${d.reset ? 'reset' : 'changed'} their password${n ? ` (${n} API token${n === 1 ? '' : 's'} revoked)` : ''}`
+    }
+    case 'session.revoked': {
+      const n = Number(d.count) || 1
+      return d.others ? `${who} signed out ${n} other device${n === 1 ? '' : 's'}` : d.current ? `${who} signed out this device` : `${who} signed out a device`
+    }
+    case 'canned.created':
+      return `${who} created the ${d.shared ? 'shared' : 'private'} canned response ${d.shortcut ?? `“${d.title}”`}`
+    case 'canned.updated':
+      return `${who} changed the canned response ${d.shortcut ?? `“${d.title}”`}${changed ? `: ${changed}` : d.bodyChanged ? ': the message' : ''}`
+    case 'canned.deleted':
+      if (d.reason === 'member_left') return `${Number(d.count) || 0} private canned response${Number(d.count) === 1 ? '' : 's'} removed: their owner left`
+      return `${who} deleted the canned response ${d.shortcut ?? `“${d.title}”`}`
+    case 'segment.created':
+      return `${who} saved the segment “${d.name}”`
+    case 'segment.deleted':
+      if (d.reason === 'field_removed') return `The segment “${d.name}” was deleted: its only filter was a contact field that was removed`
+      return `${who} deleted the segment “${d.name}”`
+    case 'support.recomputed':
+      return `${who} applied new hours and targets to ${Number(d.updated) || 0} open ticket${Number(d.updated) === 1 ? '' : 's'}`
     case 'member.switched_in':
       return `${who} switched to this workspace`
     case 'member.invited':
@@ -208,8 +281,10 @@ export function activityText(e: ActivityEvent, names: Names = {}): string {
       return `Report email sent to ${d.recipients} ${d.recipients === 1 ? 'person' : 'people'}${Number(d.failed) ? ` (${d.failed} couldn't be reached)` : ''}`
     case 'report.downloaded':
       return `${who} downloaded the ${String(d.report).replace(/_/g, ' ')} report`
-    case 'settings.updated':
-      return `${who} changed ${SETTINGS_AREA[String(d.area)] ?? 'settings'}${changed ? `: ${changed}` : ''}`
+    case 'settings.updated': {
+      const what = settingsSummary(d) || changed
+      return `${who} changed ${SETTINGS_AREA[String(d.area)] ?? 'settings'}${what ? `: ${what}` : ''}`
+    }
     case 'whatsapp.connected':
       return `${who} connected a WhatsApp account`
     case 'whatsapp.disconnected':

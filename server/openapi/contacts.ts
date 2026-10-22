@@ -2,6 +2,8 @@
 import { area, d, o } from './helpers.ts'
 
 const GONE = { 404: 'That contact no longer exists.' }
+const UNMODIFIED = { 'If-Unmodified-Since': d('string', 'The `x-updated-at` you read. When someone saved after it, the answer is 409 “Changed by someone else”. Leave it out to save anyway.') }
+const CHANGED_HEADERS = 'The answer carries `x-updated-at` (ISO) and `x-updated-by` (URL-encoded name) headers.'
 const INPUT_ERRORS = {
   400: 'X isn’t a phone number with a country code (8 to 15 digits). / That email address doesn’t look right. / Birthday must be a date.',
 }
@@ -43,18 +45,29 @@ export const contacts = area('Contacts', {
     get: { id: 'listTags', summary: 'Tags in use', ok: { type: 'array', items: o({ 'tag*': 'string', 'count*': 'integer' }) } },
   },
   '/api/contacts/fields': {
-    get: { id: 'listFields', summary: 'Custom contact fields', ok: 'FieldDef[]' },
+    get: { id: 'listFields', summary: 'Custom contact fields', description: `\`key\` is also the CSV column a field imports from. ${CHANGED_HEADERS}`, ok: 'FieldDef[]' },
     put: {
       id: 'saveFields',
       summary: 'Replace the custom fields',
-      description: 'The whole list (30 at most). A field without a key is new; its key is made from the label.',
+      description: `The whole list (30 at most, names up to 60 characters). A field without a key is new; its key is made from the label. A field left out is removed: its values are cleared from every contact and segments stop filtering on it; a segment with no other filter is deleted. A changed type or choices clears the values that no longer fit. ${CHANGED_HEADERS}`,
       who: 'settings.manage',
+      headers: UNMODIFIED,
       body: o({ 'fields*': { type: 'array', maxItems: 30, items: o({ key: 'string', 'label*': 'string', type: 'text|number|date|select', options: 'string[]' }) } }),
       ok: 'FieldDef[]',
       errors: {
-        400: 'Every field needs a name. / Two fields would both be called “X”. / Add the choices for X, separated by commas.',
+        400: 'Every field needs a name. / Keep it to 30 fields or fewer. / Keep field names to 60 characters. / Two fields would both be called “X”. / Add the choices for X, separated by commas.',
         403: 'Only owners and admins can change contact fields.',
+        409: 'Changed by someone else: someone saved after the If-Unmodified-Since you sent.',
       },
+    },
+  },
+  '/api/contacts/fields/usage': {
+    get: {
+      id: 'fieldUsage',
+      summary: 'What removing a field would clear',
+      query: { 'key*': d('string', 'The field’s key.') },
+      ok: o({ 'contacts*': d('integer', 'Contacts with a value for it.'), 'segments*': { type: 'array', items: o({ 'id*': 'string', 'name*': 'string' }) } }),
+      errors: { 404: 'That field no longer exists.' },
     },
   },
   '/api/contacts/segments': {

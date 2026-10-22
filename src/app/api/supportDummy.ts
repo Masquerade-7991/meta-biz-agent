@@ -11,6 +11,8 @@ import { automationErrors, displayNameError, profileErrors, type Automation, typ
 import type { CannedResponse, ChatDetail, ChatFilter, ChatMessage, ChatSummary, SavedView } from './inbox'
 import type { AgentRow, Priority, SupportSettings, Ticket } from './tickets'
 import { demoMemberList } from '../auth/api'
+import { demoRoleNow } from './dummy'
+import { can, type Role } from '../lib/permissions'
 import {
   applyRule,
   DEFAULT_MATRIX,
@@ -33,6 +35,18 @@ import type { WaAccount } from './whatsapp'
 import { renderTemplate } from '../templates/templates'
 import { parseActions } from '../inbox/macros'
 import { customerWrites, pausedFor } from '../support/ticketRules'
+import { supportSettingsError } from '../support/hoursRules'
+
+// Saved settings carry when and by whom, and a save sent with If-Unmodified-Since older than that is
+// refused with a 409, as on the server.
+const stampNow = () => ({ updatedAt: new Date().toISOString(), updatedBy: 'Demo User' })
+function checkUnmodified(headers: Record<string, string> | undefined, stamp: { updatedAt: string | null }) {
+  const since = headers?.['if-unmodified-since']
+  if (since && stamp.updatedAt && Date.parse(stamp.updatedAt) > Date.parse(since)) throw new MetaError(409, 'Changed by someone else', 'Someone else saved these settings after you opened them. Reload to see their changes, or keep yours.')
+}
+const needManage = () => {
+  if (!can(demoRoleNow() as Role, 'settings.manage')) throw new MetaError(403, 'Not allowed', 'Only owners and admins can change these settings.')
+}
 
 interface Chat {
   phone: string
@@ -227,13 +241,23 @@ export async function dummyInbox<T>(method: string, path: string, body: unknown)
   if (u.pathname === '/api/inbox/canned' && method === 'GET') return canned as T
   if (u.pathname.startsWith('/api/inbox/canned')) {
     const id = u.pathname.split('/')[4]
+    const admin = can(demoRoleNow() as Role, 'settings.manage')
+    const before = id ? canned.find((x) => x.id === id) : undefined
+    if (id && !before) throw new MetaError(404, 'Not found', 'That canned response was deleted.')
+    // Delete follows the same rule as edit: the team's shared responses are the admins'.
+    if (before?.shared && !admin) throw new MetaError(403, 'Not allowed', 'Only owners and admins can change the team’s shared responses.')
     if (method === 'DELETE') {
       canned = canned.filter((x) => x.id !== id)
       return { ok: true } as T
     }
     const shortcut = '/' + String(b.shortcut ?? '').replace(/^\//, '').toLowerCase()
+    if (!/^\/[a-z0-9-_]+$/.test(shortcut)) throw new MetaError(400, 'Check the details', 'Shortcuts use letters, numbers, - and _ only, like /refund.')
     if (canned.some((x) => x.shortcut === shortcut && x.id !== id)) throw new MetaError(409, 'Already exists', `${shortcut} is already used.`)
-    const row = { id: id ?? `c${++seq}`, title: String(b.title), shortcut, body: String(b.body), shared: (body as { shared?: boolean }).shared !== false, actions: parseActions((body as { actions?: unknown }).actions) ?? null }
+    // Left out, `shared` keeps its value; new ones are private unless sent shared.
+    const sentShared = (body as { shared?: boolean }).shared
+    if (sentShared === true && !admin) throw new MetaError(403, 'Not allowed', 'Only owners and admins share responses with the team.')
+    const shared = admin && (sentShared ?? before?.shared ?? false)
+    const row = { id: id ?? `c${++seq}`, title: String(b.title), shortcut, body: String(b.body), shared, createdBy: before?.createdBy ?? 'demo', actions: parseActions((body as { actions?: unknown }).actions) ?? null }
     canned = id ? canned.map((x) => (x.id === id ? row : x)) : [...canned, row]
     return row as T
   }
@@ -271,6 +295,7 @@ let settings: SupportSettings = {
   restrictAgents: false,
   aiSummary: false,
 }
+let settingsStamp: { updatedAt: string | null; updatedBy: string | null } = { updatedAt: new Date(Date.now() - 2 * 86_400_000).toISOString(), updatedBy: 'Demo User' }
 
 /** Demo SLAs count plain minutes (the server counts business hours), from when the clock started,
  *  later by the time spent waiting on the customer. */
@@ -332,6 +357,29 @@ let demoRules: Rule[] = [
   { id: 'r-vip', name: 'VIP customers jump the queue', enabled: true, match: 'all', when: [{ field: 'contactTag', any: ['vip'] }], then: [{ do: 'setPriority', priority: 'high' }] },
 ]
 let demoMatrix: EscalationMatrix = { ...DEFAULT_MATRIX, enabled: true }
+let rulesStamp: { updatedAt: string | null; updatedBy: string | null } = { updatedAt: null, updatedBy: null }
+let matrixStamp: { updatedAt: string | null; updatedBy: string | null } = { updatedAt: null, updatedBy: null }
+/** Why a rule can't run any more (it names a removed team or person), or null. */
+function staleReason(r: Rule, teams: Set<string>, members: Set<string>): string | null {
+  for (const a of Array.isArray(r?.then) ? r.then : []) {
+    if (a.do === 'assignTeam' && !teams.has(a.teamId)) return 'Sends tickets to a team that was deleted.'
+    if (a.do === 'assignUser' && !members.has(a.userId)) return 'Assigns to someone who left the workspace.'
+  }
+  return null
+}
+const withInactive = (r: Rule, teams: Set<string>, members: Set<string>) => {
+  const why = staleReason(r, teams, members)
+  return why ? { ...r, inactive: true, inactiveReason: why } : r
+}
+/** Levels keep the id they came with (by position in what was sent); new ones get one. */
+function withLevelIds(m: EscalationMatrix, sent: unknown): EscalationMatrix {
+  const lv = ((sent as { levels?: Record<string, { id?: string }[]> })?.levels ?? {}) as Record<string, { id?: string }[]>
+  let n = 0
+  return {
+    ...m,
+    levels: Object.fromEntries(Object.entries(m.levels).map(([p, list]) => [p, list.map((l, i) => ({ ...l, id: lv[p]?.[i]?.id || `lv-${p}-${Date.now().toString(36)}-${n++}` }))])) as unknown as EscalationMatrix['levels'],
+  }
+}
 const profileOf = (id: string) => demoProfiles.get(id) ?? { skills: [], maxOpen: null, availability: 'online' as const }
 let demoTurn = 0
 
@@ -368,7 +416,7 @@ function ensureTicket(c: Chat, source: Ticket['source'], priority: Priority = 'n
   return t
 }
 
-export async function dummyTickets<T>(method: string, path: string, body: unknown): Promise<T> {
+export async function dummyTickets<T>(method: string, path: string, body: unknown, headers?: Record<string, string>): Promise<T> {
   const b = (body ?? {}) as Record<string, unknown>
   const u = new URL(path, 'http://x')
   const list = ticketsNow()
@@ -440,15 +488,32 @@ export async function dummyTickets<T>(method: string, path: string, body: unknow
     }
     return withSla(t) as T
   }
+  if (u.pathname === '/api/support/settings/recompute') {
+    needManage()
+    const open = list.filter((t) => t.status !== 'resolved')
+    // Demo deadlines are always worked out from the current targets; nothing to move.
+    return { updated: open.length } as T
+  }
   if (u.pathname === '/api/support/settings') {
-    if (method === 'PUT') settings = { ...(b as unknown as SupportSettings), aiSummary: false, saved: true }
-    return settings as T
+    if (method === 'PUT') {
+      needManage()
+      checkUnmodified(headers, settingsStamp)
+      const { confirmNoHours, ...patch } = b as Partial<SupportSettings> & { confirmNoHours?: boolean }
+      // Partial, as on the server: keys left out keep their saved values.
+      const KEYS = ['hours', 'twentyFourSeven', 'awayMessage', 'sla', 'routing', 'csat', 'restrictAgents']
+      const next = { ...settings, ...Object.fromEntries(Object.entries(patch).filter(([k, v]) => v !== undefined && KEYS.includes(k))) } as SupportSettings
+      const problem = supportSettingsError(next, !!confirmNoHours)
+      if (problem) throw new MetaError(400, 'Check the details', problem)
+      settings = { ...next, aiSummary: false, saved: true }
+      settingsStamp = stampNow()
+    }
+    return { ...settings, ...settingsStamp, openTickets: list.filter((t) => t.status !== 'resolved').length } as T
   }
   if (u.pathname.startsWith('/api/support/notifications/')) {
     demoReminders = demoReminders.map((r) => (u.pathname.includes(`reminder:${r.id}/`) ? { ...r, dismissed: true } : r))
     return { ok: true } as T
   }
-  const ops = dummySupportOps(method, u.pathname, b, list)
+  const ops = dummySupportOps(method, u.pathname, b, list, headers)
   if (ops !== undefined) return ops as T
   if (u.pathname === '/api/support/notifications')
     return [
@@ -465,7 +530,7 @@ export async function dummyTickets<T>(method: string, path: string, body: unknow
   throw new MetaError(404, 'Not found', path)
 }
 
-function dummySupportOps(method: string, path: string, b: Record<string, unknown>, list: Ticket[]): unknown {
+function dummySupportOps(method: string, path: string, b: Record<string, unknown>, list: Ticket[], headers?: Record<string, string>): unknown {
   const bad = (err: unknown): never => {
     throw new MetaError(400, 'Check the details', err instanceof Error ? err.message : String(err))
   }
@@ -520,22 +585,35 @@ function dummySupportOps(method: string, path: string, b: Record<string, unknown
     return { ok: true }
   }
   if (path === '/api/support/rules') {
-    if (method === 'PUT')
+    const teams = new Set(demoTeams.map((t) => t.id))
+    if (method === 'PUT') {
+      needManage()
+      checkUnmodified(headers, rulesStamp)
+      const raw = Array.isArray(b) ? (b as Rule[]) : []
       try {
-        demoRules = parseRules(b as unknown, { teams: new Set(demoTeams.map((t) => t.id)), members })
+        if (raw.length > 50) throw new Error('Keep it to 50 rules or fewer.')
+        // A rule pointing at a removed member or team is kept as it was, marked inactive (it never matches).
+        demoRules = raw.map((r) => (staleReason(r, teams, members) ? r : parseRules([r], { teams, members })[0]))
       } catch (err) {
         return bad(err)
       }
-    return demoRules
+      rulesStamp = stampNow()
+    }
+    return { rules: demoRules.map((r) => withInactive(r, teams, members)), ...rulesStamp }
   }
   if (path === '/api/support/escalation') {
-    if (method === 'PUT')
+    if (method === 'PUT') {
+      needManage()
+      checkUnmodified(headers, matrixStamp)
       try {
-        demoMatrix = parseMatrix(b, new Set(demoTeams.map((t) => t.id)))
+        demoMatrix = withLevelIds(parseMatrix(b, new Set(demoTeams.map((t) => t.id))), b)
       } catch (err) {
         return bad(err)
       }
-    return demoMatrix
+      matrixStamp = stampNow()
+    }
+    demoMatrix = withLevelIds(demoMatrix, demoMatrix)
+    return { ...demoMatrix, ...matrixStamp }
   }
   // Demo controls: the oldest open ticket moves up one level, as if its clock ran out.
   if (path === '/api/support/demo/escalate') {
@@ -561,13 +639,35 @@ let removed = new Set<string>()
 let fieldDefsDemo: FieldDef[] = [{ key: 'city', label: 'City', type: 'text' }]
 let segmentsDemo: Segment[] = []
 const edits = new Map<string, Partial<Contact>>()
+let fieldsStamp: { updatedAt: string | null; updatedBy: string | null } = { updatedAt: null, updatedBy: null }
+/** The server's rules for field definitions (server/support/contacts.ts): 30 at most, 60-character names, unique keys. */
+function parseFieldDefs(raw: unknown): FieldDef[] {
+  const list = Array.isArray(raw) ? raw : []
+  if (list.length > 30) throw new MetaError(400, 'Check the details', 'Keep it to 30 fields or fewer.')
+  const seen = new Set<string>()
+  return list.map((x: Partial<FieldDef> & { options?: unknown }) => {
+    const label = String(x.label ?? '').trim()
+    if (!label) throw new MetaError(400, 'Check the details', 'Every field needs a name.')
+    if (label.length > 60) throw new MetaError(400, 'Check the details', `Keep “${label.slice(0, 20)}…” to 60 characters.`)
+    const key = String(x.key || label).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || `field_${seen.size + 1}`
+    if (seen.has(key)) throw new MetaError(400, 'Check the details', `Two fields would both be called “${label}”.`)
+    seen.add(key)
+    const type = (['number', 'date', 'select'] as const).find((t) => t === x.type) ?? 'text'
+    const options = type === 'select' ? (Array.isArray(x.options) ? x.options : String(x.options ?? '').split(',')).map((o) => String(o).trim()).filter(Boolean).slice(0, 50) : undefined
+    if (type === 'select' && !options?.length) throw new MetaError(400, 'Check the details', `Add the choices for ${label}, separated by commas.`)
+    return { key, label, type, ...(options && { options }) }
+  })
+}
+/** Whether a stored value still fits its field's type. */
+const fits = (f: FieldDef, v: string) =>
+  f.type === 'number' ? v.trim() !== '' && !Number.isNaN(Number(v)) : f.type === 'date' ? /^\d{4}-\d{2}-\d{2}$/.test(v) : f.type === 'select' ? (f.options ?? []).includes(v) : true
 function contactsNow(): Contact[] {
   const fromChats = load().map((c): Contact => ({ phone: c.phone, name: c.name, email: null, tags: c.tags, fields: {}, source: 'sample', createdAt: c.messages[0]?.at ?? new Date().toISOString(), lastSeenAt: lastInbound(c) ?? undefined }))
   return [...extraContacts, ...fromChats].filter((c) => !removed.has(c.phone)).map((c) => ({ ...c, ...edits.get(c.phone) }))
 }
 const matches = (c: Contact, f: { tags?: string[] }) => (f.tags ?? []).every((t) => c.tags.includes(t))
 
-export async function dummyContacts<T>(method: string, path: string, body: unknown): Promise<T> {
+export async function dummyContacts<T>(method: string, path: string, body: unknown, headers?: Record<string, string>): Promise<T> {
   const b = (body ?? {}) as Record<string, unknown>
   const u = new URL(path, 'http://x')
   const p = (k: string) => u.searchParams.get(k) ?? ''
@@ -602,9 +702,28 @@ export async function dummyContacts<T>(method: string, path: string, body: unkno
     for (const c of contactsNow()) for (const t of c.tags) counts.set(t, (counts.get(t) ?? 0) + 1)
     return [...counts].map(([tag, count]) => ({ tag, count })) as T
   }
+  if (u.pathname === '/api/contacts/fields/usage') {
+    const key = p('key')
+    return { contacts: contactsNow().filter((c) => (c.fields[key] ?? '') !== '').length, segments: segmentsDemo.filter((x) => x.filter.field?.key === key).map((x) => ({ id: x.id, name: x.name })) } as T
+  }
   if (u.pathname === '/api/contacts/fields') {
-    if (method === 'PUT') fieldDefsDemo = ((b.fields as FieldDef[]) ?? []).map((f) => ({ ...f, key: f.key || f.label.toLowerCase().replace(/[^a-z0-9]+/g, '_') }))
-    return fieldDefsDemo as T
+    if (method === 'PUT') {
+      needManage()
+      checkUnmodified(headers, fieldsStamp)
+      const next = parseFieldDefs(b.fields)
+      // Removed fields leave every contact and every segment filter; a new type clears values that don't fit.
+      const kept = new Map(next.map((f) => [f.key, f]))
+      for (const c of contactsNow()) {
+        const fields = Object.fromEntries(Object.entries(c.fields).filter(([k, v]) => kept.has(k) && fits(kept.get(k)!, v)))
+        if (Object.keys(fields).length !== Object.keys(c.fields).length) edits.set(c.phone, { ...edits.get(c.phone), fields })
+      }
+      // A segment left with no other filter is deleted rather than widened to every contact (as the server does).
+      const lost = (x: Segment) => !!x.filter.field && !kept.has(x.filter.field.key)
+      segmentsDemo = segmentsDemo.filter((x) => !lost(x) || x.filter.tags?.length || x.filter.activeDays).map((x) => (lost(x) ? { ...x, filter: { ...x.filter, field: null } } : x))
+      fieldDefsDemo = next
+      fieldsStamp = stampNow()
+    }
+    return { fields: fieldDefsDemo, ...fieldsStamp } as T
   }
   if (u.pathname === '/api/contacts/segments') {
     const withCount = (x: Segment) => ({ ...x, count: contactsNow().filter((c) => matches(c, x.filter)).length })
@@ -717,7 +836,10 @@ export async function dummyWhatsApp<T>(method: string, path: string, body: unkno
     return waAccounts.flatMap((a) =>
       a.phoneNumbers.map((n) => ({ phoneNumberId: n.id, display: n.display, name: n.verifiedName, quality: 'GREEN', nameStatus: 'APPROVED', status: 'CONNECTED', limit: 'TIER_2K', limitLabel: '2,000', checkedAt: new Date().toISOString() })),
     ) as T
-  if (u.pathname === '/api/whatsapp/config') return { mode: 'sdk', partnerCredit: true, appId: 'demo', configId: 'demo', sdkVersion: 'v23.0' } as T
+  const owner = can(demoRoleNow() as Role, 'whatsapp.manage')
+  if (u.pathname === '/api/whatsapp/config') return { mode: 'sdk', partnerCredit: true, connected: waAccounts.length > 0, ...(owner && { appId: 'demo', configId: 'demo', sdkVersion: 'v23.0' }) } as T
+  // Owners only, as on the server: others read numbers from /api/whatsapp/numbers.
+  if (u.pathname.startsWith('/api/whatsapp/accounts') && !owner) throw new MetaError(403, 'Not allowed', 'Only workspace owners can see WhatsApp accounts.')
   if (u.pathname === '/api/whatsapp/accounts' && method === 'GET') return waAccounts as T
   if (u.pathname === '/api/whatsapp/connect') {
     const now = new Date().toISOString()
@@ -767,8 +889,18 @@ export async function dummyWhatsApp<T>(method: string, path: string, body: unkno
 
 // ---- billing (dummy): a month of made-up spend in rupees ----
 let demoBudget: number | null = 5000
-export async function dummyBilling<T>(method: string, path: string, body: unknown): Promise<T> {
-  if (method === 'PUT') demoBudget = ((body ?? {}) as { budget: number | null }).budget
+let budgetStamp: { updatedAt: string | null; updatedBy: string | null } = { updatedAt: new Date(Date.now() - 6 * 86_400_000).toISOString(), updatedBy: 'Demo User' }
+export async function dummyBilling<T>(method: string, path: string, body: unknown, headers?: Record<string, string>): Promise<T> {
+  const role = demoRoleNow() as Role
+  if (!can(role, 'billing.view')) throw new MetaError(403, 'Not allowed', 'Only owners and admins see billing.')
+  if (method !== 'GET' && !can(role, 'billing.manage')) throw new MetaError(403, 'Not allowed', 'Only owners can change the budget or update the figures.')
+  if (method === 'PUT') {
+    checkUnmodified(headers, budgetStamp)
+    const v = ((body ?? {}) as { budget?: unknown }).budget
+    if (v !== null && (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1e9)) throw new MetaError(400, 'Check the details', 'Enter the budget as a number up to 1,000,000,000, or leave it empty for none.')
+    demoBudget = v === 0 ? null : (v as number | null)
+    budgetStamp = stampNow()
+  }
   const today = new Date()
   const days = Array.from({ length: 30 }, (_, i) => {
     const d = new Date(today.getTime() - (29 - i) * 86_400_000)
@@ -781,6 +913,8 @@ export async function dummyBilling<T>(method: string, path: string, body: unknow
   return {
     currency: 'INR',
     budget: demoBudget,
+    ...budgetStamp,
+    timezone: settings.hours.timezone,
     lastSyncAt: new Date(today.getTime() - 2 * 3_600_000).toISOString(),
     lastSyncError: null,
     month: { total, byCategory: [{ category: 'MARKETING', cost: total * 0.78, volume: 0 }, { category: 'UTILITY', cost: total * 0.17, volume: 0 }, { category: 'AUTHENTICATION', cost: total * 0.05, volume: 0 }] },

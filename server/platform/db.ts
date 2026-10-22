@@ -149,14 +149,19 @@ const INDEXES: Record<string, IndexDescription[]> = {
   workspaces: [{ key: { createdAt: 1 } }],
   // A person can belong to several workspaces, once each.
   memberships: [{ key: { workspaceId: 1, userId: 1 }, unique: true }, { key: { userId: 1 } }, { key: { workspaceId: 1 } }],
+  // Links stop working at expiresAt (auth.ts checks it); the rows stay 30 days so Members can list expired invites.
+  // One live invite per person per workspace: `live: true` is set when an invite is made and unset when it's
+  // used, revoked, declined or found expired (a partial index can't test for a missing usedAt or for the time).
   magic_links: [
     { key: { tokenHash: 1 }, unique: true },
     { key: { workspaceId: 1, purpose: 1 } },
-    { key: { expiresAt: 1 }, expireAfterSeconds: 0 },
+    { key: { workspaceId: 1, email: 1 }, unique: true, partialFilterExpression: { purpose: 'invite', live: true }, name: 'one_live_invite_per_email' },
+    { key: { expiresAt: 1 }, expireAfterSeconds: 30 * DAY },
   ],
+  // A person's sessions, newest first (You › Security).
   sessions: [
     { key: { tokenHash: 1 }, unique: true },
-    { key: { userId: 1 } },
+    { key: { userId: 1, lastSeenAt: -1 } },
     { key: { expiresAt: 1 }, expireAfterSeconds: 0 },
   ],
   // API tokens (Authorization: Bearer hk_…): one person in one workspace. A token without expiresAt never expires.
@@ -185,6 +190,8 @@ const INDEXES: Record<string, IndexDescription[]> = {
 const RETIRED_TTL: Record<string, string> = { whatsapp_webhooks: 'at', test_conversations: 'updatedAt', conversation_traces: 'ts' }
 /** Unique indexes that no longer are (one workspace per person, before multi-workspace membership). */
 const RETIRED_UNIQUE: Record<string, string> = { memberships: 'userId' }
+/** Plain indexes replaced by a wider one that starts with the same field. */
+const RETIRED_PLAIN: Record<string, string> = { sessions: 'userId' }
 
 /** Creates collections and indexes, skipped when nothing changed since the last run (serverless
  *  instances start often; this keeps their cold start short). */
@@ -218,6 +225,9 @@ async function createSchema(d: Db) {
     }
     await d.collection(name).createIndexes(specs)
   }
+  for (const [name, field] of Object.entries(RETIRED_PLAIN))
+    for (const ix of await d.collection(name).indexes().catch(() => []))
+      if (!ix.unique && ix.expireAfterSeconds === undefined && ix.name && Object.keys(ix.key).join() === field) await d.collection(name).dropIndex(ix.name)
   // Expiry rules that were removed above: creating indexes never drops old ones, so drop them here.
   for (const [name, field] of Object.entries(RETIRED_TTL))
     for (const ix of await d.collection(name).indexes().catch(() => []))

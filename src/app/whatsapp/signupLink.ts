@@ -54,7 +54,7 @@ interface AssetRow {
 export function assetMap(flow: SignupFlow, workspace: string, a: SignupAssets | null = null): AssetRow[] {
   return [
     { meta: 'Business portfolio', id: a?.businessId, helo: `The workspace “${workspace}”` },
-    { meta: 'WhatsApp Business account', id: a?.wabaId, helo: 'An account in Settings › WhatsApp. Its access is stored encrypted; its messages reach Helo.ai through our listening app, and your own webhook stays as it is.' },
+    { meta: 'WhatsApp Business account', id: a?.wabaId, helo: 'An account in Assets (its Account tab). Its access is stored encrypted; its messages reach Helo.ai through our listening app, and your own webhook stays as it is.' },
     {
       meta: 'Phone number',
       id: a?.phoneNumberId,
