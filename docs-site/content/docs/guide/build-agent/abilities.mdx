@@ -7,44 +7,44 @@ Shape how the agent handles specific situations, and let customers tap instead o
 
 ![The Abilities section with the Skills and Rich replies tabs](/screens/studio-abilities.webp)
 
-Abilities has two tabs: **Skills** and **Rich replies**.
+Abilities has 2 tabs: **Skills** and **Rich replies**.
 
 ## Before you start
 
-- Your Identity and Knowledge are in place. Most agents don't need any skills at first. Add one only when a specific situation, such as warranty questions or discount requests, should be handled your way.
+- Your Identity and Knowledge are in place. Most agents don't need any skills at first. Add a skill only when you want a specific situation, such as warranty questions or discount requests, handled your way.
 
 ## Skills
 
-A skill is an instruction for one situation. The agent reads each skill's description to decide when it applies.
+A skill is an instruction for one situation. The agent reads each skill's description to decide when the skill applies.
 
-### Add a skill
+## Add a skill
 
 <Steps>
 <Step>
 ### Start
-Press **Choose from templates** for ready-made starting points ("Suggested for your business" comes first), or add your own. **Import skills from CSV** adds many at once; the file needs two columns, `name` and `instruction`, and you can download a template.
+Click **Choose from templates** for ready-made starting points ("Suggested for your business" comes first), or add your own. **Import skills from CSV** adds many at once. The file needs 2 columns, `name` and `instruction`, and you can download a template.
 </Step>
 <Step>
 ### Name it
-**Skill name** is a short label so you can find it later (up to 60 characters), for example "Handling warranty questions".
+**Skill name** is a short label that helps you find the skill later (up to 60 characters), for example "Handling warranty questions".
 </Step>
 <Step>
 ### Say when it applies
-**Description** tells the agent when to use the skill, for example "When a customer asks about the warranty on a product they bought." (up to 1,024 characters).
+**Description** tells the agent when to use the skill (up to 1,024 characters), for example "When a customer asks about the warranty on a product they bought."
 </Step>
 <Step>
 ### Say what to do
-**Instruction** is what the agent should do, in plain language (up to 2,000 characters). One situation per skill works best. **Write it for me** drafts the text once the skill has a name or description.
+**Instruction** is what the agent should do, in plain language (up to 2,000 characters). One situation per skill works best. Once the skill has a name or a description, **Write it for me** drafts the text.
 </Step>
 <Step>
 ### Save
-The skill goes to Meta for review.
+Click **Save**. The skill goes to Meta for review.
 </Step>
 </Steps>
 
-### Review status
+## Skill review status
 
-Meta checks each skill, usually within minutes. Every save sends it back for review.
+Meta checks each skill, usually within minutes. Every save sends the skill back for review.
 
 | Status | Meaning |
 | --- | --- |
@@ -54,24 +54,22 @@ Meta checks each skill, usually within minutes. Every save sends it back for rev
 
 <small>Source: [Meta — Skills](https://developers.facebook.com/documentation/meta-business-agent/reference/configure/agent-skills)</small>
 
-### Good to know
+## Good to know about skills
 
-- The agent applies every skill whose description matches, so skills that cover the same situation can pull in different directions. The console warns about skills that look alike, and when you have many.
+- The agent applies every skill whose description matches, so 2 skills that cover the same situation can pull it in different directions. The console warns you about skills that look alike, and when you have many.
 - Fewer, clearer skills work better than many small ones.
 - Tone, languages and answer length belong under [Identity](/docs/guide/build-agent/identity), not in a skill.
-- A skill that still has `[brackets]` to fill in is flagged. The agent would read the brackets literally.
-- Deleting all your skills puts the agent back to its default behaviour. It stays switched on.
-- Names are converted for Meta behind the scenes, and the console keeps your readable name. If two names would end up the same for Meta, the console refuses the second one and asks you to change it.
+- A skill that still has `[brackets]` to fill in is flagged, because the agent would read the brackets literally.
+- If you delete all your skills, the agent goes back to its default behaviour. It stays switched on.
+- Names are converted for Meta behind the scenes, and the console keeps your readable name. If 2 names would end up the same for Meta, the console refuses the second one and asks you to change it.
 
 ## Rich replies
 
-A rich reply is a message the agent sends instead of plain text when it fits: buttons, a menu, a link button, a picture, a location or swipeable cards.
+A rich reply is a message that the agent sends instead of plain text when it fits: buttons, a menu, a link button, a picture, a location or swipeable cards.
 
-![The rich reply editor](/screens/studio-abilities.webp)
+## Create a rich reply
 
-### Create one
-
-Press **New rich reply**. If you have none yet, start from an example (such as "Book a demo", "Visit our website", "Product menu" or "Where to find us") or **Start from scratch**. The editor opens as a side panel with three steps and a live phone preview.
+Click **New rich reply**. If you have none yet, start from an example (such as "Book a demo", "Visit our website", "Product menu" or "Where to find us"), or click **Start from scratch**. The editor opens as a side panel with 3 steps and a live phone preview.
 
 <Steps>
 <Step>
@@ -91,21 +89,21 @@ Pick the kind.
 | **Location** | A pin on the map. |
 | **Cards with links** | Swipeable pictures, each with a link. |
 | **Cards with answers** | Swipeable pictures, each with a reply button. |
-| **Ask for location** | Asks the customer to share theirs. |
+| **Ask for location** | Asks the customer to share their location. |
 
-Cards and Ask for location are under **More kinds**.
+The 2 kinds of cards and **Ask for location** are under **More kinds**.
 </Step>
 <Step>
 ### Write the message
-Fill in the fields for that kind: the message, button text, link or picture. Each field shows a character count and a clear message if it is too long or missing. The phone preview on the right shows exactly what the customer will see.
+Fill in the fields for that kind: the message, button text, link or picture. Each field shows a character count, and a clear message if the text is too long or missing. The phone preview on the right shows exactly what the customer will see.
 </Step>
 </Steps>
 
-Give the reply a name at the top of the panel, or leave it and it is named from your "when" text. Press **Save rich reply**. It is live as soon as you save.
+Give the reply a name at the top of the panel. If you leave the name empty, the reply is named after your "when" text. Click **Save rich reply**. The reply is live as soon as you save it.
 
-### Limits worth knowing
+## Rich reply limits
 
-WhatsApp limits how much text each kind can hold. The editor enforces these as you type.
+WhatsApp limits how much text each kind can hold. The editor enforces these limits as you type.
 
 | Kind | Limits |
 | --- | --- |
@@ -116,9 +114,9 @@ WhatsApp limits how much text each kind can hold. The editor enforces these as y
 
 <small>Source: [Meta — Writing rich replies](https://developers.facebook.com/documentation/meta-business-agent/usage-guides/writing-ui-skills)</small>
 
-### Turn off, edit or delete
+## Turn off, edit or delete a rich reply
 
-Each rich reply has a switch to turn it off and on, plus **Edit** and **Delete** in its menu. Deleting stops the agent sending it straight away.
+Each rich reply has a switch to turn it off and on, and **Edit** and **Delete** in its menu. Once you delete a rich reply, the agent stops sending it straight away.
 
 A rich reply made outside Helo.ai shows "Made outside Helo.ai. Open it to set it up here."
 
@@ -128,7 +126,27 @@ A rich reply made outside Helo.ai shows "Made outside Helo.ai. Open it to set it
 | --- | --- |
 | **Say when the agent should send this.** | Fill in step 1. |
 | **Another rich reply already has this name. Change the name at the top.** | Rename it. |
-| **Another rich reply has the same "when".** | Make each "when" clearly different so the agent picks the right one. |
+| **Another rich reply has the same "when".** | Make each "when" clearly different, so the agent picks the right one. |
 | **A skill covers the same situation.** | Keep either the skill or the rich reply, or make them differ. |
 | **Couldn't save. Nothing was lost.** | Try again. |
 | A skill shows **Rejected** | Remove any request for sensitive personal details, then save again. |
+
+## Frequently asked questions
+
+<Accordions type="single">
+<Accordion title="What's the difference between a skill and a rich reply?">
+A skill tells the agent how to handle a situation, in words. A rich reply is a ready-made message with buttons, a menu, a picture or cards that the agent sends when its "when" matches. See [Skills](#skills) and [Rich replies](#rich-replies).
+</Accordion>
+<Accordion title="Why was my skill or rich reply name refused?">
+Meta only accepts lowercase letters, numbers and hyphens in names, so the console converts your name for Meta. If 2 names would end up the same after that, the console refuses the second one. Change one of the names.
+</Accordion>
+<Accordion title="How many skills should I have?">
+As few as you need. Fewer, clearer skills work better, and the console warns you when you have many or when 2 look alike. See [Good to know about skills](#good-to-know-about-skills).
+</Accordion>
+<Accordion title="Why was my skill rejected?">
+Most often, the skill asks for or mentions sensitive personal information. Remove that part and save again, and Meta checks the skill again, usually within minutes.
+</Accordion>
+<Accordion title="Why doesn't the agent use my new skill yet?">
+Meta reviews every skill after each save, and the agent only uses skills marked **In use**. While a skill shows **In review**, the agent ignores it.
+</Accordion>
+</Accordions>

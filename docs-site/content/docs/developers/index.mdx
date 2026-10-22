@@ -3,7 +3,7 @@ title: Architecture
 description: What the console is, how a request flows, and where each part lives.
 ---
 
-The Helo.ai console configures Meta's WhatsApp **Business Agent** through Meta's Platform API, and runs a support desk around it. Meta owns the agent. The console is the setup UI plus the inbox, tickets, contacts, message templates and analytics.
+The Helo.ai console configures **Meta Business Agent**, Meta's AI agent for WhatsApp, through Meta's Platform API, and runs a support desk around it. Meta owns the agent. The console is the setup UI, plus the inbox, tickets, contacts, message templates and analytics.
 
 ## Request flow
 
@@ -13,12 +13,14 @@ browser (React 19 + Vite, src/)
         │  /api/*  (Vite proxies to :8787 in dev; Vercel rewrites to api/server in production)
 server/ (node:http, TypeScript run natively by Node)
   ├─ app.ts / index.ts        routing, the auth gate, background jobs
-  ├─ auth.ts                  users, workspaces, memberships, sessions (cookie `sid`)
-  ├─ context.ts               per-request workspace + WhatsApp account (AsyncLocalStorage)
-  ├─ upstream.ts              callUpstream → Meta, or Helo.ai's server (UPSTREAM picks)
-  ├─ inbox · templates · tickets · supportOps · contacts · analytics · reports
-  ├─ whatsapp.ts · accounts.ts  Embedded Signup and per-workspace WhatsApp accounts
-  └─ db.ts                    MongoDB collections, indexes, TTLs; ws() scopes every query
+  ├─ identity/auth.ts         users, workspaces, memberships, sessions (cookie `sid`)
+  ├─ platform/context.ts      per-request workspace + WhatsApp account (AsyncLocalStorage)
+  ├─ platform/db.ts           MongoDB collections, indexes, TTLs; ws() scopes every query
+  ├─ whatsapp/upstream.ts     callUpstream → Meta, or Helo.ai's server (UPSTREAM picks)
+  ├─ whatsapp/whatsapp.ts · accounts.ts  Embedded Signup and per-workspace WhatsApp accounts
+  ├─ messaging/               inbox, templates, media, AI assist
+  ├─ support/                 tickets, supportOps, contacts, business hours
+  └─ insights/                analytics, reports, collectors, activity
 ```
 
 ## Layers
@@ -27,13 +29,13 @@ server/ (node:http, TypeScript run natively by Node)
 | --- | --- | --- |
 | UI | `src/app/pages/*`, `src/app/wizard/*` | Pages and the agent studio. Shared UI is in `src/app/components/ui/`. |
 | API clients | `src/app/api/*` | `jsonClient` per area. Dummy mode answers in the browser. |
-| Server | `server/*.ts` | Workspace-scoped handlers. Every route is in the OpenAPI spec. |
+| Server | `server/<domain>/*.ts` | Workspace-scoped handlers. Every route is in the OpenAPI spec. |
 | Shared logic | `src/app/support/*`, `src/app/inbox/sampleData.ts`, … | Pure rules imported by both the browser and the server. |
 | Data | MongoDB | One database. Every document carries `workspaceId`. |
 
 ## Workspaces and accounts
 
-- Every `/api/*` route except `/api/health` and the account routes needs a signed-in workspace member. It runs inside that member's current workspace (`ws()` in `server/db.ts`).
+- Every `/api/*` route except `/api/health` and the account routes needs a signed-in workspace member. It runs inside that member's current workspace (`ws()` in `server/platform/db.ts`).
 - A person can belong to several workspaces. Each session works in one, switched with `POST /api/account/workspace`.
 - Each workspace has its own WhatsApp accounts (`whatsapp_accounts`). Requests act with that workspace's account and token. The `.env` number is the first workspace's account.
 
@@ -43,10 +45,10 @@ Client code uses the literal placeholders `PHONE_NUMBER_ID` and `WABA_ID` in Met
 
 ## Roles
 
-Owner, Admin, Supervisor and Agent. The matrix is `src/app/lib/permissions.ts`, shared: the server enforces it on every route, and the browser hides what a role can't do.
+There are 4 roles: Owner, Admin, Supervisor and Agent (a team member). The permission matrix is in `src/app/lib/permissions.ts` and is shared: the server enforces it on every route, and the browser hides what a role can't do.
 
 ## Deliberately not wired
 
-- **Native integrations:** Meta has no API for them, so that tab stays a mock.
+- **Native integrations:** Meta has no API for them, so the studio's Native integrations tab stays a mock.
 - **Budget and mTLS:** out of scope.
 - **Duplicate agent:** a copy needs a second phone number.

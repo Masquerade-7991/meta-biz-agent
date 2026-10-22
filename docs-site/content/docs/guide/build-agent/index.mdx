@@ -7,30 +7,30 @@ Set up an AI agent that answers your customers on WhatsApp, from first draft to 
 
 ## What the agent is
 
-The AI agent is Meta's Business Agent. Meta runs it. It answers customer messages on WhatsApp at any hour, in your brand's voice, and once it is switched on it becomes the first responder on your number. Helo.ai is where you set it up: what it does, what it knows, what it may say, and when it hands a chat to your team.
+The AI agent is Meta Business Agent, and Meta runs it. It answers customer messages on WhatsApp at any hour, in your brand's voice. Once you switch it on, it becomes the first responder on your number. Helo.ai is where you set it up: what it does, what it knows, what it may say and when it hands a chat over to your team.
 
-It learns from four kinds of knowledge: your business details, FAQs you write, files you upload and websites it reads. Instructions you give it are called skills. When it is unsure, or the customer asks for a person, it hands the chat to your team.
+The agent learns from 4 kinds of knowledge: your business details, FAQs you write, files you upload and websites it reads. Instructions you give it are called skills. When the agent is unsure, or the customer asks for a person, it hands the chat over to your team.
 
-<small>Source: [Meta — Business Agent overview](https://developers.facebook.com/documentation/meta-business-agent/overview)</small>
+<small>Source: [Meta — Meta Business Agent overview](https://developers.facebook.com/documentation/meta-business-agent/overview)</small>
 
 <Callout type="info">
-Not every number can have an agent. Meta decides eligibility, and some business types (for example finance, health and gambling) are excluded. A number that runs only on the regular WhatsApp Business app is not eligible either. If your number isn't, talk to Helo.ai.
+Not every number can have an agent. Meta decides which numbers are eligible, and some business types (for example finance, health and gambling) are excluded. A number that runs only on the regular WhatsApp Business app isn't eligible either. If your number isn't eligible, talk to Helo.ai support. [WhatsApp assets](/docs/guide/whatsapp-assets#using-meta-business-agent-on-a-number) lists Meta's conditions.
 </Callout>
 
 ## Before you start
 
-- A WhatsApp number connected to Helo.ai. See [Connect your WhatsApp number](/docs/guide/connect-number).
+- A WhatsApp number connected to Helo.ai. See [Connect a WhatsApp number](/docs/guide/connect-number).
 - Permission to edit AI agents in your workspace.
 
 ## How the studio works
 
-Open **AI Agents**, then pick an agent or create one. The studio has a sidebar with one section per part of the agent, in three groups.
+Open **AI Agents**, then pick an agent or create one. The studio has a sidebar with one section for each part of the agent, in 3 groups.
 
 | Group | Sections | What you do there |
 | --- | --- | --- |
 | **Build** | Identity, Abilities, Knowledge, Connections, Safety & handoff | Decide who the agent is, what it knows and can do, and where its limits are. |
-| **Test & launch** | Test & Eval, Publish | Try it, then choose who it answers and switch it on. |
-| **Monitor** | Performance, Logs | See how it is doing and what it did. |
+| **Test & launch** | Test & Eval, Publish | Try the agent, then choose who it answers and switch it on. |
+| **Monitor** | Performance, Logs | See how the agent is doing and what it did. |
 
 **Overview** sits above the groups and shows a checklist of what is left before going live.
 
@@ -38,25 +38,25 @@ Open **AI Agents**, then pick an agent or create one. The studio has a sidebar w
 
 ### Saving your work
 
-Most sections have a **Save** button. Nothing is sent to Meta until you press it. If you change something and try to leave, a bar at the bottom reminds you that changes are unsaved, and you can save or discard them. Publish works differently: each choice there is saved as soon as you make it.
+Most sections have a **Save** button. Nothing is sent to Meta until you click it. If you change something and try to leave, a bar at the bottom reminds you that you have unsaved changes, and you can save or discard them. Publish works differently: each choice there is saved as soon as you make it.
 
 ### Try it from anywhere
 
-The **Try it** button at the top of the studio opens a chat panel. Chat as a customer would, right after changing something, without leaving the section you are in. It is free, and nobody else sees it. For the full test chat, checks and evaluations, see [Test your agent](/docs/guide/build-agent/test).
+The **Try it** button at the top of the studio opens a chat panel. Right after changing something, chat as a customer would, without leaving the section you are in. It is free, and nobody else sees it. For the full test chat, checks and evaluations, see [Test your agent](/docs/guide/build-agent/test).
 
 ## Agent status
 
-Every agent shows one of four statuses.
+Every agent shows one of 4 statuses.
 
 | Status | Meaning |
 | --- | --- |
-| **Draft** | Being set up and never switched on. |
+| **Draft** | Being set up, and never switched on. |
 | **Testing** | Switched on, and answers your test numbers only. |
 | **Live** | Answers everyone who messages the number. |
-| **Paused** | Stopped. Nobody gets AI replies until you resume it. |
+| **Paused** | Stopped. Nobody gets replies from the agent until you resume it. |
 
 <Callout type="info">
-These four words are Helo.ai's. Meta itself only has an on/off switch and a choice of audience. The console combines the two so you can see at a glance where the agent is.
+These 4 words are Helo.ai's. Meta itself only has an on/off switch and a choice of audience. The console combines the two, so you can see at a glance where the agent is.
 </Callout>
 
 ## A suggested order
@@ -64,43 +64,43 @@ These four words are Helo.ai's. Meta itself only has an on/off switch and a choi
 <Steps>
 <Step>
 ### Say what the agent does
-Name it and describe its job in plain words. See [Identity and personality](/docs/guide/build-agent/identity).
+Name the agent and describe its job in plain words. See [Identity and personality](/docs/guide/build-agent/identity).
 </Step>
 <Step>
 ### Give it knowledge
-Add your website and a handful of FAQs first. Add business details such as hours and policies. See [Knowledge](/docs/guide/build-agent/knowledge).
+Add your website and 5 to 10 FAQs first. Then add business details, such as your hours and policies. See [Knowledge](/docs/guide/build-agent/knowledge).
 </Step>
 <Step>
 ### Set its limits
-Choose how strictly it sticks to your knowledge, what it avoids, and how it hands over. See [Safety and handoff](/docs/guide/build-agent/safety-handoff).
+Choose how strictly the agent sticks to your knowledge, what it avoids and how it hands over. See [Safety and handoff](/docs/guide/build-agent/safety-handoff).
 </Step>
 <Step>
 ### Add abilities and connections, if you need them
-Skills for situations you want handled your way, rich replies with buttons, and connections to your own systems. See [Abilities](/docs/guide/build-agent/abilities) and [Connections](/docs/guide/build-agent/connections). Most agents start without any of these.
+Add skills for situations you want handled your way, rich replies with buttons, and connections to your own systems. See [Abilities](/docs/guide/build-agent/abilities) and [Connections](/docs/guide/build-agent/connections). Most agents start without any of these.
 </Step>
 <Step>
 ### Test it
-Chat with it, run the standard checks, and fix what looks off. See [Test your agent](/docs/guide/build-agent/test).
+Chat with the agent, run the standard checks and fix what looks off. See [Test your agent](/docs/guide/build-agent/test).
 </Step>
 <Step>
 ### Publish
-Add a few test numbers, try it on a real phone, then open it to everyone. See [Publish and go live](/docs/guide/build-agent/publish).
+Add a few test numbers, try the agent on a real phone, then open it to everyone. See [Publish and go live](/docs/guide/build-agent/publish).
 </Step>
 </Steps>
 
 ## Good to know
 
-- **Agent messages are billed by Meta, per token.** From 1 August 2026 Meta charges a single rate of $2.00 per million tokens. A typical message uses about 20,000 to 25,000 tokens, which is roughly 4 to 5 cents. One charge covers both the AI work and the delivery. Longer answers cost a little more.
+- **Meta bills agent messages per token** (a token is a small piece of text). From 1 August 2026, Meta charges a single rate of $2.00 per million tokens. A typical message uses about 20,000 to 25,000 tokens, which is roughly 4 to 5 US cents. One charge covers both the AI work and the delivery. Longer answers cost a little more.
 - **A payment method is needed to answer everyone.** Meta only lets the agent answer all customers once a payment method is added in Meta's Billing Hub. Answering only your test numbers works without one.
-- **Messages in a service window are no longer free of charge.** The agent's replies are never free, even inside the 24-hour reply window.
+- **Agent replies are charged even inside the 24-hour reply window.** They are never free.
 
-<small>Source: [Meta — Pricing for non-template messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages) and [Meta — Business Agent settings](https://developers.facebook.com/documentation/meta-business-agent/reference/onboard/agent-settings)</small>
+<small>Source: [Meta — Pricing for non-template messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages), [Meta — Business Agent settings](https://developers.facebook.com/documentation/meta-business-agent/reference/onboard/agent-settings)</small>
 
 ## Performance and Logs
 
 Once the agent is answering, the **Monitor** group shows how it is doing.
 
-- **Performance** charts conversations per day, handoffs over time, how often each tool ran and how those calls ended, and the health of your connections.
+- **Performance** charts conversations per day, handovers over time, how often each tool ran and how those calls ended, and the health of your connections.
 - **Logs** is a record of what the agent did.
 
 For wider reporting across your whole support operation, see [Analytics and reports](/docs/guide/analytics).
@@ -110,4 +110,24 @@ For wider reporting across your whole support operation, see [Analytics and repo
 | What you see | What to do |
 | --- | --- |
 | **Couldn't save to Meta** | Nothing was changed. Read the detail under the message and try again. |
-| A section can't load | Use the retry button on the banner. If it keeps failing, Meta may be busy; wait a minute and retry. |
+| A section can't load | Click the retry button on the banner. If it keeps failing, Meta may be busy; wait a minute and retry. |
+
+## Frequently asked questions
+
+<Accordions type="single">
+<Accordion title="Is the agent Meta's or Helo.ai's?">
+Meta's. Meta Business Agent runs on Meta's side and answers your customers. Helo.ai is where you configure it and where your team picks up the chats it hands over.
+</Accordion>
+<Accordion title="Can one number have two agents?">
+No. Each number runs one AI agent, and Meta also refuses a number that already runs another AI agent. To run a second agent, connect a second number.
+</Accordion>
+<Accordion title="Which businesses can't use the agent?">
+Meta excludes finance, government, health, alcohol, gambling, over-the-counter medicines and matrimony services. The business must also be in good standing and in a country where Meta offers the agent. See [Using Meta Business Agent on a number](/docs/guide/whatsapp-assets#using-meta-business-agent-on-a-number).
+</Accordion>
+<Accordion title="Does the agent answer customers before I switch it on?">
+No. A **Draft** agent answers nobody, and **Testing** answers only your test numbers. The **Try it** panel and Test & Eval let you chat with it at any time, without messaging customers.
+</Accordion>
+<Accordion title="What does each agent reply cost?">
+About 4 to 5 US cents for a typical message, at Meta's rate of $2.00 per million tokens. Longer answers cost more. Test chats in the studio are free. See [Good to know](#good-to-know).
+</Accordion>
+</Accordions>

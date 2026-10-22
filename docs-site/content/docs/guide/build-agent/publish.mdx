@@ -18,48 +18,48 @@ Take the agent from private testing to answering your customers.
 <Steps>
 <Step>
 ### Add your test numbers
-Under **Who your agent answers**, keep **Only my test numbers** selected (it's recommended while you try it). Enter a number with its country code, for example `+15551234567`, and press **Add**. Add yourself and colleagues.
+Under **Who your agent answers**, keep **Only my test numbers** selected (it's recommended while you try the agent). Enter a number with its country code, for example `+15551234567`, and click **Add**. Add yourself and your colleagues.
 
-You can add up to 20 numbers. Each one can chat with the agent as soon as it is added, even before it goes live. Remove a number with the x on its chip.
+You can add up to 20 numbers. Each one can chat with the agent as soon as it's added, even before the agent goes live. To remove a number, click the × on its chip.
 </Step>
 <Step>
 ### Go through the checklist
-The **Go live** card lists what's left: say what your agent does, give it knowledge, try it in Test & Eval, and choose who it answers. Each item opens the right section. A tick means done.
+The **Go live** card lists what's left: say what your agent does, give it knowledge, try it in Test & Eval, and choose who it answers. Each item opens the right section, and a tick means it's done.
 </Step>
 <Step>
-### Press Go live
-A dialog asks "Ready to go live?" and reminds you that your agent becomes the main responder for the audience you chose, and that Meta charges for each message it sends. Press **Go live**. The status becomes **Testing** (test numbers only).
+### Click Go live
+A dialog asks "Ready to go live?". It reminds you that your agent becomes the main responder for the audience you chose, and that Meta charges for each message it sends. Click **Go live**. The status becomes **Testing** (test numbers only).
 </Step>
 <Step>
 ### Try it on a real phone
-Message your number from a test number. Fix what feels off.
+Message your number from a test number, and fix what feels off.
 </Step>
 <Step>
 ### Open it to everyone
-Choose **Everyone**. Any customer who messages the number now reaches the agent. The status becomes **Live**.
+Choose **Everyone**. Any customer who messages the number now reaches the agent, and the status becomes **Live**.
 </Step>
 </Steps>
 
-The recommended order is: add test numbers, keep **Only my test numbers**, switch on, test, then choose **Everyone**.
+The recommended order is: add test numbers, keep **Only my test numbers**, switch the agent on, test it, then choose **Everyone**.
 
-<small>Source: [Meta — Allowlist](https://developers.facebook.com/documentation/meta-business-agent/reference/onboard/agent-allowlist) and [Meta — Get started](https://developers.facebook.com/documentation/meta-business-agent/get-started)</small>
+<small>Source: [Meta — Allowlist](https://developers.facebook.com/documentation/meta-business-agent/reference/onboard/agent-allowlist), [Meta — Get started](https://developers.facebook.com/documentation/meta-business-agent/get-started)</small>
 
 ## Payment method for Everyone
 
-Meta won't let the agent answer everyone until a payment method is added in Billing Hub. If you choose **Everyone** without one, Meta refuses and the console shows **Couldn't save to Meta** with Meta's reason. Add the payment method, then choose **Everyone** again. Answering only your test numbers works without one.
+Meta won't let the agent answer everyone until a payment method is added in Billing Hub. If you choose **Everyone** without one, Meta refuses, and the console shows **Couldn't save to Meta** with Meta's reason. Add the payment method, then choose **Everyone** again. Answering only your test numbers works without one.
 
-Meta charges per token for each agent message: $2.00 per million tokens from 1 August 2026, which is roughly 4 to 5 cents for a typical message. Messages the agent sends are billed even inside the 24-hour reply window.
+Meta charges per token for each agent message: $2.00 per million tokens from 1 August 2026, which is roughly 4 to 5 US cents for a typical message. Agent messages are billed even inside the 24-hour reply window.
 
-<small>Source: [Meta — Business Agent settings](https://developers.facebook.com/documentation/meta-business-agent/reference/onboard/agent-settings) and [Meta — Pricing for non-template messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages)</small>
+<small>Source: [Meta — Business Agent settings](https://developers.facebook.com/documentation/meta-business-agent/reference/onboard/agent-settings), [Meta — Pricing for non-template messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages)</small>
 
 ## Pause and resume
 
-Once the agent is on, the Go live card shows **Pause agent**.
+Once the agent is on, the **Go live** card shows **Pause agent**.
 
-- Pausing asks "Pause this agent?" Customers messaging the number then get no AI replies. Your team still sees their messages in the [Inbox](/docs/guide/inbox) and can answer them.
-- The status becomes **Paused**. Press **Resume** to switch it on again. The toast says "Agent is live again".
+- When you pause, the console asks "Pause this agent?". After you confirm, customers who message the number get no replies from the agent. Your team still sees their messages in the [Inbox](/docs/guide/inbox) and can answer them.
+- The status becomes **Paused**. To switch the agent on again, click **Resume**. A message confirms "Agent is live again".
 
-When Meta's switch is turned off, the AI stops on all conversations. When it is turned back on, it applies to new conversations only.
+When Meta's switch is turned off, the agent stops on all conversations. When it's turned back on, it only answers new conversations.
 
 <small>Source: [Meta — Business Agent settings](https://developers.facebook.com/documentation/meta-business-agent/reference/onboard/agent-settings)</small>
 
@@ -67,19 +67,39 @@ When Meta's switch is turned off, the AI stops on all conversations. When it is 
 
 | Setting | A customer who messages the number |
 | --- | --- |
-| **Only my test numbers**, switched on | If their number is on your list, the agent replies. Everyone else gets no AI reply; your team handles those chats. |
-| **Everyone**, switched on | The agent replies. It hands over to your team when it can't help. |
-| **Paused** | No AI reply. Your team sees the message. |
+| **Only my test numbers**, switched on | If their number is on your list, the agent replies. Everyone else gets no reply from the agent, and your team handles those chats. |
+| **Everyone**, switched on | The agent replies, and hands over to your team when it can't help. |
+| **Paused** | No reply from the agent. Your team sees the message. |
 
 ## Good to know
 
-- A phone number in the list must include the country code and be in the form `+` followed by digits. Otherwise: "This doesn't look like a valid number".
-- You reach the limit at 20: "You've reached the limit of 20 numbers. Remove one to add another."
+- Each number on the list must include the country code, as `+` followed by digits. Otherwise, the console shows "This doesn't look like a valid number".
+- The list holds up to 20 numbers. When it's full, the console shows "You've reached the limit of 20 numbers. Remove one to add another."
 - Publishing is per number. Each WhatsApp number has its own agent.
 
 ## If something goes wrong
 
 | Message | What to do |
 | --- | --- |
-| **Couldn't save to Meta** | Nothing changed. Read Meta's reason under the message. A missing payment method is the common one for Everyone. |
-| **Couldn't switch your agent on. Nothing has changed.** | Press **Try again**. |
+| **Couldn't save to Meta** | Nothing changed. Read Meta's reason under the message. For **Everyone**, the usual reason is a missing payment method. |
+| **Couldn't switch your agent on. Nothing has changed.** | Click **Try again**. |
+
+## Frequently asked questions
+
+<Accordions type="single">
+<Accordion title="What's the difference between Testing and Live?">
+**Testing** means the agent is on but answers only the numbers on your test list. **Live** means it answers everyone who messages the number. See [What customers experience](#what-customers-experience).
+</Accordion>
+<Accordion title="How do I pause the agent?">
+Click **Pause agent** on the **Go live** card and confirm. Customers then get no replies from the agent, and your team answers them in the Inbox. Click **Resume** to switch the agent back on.
+</Accordion>
+<Accordion title="Can I go back to an earlier version of the agent?">
+The console doesn't keep earlier versions. To stop a change quickly, pause the agent, fix the section and save it, then click **Resume**.
+</Accordion>
+<Accordion title="Why can't I choose Everyone?">
+Meta needs a payment method in Billing Hub before the agent can answer everyone. Add one, then choose **Everyone** again. See [Payment method for Everyone](#payment-method-for-everyone).
+</Accordion>
+<Accordion title="Does the agent pick up chats that were already going when I resume?">
+No. When the agent is switched back on, it only answers new conversations, so your team answers the chats that were already going.
+</Accordion>
+</Accordions>

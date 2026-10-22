@@ -1,6 +1,6 @@
 ---
 title: Support platform
-description: The server modules behind Inbox, Tickets, Contacts, message templates and Analytics, and their rules.
+description: The server modules behind Inbox, Tickets, Contacts, Message templates and Analytics, and their rules.
 ---
 
 ## Modules
@@ -18,15 +18,15 @@ All of them are workspace-scoped. Sending needs `ownsMetaAssets()`.
 
 ## Model
 
-There is one conversation per customer phone. A ticket is one issue inside it. It opens on a handoff, a take-over, a team reply, or the customer writing again.
+There is one conversation per customer phone. A ticket is one issue inside it. A ticket opens on a handover, a takeover, a team reply or the customer writing again.
 
 ## Ticket lifecycle
 
-The rules are in `src/app/support/ticketRules.ts`, shared with dummy mode:
+The rules are in `src/app/support/ticketRules.ts`, shared with Dummy mode:
 
-- Handing the chat back to the AI resolves its ticket, with no rating question.
-- A customer writing reopens a ticket resolved in the last 3 days. Later than that, a new ticket opens (`source: customer`), unless the AI holds the chat.
-- Waiting on the customer pauses the deadlines (`pausedAt` / `pausedMs`). The dues shift on resume, and nothing escalates while paused.
+- Handing the chat back to the AI agent resolves its ticket, with no rating question.
+- Unless the agent holds the chat, a customer writing reopens a ticket resolved in the last 3 days. After 3 days, a new ticket opens instead (`source: customer`).
+- Waiting on the customer pauses the deadlines (`pausedAt` / `pausedMs`). The due times shift on resume, and nothing escalates while a ticket is paused.
 - Reopening restarts deadlines from `clockStartAt`, and escalation from level 0.
 - The database allows one open ticket per chat (`one_open_ticket_per_chat`).
 - Bulk changes answer `{done, failed[]}`.
@@ -40,7 +40,7 @@ The decisions are pure and shared (`src/app/support/routing.ts`):
 - Only available people under their limit get tickets.
 - Escalation levels fire in order, once each (`escalationLevel`). They alert by bell, and optionally by email.
 
-Business-hours maths is in `server/businessHours.ts`.
+Business-hours maths is in `server/support/businessHours.ts`.
 
 ## Activity log
 
@@ -52,9 +52,9 @@ Record actions with `trace(kind, data, {entity, id}, changes)`, where `changes` 
 
 ## Analytics definitions
 
-- **Conversation:** has a message from the customer, the AI or the team.
-- **AI alone:** the AI answered and nobody from the team wrote.
-- **No reply:** neither the AI nor the team answered.
+- **Conversation:** has a message from the customer, the agent or the team.
+- **AI alone:** the agent answered and nobody from the team wrote.
+- **No reply:** neither the agent nor the team answered.
 
 Rows carry `phoneNumberId`. Rows without one count as the default number. WhatsApp spend is per account and per UTC day, so cost per resolved conversation shows only for all agents.
 

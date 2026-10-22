@@ -3,7 +3,7 @@ title: Contacts
 description: Your customers, their details, and saved groups to reach them.
 ---
 
-Contacts hold who your customers are, so your team has context when they answer.
+Contacts keep what you know about your customers, so your team has context when it answers.
 
 ![The Contacts page with segments, tags and custom fields](/screens/contacts.webp)
 
@@ -18,21 +18,21 @@ Every customer who messages you becomes a contact. You can also add contacts you
 
 A contact has a **Name**, **Phone number** (with country code), **Email**, **Tags** and any **custom fields** you've added.
 
-- **Tags** are free text, such as `vip` or `billing`. They are saved in lower case, up to 30 per contact.
+- **Tags** are free text, such as `vip` or `billing`. They're saved in lowercase, up to 30 per contact.
 - **Custom fields** are extra details like city or renewal date. Add them under **Settings › Contact fields**, and choose text, number, date or a list of choices. Each field then shows as a column and in the contact's form.
 
-Select **Add contact** to create one. Open a contact to edit, jump to their chat with **Open chat**, or delete them.
+Click **Add contact** to create one. Open a contact to edit it, jump to their chat with **Open chat**, or delete it.
 
 ## Import from a CSV file
 
-Select **Import CSV** (supervisors and above). You can [download a small sample file](/samples/contacts-sample.csv) to see the layout.
+Click **Import CSV** (supervisors and above). You can [download a small sample file](/samples/contacts-sample.csv) to see the layout.
 
 ![The import dialog showing how each column was matched](/screens/contacts-import.webp)
 
-1. Select **Choose a CSV file**. The first row must be headers.
+1. Click **Choose a CSV file**. The first row must hold the column headers.
 2. Check how each column was matched. Unmatched columns show **Ignored**.
 3. Optionally fill in **Tag everyone in this file** to add one tag to all of them, such as `diwali-2026`.
-4. Select **Import N contacts** (the button shows the row count).
+4. Click **Import N contacts** (the button shows the row count).
 
 ### Columns the import understands
 
@@ -44,7 +44,7 @@ Select **Import CSV** (supervisors and above). You can [download a small sample 
 | Tags | Tags, Labels (separate several with a comma, semicolon or vertical bar) |
 | A custom field | The field's name |
 
-Headers ignore capitals and punctuation. If no phone column is found, you'll see: No phone column found. Name a column "Phone", "Mobile" or "WhatsApp number".
+Headers ignore capitals and punctuation. If no phone column is found, you see **No phone column found. Name a column "Phone", "Mobile" or "WhatsApp number".**
 
 ### Phone number rules
 
@@ -65,38 +65,38 @@ When the import finishes you'll see "Added 40, updated 8, skipped 2", then each 
 
 A segment is a saved group that updates itself as contacts change. Use it to filter this page.
 
-Select **New segment** and set:
+Click **New segment** and set:
 
 - **Name**, for example "Active VIPs".
-- **Has all these tags**: a contact must have every tag listed.
+- **Has all these tags:** a contact must have every tag listed.
 - **Last message from them**: **Any time**, **Within 7 days**, **Within 30 days** or **Within 90 days**.
 
-To remove a segment, select **Delete segment**. Only the saved filter goes; the contacts stay.
+To remove a segment, click **Delete segment**. Only the saved filter goes; the contacts stay.
 
 ## Permission to message people
 
-WhatsApp's rules, and ours, are the same: message people who have agreed to hear from you.
+WhatsApp's rules and Helo.ai's are the same: only message people who have agreed to hear from you.
 
-- Collect clear agreement before you send them messages, such as a tick box on your website or a form at your shop. The wording should say they're agreeing to hear from your business on WhatsApp, and name the business.
-- Keep it separate for different kinds of message, and tell people what they'll get.
+- Get clear agreement before you message anyone, such as a tick box on your website or a form at your shop. The wording should say they're agreeing to hear from your business on WhatsApp, and name the business.
+- Ask separately for different kinds of message (for example, order updates and offers), and tell people what they'll get.
 - You can answer customers who message you first inside the 24-hour reply window. Starting a conversation, or writing after the window, needs an approved template.
 - Respect every request to stop, however it arrives.
 
-<small>Source: [Meta — Getting opt-in](https://developers.facebook.com/documentation/business-messaging/whatsapp/getting-opt-in) and [WhatsApp Business Messaging Policy](https://whatsappbusiness.com/policy/)</small>
+<small>Source: [Meta — Getting opt-in](https://developers.facebook.com/documentation/business-messaging/whatsapp/getting-opt-in), [WhatsApp Business Messaging Policy](https://whatsappbusiness.com/policy/)</small>
 
 ### Opt-outs
 
-When a customer replies **STOP** or **UNSUBSCRIBE**, the console marks the contact **Opted out**. They're marked so your team knows not to send them marketing. The chat still works, so you can answer if they write. Replying **START** brings them back. Customers can also pause marketing messages from WhatsApp's own settings, and the console follows that too.
+When a customer replies **STOP** or **UNSUBSCRIBE**, the console marks the contact **Opted out**, so your team knows not to send them marketing. The chat still works, so you can answer if they write. If they reply **START**, the mark is removed. Customers can also pause marketing messages in WhatsApp's own settings, and the console picks that up too.
 
 You can switch **Opted out of marketing messages** on or off in a contact's form. Only turn it off when the customer has asked to hear from you again.
 
-To stop a customer messaging you at all, [block them](/docs/guide/inbox).
+To stop a customer messaging you at all, [block them](/docs/guide/inbox#block-a-customer).
 
 <small>Source: [Meta — Marketing templates](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates)</small>
 
 ## Delete a contact
 
-Open the contact and select **Delete**. This also deletes their chat history and tickets, and can't be undone. If you only want to stop messaging them, use **Opted out of marketing messages** instead.
+Open the contact and click **Delete**. This also deletes their chat history and tickets, and can't be undone. If you only want to stop messaging them, use **Opted out of marketing messages** instead.
 
 ## If something goes wrong
 
@@ -106,3 +106,23 @@ Open the contact and select **Delete**. This also deletes their chat history and
 | "looks like a local number" | Add the country code, such as `+91`. |
 | "No phone column found" | Rename the phone column to **Phone**. |
 | "Supervisors, admins and owners import contacts" | Ask one of them to import the file. |
+
+## Frequently asked questions
+
+<Accordions type="single">
+<Accordion title="Does importing a file overwrite details we already have?">
+Only where the file has a value. For a number that's already a contact, a filled-in name, email or field replaces the saved one, empty cells leave it as it is, and tags are added to the ones they have.
+</Accordion>
+<Accordion title="Do my column headers have to match exactly?">
+No. Common names such as Mobile or WhatsApp number are recognised, and capitals and punctuation don't matter. Check the matches in the dialog before you import. See [Columns the import understands](#columns-the-import-understands).
+</Accordion>
+<Accordion title="Can I message everyone in a segment at once?">
+No. Segments filter this page. Messages go out one chat at a time from the [Inbox](/docs/guide/inbox), and starting a conversation needs an approved template.
+</Accordion>
+<Accordion title="Can a customer who opted out still write to us?">
+Yes. Opting out only concerns marketing messages. They can still write to you, and you can answer them in the chat.
+</Accordion>
+<Accordion title="Does deleting a contact remove them from WhatsApp?">
+No. It deletes the contact, their chat history and their tickets from Helo.ai only. If they write again, they appear as a new contact.
+</Accordion>
+</Accordions>

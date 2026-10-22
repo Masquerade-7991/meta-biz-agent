@@ -3,40 +3,40 @@ title: Safety and handoff
 description: Decide how strictly the agent sticks to your knowledge, what it avoids, and how it passes a chat to your team.
 ---
 
-Set the agent's limits and its hand-over behaviour before real customers reach it.
+Set the agent's limits and its handover behaviour before real customers reach it.
 
 ![The Safety and handoff section](/screens/studio-safety.webp)
 
 ## Before you start
 
-- Know who on your team will pick up handed-over chats. See [Inbox](/docs/guide/inbox) and the support settings.
+- Know who on your team will pick up the chats the agent hands over. See [Inbox](/docs/guide/inbox) and [Settings](/docs/guide/settings), where routing decides who gets each ticket.
 
 ## Steps
 
-All of this page is saved together with **Save**.
+One **Save** button saves everything in this section.
 
 <Steps>
 <Step>
 ### Choose how it answers
-Under **How your agent answers**:
+Under **How your agent answers**, choose one:
 
-- **Only from my knowledge**: answers from what you've given it, and hands over when it doesn't know.
-- **Can chat naturally**: small talk and general help within its role, still based on your knowledge.
+- **Only from my knowledge:** the agent answers from what you've given it, and hands over when it doesn't know.
+- **Can chat naturally:** the agent also makes small talk and gives general help within its role, still based on your knowledge.
 
-For a business where wrong answers are costly, start with "Only from my knowledge".
+For a business where wrong answers are costly, start with **Only from my knowledge**.
 </Step>
 <Step>
 ### Add words it never says
-Type a word or phrase and press Enter (up to 50 phrases, 60 characters each). Capital letters don't matter: "cheap" also covers "Cheap". The console may offer related forms, such as "Also add: ...?" with **Add both** or **Dismiss**.
+Type a word or phrase, then hit Enter to add it (up to 50 phrases, 60 characters each). Capital letters don't matter: "cheap" also covers "Cheap". The console may offer related forms, such as "Also add: …?", with **Add both** or **Dismiss**.
 
 When the agent's reply would contain one of these phrases, Meta withholds that reply.
 </Step>
 <Step>
 ### Add topics it stays away from
-Topics are broader than words: the agent politely declines anything on them. For example, "Competitors' prices". Up to 20 topics.
+Topics are broader than words: the agent politely declines anything about them. For example, "Competitors' prices". You can add up to 20 topics.
 </Step>
 <Step>
-### Choose the handoff message
+### Choose the handover message
 Under **Handing over to your team**, pick **What it says when it hands over**:
 
 - **Meta's standard message (in the customer's language)**.
@@ -51,7 +51,7 @@ This follow-up is charged like any other message the agent sends.
 </Step>
 <Step>
 ### Save
-Press **Save**.
+Click **Save**.
 </Step>
 </Steps>
 
@@ -59,15 +59,15 @@ Press **Save**.
 
 ## When does the agent hand over?
 
-The agent hands a chat to your team when it is unsure, when something seems wrong, or when the customer asks for a person. Meta decides these triggers; you can't switch them on or off. What you control is the message the customer sees.
+The agent hands a chat over to your team when it is unsure, when something seems wrong, or when the customer asks for a person. Meta decides these triggers, and you can't switch them on or off. What you control is the message the customer sees.
 
-To add your own rules, press **Add your own handoff rules**. It opens a new skill in [Abilities](/docs/guide/build-agent/abilities) pre-filled with a sensible starting text that you can adapt. Press **Who receives handed-over chats** to go to the support settings.
+To add your own rules, click **Add your own handoff rules**. It opens a new skill in [Abilities](/docs/guide/build-agent/abilities#skills), filled in with starting text that you can adapt. To change who gets the chats, click **Who receives handed-over chats**, which opens the support settings.
 
 <small>Source: [Meta — Business Agent capabilities](https://developers.facebook.com/documentation/meta-business-agent/capabilities)</small>
 
-## What happens after a handoff
+## What happens after a handover
 
-The chat moves to your team in the Inbox, and a ticket opens for it. While your team holds the chat, the agent stays quiet. Anyone on your team who replies from the Inbox takes over the chat; you can give it back to the AI when the issue is done, which resolves the ticket. See [Inbox](/docs/guide/inbox) and [Tickets](/docs/guide/tickets).
+The chat moves to your team in the Inbox, and a ticket opens for it. While your team holds the chat, the agent stays quiet. Anyone on your team who replies from the Inbox takes over the chat. When the issue is done, you can hand the chat back to the AI agent, which resolves the ticket. See [Inbox](/docs/guide/inbox) and [Tickets](/docs/guide/tickets).
 
 ## Always on
 
@@ -81,7 +81,27 @@ Whatever you choose, the agent never claims to be human when asked, never shares
 
 | Message | What to do |
 | --- | --- |
-| **Write the handoff message, or pick another option.** | You chose "My own message" but left it empty. |
-| **Write the follow-up message, or use Meta's standard one.** | Same, for the follow-up. |
-| **You already have this word or phrase.** | It is already in the list. |
-| **Your changes weren't saved. Nothing has been lost.** | Press retry on the banner. |
+| **Write the handoff message, or pick another option.** | You chose **My own message** but left it empty. Write the message, or pick another option. |
+| **Write the follow-up message, or use Meta's standard one.** | The same, for the follow-up. |
+| **You already have this word or phrase.** | The phrase is already in the list. |
+| **Your changes weren't saved. Nothing has been lost.** | Click retry on the banner. |
+
+## Frequently asked questions
+
+<Accordions type="single">
+<Accordion title="When does the agent hand a chat over?">
+When it is unsure, when something seems wrong, or when the customer asks for a person. Meta decides these triggers; you can add your own rules as a skill with **Add your own handoff rules**. See [When does the agent hand over?](#when-does-the-agent-hand-over).
+</Accordion>
+<Accordion title="What happens outside business hours?">
+The agent keeps answering at all hours. A chat it hands over waits in the Inbox until your team picks it up. If you set an away message in [Settings](/docs/guide/settings), customers who write to your team outside business hours receive it.
+</Accordion>
+<Accordion title="Can I stop the agent talking about a topic?">
+Yes. Add the topic under topics it stays away from, and the agent politely declines anything about it. For single words or phrases, add them to the words it never says.
+</Accordion>
+<Accordion title="Can I write my own handover message?">
+Yes. Choose **My own message** and write up to 300 characters. It is sent exactly as written, in one language, so Meta's standard message is the better choice if your agent speaks several languages.
+</Accordion>
+<Accordion title="Does the agent answer while my team holds the chat?">
+No. Once a chat is handed over or someone on your team replies, the agent stays quiet until you hand the chat back to the AI agent.
+</Accordion>
+</Accordions>

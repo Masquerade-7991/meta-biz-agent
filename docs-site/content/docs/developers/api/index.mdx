@@ -16,7 +16,7 @@ curl https://your-console.example/api/tickets \
   -H "Authorization: Bearer $HELO_API_TOKEN"
 ```
 
-Create one in the console under **Settings › API tokens** ([how](/docs/guide/settings#api-tokens)). A token acts as you, in one workspace, with your current role. It's shown once, and only its hash is stored. It stops working when it expires, when it's revoked, or when you leave the workspace. A wrong or dead token gets `401` with the title `Invalid API token`.
+Create one in the console under **Settings › API tokens** ([how](/docs/guide/settings#api-tokens)). A token acts as you, in one workspace, with your current role. It's shown once, and only its hash is stored. It stops working when it expires, when it's revoked, when you change your password, or when you leave the workspace. A wrong or dead token gets `401` with the title `Invalid API token`.
 
 A token can read account routes but can't change them (password, email, workspaces, tokens). Those need the session cookie `sid`, which the console itself uses (`POST /api/auth/login`).
 
@@ -26,7 +26,7 @@ A token can read account routes but can't change them (password, email, workspac
 
 1. Pick a server. **Your console** takes your console's address; **localhost:8787** is the API server when you're [running locally](/docs/developers/running-locally).
 2. Paste your token into **Authorization**. It's kept in this browser only.
-3. Fill in the fields and press **Send** (⌘↵).
+3. Fill in the fields and click **Send** (⌘↵).
 
 Requests are real: a POST, PUT or DELETE changes data in that workspace. Sample contacts (`sample: true`) never reach Meta.
 
@@ -36,7 +36,7 @@ The console answers browsers on other sites only if they're listed in its `DOCS_
 
 ## Roles
 
-Owner › Admin › Supervisor › Agent. Each route says the lowest role that may call it.
+From most to least access: Owner, Admin, Supervisor, Agent. Each route says the lowest role that may call it.
 
 ## Errors
 

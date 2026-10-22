@@ -1,9 +1,9 @@
 ---
 title: Inbox
-description: Every customer chat, who is answering it, and how your team replies, takes over and hands back.
+description: See every customer chat and who is answering it, then reply, take over from the AI agent or hand back.
 ---
 
-The inbox is where your team reads customer chats, takes them over from the AI agent, and replies.
+The inbox is where your team reads customer chats, takes them over from the AI agent and replies.
 
 ![The inbox: chat list on the left, the conversation in the middle, customer details on the right](/screens/inbox.webp)
 
@@ -12,9 +12,9 @@ There is one chat per customer phone number. A chat appears when a customer mess
 ## Before you start
 
 - Any signed-in member can use the inbox. What you can do beyond reading depends on your role (see the table below).
-- Your WhatsApp number must be connected. See [Connect a number](/docs/guide/connect-number).
+- Your WhatsApp number must be connected. See [Connect a WhatsApp number](/docs/guide/connect-number).
 
-| Action | Agent | Supervisor | Admin / Owner |
+| Action | Agent (team member) | Supervisor | Admin / Owner |
 | --- | --- | --- | --- |
 | Read and reply to chats you can see | Yes | Yes | Yes |
 | Assign a chat to yourself or give it up | Yes | Yes | Yes |
@@ -47,13 +47,13 @@ A chat is held by either the AI agent or your team, never both.
 | --- | --- | --- |
 | Who answers new messages | The AI agent | A person |
 | Badge in the list | **AI** | **Team** |
-| Ticket | Opens only when the AI hands the chat over | One open ticket while people work on it |
+| Ticket | Opens only when the agent hands the chat over | One open ticket while people work on it |
 
 The AI agent hands a chat to your team on its own when it's unsure, something seems wrong, or the customer asks for a person.
 
 ### Take over
 
-Select **Take over**. You answer instead of the AI, the chat is assigned to you if nobody has it, and a ticket opens if one isn't open already. A line in the chat records who took over.
+Click **Take over**. You answer instead of the agent, the chat is assigned to you if nobody has it, and a ticket opens if one isn't open already. A line in the chat records who took over.
 
 ![A chat after taking over, with the reply box and the ticket in the side panel](/screens/inbox-takeover.webp)
 
@@ -61,15 +61,15 @@ Replying without taking over first has the same effect: sending a message moves 
 
 ### Hand back to the AI
 
-Select **Hand back to AI**. The AI agent answers the customer's next message and the chat's ticket is resolved (no rating question is sent). You can also hand back while sending, from the arrow next to **Send**: **Send and hand back to AI**.
+Click **Hand back to AI**. The agent answers the customer's next message and the chat's ticket is resolved (no rating question is sent). You can also hand back while sending, from the arrow next to **Send**: **Send and hand back to AI**.
 
-If the customer writes again after the hand-back, a new ticket opens only when people take the chat again. See [Tickets](/docs/guide/tickets) for the full lifecycle.
+If the customer writes again after you hand the chat back, the agent answers, and a new ticket opens only when your team takes the chat again. See [Tickets](/docs/guide/tickets) for the full lifecycle.
 
 ## Reply
 
 1. Open a chat.
 2. Type in the box. The **Reply** tab is for the customer; **Internal note** is seen only by your team.
-3. Select **Send**.
+3. Click **Send**.
 
 The arrow next to **Send** offers three shortcuts that also update the ticket: **Send and resolve**, **Send and wait on customer**, and **Send and hand back to AI**. The first two need an open ticket.
 
@@ -81,16 +81,15 @@ Other tools above the box:
 - The paperclip attaches a file. You can also drop a file onto the chat.
 - The emoji picker inserts emoji.
 
-
 ### Canned responses and macros
 
 A canned response is a saved reply. Type its shortcut (for example `/refund`) in the reply box and pick it from the list. Create them in **Settings › Canned responses** with a name, a shortcut and the message. You can use the customer's name with `{{name}}`.
 
-A canned response can also act on the ticket after it's sent (a macro). Under **After sending**, choose to resolve the ticket or wait on the customer, set a priority, add tags, or hand the chat back to the AI. The composer shows what will happen and lets you **Skip** it.
+A canned response can also act on the ticket after it's sent (a macro). Under **After sending**, choose to resolve the ticket or wait on the customer, set a priority, add tags, or hand the chat back to the agent. The composer shows what will happen and lets you **Skip** it.
 
 ### Files you can send
 
-The console checks a file before it uploads, using WhatsApp's limits.
+The console checks each file against WhatsApp's limits before uploading it.
 
 | Type | Formats | Largest size |
 | --- | --- | --- |
@@ -109,9 +108,9 @@ You can send free-form messages only within 24 hours of the customer's last mess
 
 The console shows this in three places:
 
-- A chip in the chat header reads **Free replies for 2h 10m**. It turns amber in the last hour and reads **Reply window closed** after.
+- A chip in the chat header reads **Free replies for 2h 10m**. It turns amber in the last hour and reads **Reply window closed** afterwards.
 - The customer details panel shows **Reply window**: **Open until** a time, or **Closed. Templates only.**
-- Once the window is closed, the reply box is replaced by a notice and **Send a template**. Choose an approved template, fill in its values and send. When the customer answers, you can chat freely again.
+- Once the window is closed, the reply box is replaced by a notice and **Send a template**. Pick an approved template, fill in its values and send it. When the customer answers, you can chat freely again.
 
 Use the **Closing soon** filter to catch chats before the window ends.
 
@@ -129,14 +128,14 @@ Your own messages show ticks beside the time:
 | Two ticks | Delivered to the customer's phone. |
 | Two blue ticks | Read by the customer. |
 
-Sending a message only tells you WhatsApp accepted it. Delivery arrives afterwards, so ticks can take a moment. If a message never reaches the customer, WhatsApp reports it as failed, sometimes after a short delay. Read ticks also depend on the customer's own privacy settings, so a missing blue tick doesn't always mean unread.
+When a message is sent, you only know that WhatsApp accepted it. Delivery is reported afterwards, so ticks can take a moment. If a message never reaches the customer, WhatsApp reports it as failed, sometimes after a short delay. Read ticks also depend on the customer's own privacy settings, so a missing blue tick doesn't always mean unread.
 
 <small>Source: [Meta — Message status webhooks](https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/status)</small>
 
 ## Assign, snooze and remind
 
 - **Assign:** use the **Assign to** menu in the header. The chat's open ticket follows the new person. Agents can take a chat or give up their own; moving someone else's work needs a supervisor, admin or owner.
-- **Later:** set a chat aside. Choose **In 1 hour**, **This evening (6 pm)**, **Tomorrow morning (9 am)**, **Next Monday (9 am)** or **Pick a time**. Snoozed chats leave the main list and show under **Snoozed**. A snooze ends early if the customer writes again.
+- **Later:** set a chat aside (snooze it). Click **In 1 hour**, **This evening (6 pm)**, **Tomorrow morning (9 am)**, **Next Monday (9 am)** or **Pick a time**. Snoozed chats leave the main list and show under **Snoozed**. A snooze ends early if the customer writes again.
 - **Remind me about it:** also under **Later**, set a time and a note. You get a reminder when it's due.
 
 ## Customer details
@@ -150,11 +149,11 @@ The panel on the right (open it with **Details** on narrow screens) shows:
 
 ### Block a customer
 
-Admins and owners can open the **More actions** menu and choose **Block on WhatsApp**. After you confirm:
+Admins and owners can open the **More actions** menu and click **Block on WhatsApp**. After you confirm:
 
 - The customer can't message your number.
 - The customer can't see your number online, and you can't message them.
-- A **Blocked** badge appears on the chat. Choose **Unblock on WhatsApp** to reverse it.
+- A **Blocked** badge appears on the chat. Click **Unblock on WhatsApp** to reverse it.
 
 WhatsApp only lets you block someone who messaged you in the last 24 hours, and never another WhatsApp Business account or your own number. The block list holds up to 64,000 numbers.
 
@@ -166,7 +165,7 @@ Supervisors, admins and owners always see every chat. By default agents see ever
 
 ## Teach the agent from a chat
 
-Hover over an AI reply and select **Teach the agent**. Write the question as a customer would ask it and the answer you want, then select **Save as FAQ**. The agent answers from that FAQ next time. The FAQ is saved with your agent's other FAQs, where you can edit it.
+Hover over a reply from the agent and click **Teach the agent**. Write the question as a customer would ask it and the answer you want, then click **Save as FAQ**. The agent answers from that FAQ next time. The FAQ is saved with your agent's other FAQs, where you can edit it.
 
 ## Good to know
 
@@ -178,9 +177,29 @@ Hover over an AI reply and select **Teach the agent**. Write the question as a c
 
 | What you see | What to do |
 | --- | --- |
-| "WhatsApp only allows free replies within 24 hours of the customer's last message. Send a template instead." | The window has closed. Choose **Send a template**. |
+| "WhatsApp only allows free replies within 24 hours of the customer's last message. Send a template instead." | The reply window has closed. Click **Send a template**. |
 | "That file is 6.2 MB. WhatsApp allows images (JPG, PNG) up to 5 MB." | Shrink the file or send it as a document. |
 | "WhatsApp can't send this kind of file." | Use one of the formats in the table above. |
 | "This chat is assigned to someone else." | Ask a supervisor to reassign it, or ask for the chat to be unassigned. |
 | "Owners and admins block customers." | Ask an admin or owner. |
-| Take over fails with a message from WhatsApp | Another app may hold the chat. Try again, or check that your number is connected under **Assets › Account**. |
+| Take over fails with a message from WhatsApp | Another app may hold the chat. Try again. If it keeps failing, ask an owner to check that your number is connected under **Assets › Account**. |
+
+## Frequently asked questions
+
+<Accordions type="single">
+<Accordion title="Why can't I type a reply?">
+The chat's 24-hour reply window has closed, so the reply box is replaced by **Send a template**. Send an approved template, and when the customer answers you can reply freely again. See [The 24-hour reply window](#the-24-hour-reply-window).
+</Accordion>
+<Accordion title="Does the AI agent keep answering after I reply?">
+No. Sending a message moves the chat to your team, and the agent stays quiet until someone clicks **Hand back to AI**. See [Who holds a chat](#who-holds-a-chat).
+</Accordion>
+<Accordion title="Does Suggest reply send anything to the customer?">
+No. It puts the agent's suggested answer in the reply box for you to edit and send yourself. It isn't available once the reply window has closed.
+</Accordion>
+<Accordion title="Can the customer see internal notes?">
+No. Anything written on the **Internal note** tab stays in the console for your team. Only messages sent from the **Reply** tab reach WhatsApp.
+</Accordion>
+<Accordion title="Why does a message say WhatsApp couldn't deliver it?">
+WhatsApp refused it, and the line in the chat gives the reason, such as a closed reply window or a customer who turned off marketing messages. See [Messages that didn't go out](/docs/guide/troubleshooting#messages-that-didnt-go-out).
+</Accordion>
+</Accordions>

@@ -9,7 +9,7 @@ Testing is free and doesn't message any real customer. It works even while the a
 
 ## Before you start
 
-- At least some knowledge or a skill. Without them the console shows "Your agent has nothing to go on yet. Add knowledge or a skill first, then test it here."
+- The agent needs at least some knowledge or a skill. Without either, the console shows "Your agent has nothing to go on yet. Add knowledge or a skill first, then test it here."
 
 ## The test chat
 
@@ -20,15 +20,15 @@ Open **Test & Eval** and stay on the **Chat** tab.
 <Steps>
 <Step>
 ### Ask something
-Type a question as a customer would, or tap one of the **Try asking** suggestions, such as "What do you sell?", "Can I talk to a person?" or "Where is my order?".
+Type a question as a customer would, or click one of the **Try asking** suggestions, such as "What do you sell?", "Can I talk to a person?" or "Where is my order?".
 </Step>
 <Step>
 ### Look behind the scenes
-The panel beside the chat shows what happened for the selected reply. If a tool ran, you see it here; if not, there is a link to Connections.
+The panel beside the chat shows what happened for the selected reply. If a tool ran, you see it here. If not, the panel links to Connections.
 </Step>
 <Step>
 ### Start over when you like
-**New conversation** clears the chat so the agent starts fresh.
+**New conversation** clears the chat, so the agent starts fresh.
 </Step>
 </Steps>
 
@@ -38,17 +38,21 @@ You can send up to 500 test messages an hour on each number. Test chats are not 
 
 ### Past test conversations
 
-Press **History** to open earlier test chats, each with its first message, date and number of messages. Open one to read it; **Back to testing** returns you to a live chat.
+Click **History** to open earlier test chats. Each one shows its first message, its date and how many messages it has. Open one to read it. **Back to testing** takes you back to a live chat.
 
 ### Try it from anywhere
 
-You don't have to open Test & Eval each time. **Try it** at the top of every studio section opens a quick chat panel ("Try your agent"). It uses the same free test, so you can check a change right after making it. It adds a note when a person on your team would take over, or when Meta's agent couldn't answer. The full chat, checks and details stay in Test & Eval. **Start a new conversation** (the arrow icon) clears the panel.
+You don't have to open Test & Eval each time. **Try it** at the top of every studio section opens a quick chat panel ("Try your agent"). It uses the same free test, so you can check a change right after making it.
+
+- The panel adds a note when a person on your team would take over, or when Meta's agent couldn't answer.
+- **Start a new conversation** (the arrow icon) clears the panel.
+- The full chat, checks and details stay in Test & Eval.
 
 ## Standard checks
 
-The **Standard checks** tab sends common situations to your real agent for you: a question from your FAQ, something outside what you sell, asking for a person, and a configured action if you have one.
+The **Standard checks** tab sends common situations to your real agent for you: a question from your FAQ, something outside what you sell, a request for a person and, if you have one, a configured action.
 
-Press **Run standard checks**. Each situation is marked **Answered** or **Check this**. Open one to see what was sent and how the agent replied. **Check this** doesn't always mean a problem: it means the reply deserves a look.
+Click **Run standard checks**. Each situation is marked **Answered** or **Check this**. Open one to see what was sent and how the agent replied. **Check this** doesn't always mean there's a problem; it means the reply deserves a look.
 
 ## Evaluation
 
@@ -57,15 +61,15 @@ The **Evaluation** tab runs scored scenarios against your agent, with Meta playi
 <Steps>
 <Step>
 ### Pull the cases
-Press **Pull eval cases**. Meta generates the scenarios from the business category set on your WhatsApp Business account. Meta doesn't let you write your own scenarios yet.
+Click **Pull eval cases**. Meta generates the scenarios from the business category set on your WhatsApp Business account. Meta doesn't let you write your own scenarios yet.
 </Step>
 <Step>
 ### Start one
-Open a card to see how many turns it runs and what the agent must do to pass. Press **Start eval**. The card moves through "Simulating the conversation", "Scoring the conversation" and "Finding patterns".
+Open a card to see how many turns the scenario runs and what the agent must do to pass. Click **Start eval**. The card moves through "Simulating the conversation", "Scoring the conversation" and "Finding patterns".
 </Step>
 <Step>
 ### Read the result
-You get a score out of 5, what went well, the top reasons for any failure, and where the agent struggled. **View full conversation** shows the whole simulated chat.
+You get a score out of 5, what went well, the top reasons for any failure and where the agent struggled. **View full conversation** shows the whole simulated chat.
 </Step>
 </Steps>
 
@@ -73,8 +77,8 @@ You get a score out of 5, what went well, the top reasons for any failure, and w
 
 ## Good to know
 
-- Test each language you have enabled. Meta says English is where the agent is strongest.
-- Sending a test message marks "Try it in Test & Eval" as done on the Go live checklist.
+- Test each language you have turned on. Meta says the agent is strongest in English.
+- Sending a test message marks "Try it in Test & Eval" as done on the **Go live** checklist.
 
 ## If something goes wrong
 
@@ -82,6 +86,26 @@ You get a score out of 5, what went well, the top reasons for any failure, and w
 | --- | --- |
 | **The agent didn't answer** | Meta's side had an error. Send the message again. |
 | **Couldn't reach the agent** | The console couldn't connect. Try again in a moment. |
-| **Testing is temporarily at capacity across the platform. Try again later.** | The shared limit was hit. Wait and retry. |
+| **Testing is temporarily at capacity across the platform. Try again later.** | The shared limit was reached. Wait, then try again. |
 | **Evaluation failed.** | The scenario didn't complete. Start it again. |
-| **Meta has no eval cases for this number yet.** | Nothing to run for this number yet. |
+| **Meta has no eval cases for this number yet.** | There is nothing to run for this number yet. |
+
+## Frequently asked questions
+
+<Accordions type="single">
+<Accordion title="Does testing cost money?">
+No. Test chats in Test & Eval and the **Try it** panel are free, and they never message a real customer. Chats from a real phone on your test numbers go through WhatsApp itself, and they work without a payment method; see [Publish and go live](/docs/guide/build-agent/publish#payment-method-for-everyone).
+</Accordion>
+<Accordion title="Why didn't my test number get a reply on my phone?">
+Check that the number is on the list under **Who your agent answers**, with its country code, and that the agent isn't **Paused**. See [Publish and go live](/docs/guide/build-agent/publish).
+</Accordion>
+<Accordion title="Can I see which tool the agent used?">
+Yes. Click a reply in the test chat, and the panel beside it shows the tool that ran. Tool details can take a second to appear after the reply.
+</Accordion>
+<Accordion title="Can I write my own evaluation scenarios?">
+Not yet. Meta generates the cases from your business category when you click **Pull eval cases**. Use the test chat for your own questions.
+</Accordion>
+<Accordion title="Is there a limit on test messages?">
+Yes: up to 500 test messages an hour on each number. If the whole platform is busy, the console says testing is at capacity; wait and try again.
+</Accordion>
+</Accordions>

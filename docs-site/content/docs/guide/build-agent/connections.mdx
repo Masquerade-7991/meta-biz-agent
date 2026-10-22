@@ -3,78 +3,82 @@ title: Connections
 description: Let the agent look things up and take actions in your own systems, such as your store or booking tool.
 ---
 
-Connect a system that has an API, so the agent can check other methods to bring in data instead of only answering from its knowledge.
+Connect a system that has an API, so the agent can look things up and take actions there, instead of only answering from its knowledge.
 
 ![The Connections section listing a connection and its tools](/screens/studio-connections.webp)
 
 ## Before you start
 
-- The system's web address (starting with `https://`) and a key or credentials. You may want your developer nearby: the form has **Copy a checklist for your developer**, listing exactly what to find.
+- You need the system's web address (starting with `https://`) and a key or other credentials. You may want your developer nearby. The form has **Copy a checklist for your developer**, which lists exactly what to find.
 - The system must be reachable on the public internet over HTTPS.
 
-The **Connections** section has three tabs: **Your systems**, **Ready-made** and **Business events**. Ready-made one-click connections to popular tools are on the way; until then, use **Your systems** for anything with an API.
+The **Connections** section has 3 tabs: **Your systems**, **Ready-made** and **Business events**. Ready-made, one-click connections to popular tools are on the way. Until then, use **Your systems** for anything with an API.
 
 ## How it fits together
 
 - A **connection** is one system, such as your online store.
-- A **tool** is one request the agent can make to it, such as "look up an order".
+- A **tool** is one request the agent can make to that system, such as "look up an order".
 
 ## Steps
 
 <Steps>
 <Step>
 ### Connect a system
-Press **Connect a system**.
+Click **Connect a system**.
 
-- **Name**: type it the way you'd say it, for example "Shopify store". Meta only accepts letters, numbers and underscores, so the form shows what it's saved as (`Shopify_store`).
-- **What is it for?** One sentence. The agent reads it to decide when this system can help.
-- **Address**: choose **API**, where you add each request the agent can make, or **MCP server**, where the server lists its own tools. Then enter the base address every request starts with, including any version. It must start with `https://`.
+- **Name:** type it the way you'd say it, for example "Shopify store". Meta only accepts letters, numbers and underscores, so the form shows the name it's saved as (`Shopify_store`).
+- **What is it for?** Write one sentence. The agent reads it to decide when this system can help.
+- **Address:** choose **API**, where you add each request the agent can make, or **MCP server**, where the server lists its own tools. Then enter the base address that every request starts with, including any version. It must start with `https://`.
 </Step>
 <Step>
 ### Choose how it signs in
-- **Access key**: a key or token. In **Send as**, choose **Bearer token** (the most common), **Custom header** or **URL parameter**. For a header or parameter, name it exactly as the system's documents say (for example `X-Shopify-Access-Token`). Paste the key. If the system wants text before the key, choose **Add text before the key**. **Another key** adds a second one.
-- **OAuth (client credentials)**: a token address, client ID and secret, optional scopes, and whether the token request is form-encoded (most systems) or JSON.
-- **None**: public systems only. Anyone can call such a system without a key, so use it only for public information.
+- **Access key:** a key or token. In the dropdown next to the key, choose **Bearer token** (the most common), **Custom header** or **URL parameter**. For a header or a parameter, name it exactly as the system's documentation says (for example `X-Shopify-Access-Token`). Paste the key. If a header needs text before the key, click **Add text before the key**. **Another key** adds a second key.
+- **OAuth (client credentials):** a token address, a client ID and secret, optional scopes, and whether the token request is form-encoded (most systems) or JSON.
+- **None:** for public systems only. Anyone can call such a system without a key, so use it only for public information.
 </Step>
 <Step>
 ### Create the connection
-Press **Connect**. Problems show under each field once you've filled it in, or all together when you press **Connect**.
+Click **Connect**. Problems show under each field once you've filled it in, or all together when you click **Connect**.
 </Step>
 <Step>
 ### Add a tool
-Open the connection and press **Add tool**. For an MCP server, press **Refresh tools** instead and the server lists them.
+Open the connection and click **Add tool**. For an MCP server, click **Refresh tools** instead, and the server lists its tools.
 
-- **Name**: type it the way you'd say it, for example "look up order". It's saved as `look_up_order`.
-- **When should the agent use it?** Be specific: when to use it, what it needs and what it returns.
-- **Request**: the method (colour-coded: GET green, POST blue, PUT and PATCH amber, DELETE red), and the path after the base address. Put changing parts in curly brackets, like `/orders/{order_id}`. Each one appears under **From the path**.
-- **Values it sends**: the tabs **Params** (added to the address, like `?limit=3`), **Headers** and **Body** (JSON; not for GET). Each value is one line: its name, its type, and how it's filled. Click how it's filled to choose: the agent takes it from the chat (say what to take, and whether it's required), it's always the same value, or it's the customer's WhatsApp number.
-- **More** holds an optional example customer question, shown in Test & Eval so you can try the tool with one tap.
+- **Name:** type it the way you'd say it, for example "look up order". It's saved as `look_up_order`.
+- **When should the agent use it?** Be specific: when to use the tool, what it needs and what it returns.
+- **Request:** the method (colour-coded: GET green, POST blue, PUT and PATCH amber, DELETE red) and the path after the base address. Put the parts that change in curly brackets, like `/orders/{order_id}`. Each one appears under **From the path**.
+- **Values it sends:** the tabs **Params** (added to the address, like `?limit=3`), **Headers** and **Body** (JSON; not for GET). Each value is one line: its name, its type and how it's filled. Click how it's filled to choose: the agent takes it from the chat (say what to take, and whether it's required), it's always the same value, or it's the customer's WhatsApp number.
+- **More** holds an optional example customer question. Test & Eval shows it, so you can try the tool with one click.
 
-Press **Save and test** to save and try it straight away, or choose **Save without testing** from the arrow next to it.
+Click **Save and test** to save the tool and try it straight away, or choose **Save without testing** from the arrow next to it.
 </Step>
 <Step>
 ### Test it
-Press **Test** next to a tool, fill in sample values and run it. It sends the real request with your saved key. It doesn't message any customer. You see whether it worked, how long it took, and the answer.
+Click **Test** next to a tool, fill in sample values and run it. It sends the real request with your saved key, but it doesn't message any customer. You see whether it worked, how long it took and the answer.
 </Step>
 </Steps>
 
 ## Keys
 
-- A saved key is never shown again. The edit form shows only the last characters, for example "Saved key ends in ...".
-- Keys live with Meta, not in your browser.
-- Editing a connection without changing its sign-in leaves the saved keys alone. If you change the sign-in method, you must enter every key again.
+- A saved key is never shown again. The edit form shows only its last characters, for example "Saved key ends in …".
+- Keys are stored with Meta, not in your browser.
+- If you edit a connection without changing its sign-in, the saved keys stay as they are. If you change the sign-in method, you must enter every key again.
 
 ## Connection status
 
 | Status | Meaning |
 | --- | --- |
-| **Working** | Recent calls succeeded. |
-| **Failing** | Recent calls failed. Choose **See errors**. |
-| **Not tested yet** | Test a tool to check it works. |
+| **Active** | The connection is working. |
+| **Error** | Recent calls failed. Click **See errors**. |
+| **Expired** | The system stopped accepting the key. Some systems, such as Shopify, issue tokens that expire after about a day. Click **Replace key**. |
+| **OAuth Pending** | Not connected yet, because it needs its key. |
+| **Not tested yet** | Test a tool to check that it works. |
 
-Other notes under the status: "Not connected yet: it needs its key", and "The system stopped accepting the key". Some systems, such as Shopify, issue tokens that expire after about a day. Open the connection's menu for **Errors and stats**, **Edit connection** or **Delete connection**. Deleting a connection removes its tools, and the agent stops using them straight away.
+A connection that isn't saved to Meta yet shows "Not saved to Meta yet. Edit and save it to use it."
 
-**Errors and stats** shows the last 7 days. Meta keeps only failed calls, so successful chats count in the totals but not in the list.
+Open the connection's menu for **Errors and stats**, **Edit connection** or **Delete connection**. Deleting a connection removes its tools, and the agent stops using them straight away.
+
+**Errors and stats** covers the last 7 days. Meta keeps only failed calls, so successful calls count in the totals but don't appear in the list.
 
 <small>Source: [Meta — Connectors](https://developers.facebook.com/documentation/meta-business-agent/reference/configure/connectors)</small>
 
@@ -82,16 +86,36 @@ Other notes under the status: "Not connected yet: it needs its key", and "The sy
 
 - Names must be unique. Meta allows only letters, numbers and underscores, so spaces and dashes become underscores when you save.
 - Many similar tools make it harder for the agent to pick the right one. Fewer, clearly described tools work better.
-- A tool can show success while the other system reported a failure. The test result shows what the system actually answered.
+- A tool can show success even when the other system reported a failure. The test result shows what the system actually answered.
 
 ## If something goes wrong
 
 | Message | What to do |
 | --- | --- |
-| **Use some letters or numbers in the name.** | A name written only in another script or symbols has nothing Meta accepts. Add some Latin letters or numbers. |
+| **Use some letters or numbers in the name.** | A name written only in another script, or only in symbols, has nothing Meta accepts. Add some Latin letters or numbers. |
 | **Use a full https:// address** | The address must start with `https://`. |
 | **Something with this name already exists here. Choose another name.** | Pick a different name. |
-| **Meta didn't accept the connection...** | Check the name, that the address starts with `https://`, and that every key is filled in. |
-| **Enter this key again: changing sign-in sends every key afresh.** | Re-enter all keys. |
-| **Save the connection first.** | A tool can only be tested once its connection is saved. |
-| **Couldn't run the test** | Read the detail shown. A 401 or 403 means the key is wrong or expired; update it. A 5xx means the other system had an error. |
+| **Meta didn't accept the connection…** | Check the name, check that the address starts with `https://`, and check that every key is filled in. |
+| **Enter this key again: changing sign-in sends every key afresh.** | Enter all the keys again. |
+| **Save the connection first.** | You can only test a tool once its connection is saved. |
+| **Couldn't run the test** | Read the detail shown. A 401 or 403 means the key is wrong or has expired, so update it. A 5xx means the other system had an error. |
+
+## Frequently asked questions
+
+<Accordions type="single">
+<Accordion title="Are my API keys safe?">
+Keys are stored with Meta, not in your browser, and a saved key is never shown again; the form shows only its last characters. See [Keys](#keys).
+</Accordion>
+<Accordion title="Why did a tool run say success when it failed?">
+Meta can report that the request ran even when your system answered with an error. The test result shows what the system actually answered, so read it there.
+</Accordion>
+<Accordion title="What are the naming rules?">
+Meta accepts only letters, numbers and underscores, and each name must be unique. Type the name the way you'd say it; the form shows what it's saved as, with spaces and dashes turned into underscores.
+</Accordion>
+<Accordion title="Should I choose API or MCP server?">
+Choose **API** if you want to describe each request yourself. Choose **MCP server** if your system runs an MCP server, which lists its own tools when you click **Refresh tools**.
+</Accordion>
+<Accordion title="Does testing a tool message my customers?">
+No. **Test** sends the real request to your system with your saved key, but it never messages a customer. It can still change data in your system, for example if the tool creates a booking.
+</Accordion>
+</Accordions>

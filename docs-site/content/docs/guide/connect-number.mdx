@@ -3,172 +3,156 @@ title: Connect a WhatsApp number
 description: Bring your number into Helo.ai through Meta's own signup, and what to do after.
 ---
 
-Connecting links your WhatsApp number to your workspace so your AI agent and team can answer customers on it.
+Connecting links your WhatsApp number to your workspace, so your AI agent and your team can answer customers on it.
 
 ## Before you start
 
-- **Role:** only a workspace **owner** can connect numbers. For everyone else the **Connect** button is greyed out with "Only owners connect numbers."
-- **A Facebook login** with admin access to your business on Meta.
-- **The number.** A new number that can receive a text or call and isn't on WhatsApp yet, the phone that has your WhatsApp Business app, or a number you use with another WhatsApp provider.
-- **Payment.** Messages are billed through Helo.ai when your plan includes it. Otherwise you add a payment method in WhatsApp Manager afterwards ([Assets › Account](#the-account-tab) shows the step).
+- **Role:** only a workspace **owner** can connect numbers. For everyone else, the **Connect** button is greyed out with "Only owners connect numbers."
+- **A Facebook login:** one with admin access to your business on Meta.
+- **The number:** a new number that can receive a text or a call and isn't on WhatsApp yet, the phone that has your WhatsApp Business app, or a number that works with another WhatsApp provider today. [Which numbers you can add](/docs/guide/whatsapp-assets#which-numbers-you-can-add) has the details.
+- **Payment:** messages are billed through Helo.ai when your plan includes it. Otherwise, you add a payment method in WhatsApp Manager afterwards ([Assets › Account](#the-account-tab) shows the step).
 
-<small>Source: [Meta — phone numbers](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/phone-numbers)</small>
+<small>Source: [Meta — Business phone numbers](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/phone-numbers)</small>
 
 ## Steps
 
-Click **Connect** on Home or on the WhatsApp page (**Assets** in the sidebar).
+Click **Connect** on Home or on the **Assets** page.
 
 ![The Connect your WhatsApp number dialog with its three choices](/screens/connect-number.webp)
 
 <Steps>
 <Step>
 
-**Pick the kind of number:** **New number**, **WhatsApp Business app number** (you keep using the app; chats and contacts sync here) or **Move from another provider**.
+**Pick the kind of number:** **New number**, **WhatsApp Business app number** (you keep using the app, and chats and contacts sync here) or **Already with another provider**.
 
 </Step>
 <Step>
 
-**Read what to know and tick each box.** **Connect** turns on once every box is ticked. Use the back arrow to pick again.
+**Read what to know and tick each box.** **Connect** turns on once every box is ticked. To pick again, click the back arrow.
 
 | Kind | You confirm |
 | --- | --- |
 | New number | The number isn't using WhatsApp, and you're ready to receive a code. |
 | WhatsApp Business app number | The number is on the WhatsApp Business app, and you have the phone with you. |
-| Move from another provider | You've turned off two-step verification (your current provider can do it), and you're ready to receive a code. The display name, quality rating and messaging limit stay; message history doesn't move, and the number stops working with your old provider. |
+| Already with another provider | The number works with another provider today, and you'll use this number in Meta's signup. The number doesn't move, your chats carry on, and your current provider can stay on it. Templates stay with your current provider, because Helo.ai gets its own Messaging account. |
 
 </Step>
 <Step>
 
-**Click Connect** and finish Meta's signup (about 5 minutes). Depending on your setup it opens in a window, and this page updates by itself (allow pop-ups for the site), or in this tab.
+**Click Connect** and finish Meta's signup (about 5 minutes). Depending on your setup, it opens either in a window, and this page updates by itself (allow pop-ups for the site), or in this tab.
 
 </Step>
 <Step>
 
-**Helo.ai finishes the connection.** You see **WhatsApp connected**, and for a new number your **two-step PIN**. If a step still needs you, the dialog links to **Assets › Account**.
+**Helo.ai finishes the connection.** You see **WhatsApp connected** and, for a new number, your **two-step PIN**. If a step still needs you, the dialog links to **Assets › Account**.
 
 </Step>
 </Steps>
 
 If Meta's signup opens in this tab, Helo.ai completes the connection on its side after you finish, and the number appears in your workspace.
 
+<small>Source: [Meta — Updates to WhatsApp Business accounts](https://developers.facebook.com/documentation/business-messaging/whatsapp/account-model-evolution#phone-number-migration), [Meta — WhatsApp accounts and Messaging accounts](https://developers.facebook.com/documentation/business-messaging/whatsapp/whatsapp-business-accounts#share-your-account-with-a-partner)</small>
+
 ### How Meta's pieces land in Helo.ai
 
 | From Meta | Lands in Helo.ai as |
 | --- | --- |
-| Business portfolio | The business behind your workspace |
+| Business portfolio | The business behind your workspace. |
 | WhatsApp Business account | The account on **Assets › Account**. Its access is stored encrypted. Messages reach Helo.ai through a listening app, and your own webhook stays as it is. |
-| Phone number | A number on the WhatsApp page. A new number is registered with a PIN Helo.ai keeps for you and can run one AI agent. A Business app number keeps working on your phone. |
+| Phone number | A number on the **Assets** page. A new number is registered with a PIN that Helo.ai keeps for you, and it can run one AI agent. A Business app number keeps working on your phone. |
 | Permissions you grant | Helo.ai manages the account and sends messages for you. Meta never shares your login or payment details. |
 
-After you connect, **Assets › Account** shows this map with the details Meta reported.
+After you connect, **Assets › Account** shows this map with the details Meta reported. [WhatsApp assets](/docs/guide/whatsapp-assets) explains each piece in plain words.
 
 ## What Meta's signup asks you
 
-In Meta's own screens you will:
+In Meta's own screens, you:
 
 1. Sign in with Facebook and accept the terms.
 2. Choose or create your business portfolio and WhatsApp Business account.
-3. Add the phone number and choose how to get the code (text or call), then enter it.
+3. Add the phone number, choose how to get the code (text or call) and enter it.
 4. Enter the display name for the number.
 5. Review the permissions you give Helo.ai, then finish.
 
 This is Meta's page, not ours, so your login stays with Meta. Meta shows it in many languages.
 
-<small>Source: [Meta — Embedded Signup overview](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/overview), [Meta — default flow](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/default-flow)</small>
+<small>Source: [Meta — Embedded Signup overview](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/overview), [Meta — Default flow](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/default-flow)</small>
 
 ## Using your WhatsApp Business app number
 
-This is called **coexistence**. In Meta's signup you choose to connect your existing Business app account, enter your number, and copy the code shown. Then you open the message from Meta in the app and confirm the connection, agree (or not) to share chat history, and paste the code back. You need a recent version of the Business app (2.24.17 or newer).
+This is called **coexistence**. In Meta's signup, you choose to connect your existing Business app account, enter your number and copy the code shown. Then you open the message from Meta in the app, confirm the connection, choose whether to share your chat history and paste the code back. You need version 2.24.17 or newer of the Business app.
 
 | | |
 | --- | --- |
-| **Keeps working** | One-to-one chats in the app. Messages sync both ways. Supported linked devices. Editing and revoking messages in one-to-one chats. |
+| **Keeps working** | One-to-one chats in the app, with messages synced both ways. Supported linked devices. Editing and revoking messages in one-to-one chats. |
 | **Syncs to Helo.ai** | All your contacts that have a WhatsApp number, and about 6 months of one-to-one chat history. Groups don't sync. |
-| **Doesn't work alongside the API** | Groups, disappearing and view-once messages, live location, broadcast lists (they become read-only), voice and video calls, catalog, orders and status, the app's greeting, away message, quick replies and labels, and channels. |
+| **Doesn't work alongside the API** | Groups, disappearing and view-once messages, live location, broadcast lists (they become read-only), voice and video calls, catalogue, orders and status, the app's greeting, away message, quick replies and labels, and channels. |
 
 Good to know:
 
 - Messages you send from the app stay free. Messages sent through Helo.ai follow the usual WhatsApp message prices.
-- If you decline to share chat history, the old chats aren't brought over.
+- If you choose not to share your chat history, the old chats aren't brought over.
 - Chats and contacts must be brought over within 24 hours of connecting. If that time passes, the step shows as too late to retry. Your number still works; only the old chats stay on your phone.
-- If you don't open the Business app on your phone for about 14 days, Meta disconnects the number. To disconnect on purpose, use the app: Settings, Account, Business Platform, Disconnect Account.
+- If you don't open the Business app on your phone for about 14 days, Meta disconnects the number. To disconnect on purpose, use the app: **Settings › Account › Business Platform › Disconnect Account**.
 
-<small>Source: [Meta — onboarding WhatsApp Business app users](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users)</small>
+<small>Source: [Meta — Onboarding WhatsApp Business app users](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users)</small>
 
 ## Setup steps
 
-After Meta's signup, Helo.ai runs these steps. Each shows one state:
+After Meta's signup, Helo.ai runs these steps. Each step shows one state.
 
 | Step | What it does |
 | --- | --- |
-| Secure access to your account | Gets access to your account from Meta |
-| Connect your WhatsApp account to Helo.ai | Subscribes the account so messages reach you |
-| Register your number | Turns on messaging for the number (new numbers) |
-| Bring over your chats and contacts | Syncs contacts and history (Business app numbers) |
-| Read your business details | Reads your profile and number details |
-| Set up billing | Billing through Helo.ai, or your own payment method in Meta |
+| Secure access to your account | Gets access to your account from Meta. |
+| Connect your WhatsApp account to Helo.ai | Subscribes the account, so messages reach you. |
+| Register your number | Turns on messaging for the number (new numbers). |
+| Bring over your chats and contacts | Syncs contacts and history (Business app numbers). |
+| Read your business details | Reads your profile and number details. |
+| Set up billing | Billing through Helo.ai, or your own payment method in Meta. |
 
 | State | Meaning |
 | --- | --- |
-| Done (tick) | Finished |
-| Waiting on you (clock) | Needs something from you, usually a payment method |
-| Failed (cross) | Didn't finish. Click **Retry the failed steps** |
-| Too late to retry (cross) | Meta's time for the step passed. There's no Retry |
+| Done (tick) | Finished. |
+| Waiting on you (clock) | Needs something from you, usually a payment method. |
+| Failed (cross) | Didn't finish. Click **Retry the failed steps**. |
+| Too late to retry (cross) | Meta's time for the step has passed, so there's no Retry. |
 
-If billing is waiting on you, click **Add a payment method** to open WhatsApp Manager, add one, then click **I've added it**. Meta bills your business for messages, so the number can't message customers until a payment method is in place.
+If billing is waiting on you, click **Add a payment method** to open WhatsApp Manager and add one there. Then click **I've added it**. Meta bills your business for messages, so add the payment method before the number messages customers. Without one, Meta stops delivering service messages once the number's 1,000 free ones for the month are used.
+
+<small>Source: [Meta — Pricing](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing#free-tier-of-monthly-service-messages)</small>
 
 ## After connecting
 
-### The WhatsApp page
+### The Assets page
 
-![The WhatsApp page listing numbers with status, quality and daily limit](/screens/whatsapp.webp)
+![The Assets page listing numbers with status, quality and daily limit](/screens/whatsapp.webp)
 
-The WhatsApp page (**Assets** in the sidebar) lists your numbers with **Status**, **Quality** and **Daily limit**. Open a number for its tabs: Profile, Display name, Automations (ice breakers and commands), Security, Blocked and Activity.
+The **Assets** page lists your numbers with **Status**, **Quality** and **Daily limit**. Open a number for its tabs: **Profile**, **Display name**, **Automations** (ice breakers and commands), **Security**, **Blocked** and **Activity**. [Managing a number in Assets](/docs/guide/whatsapp-assets#managing-a-number-in-assets) explains each tab.
 
 ### The Account tab
 
 ![Assets › Account with the account card and Live events](/screens/whatsapp-account.webp)
 
-Owners see a third tab on the WhatsApp page, **Account**, next to **Phone numbers** and **Message templates**. It holds what used to be under Settings › WhatsApp:
+Owners see a third tab on the **Assets** page, **Account**, next to **Phone numbers** and **Message templates**. It holds what used to be under **Settings › WhatsApp**:
 
 - **The account:** its name, how it was connected, whether it is **Connected** or **Needs attention**, how it is billed (**Billed through Helo.ai** or **Pays Meta directly**) and its numbers.
-- **Setup steps:** what happened when the account was connected, with a tick for each step that finished. If a step failed you get **Retry the failed steps**. If billing is waiting on you, click **Add a payment method**, add one in Meta's WhatsApp Manager, then click **I've added it** (see [Setup steps](#setup-steps)).
+- **Setup steps:** what happened when the account was connected, with a tick for each step that finished. If a step failed, you get **Retry the failed steps**. If billing is waiting on you, click **Add a payment method**, add one in Meta's WhatsApp Manager, then click **I've added it** (see [Setup steps](#setup-steps)).
 - **How this account maps to Helo.ai:** how your Meta business, WhatsApp account and number are linked to your workspace.
 - **Live events:** how WhatsApp delivers customers' messages, replies and delivery ticks to the console, and which other apps also receive them.
-- **Disconnect:** Helo.ai stops sending and receiving for the account's numbers, so the AI agent and inbox stop working there. You type the name to confirm. The account stays yours and you can connect it again.
-- Accounts set up by Helo.ai show **Managed by Helo.ai**: the console reads them and configures the AI agent, but never changes their webhooks, registration, PIN or billing, so they have no setup steps or Disconnect.
+- **Disconnect:** Helo.ai stops sending and receiving for the account's numbers, so the AI agent and the Inbox stop working there. You type the account name to confirm. The account stays yours, and you can connect it again.
+- **Managed by Helo.ai:** accounts that Helo.ai set up show this label. The console reads them and configures the AI agent, but never changes their webhooks, registration, PIN or billing, so they have no setup steps and no Disconnect.
 
-Admins, supervisors and agents don't see the Account tab. A link to the old Settings › WhatsApp address takes owners here.
+Admins, supervisors and agents don't see the **Account** tab. A link to the old **Settings › WhatsApp** address takes owners here.
 
-Each number's two-step PIN is on that number's **Security** tab (see [Two-step verification PIN](#two-step-verification-pin)).
+Each number's two-step PIN is on that number's **Security** tab (see [Two-step verification PIN](/docs/guide/whatsapp-assets#two-step-verification-pin)).
 
-### Display name
+### Display name, verification, PIN and payment
 
-Your display name is what customers see in the chat list and at the top of chats. Meta reviews it, and the Display name tab shows the result: approved, in review, declined or expired. Names that aren't clearly your business tend to be declined. After an approval, Meta may require the number to be registered again within 14 days.
-
-<small>Source: [Meta — display names](https://developers.facebook.com/documentation/business-messaging/whatsapp/display-names)</small>
-
-### Business verification and the badge
-
-Verifying your business with Meta, in your business portfolio settings, raises how many people you can message and lets you register more numbers. Meta may ask for documents such as a business licence. Meta also offers an official business account badge (a blue checkmark) to eligible, verified businesses whose number has been registered for at least 30 days. It isn't available to numbers that also use the Business app.
-
-<small>Source: [Meta — messaging limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/messaging-limits), [Meta — official business accounts](https://developers.facebook.com/documentation/business-messaging/whatsapp/official-business-accounts)</small>
-
-### Two-step verification PIN
-
-A new number is registered with a six-digit PIN. The PIN is shown once when you connect, and owners can show it again on the number's **Security** tab with **Show the current PIN**. Meta asks for it when a number is registered again. If you forget a PIN you set yourself, reset it in WhatsApp Manager (Phone numbers, Settings, Two-step verification, Change PIN). It can't be turned off.
-
-<small>Source: [Meta — two-step verification](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/two-step-verification)</small>
-
-### Payment
-
-Meta bills per template message you send, and your payment method is managed in WhatsApp Manager and Meta's Billing Hub. Messaging limits are set for your whole business portfolio, not per number. See [Message templates](/docs/guide/templates) for how limits and quality affect what you can send.
-
-<small>Source: [Meta — pricing](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing), [Meta — messaging limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/messaging-limits)</small>
+What customers see as your name, Meta's business verification, the two-step PIN and paying Meta are all explained on [WhatsApp assets](/docs/guide/whatsapp-assets).
 
 ## Good to know
 
-- One connection, one workspace: a WhatsApp account already connected to another workspace can't be connected again.
+- One connection, one workspace: a WhatsApp account that is already connected to another workspace can't be connected again.
 - A number can run one AI agent.
 
 ## If something goes wrong
@@ -176,12 +160,35 @@ Meta bills per template message you send, and your payment method is managed in 
 | You see | What to do |
 | --- | --- |
 | Only owners connect numbers. | Ask a workspace owner to connect it. |
-| Connecting numbers from the console isn't switched on for this workspace yet. | Talk to your Helo.ai contact. |
+| Connecting numbers from the console isn't switched on for this workspace yet. | Talk to Helo.ai support. |
 | Too many signup attempts. Try again in an hour. | Wait, then try again. |
-| Meta didn't accept the signup … Please run the signup again. | Click **Open again** and repeat Meta's signup. |
+| Meta didn't accept the signup … Please run the signup again. | Click **Try again** and repeat Meta's signup. |
 | The signup didn't return a WhatsApp account and number. | Run the signup again and finish every screen. |
 | Meta connected the WhatsApp account but no phone number. | Add a number to the account in WhatsApp Manager, then connect again. |
 | This WhatsApp account is already connected to another workspace. | Disconnect it there first. |
-| Nothing was connected (you left Meta's signup) | Click **Open again**. |
+| Nothing was connected (you left Meta's signup) | Click **Try again**. |
 | A step shows Failed | Click **Retry the failed steps**. |
-| Meta allows 24 hours after signup to bring chats over, and that time has passed. | Your number works. Only old chats stay on your phone. |
+| Meta allows 24 hours after signup to bring chats over, and that time has passed. | Your number works. Only the old chats stay on your phone. |
+
+## Frequently asked questions
+
+<Accordions type="single">
+<Accordion title="How long does connecting take?">
+Meta's signup takes about 5 minutes. Helo.ai then runs its [setup steps](#setup-steps) by itself, and the number appears on the **Assets** page when they finish.
+</Accordion>
+<Accordion title="Nothing opened when I clicked Connect. What now?">
+Your browser may have blocked the pop-up. Allow pop-ups for the console, then click **Connect** again. If you closed Meta's window before the end, the dialog says "Nothing was connected"; click **Try again**.
+</Accordion>
+<Accordion title="Can I connect my WhatsApp Business app number and keep using the app?">
+Yes. Pick **WhatsApp Business app number**. The app keeps working on your phone, and your chats and contacts sync to Helo.ai. Some app features stop working; see [Using your WhatsApp Business app number](#using-your-whatsapp-business-app-number).
+</Accordion>
+<Accordion title="My number is with another provider. Do I have to move it?">
+No. Pick **Already with another provider** and use the same number in Meta's signup. The number doesn't move, and your current provider can stay on it. Your templates stay with that provider, so you create the ones you need again in Helo.ai.
+</Accordion>
+<Accordion title="Why is the Connect button greyed out?">
+In the dialog, **Connect** turns on only once you tick every box. On Home and the **Assets** page, it stays greyed out for anyone who isn't a workspace owner.
+</Accordion>
+<Accordion title="Can I connect more than one number?">
+Yes. Click **Connect** again for each number. Meta allows 2 numbers at first and up to 20 once your business is verified; see [What Meta allows](/docs/guide/whatsapp-assets#what-meta-allows).
+</Accordion>
+</Accordions>

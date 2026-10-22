@@ -8,7 +8,7 @@ description: How the console talks to Meta, and the details that are easy to get
 - **One place for Meta calls:** everything goes through `src/app/api/meta.ts`.
 - **Meta is the source of truth.** An agent loads from Meta when opened (`hydrateFromMeta`, merged by `metaId`). Per-row actions call Meta first and update local state only after Meta accepts. New list types need a `metaId`.
 - **Keep the failure hooks:** `consumeForcedFailure()` goes before each real call, so Demo controls can force errors.
-- **Check Meta's reference before wiring an endpoint:** developers.facebook.com/documentation/meta-business-agent. Its `llms.txt` lists every page. Don't guess.
+- **Check Meta's reference before wiring an endpoint:** [developers.facebook.com/documentation/meta-business-agent](https://developers.facebook.com/documentation/meta-business-agent). Its `llms.txt` lists every page. Don't guess.
 
 ## Easy to get wrong
 
@@ -24,9 +24,10 @@ description: How the console talks to Meta, and the details that are easy to get
 - Tool value names may be anything, but must be unique across path, query, headers and body together.
 </Accordion>
 <Accordion title="Settings">
-- Settings `PUT` is partial.
-- Safety & handoff never sends `rollout` or `ai_audience`. Publish owns them (`setRollout`). Re-sending them made Meta refuse the save or flip a live agent.
-- Several response fields are JSON-encoded strings. Settings GET returns a one-item list.
+- Settings `PUT` is partial: send only the fields you change.
+- Safety & handoff never sends `rollout` or `ai_audience`, because Publish owns them (`setRollout`). Re-sending them made Meta refuse the save, or flipped a live agent.
+- Settings `GET` returns a one-item list.
+- Several response fields are JSON-encoded strings.
 </Accordion>
 <Accordion title="Connectors and tools">
 - A connector `PUT` without `auth_config` keeps the saved keys. `upsertApiKey` replaces all of them. Keys never stay in the browser (`stripConnectionSecrets`).
@@ -53,8 +54,8 @@ New numbers come in through **Embedded Signup v4**, always through `ConnectNumbe
 
 | Mode | Needs | What Connect does |
 | --- | --- | --- |
-| `sdk` | ES config id, app id and secret, encryption key | Opens Meta's window with the JS SDK. `POST /api/whatsapp/connect` finishes the setup. |
+| `sdk` | An Embedded Signup configuration ID, the app ID and secret, and an encryption key | Opens Meta's window with the JS SDK. `POST /api/whatsapp/connect` finishes the setup. |
 | `hosted` | `EMBEDDED_SIGNUP_LINK` | Sends the current tab to Meta's hosted signup. Meta's Cross-Origin-Opener-Policy would cut a pop-up off from the console anyway. Helo.ai completes the connection on its side. |
 | `none` | nothing | "Talk to Helo.ai". Setting names are never shown to customers. |
 
-Customer tokens and PINs are stored only sealed (AES-256-GCM, `server/crypto.ts`).
+Customer tokens and PINs are stored only sealed (AES-256-GCM, `server/platform/crypto.ts`).

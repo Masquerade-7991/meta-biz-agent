@@ -3,15 +3,15 @@ title: Knowledge
 description: Teach the agent about your business with websites, FAQs, documents and business details.
 ---
 
-Give the agent the facts it needs to answer real questions, and close the gaps customers reveal.
+Give the agent the facts it needs to answer real questions, and close the gaps that customers reveal.
 
 ![The Knowledge section with the tabs Website, FAQ, Documents and Business details, and the list of questions the agent couldn't answer this week](/screens/studio-knowledge.webp)
 
-Knowledge has four tabs. Each tab shows a count, and the line above them summarises what the agent knows.
+Knowledge has 4 tabs. Each tab shows a count, and the line above the tabs summarises what the agent knows.
 
 | Tab | What it is |
 | --- | --- |
-| **Website** | Addresses Meta reads and learns from. The quickest way to start. |
+| **Website** | Addresses that Meta reads and learns from. The quickest way to start. |
 | **FAQ** | Questions and answers you write yourself. |
 | **Documents** | Files the agent reads, such as a price list or a policy PDF. |
 | **Business details** | Structured facts: description, payment methods, policies, contact details and hours. |
@@ -23,20 +23,20 @@ With nothing added, the agent can still chat, but it can't answer specific quest
 ## Before you start
 
 - An agent open in the studio.
-- Your website address, a few common customer questions, or documents to hand.
+- Your website address, a few common customer questions or some documents to hand.
 
 ## Questions your agent couldn't answer
 
-Once customers or testers are talking to the agent, a panel above the tabs lists questions from the last 7 days that the agent could not answer or handed to a person. Each one shows how often it was asked ("Asked 3×", or "in testing" if it came from a test chat) and a reason: **Couldn't answer** or **Handed to a person**.
+Once customers or testers are talking to the agent, a panel above the tabs lists questions from the last 7 days that the agent couldn't answer or handed over to a person. Each question shows how often it was asked ("Asked 3×", or "in testing" if it came from a test chat) and a reason: **Couldn't answer** or **Handed to a person**.
 
-Press **Add as FAQ** and the question is carried to the FAQ tab so you can write the answer. Answer it once and the agent knows next time. The panel stays hidden when there is nothing to show.
+Click **Add as FAQ**, and the question is carried over to the FAQ tab, so you can write the answer. Once you answer it, the agent knows the answer next time. The panel stays hidden when there is nothing to show.
 
 ## Website
 
 <Steps>
 <Step>
 ### Add the address
-Type your address (for example `https://yourbusiness.com`) under **Add a website** and press **Add**. To add several, press **Add several** and put one address per line.
+Type your address (for example `https://yourbusiness.com`) under **Add a website** and click **Add**. To add several at once, click **Add several** and put one address on each line.
 </Step>
 <Step>
 ### Wait for it to be read
@@ -44,69 +44,69 @@ Each website shows its progress: **Queued**, then **Reading**, then **Ready**. L
 </Step>
 <Step>
 ### Check it
-Ask the agent a question that only a page on your site can answer, using **Try it**.
+Using **Try it**, ask the agent a question that only a page on your site can answer.
 </Step>
 </Steps>
 
-Meta reads the whole site from the address you give, and reads it again now and then. If you add an address already covered by another one in your list, the console tells you.
+Meta reads the whole site from the address you give, and reads it again from time to time. If you add an address that another address in your list already covers, the console tells you.
 
 | Status | What it means |
 | --- | --- |
 | **Queued** | Waiting for Meta to start reading. |
 | **Reading** | Meta is reading the site. |
 | **Ready** | The agent can answer from this site. |
-| **Taking a while** | Meta is still working on it. Check back later, or choose **Read again**. |
+| **Taking a while** | Meta is still working on it. Check back later, or click **Read again**. |
 | **Nothing usable** | Meta read the site but found no text it could use. Try a page with more written content, like your FAQ or help page. |
 | **Couldn't read** | Meta couldn't read the site. Open **Why might this happen?** for common causes. |
 
 Each site also has **Read again**, **Edit address** and **Remove**.
 
 <Callout type="warn">
-Don't rely on the page count. Meta sometimes reports 0 pages even when the agent has learned from the site. To check a site worked, ask the agent a question that only that site answers.
+Don't rely on the page count. Meta sometimes reports 0 pages even when the agent has learned from the site. To check that a site worked, ask the agent a question that only that site answers.
 </Callout>
 
-If a site fails, the usual causes are a site that blocks automatic readers, pages that need a login, or text that only appears after the page runs in a browser. Adding a simpler page, like your help or FAQ page, often fixes it.
+If a site fails, the usual causes are a site that blocks automatic readers, pages that need a login, or text that only appears once the page runs in a browser. Adding a simpler page, like your help or FAQ page, often fixes it.
 
 <small>Source: [Meta — Website knowledge](https://developers.facebook.com/documentation/meta-business-agent/reference/configure/agent-knowledge-websites)</small>
 
 ## FAQ
 
-Press **Add row** to write a question and its answer, or **Import FAQs from CSV** to bring many in at once (choose which column holds the questions and which the answers).
+Click **Add row** to write a question and its answer. To bring in many at once, click **Import FAQs from CSV**, then choose which column holds the questions and which holds the answers.
 
 Tips from Meta and the console:
 
-- Keep each entry to **one specific question**, and write the answer so it makes sense on its own. The agent reads each entry separately.
+- Keep each entry to **one specific question**, and write the answer so that it makes sense on its own. The agent reads each entry separately.
 - Avoid near-duplicates. The console warns you when a question looks like one you already have.
-- Keep the list manageable. The console warns when you have a lot of entries, because past a few hundred the agent gets worse at finding the right answer.
-- Use the search box to find an entry. Each row can be edited or deleted. The agent stops using a deleted entry immediately.
+- Keep the list manageable. The console warns you when you have a lot of entries, because past a few hundred, the agent gets worse at finding the right answer.
+- Use the search box to find an entry. You can edit or delete each row, and the agent stops using a deleted entry immediately.
 
 <small>Source: [Meta — FAQ knowledge](https://developers.facebook.com/documentation/meta-business-agent/reference/configure/agent-knowledge-faqs)</small>
 
 ## Documents
 
-Drop files onto the upload area or click it to browse. Accepted types are PDF, DOC, DOCX, PNG, JPG and JPEG, up to 100 MB per file. CSV and XLSX files only work when Meta has switched them on for your account; if not, the console says so and suggests saving the file as a PDF.
+Drop files onto the upload area, or click it to browse. Accepted types are PDF, DOC, DOCX, PNG, JPG and JPEG, up to 100 MB per file. CSV and XLSX files only work when Meta has switched them on for your account. If Meta hasn't, the console says so and suggests saving the file as a PDF.
 
-Each document can be replaced or deleted. A deleted document can't be brought back, and the agent stops using it.
+You can replace or delete each document. A deleted document can't be brought back, and the agent stops using it.
 
 <small>Source: [Meta — File knowledge](https://developers.facebook.com/documentation/meta-business-agent/reference/configure/agent-knowledge-files)</small>
 
 ## Business details
 
-Structured facts the agent can use in any conversation. Fill in what applies and skip the rest.
+These are structured facts the agent can use in any conversation. Fill in what applies and skip the rest.
 
-- **Business description**: what you sell and who you serve.
-- **Payment methods**.
-- **Your policies**: cancellations and refunds, how customers buy or book, delivery or fulfilment, and more.
-- **How customers reach you**: contact email, business address and business hours.
+- **Business description:** what you sell and who you serve.
+- **Payment methods:** how customers can pay you.
+- **Your policies:** cancellations and refunds, how customers buy or book, delivery or fulfilment, and more.
+- **How customers reach you:** contact email, business address and business hours.
 
-Business hours are your hours, not the agent's. The agent is available at all times. Setting every day to closed tells the agent you are never open, so the console asks you to confirm it.
+Business hours are your hours, not the agent's; the agent is available at all times. If you set every day to closed, the agent would tell customers you are never open, so the console asks you to confirm.
 
 This tab has its own **Save** button.
 
 ## Good to know
 
 - Tell the agent less, but clearly. A short, accurate FAQ beats a long, messy one.
-- Don't repeat in FAQs what you already put under Business details.
+- Don't repeat in FAQs what you already put under **Business details**.
 
 ## If something goes wrong
 
@@ -115,6 +115,26 @@ This tab has its own **Save** button.
 | **This does not look like a website address.** | Check the address, including `https://`. |
 | **This question already exists. Edit the existing entry instead of adding a new one.** | Find and edit the existing FAQ. |
 | **Document type is not supported.** | Use one of the accepted file types. |
-| **File exceeds 100 MB.** | Compress it or split it. |
+| **File exceeds 100 MB.** | Compress the file or split it. |
 | **Could not save. Nothing was lost.** | Try again. |
 | **Could not delete. The item is still here.** | Try again. |
+
+## Frequently asked questions
+
+<Accordions type="single">
+<Accordion title="How long does it take Meta to learn a website?">
+Usually a few minutes; large sites take longer. The site moves from **Queued** to **Reading** to **Ready**. If it shows **Taking a while**, check back later or click **Read again**.
+</Accordion>
+<Accordion title="Why does my website show 0 pages?">
+Meta sometimes reports 0 pages even when the agent has learned from the site. Ask the agent a question that only the site answers to check. See the note under [Website](#website).
+</Accordion>
+<Accordion title="Which files can I upload?">
+PDF, DOC, DOCX, PNG, JPG and JPEG, up to 100 MB each. CSV and XLSX files only work if Meta has switched them on for your account; otherwise, save them as a PDF. See [Documents](#documents).
+</Accordion>
+<Accordion title="How do I check that the agent learned something?">
+Open **Try it** and ask a question that only that website, FAQ or document can answer. If the answer is wrong, check the source, or add the fact as an FAQ.
+</Accordion>
+<Accordion title="Should I use FAQs or business details?">
+Use **Business details** for facts such as your hours, payment methods and policies. Use FAQs for specific questions customers ask. Don't repeat the same fact in both.
+</Accordion>
+</Accordions>

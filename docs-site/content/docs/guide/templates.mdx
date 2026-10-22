@@ -1,30 +1,30 @@
 ---
 title: Message templates
-description: Create WhatsApp message templates, get them approved, and send one to restart a chat after the 24-hour window.
+description: Create WhatsApp message templates, get them approved, and send one to restart a chat after the 24-hour reply window.
 ---
 
-Templates are the pre-approved messages WhatsApp lets you send when you write first, or more than 24 hours after a customer last wrote. You manage them on the **WhatsApp** page and send them from a chat in the [Inbox](/docs/guide/inbox).
+Templates are messages that Meta approves in advance. WhatsApp lets you send one when you write to a customer first, or more than 24 hours after they last wrote. You manage templates under **Assets › Message templates** and send them from a chat in the [Inbox](/docs/guide/inbox).
 
 ## Before you start
 
-- **Role:** supervisors, admins and owners create templates. Only admins and owners can delete one. Anyone who can answer a chat can send an approved template into it.
-- **A connected number.** See [Connect a WhatsApp number](/docs/guide/connect-number).
+- **Role:** supervisors, admins and owners create templates. Only admins and owners can delete them. Anyone who can answer a chat can send an approved template into it.
+- **A connected number:** see [Connect a WhatsApp number](/docs/guide/connect-number).
 
 ## Why templates exist
 
-You can reply freely for 24 hours after a customer last wrote to you. Outside that window, or when you write first, WhatsApp only allows an approved template.
+You can reply freely for 24 hours after a customer last wrote to you. This is the 24-hour reply window. Outside the reply window, or when you write first, WhatsApp only allows an approved template.
 
-<small>Source: [Meta — send messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages)</small>
+<small>Source: [Meta — Send messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages)</small>
 
 ## Create a template
 
-Open the **WhatsApp** page, go to the **Message templates** tab and click **New template**.
+Open **Assets**, go to the **Message templates** tab and click **New template**.
 
 ![The New template dialog with a live phone preview](/screens/template-new.webp)
 
 <Steps>
 <Step>
-**Name it.** Lowercase letters, numbers and underscores only, for example `order_update`. You can use the same name again in another language.
+**Name it.** Use lowercase letters, numbers and underscores only, for example `order_update`. You can use the same name again in another language.
 </Step>
 <Step>
 **Pick a category and language.** Marketing is for offers and promotions. Utility is for messages about something the customer did or asked for, such as an order update. See the table below.
@@ -39,26 +39,26 @@ Open the **WhatsApp** page, go to the **Message templates** tab and click **New 
 **Fill in the examples.** Each placeholder needs a sample value, so Meta's reviewers see what a real message looks like. The dialog asks for them as soon as you add a placeholder.
 </Step>
 <Step>
-**Add a footer (optional) and buttons (optional).** Footer: up to 60 characters. The console offers up to 3 buttons, each a **Quick reply** or a **Link**, with a label of up to 25 characters.
+**Add a footer and buttons (both optional).** A footer can be up to 60 characters. The console offers up to 3 buttons, each a **Quick reply** or a **Link**, with a label of up to 25 characters.
 </Step>
 <Step>
-Click **Submit for review**. The template appears in the Message templates tab as pending.
+Click **Submit for review**. The template appears on the **Message templates** tab as **pending**.
 </Step>
 </Steps>
 
-<small>Source: [Meta — templates overview](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview), [Meta — template components](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/components)</small>
+<small>Source: [Meta — Templates overview](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview), [Meta — Template components](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/components)</small>
 
 ### Choosing a category
 
 | Category | Use it for | Notes |
 | --- | --- | --- |
 | Marketing | Offers, announcements, anything promotional, and anything unclear. | Always charged. Subject to per-person limits (see below). |
-| Utility | Specific, non-promotional messages the customer asked for or expects: order, delivery and account updates. | If Meta decides your "utility" template is really marketing, it is approved as marketing. |
+| Utility | Specific, non-promotional messages the customer asked for or expects: order, delivery and account updates. | If Meta decides your "utility" template is really marketing, it's approved as marketing. |
 | Authentication | One-time passcodes. | Has its own strict format. You can't create these from the console. |
 
 Mixing a promotion into a utility message makes it marketing. Meta decides the category, and the category decides the price.
 
-<small>Source: [Meta — template categorization](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-categorization)</small>
+<small>Source: [Meta — Template categorization](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-categorization)</small>
 
 ### Template limits at a glance
 
@@ -70,19 +70,19 @@ Mixing a promotion into a utility message makes it marketing. Meta decides the c
 | Footer | Up to 60 characters, plain text |
 | Button label | Up to 25 characters |
 
-Meta allows more buttons and button types than the console lets you create. Each language of a template counts toward your account's template allowance, and Meta does not translate for you.
+Meta allows more buttons and button types than the console lets you create. Each language of a template counts towards your WhatsApp Business account's template allowance, and Meta doesn't translate templates for you.
 
-<small>Source: [Meta — template components](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/components), [Meta — templates overview](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview)</small>
+<small>Source: [Meta — Template components](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/components), [Meta — Templates overview](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview)</small>
 
 ## Meta's review
 
-Every template is checked by Meta before you can use it. The decision can take up to 24 hours, and you see the result on the template's card under **WhatsApp › Message templates**.
+Meta checks every template before you can use it. A decision can take up to 24 hours, and you see the result on the template's card under **Assets › Message templates**.
 
 | Status on the card | Meaning |
 | --- | --- |
 | pending | Meta is still reviewing it. |
 | approved | You can send it. |
-| rejected | Meta declined it. The card says why, in small red text. |
+| rejected | Meta declined it. The card gives the reason in small red text. |
 
 Only approved templates can be sent from the Inbox.
 
@@ -90,27 +90,27 @@ Only approved templates can be sent from the Inbox.
 
 - A placeholder is written wrongly: a missing brace, numbers that skip, or special characters inside the braces.
 - The message starts or ends with a placeholder.
-- It asks for sensitive details such as full card numbers or ID numbers.
-- Abusive or threatening wording, or content that breaks Meta's business policies.
+- It asks for sensitive details, such as full card numbers or ID numbers.
+- It uses abusive or threatening wording, or breaks Meta's business policies.
 - It repeats the body and footer of a template you already have.
 
 If a template is rejected, fix the wording and submit it again. If you think the decision is wrong, you can appeal in WhatsApp Manager.
 
-<small>Source: [Meta — template review](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-review)</small>
+<small>Source: [Meta — Template review](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-review)</small>
 
 ### Quality, pausing and pacing
 
-After a template is in use, Meta rates its quality from how recipients react (blocks, reports, engagement). New templates start with no rating.
+Once a template is in use, Meta rates its quality from how recipients react (blocks, reports and engagement). New templates start with no rating.
 
-- If a template drops to low quality, Meta pauses it: 3 hours the first time, 6 hours the second time, and disables it the third time. A paused template can't be sent, and nothing is charged for blocked attempts.
-- New and previously low-rated templates can be paced. Meta lets messages go out normally up to a point, then holds the rest while it collects feedback. Good feedback releases them. Bad feedback drops them and pauses the template.
+- If a template drops to low quality, Meta pauses it: for 3 hours the first time and 6 hours the second time. The third time, Meta disables it. A paused template can't be sent, and you aren't charged for the attempts Meta blocks.
+- New templates, and templates that had low quality before, can be paced. Meta lets messages go out normally up to a point, then holds the rest while it collects feedback. Good feedback releases them. Bad feedback drops them and pauses the template.
 - A template you haven't used for 12 months may be archived.
 
-<small>Source: [Meta — template quality](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-quality), [Meta — pausing](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-pausing), [Meta — pacing](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-pacing)</small>
+<small>Source: [Meta — Template quality](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-quality), [Meta — Template pausing](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-pausing), [Meta — Template pacing](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-pacing)</small>
 
 ## Send a template from a chat
 
-When a chat's 24-hour window has closed, the Inbox replaces the reply box with a notice and **Send a template**.
+When a chat's reply window has closed, the Inbox replaces the reply box with a notice and **Send a template**.
 
 <Steps>
 <Step>
@@ -120,10 +120,10 @@ Click **Send a template**.
 **Pick an approved template.** Only approved ones are listed.
 </Step>
 <Step>
-**Fill in its values.** Each placeholder needs a value; the preview shows the message as the customer will see it.
+**Fill in its values.** Each placeholder needs a value. The preview shows the message as the customer will see it.
 </Step>
 <Step>
-Click **Send template**. The chat moves to your team, and once the customer replies you can chat freely again.
+**Send it** from the dialog. The chat moves to your team, and once the customer replies you can chat freely again.
 </Step>
 </Steps>
 
@@ -135,38 +135,38 @@ Meta charges for each delivered template message, and marketing templates are al
 
 ### How many people you can message
 
-WhatsApp limits how many different people you can message outside a 24-hour window. The limit belongs to your whole business portfolio at Meta and is shared by every number in it.
+WhatsApp limits how many different people you can message first, outside a reply window they opened. The limit belongs to your whole business portfolio at Meta and is shared by every number in it.
 
 - A new portfolio starts at 250 people in any rolling 24 hours.
-- The next steps are 2,000, 10,000, 100,000 and then unlimited.
+- The next levels are 2,000, 10,000, 100,000 and then unlimited.
 - You can reach 2,000 by verifying your business with Meta, or by sending 2,000 delivered messages to different people within 30 days using high-quality templates.
-- From 2,000 upward, Meta raises you to the next level within about 6 hours when your messages are well received and you've used at least half of your current limit in the last 7 days.
+- From 2,000 upwards, Meta raises you to the next level within about 6 hours when your messages are well received and you've used at least half of your current limit in the last 7 days.
 
-Each number's health card (on the **WhatsApp** page) shows its quality rating and its daily limit for new conversations. Quality drops when customers block or report you, which can lower your limit.
+On the **Assets** page, each number's **Quality** and **Daily limit** columns show its quality rating and how many new conversations it can start a day. Quality drops when customers block or report you, and low quality can lower your limit.
 
-<small>Source: [Meta — messaging limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/messaging-limits), [Meta — upcoming changes to messaging limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/upcoming-messaging-limits-changes)</small>
+<small>Source: [Meta — Messaging limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/messaging-limits), [Meta — Upcoming changes to messaging limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/upcoming-messaging-limits-changes)</small>
 
 ### Limits per customer
 
-WhatsApp can also cap how many marketing templates one person receives from all businesses combined, depending on how that person reacts to marketing. If a person is over their limit, that message fails and you should wait at least 24 hours before trying them again. Sending again and again can block further attempts for up to 24 hours. Marketing messages sent inside a window the customer opened by replying don't count.
+WhatsApp can also cap how many marketing templates one person receives from all businesses combined, depending on how that person reacts to marketing. If a person is over their limit, your message fails, and you should wait at least 24 hours before trying them again. Sending again and again can block further attempts for up to 24 hours. Marketing messages sent inside a reply window the customer opened don't count.
 
 Per-person limits don't apply to senders or recipients in the EEA, the UK, Japan or South Korea. WhatsApp also doesn't currently deliver marketing templates to numbers in the United States.
 
-People can switch off marketing messages from a business. A marketing template sent to someone who did is accepted and then fails.
+People can switch off marketing messages from a business. If you send a marketing template to someone who has, WhatsApp accepts it and then it fails.
 
-<small>Source: [Meta — per-user marketing limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/per-user-limits), [Meta — marketing templates](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates)</small>
+<small>Source: [Meta — Per-user marketing limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/per-user-limits), [Meta — Marketing templates](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates)</small>
 
 ### What messages cost
 
-Since 1 July 2025 Meta charges per delivered template message. The price depends on the template's category and the recipient's country. Utility and authentication prices drop with volume; marketing is always charged. Rates are published by Meta in 16 currencies, and Meta changes prices only on 1 January, 1 April, 1 July or 1 October, with notice. Check Meta's current rate card for the numbers. Helo.ai shows what you were actually charged under [Analytics](/docs/guide/analytics) and **Settings › Billing**.
+Since 1 July 2025, Meta has charged per delivered template message. The price depends on the template's category and the recipient's country. Utility and authentication prices drop with volume; marketing is always charged. Meta publishes its rates in 16 currencies and changes prices only on 1 January, 1 April, 1 July or 1 October, with notice. Check Meta's current rate card for the numbers. Helo.ai shows what you were actually charged under [Analytics](/docs/guide/analytics) and **Settings › Billing**.
 
-<small>Source: [Meta — pricing](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing)</small>
+<small>Source: [Meta — Pricing](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing)</small>
 
 ### Permission to message
 
-Only message people who have said you can, and respect every stop request. A customer who replies **STOP** is marked as opted out in Contacts.
+Only message people who have said you can, and respect every request to stop. A customer who replies **STOP** is marked as opted out in Contacts.
 
-<small>Source: [Meta — getting opt-in](https://developers.facebook.com/documentation/business-messaging/whatsapp/getting-opt-in), [WhatsApp Business Messaging Policy](https://whatsappbusiness.com/policy/)</small>
+<small>Source: [Meta — Getting opt-in](https://developers.facebook.com/documentation/business-messaging/whatsapp/getting-opt-in), [WhatsApp Business Messaging Policy](https://whatsappbusiness.com/policy/)</small>
 
 ## If something goes wrong
 
@@ -177,6 +177,29 @@ Only message people who have said you can, and respect every stop request. A cus
 | **No approved templates yet** in the template picker | Wait for Meta's review, or create a template. |
 | **Template … is pending; only approved templates can be sent** | Wait for Meta's review to finish. |
 | **Supervisors, admins and owners create templates** | Ask someone with that role. |
-| A template shows **Rejected** | Read the reason on the card, fix it and resubmit. |
+| A template shows **rejected** | Read the reason on the card, fix the template and submit it again. |
 
 For messages WhatsApp couldn't deliver, see [Troubleshooting](/docs/guide/troubleshooting).
+
+## Frequently asked questions
+
+<Accordions type="single">
+<Accordion title="Can I edit a template after I submit it?">
+Not from the console. Create a new template with the corrected wording instead, or edit the template in WhatsApp Manager, where Meta reviews it again.
+</Accordion>
+<Accordion title="Can I reuse the name of a template I deleted?">
+Not straight away. After you delete an approved template, Meta doesn't let you create a new one with the same name for 30 days. Deleting a template removes it in every language.
+</Accordion>
+<Accordion title="Do I need a template to reply to a customer who just wrote?">
+No. While the [reply window](#why-templates-exist) is open, your team and the AI agent can reply freely. You only need a template to write first, or after the window closes.
+</Accordion>
+<Accordion title="Are replies inside the reply window free?">
+Replies that aren't templates are service messages. Meta gives each number 1,000 free service messages a month and charges for the rest, and replies from Meta Business Agent are always charged. Messages customers send you are free.
+</Accordion>
+<Accordion title="Why did Meta approve my utility template as marketing?">
+Meta decides the category from the wording. Anything promotional, even a line in an order update, makes it marketing. See [Choosing a category](#choosing-a-category).
+</Accordion>
+<Accordion title="Why can't I pick a template in the chat?">
+Only approved templates are listed. Pending, rejected and paused ones stay out of the picker until Meta approves or unpauses them.
+</Accordion>
+</Accordions>

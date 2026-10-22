@@ -1,0 +1,212 @@
+---
+title: WhatsApp assets
+description: What Meta sets up for your business on WhatsApp, which numbers you can add, and what Meta allows.
+---
+
+Your WhatsApp "assets" are the things Meta keeps for your business: your business, your numbers, your templates and how you pay. This page explains each one in plain words. It also covers which numbers you can add and the limits Meta sets.
+
+To connect a number, follow [Connect a WhatsApp number](/docs/guide/connect-number).
+
+## What your WhatsApp assets are
+
+| Asset | What it is |
+| --- | --- |
+| **Business portfolio** | Your business on Meta. It owns all your other assets. Meta checks your business here (business verification). |
+| **WhatsApp account** | Your business's presence on WhatsApp. Each one holds a single phone number and its business profile. |
+| **Messaging account** | Holds your message templates and your billing details. Usually, each provider you work with, such as Helo.ai, gets its own Messaging account. |
+| **Phone number** | The number customers message. It has a **display name** (the name customers see) and a **business profile** (your photo, description, address and websites). |
+| **Message templates** | Messages Meta approves in advance. You need them to message someone first, or after the reply window closes. |
+
+The WhatsApp account and the Messaging account used to be a single account, called the WhatsApp Business account (WABA). Meta split it in two from September 2026. Meta's signup and Helo.ai may still say "WhatsApp Business account" in places.
+
+<small>Source: [Meta — WhatsApp accounts and Messaging accounts](https://developers.facebook.com/documentation/business-messaging/whatsapp/whatsapp-business-accounts), [Meta — Updates to WhatsApp Business accounts](https://developers.facebook.com/documentation/business-messaging/whatsapp/account-model-evolution), [Meta — Onboarding changes](https://developers.facebook.com/documentation/business-messaging/whatsapp/account-model-evolution/onboarding)</small>
+
+### Where you find them in Helo.ai
+
+- **Assets** (in the sidebar) lists your numbers. Open a number to see its tabs.
+- **Assets › Message templates** holds your templates. See [Message templates](/docs/guide/templates).
+- **Assets › Account** shows the account, how it's billed and how it links to your workspace. Only owners see it. See [The Account tab](/docs/guide/connect-number#the-account-tab).
+
+**Assets** needs the supervisor role or above.
+
+## Which numbers you can add
+
+The number must:
+
+- be your own
+- have a country code and an area code (short codes don't work)
+- be able to get a text message or a voice call, so Meta can send you a code
+
+A landline works if you choose a voice call for the code. A toll-free number usually sits behind a phone menu, which Meta's call can't get through. It must accept calls from other countries and pass the call to a real person. A number from an internet phone service (VoIP) must accept texts or calls from other countries.
+
+<small>Source: [Meta — Business phone numbers](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/phone-numbers)</small>
+
+### A number that's already on WhatsApp
+
+A number that's in use on WhatsApp can't be added as a new number. You have 2 choices:
+
+- **It's on the WhatsApp Business app:** connect it as a **WhatsApp Business app number**. You keep using the app, and your chat history is kept.
+- **Otherwise:** delete the WhatsApp account for that number first. In WhatsApp on the phone, go to **Settings › Account › Delete my account**. Back up your chats first, because your chat history is lost. It can take up to 3 minutes before the number is free.
+
+A number that WhatsApp has banned must be unbanned through WhatsApp's appeal process before you can add it.
+
+<small>Source: [Meta — Migrate an existing WhatsApp number to a business account](https://developers.facebook.com/documentation/business-messaging/whatsapp/solution-providers/migrate-existing-whatsapp-number-to-a-business-account), [Meta — Business phone numbers](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/phone-numbers#registering-business-phone-numbers)</small>
+
+## Three ways to add a number
+
+The **Connect** dialog has 3 cards. [Connect a WhatsApp number](/docs/guide/connect-number#steps) has the steps for each.
+
+- **New number:** a number that isn't on WhatsApp yet. Meta sends a code by text or call to prove it's yours.
+- **WhatsApp Business app number:** the number you use in the WhatsApp Business app. The app keeps working on your phone, and your chats and contacts sync to Helo.ai. Some app features stop working; [the Connect page lists them](/docs/guide/connect-number#using-your-whatsapp-business-app-number).
+- **Already with another provider:** a number that works with another WhatsApp provider today. Nothing moves. You use the same number in Meta's signup, and your current provider can stay on it. Removing them is up to you. Your templates stay with your current provider, because Helo.ai gets its own Messaging account. A WhatsApp account can be shared with up to 5 providers.
+
+<small>Source: [Meta — Onboarding WhatsApp Business app users](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users), [Meta — Updates to WhatsApp Business accounts](https://developers.facebook.com/documentation/business-messaging/whatsapp/account-model-evolution#phone-number-migration), [Meta — WhatsApp accounts and Messaging accounts](https://developers.facebook.com/documentation/business-messaging/whatsapp/whatsapp-business-accounts#share-your-account-with-a-partner)</small>
+
+## What Meta allows
+
+### Numbers
+
+A new business portfolio can have 2 registered numbers. Meta raises this to 20 by itself once your business is verified, or once your messaging limit reaches 2,000.
+
+<small>Source: [Meta — Business phone numbers](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/phone-numbers#registered-number-cap)</small>
+
+### Messaging limit
+
+The messaging limit is how many different people you can message first in any 24 hours. Replies inside a reply window don't count towards it. All the numbers in your business portfolio share one limit. On the **Assets** page, it's the **Daily limit** column.
+
+| Step | Limit | How you get there |
+| --- | --- | --- |
+| Start | 250 | Every new business portfolio starts here. |
+| 1 | 2,000 | Verify your business, or send templates to 2,000 different people in 30 days with good quality. |
+| 2 | 10,000 | Automatic. |
+| 3 | 100,000 | Automatic. |
+| 4 | Unlimited | Automatic. |
+
+From 2,000 up, the limit rises one step by itself when your messages are of good quality and you used at least half of your limit in the last 7 days. It rises within 6 hours.
+
+<small>Source: [Meta — Messaging limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/messaging-limits)</small>
+
+### Templates
+
+You can have up to 250 message templates. Once your business is verified and one of your numbers has an approved display name, you can have up to 6,000.
+
+<small>Source: [Meta — WhatsApp accounts and Messaging accounts](https://developers.facebook.com/documentation/business-messaging/whatsapp/whatsapp-business-accounts#limitations)</small>
+
+### Display name
+
+The display name is the business name customers see. Meta checks it against its display name guidelines, so it must match your business. Until it's approved, customers see it on your profile, but not always at the top of the chat.
+
+- You can change it up to 10 times in 30 days.
+- After Meta approves a new name, you register the number again within 14 days. If you don't, you must send the name for review again.
+
+On the number's **Display name** tab, type the name in **New display name** and click **Send for review**. When it's approved, click **Register now**.
+
+<small>Source: [Meta — Display names](https://developers.facebook.com/documentation/business-messaging/whatsapp/display-names)</small>
+
+## Business verification
+
+Business verification is Meta checking that your business is real. You do it in your business portfolio's settings on Meta, not in Helo.ai. Meta may ask for documents. Start from Meta's [Verify your business](https://www.facebook.com/business/help/2058515294227817) help page.
+
+Verification unlocks:
+
+- up to 20 numbers
+- the 2,000 messaging limit
+- up to 6,000 templates (once a number also has an approved display name)
+- the chance to ask for the blue tick
+
+### The blue tick
+
+The blue tick next to your name means the number is an Official Business Account. You can ask Meta for it in WhatsApp Manager when:
+
+- your business portfolio is verified
+- your business has been on the WhatsApp Business Platform for at least 30 days
+- the number's display name is approved
+- the number has two-step verification on
+- your business follows the WhatsApp Business Messaging Policy
+
+Meta doesn't give the blue tick to WhatsApp Business app numbers. If Meta says no, you can ask again after 30 days. When a number has it, the **Assets** page shows **Official business**.
+
+<small>Source: [Meta — Official business accounts](https://developers.facebook.com/documentation/business-messaging/whatsapp/official-business-accounts), [Meta — Messaging limits](https://developers.facebook.com/documentation/business-messaging/whatsapp/messaging-limits#scaling-paths)</small>
+
+## Using Meta Business Agent on a number
+
+Meta Business Agent is Meta's AI agent. In Helo.ai, each number can run one AI agent. Meta decides which numbers can have one. The number's account must:
+
+- be in a business category Meta supports, with a business category set (on the number's **Profile** tab). Finance, government, health, alcohol, gambling, over-the-counter medicines and matrimony services are not supported.
+- be in good standing, which means not restricted or banned on WhatsApp
+- belong to a business based in a country where Meta offers the agent
+- meet Meta's business trust and verification requirements
+- not run another AI agent on that number
+
+Meta's eligibility check has the final say. If a number isn't eligible, the studio tells you. Meta doesn't say whether WhatsApp Business app numbers qualify, so check in the studio before you plan around it.
+
+<small>Source: [Meta — Meta Business Agent overview](https://developers.facebook.com/documentation/meta-business-agent/overview#which-phone-numbers-are-eligible)</small>
+
+## Paying Meta
+
+Meta charges for the messages your business sends. **Assets › Account** shows how your account pays:
+
+- **Billed through Helo.ai:** your Helo.ai plan includes Meta's charges.
+- **Pays Meta directly:** you add a payment method in Meta's Billing Hub (it opens from WhatsApp Manager). Each Messaging account has its own payment method.
+
+What Meta charges for:
+
+- **Messages customers send you:** free.
+- **Replies from your team:** each number gets 1,000 free a month. After that, each one is charged. Without a payment method, Meta stops delivering them once the free ones are used.
+- **Templates:** charged per message delivered.
+- **Replies from the AI agent:** charged by the amount of text, about 4 to 5 US cents each. The agent can only answer everyone once a payment method is added. Answering only your test numbers works without one.
+
+<small>Source: [Meta — Pricing](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing#free-tier-of-monthly-service-messages), [Meta — Pricing for non-template messages](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing/non-template-messages), [Meta — WhatsApp accounts and Messaging accounts](https://developers.facebook.com/documentation/business-messaging/whatsapp/whatsapp-business-accounts#limitations)</small>
+
+## Managing a number in Assets
+
+Open a number on the **Assets** page to see its tabs. Admins and owners can change a number's details; only owners register, deregister or see the PIN.
+
+| Tab | What you do there |
+| --- | --- |
+| **Profile** | Your photo (square JPG or PNG, up to 5 MB), **About** (up to 139 characters), **Description** (up to 512), **Category**, **Email**, **Address** (up to 256) and up to 2 **Websites**. |
+| **Display name** | Ask for a new name and see Meta's review. See [Display name](#display-name). |
+| **Automations** | Up to 4 ice breakers (tappable first messages) and up to 30 commands that customers see in a new chat. |
+| **Security** | Prove you own the number with a code, register it, see or change its two-step PIN and deregister it. |
+| **Blocked** | Block a customer's number. WhatsApp only lets you block someone who messaged the number in the last 24 hours. |
+| **Activity** | Changes made to the number from the console, and Meta's reviews. |
+
+**Refresh from WhatsApp** on the **Assets** page reads the latest details from Meta. If your workspace has more than one WhatsApp account, pick one from the list next to **WhatsApp account**.
+
+### Two-step verification PIN
+
+The two-step PIN is a 6-digit code. Meta asks for it when the number is registered again.
+
+- For a new number, Helo.ai shows the PIN once when you connect.
+- Owners can see it again on the number's **Security** tab with **Show the current PIN**, or set a new one.
+- If you set the PIN yourself and forget it, change it in WhatsApp Manager: open the number's settings, then **Two-step verification › Change PIN**.
+
+Meta is phasing out this PIN for some numbers. For those numbers, WhatsApp Manager no longer shows a **Two-step verification** tab, and there is no PIN to change.
+
+<small>Source: [Meta — Two-step verification](https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/two-step-verification), [Meta — Updates to WhatsApp Business accounts](https://developers.facebook.com/documentation/business-messaging/whatsapp/account-model-evolution#2fa-pin)</small>
+
+## Frequently asked questions
+
+<Accordions type="single">
+<Accordion title="What's the difference between a WhatsApp account and a Messaging account?">
+A WhatsApp account holds one phone number and its profile: what customers see. A Messaging account holds your templates and billing. Both used to be one account, the WhatsApp Business account; see [What your WhatsApp assets are](#what-your-whatsapp-assets-are).
+</Accordion>
+<Accordion title="How many numbers can I add?">
+2 to start. Meta raises it to 20 once your business is verified or your messaging limit reaches 2,000. See [Numbers](#numbers).
+</Accordion>
+<Accordion title="Why can't I message more people today?">
+You've reached your messaging limit: the number of different people you can message first in 24 hours. It starts at 250 and rises as you send good-quality messages. See [Messaging limit](#messaging-limit).
+</Accordion>
+<Accordion title="How do I get the blue tick?">
+Verify your business, get your display name approved and wait until your business has been on the platform for 30 days. Then ask for it in WhatsApp Manager. See [The blue tick](#the-blue-tick).
+</Accordion>
+<Accordion title="Can I change my display name?">
+Yes, up to 10 times in 30 days, on the number's **Display name** tab. Meta reviews each new name, and once it's approved, you click **Register now** within 14 days.
+</Accordion>
+<Accordion title="Do I need business verification?">
+Not to start. Without it, you start with 2 numbers, a limit of 250 people a day and up to 250 templates. Verifying raises all 3; see [Business verification](#business-verification).
+</Accordion>
+<Accordion title="Who pays Meta?">
+Either Helo.ai bills you as part of your plan, or you pay Meta directly with a payment method in Billing Hub. **Assets › Account** shows which. See [Paying Meta](#paying-meta).
+</Accordion>
+</Accordions>

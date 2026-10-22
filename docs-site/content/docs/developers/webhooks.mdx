@@ -21,16 +21,16 @@ The `.env` account, and any IDs in `PROTECTED_IDS`, can't have these changed:
 - coexistence sync;
 - credit line.
 
-`callUpstream` refuses those calls for everything, both the relay and the modules (`server/protect.ts`, covered by `protect.test.ts`). Connect, Retry, Disconnect and billing refuse it too, and the UI hides those controls.
+`callUpstream` refuses those calls wherever they come from, the relay or the modules (`server/platform/protect.ts`, covered by `protect.test.ts`). Connect, Retry, Disconnect and billing refuse it too, and the UI hides those controls.
 
-On the protected number, the console never messages customers on its own, so there's no away message and no satisfaction question. People still send by clicking.
+On the protected number, the console never messages customers on its own, so there's no away message and no rating question. People still send by clicking.
 
 ## The receiver
 
-`handleWebhook` in `server/inbox.ts`:
+`handleWebhook` in `server/messaging/inbox.ts`:
 
 1. Checks the signature against any app in `WEBHOOK_APP_SECRETS`. If none are set, it answers 503 so Meta retries.
-2. Stores the delivery as sent in `webhook_inbox`. The id is the body's sha256, so retries are stored once.
+2. Stores the delivery exactly as Meta sent it in `webhook_inbox`. The id is the body's sha256, so retries are stored once.
 3. Processes it, then answers.
 
 Failures are retried after each delivery, every 5 minutes locally, and by the daily cron. Side effects run once per new message. Statuses only move forward. Pricing goes to `message_charges`.
