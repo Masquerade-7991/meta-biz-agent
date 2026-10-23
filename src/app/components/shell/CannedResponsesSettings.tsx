@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2, MessageSquareText, Pencil, Plus, Trash2, Zap } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
@@ -19,7 +19,7 @@ import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
 import { cn } from '@/app/lib/utils'
 import { EmptyState } from '@/app/components/ui/page'
-import { SearchInput } from '@/app/components/Filters'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
 import { useMembers } from '@/app/auth/useMembers'
 import { SettingsSection } from './SettingsSection'
 import { LoadGate } from './settings/SettingsUi'
@@ -131,6 +131,19 @@ export function CannedResponsesSettings() {
   const nameOf = (id?: string) => (id === me?.user.id ? 'you' : members.find((m) => m.userId === id)?.name)
   const needle = q.trim().toLowerCase()
   const shown = (rows ?? []).filter((c) => !needle || `${c.shortcut} ${c.title} ${c.body}`.toLowerCase().includes(needle))
+  // The omnibar searches the responses; a match opens it.
+  useOmnibarScope(
+    useMemo(
+      () => ({
+        id: 'settings/canned',
+        placeholder: 'Search shortcuts and text',
+        query: { value: q, onChange: setQ },
+        items: shown.slice(0, 6).map((c) => ({ id: c.id, label: c.title, hint: `/${c.shortcut}`, run: () => setEditing(c) })),
+      }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [q, rows],
+    ),
+  )
   const newButton = (
     <Button size="sm" onClick={() => setEditing('new')}>
       <Plus className="size-4" />
@@ -152,7 +165,6 @@ export function CannedResponsesSettings() {
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-2">
-              <SearchInput value={q} onChange={setQ} placeholder="Search shortcuts and text" label="Search canned responses" className="h-9 w-64 max-w-full" />
               <span className="ml-auto">{newButton}</span>
             </div>
             {shown.length === 0 ? (

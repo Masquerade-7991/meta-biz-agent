@@ -85,6 +85,14 @@ interface Assets {
   phoneName: string
 }
 let assets: Promise<Assets> | null = null
+/** Demo control (a new workspace): no agent, no test chats. */
+export function resetDummyAgent() {
+  Object.assign(db, fresh(), { n: db.n })
+  save()
+}
+/** How many test chats the demo agent has had (Home's setup guide; the store keeps none in Dummy mode). */
+export const dummyTestChats = () => Object.keys(db.conversations).length
+
 export function dummyAssets(): Promise<Assets> {
   assets ??= fetch('/api/health')
     .then((r) => (r.ok ? r.json() : null))

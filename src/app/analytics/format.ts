@@ -16,3 +16,13 @@ export const pointChange = (k: { value: number | null; prev: number | null }) =>
 /** For chart axes: short and whole (₹1.2K). */
 export const moneyShort = (v: number, currency: string | null) =>
   new Intl.NumberFormat([], { ...(currency && { style: 'currency', currency }), notation: 'compact', maximumFractionDigits: 1 }).format(v)
+/** Minutes as 12m, 1h 05m or 2d 3h: for tables, where 1.5h reads oddly. */
+export const hm = (min: number | null | undefined) => {
+  if (min == null) return '–'
+  const m = Math.round(min)
+  if (m < 60) return `${m}m`
+  if (m < 60 * 48) return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`
+  return `${Math.floor(m / 1440)}d ${Math.round((m % 1440) / 60)}h`
+}
+/** A YYYY-MM-DD day as "Mon 12 Oct". */
+export const dayLabel = (d: string) => new Date(d + 'T00:00').toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })

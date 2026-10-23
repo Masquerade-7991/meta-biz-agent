@@ -738,7 +738,7 @@ export interface WizardState {
    *  back to the step (and, where that step has its own inner tabs, the specific tab) that owns
    *  each piece of read-only data shown there. Kept outside the slice system for the same reason
    *  as pendingSkillPrefill above — pure UI intent, not agent configuration. */
-  pendingStepFocus: { step: StepId; tab?: string } | null
+  pendingStepFocus: { step: StepId; tab?: string; id?: string } | null
   /** Which studio sidebar page is showing. Pure UI navigation state, not agent configuration. */
   currentSection: StudioSectionId
 }

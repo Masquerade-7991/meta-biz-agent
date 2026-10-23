@@ -1,5 +1,8 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
-import { ArrowLeft, Eye, Menu, MessageCircle, Rocket } from 'lucide-react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { ArrowLeft, BrainCircuit, Eye, FileText, Globe, Menu, MessageCircle, MessageSquareText, Plug, Rocket, Sparkles, Wrench } from 'lucide-react'
+import { Omnibar, OmnibarButton } from '@/app/omnibar/Omnibar'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
+import type { OmniItem } from '@/app/omnibar/scope'
 import { TryItPanel } from '@/app/wizard/steps/TryItPanel'
 import { StatusPill } from '@/app/components/ui/status'
 import { Sheet, SheetContent, SheetTitle } from '@/app/components/ui/sheet'
@@ -62,7 +65,7 @@ const GROUPS = ['build', 'deploy', 'monitor'] as const
 // own wizard already modeled it (Identity, Abilities, Knowledge, Connections, Safety & handoff,
 // Test & Eval, Publish, Activity) — just no longer gated by Back/Next.
 export function AgentStudioShell({ onExit }: { onExit: () => void }) {
-  const { state, setSection, patch } = useWizard()
+  const { state, setSection, patch, setPendingStepFocus } = useWizard()
   const { runGuard, pending, status: saveStatus } = useNavigationGuard()
   const [navOpen, setNavOpen] = useState(false)
   const [tryOpen, setTryOpen] = useState(false)
@@ -106,13 +109,37 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function navigate(id: StudioSectionId) {
-    if (id === state.currentSection || pending) return
-    const ok = await runGuard(readOnly ? 'discard' : 'save')
-    if (!ok) return
-    setNavOpen(false)
-    setSection(id)
+  async function navigate(id: StudioSectionId, focus?: WizardState['pendingStepFocus']) {
+    if (pending) return
+    if (id !== state.currentSection) {
+      const ok = await runGuard(readOnly ? 'discard' : 'save')
+      if (!ok) return
+      setNavOpen(false)
+      setSection(id)
+    }
+    if (focus) setPendingStepFocus(focus)
   }
+
+  // The omnibar searches this agent: its sections and everything listed in them (no fetch, it's all
+  // in the wizard's state). A section's own search (FAQ, Business events) overrides it.
+  const agentName = state.identity.agentName.trim() || 'Untitled agent'
+  const { knowledge, personalization, richReplies, connections } = state
+  const studioScope = useMemo(() => {
+    const items: OmniItem[] = [
+      ...STUDIO_NAV_SECTIONS.map((s) => ({ id: `section:${s.id}`, label: s.label, hint: 'Section', icon: s.icon, run: () => void navigate(s.id) })),
+      ...knowledge.faqs.map((f) => ({ id: `faq:${f.id}`, label: f.question, hint: 'FAQ', keywords: `faq ${f.answer}`, icon: BrainCircuit, run: () => void navigate('knowledge', { step: 'knowledge', tab: 'faq', id: f.id }) })),
+      ...knowledge.websites.map((w) => ({ id: `site:${w.id}`, label: w.url, hint: 'Website', keywords: 'website', icon: Globe, run: () => void navigate('knowledge', { step: 'knowledge', tab: 'website' }) })),
+      ...knowledge.documents.map((d) => ({ id: `doc:${d.id}`, label: d.fileName, hint: 'Document', keywords: 'document file', icon: FileText, run: () => void navigate('knowledge', { step: 'knowledge', tab: 'documents' }) })),
+      ...personalization.customSkills.map((s) => ({ id: `skill:${s.id}`, label: s.name, hint: 'Skill', keywords: `skill ${s.instruction}`, icon: Sparkles, run: () => void navigate('abilities', { step: 'agent', tab: 'skills' }) })),
+      ...richReplies.richReplies.map((r) => ({ id: `reply:${r.id}`, label: r.name, hint: 'Rich reply', keywords: `rich reply ${r.trigger}`, icon: MessageSquareText, run: () => void navigate('abilities', { step: 'agent', tab: 'richReplies' }) })),
+      ...connections.connections.map((c) => ({ id: `conn:${c.id}`, label: c.name, hint: 'Connection', keywords: `connection ${c.description}`, icon: Plug, run: () => void navigate('connections') })),
+      ...connections.actions.map((a) => ({ id: `tool:${a.id}`, label: a.name, hint: 'Tool', keywords: `tool ${a.description}`, icon: Wrench, run: () => void navigate('connections') })),
+    ]
+    return { id: 'studio', placeholder: `Search ${agentName}`, items }
+    // navigate reads the current section and guard; both are in the deps through state and pending.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentName, knowledge, personalization, richReplies, connections, state.currentSection, pending, readOnly])
+  useOmnibarScope(studioScope)
 
   async function handleExit() {
     if (pending) return
@@ -159,7 +186,7 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
   return (
     <div className="relative isolate flex h-dvh flex-col bg-background">
       <Backdrop />
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-3 sm:px-4">
+      <header className="relative flex h-14 shrink-0 items-center gap-3 border-b border-border px-3 sm:px-4">
         <button
           type="button"
           onClick={() => setNavOpen(true)}
@@ -180,7 +207,9 @@ export function AgentStudioShell({ onExit }: { onExit: () => void }) {
             <span className="hidden truncate font-mono text-meta text-muted-foreground lg:inline">{state.gate.selectedPhoneNumber}</span>
           )}
         </div>
-        <div className="ml-auto flex items-center gap-3">
+        <Omnibar className="md:w-56 lg:w-72 xl:w-96" />
+        <div className="ml-auto flex items-center gap-3 md:ml-0">
+          <OmnibarButton />
           {saveText && (
             <span className="flex items-center gap-1.5 text-meta text-muted-foreground" aria-live="polite">
               {saveStatus.dirty && !readOnly && <span aria-hidden className="size-1.5 rounded-full bg-warning" />}

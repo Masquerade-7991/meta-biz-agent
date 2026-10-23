@@ -52,7 +52,8 @@ import { TicketPanel } from './TicketPanel'
 import { SendTemplateDialog } from './SendTemplateDialog'
 import { useMembers } from '@/app/auth/useMembers'
 import { usePolling } from '@/app/lib/usePolling'
-import { PillTabs, SearchInput } from '@/app/components/Filters'
+import { PillTabs } from '@/app/components/Filters'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
 import { customerLabel, isBsuid, NO_CONTROL_HIDDEN } from '@/app/lib/customer'
 import { MediaView } from '@/app/inbox/MediaView'
 import { ACCEPT, checkMedia, formatSize } from '@/app/inbox/media'
@@ -1106,13 +1107,29 @@ export function InboxPage({ initialPhone }: { initialPhone?: string | null }) {
   )
   useRegisterDevControls('inbox', demo)
 
+  // The omnibar is the chat search (names, numbers and messages); saved views still store q.
+  useOmnibarScope(
+    useMemo(
+      () => ({
+        id: 'inbox',
+        placeholder: 'Search chats, numbers and messages',
+        query: { value: q, onChange: setQ },
+        items: [
+          ...(chats ?? []).slice(0, 6).map((c) => ({ id: c.phone, label: display(c), hint: c.name ? customerLabel(c.phone, c.username) : undefined, run: () => void openChat(c.phone) })),
+          ...(hits ?? []).slice(0, 3).map((h) => ({ id: `hit:${h.id}`, label: h.name || customerLabel(h.phone), hint: h.body, run: () => void openChat(h.phone, h.id) })),
+        ],
+      }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [q, chats, hits],
+    ),
+  )
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <TestNumberNote />
       <div className="flex min-h-0 flex-1">
       <section className={cn('flex w-full shrink-0 flex-col border-r border-border bg-background md:w-80', open && 'hidden md:flex')} aria-label="Chats">
         <div className="space-y-3 border-b border-border p-4">
-          <SearchInput value={q} onChange={setQ} placeholder="Search names, numbers and messages" label="Search chats" />
           <PillTabs label="Filter chats" options={FILTERS} value={filter} onChange={setFilter} compact />
           <SavedViews
             views={views}

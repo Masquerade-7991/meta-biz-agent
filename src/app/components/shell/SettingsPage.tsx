@@ -24,6 +24,8 @@ import { SecuritySettings } from './settings/SecuritySettings'
 import { SettingsHome } from './settings/SettingsHome'
 import { areaOf, canOpenTab, resolveSettings, type SettingsTab } from './settings/areas'
 import { confirmLeave } from './settings/leaveGuard'
+import { SettingsSectionsContext, type RegisterSection } from './settingsSections'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
 
 export type { SettingsTab } from './settings/areas'
 
@@ -86,6 +88,35 @@ function AreaPage({ tab }: { tab: SettingsTab }) {
     active.current?.scrollIntoView({ block: 'nearest', inline: 'center' })
   }, [tab])
 
+  // The omnibar, on a tab without a list of its own: the tab's section titles (each SettingsSection
+  // registers) and the area's other tabs. Members, Canned responses and Activity override it.
+  const [sections, setSections] = useState<{ id: string; title: string }[]>([])
+  const registerSection = useCallback<RegisterSection>((id, title) => {
+    setSections((prev) => [...prev.filter((s) => s.id !== id), { id, title }])
+    return () => setSections((prev) => prev.filter((s) => s.id !== id))
+  }, [])
+  useOmnibarScope(
+    useMemo(
+      () => ({
+        id: 'settings',
+        placeholder: 'Search this page',
+        items: [
+          ...sections.map((s) => ({
+            id: s.id,
+            label: s.title,
+            hint: tabs.find((t) => t.slug === tab)?.label,
+            run: () => {
+              document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            },
+          })),
+          ...tabs.filter((t) => t.slug !== tab).map((t) => ({ id: `tab:${t.slug}`, label: t.label, hint: area.label, keywords: t.keywords, run: () => go(t.slug) })),
+        ],
+      }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [sections, tab, me?.role],
+    ),
+  )
+
   return (
     <PageContainer>
       <nav aria-label="Breadcrumb" className="mb-2">
@@ -143,7 +174,7 @@ function AreaPage({ tab }: { tab: SettingsTab }) {
           <span aria-hidden className="pointer-events-none absolute top-0 right-0 bottom-px w-8 bg-linear-to-l from-background md:hidden" />
         </div>
         <TabsContent value={tab} className="pt-2">
-          {TABS[tab]()}
+          <SettingsSectionsContext.Provider value={registerSection}>{TABS[tab]()}</SettingsSectionsContext.Provider>
         </TabsContent>
       </Tabs>
     </PageContainer>

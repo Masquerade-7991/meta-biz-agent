@@ -798,8 +798,11 @@ const dummyAccountNow = (): WaAccount => ({
   createdAt: new Date().toISOString(),
 })
 let waAccounts: WaAccount[] | null = null
-/** Demo control: show Home as a brand-new workspace (no WhatsApp yet). */
-export const resetDummyWhatsApp = (connected: boolean) => void (waAccounts = connected ? [dummyAccountNow()] : [])
+/** Demo control: show Home as a brand-new workspace (no WhatsApp yet, no chats), or back to the sample one. */
+export function resetDummyWhatsApp(connected: boolean) {
+  waAccounts = connected ? [dummyAccountNow()] : []
+  chats = connected ? null : []
+}
 
 export async function dummyWhatsApp<T>(method: string, path: string, body: unknown): Promise<T> {
   const b = (body ?? {}) as Record<string, string>
@@ -846,11 +849,13 @@ export async function dummyWhatsApp<T>(method: string, path: string, body: unkno
     const done = { state: 'done' as const, at: now }
     const coexist = b.flow === 'coexistence'
     const own = b.billing === 'own'
+    // A brand-new demo workspace gets the demo number itself, so the agent studio, Assets and Home agree.
+    const first = waAccounts.length === 0 ? dummyAccountNow() : null
     const account: WaAccount = {
-      wabaId: b.wabaId,
-      wabaName: 'Asha Foods',
-      businessId: b.businessId,
-      phoneNumbers: [{ id: b.phoneNumberId, display: coexist ? '+91 99887 76655' : '+91 90000 12345', verifiedName: 'Asha Foods' }],
+      wabaId: first?.wabaId ?? b.wabaId,
+      wabaName: first?.wabaName ?? 'Asha Foods',
+      businessId: first?.businessId ?? b.businessId,
+      phoneNumbers: first?.phoneNumbers ?? [{ id: b.phoneNumberId, display: coexist ? '+91 99887 76655' : '+91 90000 12345', verifiedName: 'Asha Foods' }],
       source: coexist ? 'coexistence' : 'signup',
       billing: { mode: own ? 'own' : 'partner_credit', state: own ? 'pending' : 'shared' },
       steps: {
@@ -861,7 +866,7 @@ export async function dummyWhatsApp<T>(method: string, path: string, body: unkno
         details: done,
         billing: own ? { state: 'waiting', at: now, error: 'Add a payment method in WhatsApp Manager, then confirm here.' } : done,
       },
-      primaryNumberId: b.phoneNumberId,
+      primaryNumberId: first?.phoneNumbers[0].id ?? b.phoneNumberId,
       hasPin: !coexist,
       canDisconnect: true,
       needsAttention: false,
@@ -972,7 +977,8 @@ export async function dummyNumbers<T>(method: string, path: string, body: unknow
       x.activity.unshift({ kind: 'name_reviewed', data: { decision: 'APPROVED' }, at: new Date().toISOString(), by: 'WhatsApp' })
     }
   const u = new URL(path, 'http://x')
-  if (u.pathname === '/api/whatsapp/numbers') return list.map((x) => x.n) as T
+  // As on the server: only the numbers of the workspace's connected accounts.
+  if (u.pathname === '/api/whatsapp/numbers') return list.filter((x) => (waAccounts ?? [dummyAccountNow()]).some((a) => a.wabaId === x.n.wabaId)).map((x) => x.n) as T
   const m = u.pathname.match(/^\/api\/whatsapp\/numbers\/(\d+)(?:\/([a-z-]+))?(?:\/([^/]+))?$/)
   const x = m && list.find((y) => y.n.id === m[1])
   if (!m || !x) throw new MetaError(404, 'Not found', 'That number isn’t connected to this workspace.')

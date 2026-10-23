@@ -131,8 +131,9 @@ function dummyOverview(f: AnalyticsFilter): Overview {
       date,
       conversations: c.conversations,
       aiOnly: c.aiOnly,
-      withTeam: c.conversations - c.aiOnly,
-      noReply: 0,
+      // About one in eight chats the AI didn't answer got no reply from the team either.
+      withTeam: c.conversations - c.aiOnly - Math.round((c.conversations - c.aiOnly) * 0.12),
+      noReply: Math.round((c.conversations - c.aiOnly) * 0.12),
       handoffs: c.handoffs,
       ticketsOpened: c.opened,
       ticketsResolved: c.resolved,
@@ -213,9 +214,10 @@ function dummyOverview(f: AnalyticsFilter): Overview {
       { level: 2, count: Math.round(cur.t('escalations') * 0.22) },
       { level: 3, count: Math.round(cur.t('escalations') * 0.08) },
     ],
+    // Handovers are the AI handing over plus someone taking over, as in the Handovers records.
     handoffReasons: [
-      { label: 'AI handed over', count: cur.t('handoffs') },
-      { label: 'Someone took over', count: Math.round(opened * 0.18) },
+      { label: 'AI handed over', count: Math.round(cur.t('handoffs') * 0.8) },
+      { label: 'Someone took over', count: cur.t('handoffs') - Math.round(cur.t('handoffs') * 0.8) },
       { label: 'Team replied', count: Math.round(opened * 0.08) },
       { label: 'Created by hand', count: Math.round(opened * 0.02) },
     ],
@@ -240,24 +242,48 @@ function dummyOverview(f: AnalyticsFilter): Overview {
   }
 }
 
-function dummyLogs(kind: LogKind, f: AnalyticsFilter, skip: number, limit: number): LogPage {
+function dummyLogs(kind: LogKind, f: AnalyticsFilter, skip: number, limit: number, sort: { key: string; dir: string } | null): LogPage {
   const o = dummyOverview(f)
   const days = o.series
-  const total =
-    kind === 'tickets' ? o.kpis.ticketsOpened.value ?? 0 : kind === 'handovers' ? o.kpis.handoffs.value ?? 0 : kind === 'escalations' ? o.kpis.escalations.value ?? 0 : kind === 'charges' ? Math.min(5000, (o.kpis.conversations.value ?? 0) * 2) : days.length * 24
-  const at = (i: number) => {
+  const rated = days.reduce((a, d) => a + d.csatGood + d.csatOkay + d.csatBad, 0)
+  const total = {
+    conversations: o.kpis.conversations.value ?? 0,
+    tickets: o.kpis.ticketsOpened.value ?? 0,
+    handovers: o.kpis.handoffs.value ?? 0,
+    escalations: o.kpis.escalations.value ?? 0,
+    csat: rated,
+    charges: Math.min(5000, (o.kpis.conversations.value ?? 0) * 2),
+    agent_usage: days.length * 24,
+  }[kind]
+  // Newest first, written like the server writes them (en-GB, the support hours' time zone).
+  const atDate = (i: number) => {
     const d = days[days.length - 1 - (i % days.length)]?.date ?? f.to
-    const h = 9 + (i * 7) % 12
-    return new Date(`${d}T${String(h).padStart(2, '0')}:${String((i * 13) % 60).padStart(2, '0')}:00`).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })
+    const h = 21 - ((i * 7) % 12)
+    return new Date(`${d}T${String(h).padStart(2, '0')}:${String((i * 13) % 60).padStart(2, '0')}:00`)
   }
+  const at = (i: number) => atDate(i).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })
   const who = (i: number) => CUSTOMERS[i % CUSTOMERS.length]
   const person = (i: number) => PEOPLE[i % PEOPLE.length].name
   const team = (i: number) => TEAMS[i % TEAMS.length].name
   const agent = (i: number) => pick(f)[i % Math.max(1, pick(f).length)]?.label ?? AGENTS[0].label
-  const rows = Array.from({ length: Math.max(0, Math.min(limit, total - skip)) }, (_, j): LogPage['rows'][number] => {
-    const i = skip + j
+  const containment = o.kpis.containment.value ?? 0.8
+  const row = (i: number): LogPage['rows'][number] => {
     const r = (k: string) => rand(`${kind}${i}${k}`)
+    const rating = (x: number) => (x < 0.7 ? 'good' : x < 0.88 ? 'okay' : 'bad')
     switch (kind) {
+      case 'conversations': {
+        const by = r('a') < containment ? 'ai' : r('n') < 0.12 ? 'none' : 'team'
+        return {
+          started: at(i),
+          customer: who(i),
+          agent: agent(i),
+          answeredBy: by,
+          firstReplyMin: by === 'ai' ? 0 : by === 'team' ? Math.round(3 + r('f') * 40) : null,
+          messages: by === 'none' ? 1 : Math.round(2 + r('m') * 14),
+          ticket: by === 'team' ? `#${4800 - i}` : null,
+          csat: by === 'team' && r('c') < 0.4 ? rating(r('g')) : null,
+        }
+      }
       case 'tickets':
         return {
           ticket: `#${4800 - i}`,
@@ -278,20 +304,57 @@ function dummyLogs(kind: LogKind, f: AnalyticsFilter, skip: number, limit: numbe
         return { at: at(i), ticket: `#${4800 - i}`, customer: who(i), how: r('h') < 0.8 ? 'AI handed over' : 'Someone took over', to: person(i), team: team(i), firstReplyMin: Math.round(3 + r('f') * 30), status: r('s') < 0.8 ? 'resolved' : 'open' }
       case 'escalations':
         return { at: at(i), ticket: `#${4800 - i * 3}`, customer: who(i), priority: ['urgent', 'high', 'normal'][i % 3], level: r('l') < 0.7 ? 1 : r('l') < 0.92 ? 2 : 3, reason: ['First reply 75% in', 'First reply at breach', 'Resolution at breach'][i % 3], notified: 1 + (i % 3), team: team(i) }
+      case 'csat':
+        return {
+          when: at(i),
+          customer: who(i),
+          ticket: `#${4800 - i * 2}`,
+          rating: rating(r('g')),
+          team: team(i),
+          assignee: person(i),
+          comment: r('t') < 0.3 ? ['Quick and helpful, thanks!', 'Took a while but sorted.', 'Still waiting on my refund.', 'Great service.'][i % 4] : null,
+        }
       case 'charges':
         return { at: at(i), agent: agent(i), customer: who(i), category: ['service', 'marketing', 'utility', 'service', 'authentication'][i % 5], type: r('t') < 0.9 ? 'regular' : 'free_customer_service', billable: r('b') < 0.85 ? 'Yes' : 'No', status: ['delivered', 'read', 'sent'][i % 3] }
       default:
         return { hour: at(i), agent: agent(i), messages: Math.round(4 + r('m') * 30), tokens: Math.round((4 + r('m') * 30) * 21_000), cost: Math.round((4 + r('m') * 30) * 4.2) / 100 }
     }
-  })
+  }
   const columns: Record<LogKind, LogPage['columns']> = {
+    conversations: ['started:Started', 'customer:Customer', 'agent:Agent', 'answeredBy:Answered by', 'firstReplyMin:First reply:n', 'messages:Messages:n', 'ticket:Ticket', 'csat:Satisfaction'].map(col),
     tickets: ['ticket:Ticket', 'subject:Subject', 'customer:Customer', 'team:Team', 'assignee:Assignee', 'priority:Priority', 'status:Status', 'opened:Opened', 'firstReplyMin:Minutes to first reply:n', 'resolveMin:Minutes to resolve:n', 'sla:SLA', 'level:Escalation level:n', 'csat:CSAT'].map(col),
     handovers: ['at:Handed over', 'ticket:Ticket', 'customer:Customer', 'how:How', 'to:Picked up by', 'team:Team', 'firstReplyMin:Minutes to first reply:n', 'status:Status'].map(col),
     escalations: ['at:When', 'ticket:Ticket', 'customer:Customer', 'priority:Priority', 'level:Level:n', 'reason:Why', 'notified:People alerted:n', 'team:Team'].map(col),
+    csat: ['when:When', 'customer:Customer', 'ticket:Ticket', 'rating:Rating', 'team:Team', 'assignee:Assignee', 'comment:Comment'].map(col),
     charges: ['at:When', 'agent:Agent', 'customer:Customer', 'category:Category', 'type:Pricing type', 'billable:Billable', 'status:Status'].map(col),
     agent_usage: ['hour:Hour', 'agent:Agent', 'messages:Billable messages:n', 'tokens:Billable tokens:n', 'cost:Cost:n'].map(col),
   }
-  return { kind, columns: columns[kind], rows, total }
+  // The columns the server can sort by (server/insights/analytics.ts); anything else it refuses.
+  const SORTABLE: Record<LogKind, string[]> = {
+    conversations: ['started', 'firstReplyMin', 'messages', 'answeredBy'],
+    tickets: ['opened', 'ticket', 'status', 'firstReplyMin', 'resolveMin', 'level'],
+    handovers: ['at', 'ticket', 'how', 'firstReplyMin', 'status'],
+    escalations: ['at', 'ticket', 'level'],
+    csat: ['when', 'ticket', 'rating'],
+    charges: ['at', 'category', 'type', 'billable', 'status'],
+    agent_usage: ['hour', 'messages', 'tokens', 'cost'],
+  }
+  const cols = columns[kind].map((c) => ({ ...c, sortable: SORTABLE[kind].includes(c.key) }))
+  const by = sort && cols.find((c) => c.key === sort.key && c.sortable)
+  if (sort && !by) throw new MetaError(400, 'Can’t sort by that', `The ${kind} log can’t be sorted by ${sort.key}.`)
+  if (!sort || !by) return { kind, columns: cols, rows: Array.from({ length: Math.max(0, Math.min(limit, total - skip)) }, (_, j) => row(skip + j)), total }
+  // Sorted like the server: by that column, empty cells last, then newest first.
+  const k = sort.dir === 'asc' ? 1 : -1
+  // Time columns sort by the time itself, not its words.
+  const TIMES = new Set(['started', 'opened', 'at', 'when', 'hour'])
+  const value = (i: number) => (TIMES.has(by.key) ? +atDate(i) : row(i)[by.key])
+  const order = Array.from({ length: total }, (_, i) => i).sort((a, b) => {
+    const x = value(a)
+    const y = value(b)
+    if (x == null || y == null) return x == null && y == null ? 0 : x == null ? 1 : -1
+    return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y))) * k
+  })
+  return { kind, columns: cols, rows: order.slice(skip, skip + limit).map(row), total, sort: { key: by.key, dir: sort.dir === 'asc' ? 'asc' : 'desc' } }
 }
 function col(spec: string) {
   const [key, label, n] = spec.split(':')
@@ -307,6 +370,7 @@ export async function dummyAnalytics<T>(_method: string, path: string): Promise<
   const f: AnalyticsFilter = { from: u.searchParams.get('from') || addDays(to, -29), to, numbers: list('numbers'), team: u.searchParams.get('team'), person: u.searchParams.get('person') }
   if (u.pathname === '/api/analytics/overview') return dummyOverview(f) as T
   const m = u.pathname.match(/^\/api\/analytics\/logs\/([a-z_]+)$/)
-  if (m && LOG_KINDS.includes(m[1] as LogKind)) return dummyLogs(m[1] as LogKind, f, Number(u.searchParams.get('skip') ?? 0), Number(u.searchParams.get('limit') ?? 50)) as T
+  const sort = u.searchParams.get('sort')
+  if (m && LOG_KINDS.includes(m[1] as LogKind)) return dummyLogs(m[1] as LogKind, f, Number(u.searchParams.get('skip') ?? 0), Number(u.searchParams.get('limit') ?? 50), sort ? { key: sort, dir: u.searchParams.get('dir') === 'asc' ? 'asc' : 'desc' } : null) as T
   throw new MetaError(404, 'Not found', path)
 }

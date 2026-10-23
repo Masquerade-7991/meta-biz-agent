@@ -45,6 +45,8 @@ const SHOTS = [
   ['template-new', '/whatsapp', async (p) => { await tab('Message templates')(p); await click(/^New template/)(p) }, dialog],
   ['analytics', '/analytics'],
   ['reports', '/reports'],
+  ['report-summary', '/reports/business_review'],
+  ['report-records', '/reports/tickets'],
   ['whatsapp', '/whatsapp'],
   ['connect-number', '/whatsapp', click(/^Connect$/), dialog, 900],
   ['whatsapp-account', '/whatsapp?tab=account'],
@@ -55,6 +57,8 @@ const SHOTS = [
   ['settings-escalation', '/settings/escalation'],
   ['settings-hours', '/settings/support'],
   ['settings-activity', '/settings/activity'],
+  // Last: it resets this browser's demo data to a new workspace (Demo controls › New workspace).
+  ['home-first', '/', async (p) => { await click('Demo controls')(p); await click('New workspace (no number)')(p); await p.keyboard.press('Escape'); await p.getByRole('heading', { name: 'Quick-start guides' }).waitFor() }],
 ]
 
 const only = process.argv[2]?.split(',')

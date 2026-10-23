@@ -15,4 +15,6 @@ export const filterQuery = (f: AnalyticsFilter) => {
 }
 
 export const getOverview = (f: AnalyticsFilter) => call<Overview>(`/api/analytics/overview?${filterQuery(f)}`)
-export const getLog = (kind: LogKind, f: AnalyticsFilter, skip = 0, limit = 50) => call<LogPage>(`/api/analytics/logs/${kind}?${filterQuery(f)}&skip=${skip}&limit=${limit}`)
+/** `sort`: a column key of the log; the server keeps its own order (newest first) without one. */
+export const getLog = (kind: LogKind, f: AnalyticsFilter, skip = 0, limit = 50, sort?: { key: string; dir: 'asc' | 'desc' } | null) =>
+  call<LogPage>(`/api/analytics/logs/${kind}?${filterQuery(f)}&skip=${skip}&limit=${limit}${sort ? `&sort=${encodeURIComponent(sort.key)}&dir=${sort.dir}` : ''}`)

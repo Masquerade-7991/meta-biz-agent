@@ -31,9 +31,10 @@ export default function HomePage() {
         <span className="size-1.5 rounded-full bg-fd-primary" />
         WhatsApp Business Agent, run by Meta, set up in Helo.ai's console
       </p>
-      <h1 className="max-w-2xl font-display text-4xl font-bold tracking-tight text-(--text-strong) text-balance sm:text-5xl">
+      <h1 className="hero-title max-w-2xl font-display text-4xl font-bold tracking-tight text-(--text-strong) text-balance sm:text-5xl">
         Everything you need to setup your agent and get started
       </h1>
+      <span className="hero-rule" aria-hidden />
       <p className="mt-5 max-w-xl text-base text-fd-muted-foreground sm:text-lg">
         Step-by-step guides for the Helo.ai console, written from Meta&rsquo;s rules and our own product.
       </p>
@@ -48,7 +49,9 @@ export default function HomePage() {
             data-card="true"
             className="group rounded-xl border p-6 text-fd-card-foreground"
           >
-            <Icon className="size-5 text-fd-primary" aria-hidden />
+            <span className="deco-tile inline-flex size-9 items-center justify-center rounded-lg">
+              <Icon className="size-5 text-(--accent-text)" aria-hidden />
+            </span>
             <h2 className="mt-4 flex items-center gap-1.5 font-display text-lg font-semibold tracking-tight text-(--text-strong)">
               {title}
               <ArrowRight className="size-4 text-fd-muted-foreground transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden />
@@ -66,7 +69,7 @@ export default function HomePage() {
               href={href}
               className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground"
             >
-              <Icon className="size-4 text-fd-muted-foreground" aria-hidden />
+              <Icon className="size-4 text-(--accent-text)" aria-hidden />
               {label}
             </Link>
           </li>

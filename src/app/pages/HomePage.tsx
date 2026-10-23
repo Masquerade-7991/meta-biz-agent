@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Bot, Check, ChevronRight, Inbox, MessageCircle, Smartphone, Ticket, UserPlus, Users } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ArrowUpRight, BarChart3, Bot, ChevronRight, CreditCard, Headset, Inbox, MessageCircle, Rocket, Smartphone, Ticket, UserPlus, Users } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { listChats, type ChatSummary } from '@/app/api/inbox'
 import { getSupportSettings, listTickets } from '@/app/api/tickets'
@@ -8,7 +8,7 @@ import { addDays, isoDay, type Overview } from '@/app/analytics/types'
 import { dur, num, pct } from '@/app/analytics/format'
 import { getNumberHealth } from '@/app/api/whatsapp'
 import { StatusPill } from '@/app/components/ui/status'
-import { AGENT_STATUS, agentStatusOf, type Tone } from '@/app/lib/status'
+import { AGENT_STATUS, agentStatusOf, progressTone, type Tone } from '@/app/lib/status'
 import { cn } from '@/app/lib/utils'
 import { Button } from '@/app/components/ui/button'
 import { useAuth } from '@/app/auth/AuthContext'
@@ -17,14 +17,19 @@ import { can } from '@/app/lib/permissions'
 import type { NavId } from '@/app/nav'
 import type { SettingsTab } from '@/app/components/shell/settings/areas'
 import { workspaceAccounts, type WaAccount } from '@/app/api/whatsapp'
-import { AccountSteps } from '@/app/whatsapp/AccountSteps'
 import { ConnectNumberButton } from '@/app/whatsapp/ConnectNumberDialog'
 import { isDummyMode } from '@/app/api/dummy'
 import { DemoControlsGroup } from '@/app/components/wizard/DemoControlsGroup'
 import { useRegisterDevControls } from '@/app/wizard/DevControlsContext'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
-import { listStoredAgents } from '@/app/api/store'
+import { hasTestConversations, listStoredAgents } from '@/app/api/store'
+import { authApi, resetDemoTeam } from '@/app/auth/api'
+import { DOCS_BASE, QUICK_START } from '@/app/home/helpLinks'
+import { setupSteps, type SetupSignals, type SetupStepId } from '@/app/home/setupSteps'
+import { studioPath } from '@/app/wizard/studioPaths'
 import { useWizard } from '@/app/wizard/WizardContext'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
+import type { OmniItem } from '@/app/omnibar/scope'
 
 interface Snapshot {
   number: { id: string; display: string; name: string } | null
@@ -60,145 +65,197 @@ function greeting(name?: string) {
   return first ? `${part}, ${first}` : part
 }
 
-/** One step of the setup guide; `done` comes from live data, never from a click. */
-function Step({ n, done, locked, title, note, children, action }: { n: number; done: boolean; locked?: string; title: string; note?: ReactNode; children?: ReactNode; action?: ReactNode }) {
-  return (
-    <li className="grid grid-cols-[2rem_minmax(0,1fr)] gap-4 py-5">
-      <span
-        className={
-          done
-            ? 'flex size-8 items-center justify-center rounded-full bg-success text-success-foreground'
-            : locked
-              ? 'flex size-8 items-center justify-center rounded-full border border-border text-muted-foreground/60'
-              : 'flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground'
-        }
-        aria-label={done ? 'Done' : `Step ${n}`}
-      >
-        {done ? <Check className="size-4 text-sm" /> : <span>{n}</span>}
-      </span>
-      <div className="min-w-0 space-y-2">
-        <p className={cn('font-semibold', (done || locked) && 'text-muted-foreground')}>
-          {title}
-        </p>
-        {done ? (
-          note && (
-            <div className="text-muted-foreground text-sm">
-              {note}
-            </div>
-          )
-        ) : locked ? (
-          <p className="text-muted-foreground/80 text-sm">
-            {locked}
-          </p>
-        ) : (
-          <>
-            {children && (
-              <div className="text-muted-foreground text-sm">
-                {children}
-              </div>
-            )}
-            {action}
-          </>
-        )}
-      </div>
-    </li>
-  )
-}
-
 const billingDone = (a: WaAccount) => a.source === 'env' || (a.billing.mode === 'partner_credit' ? a.billing.state === 'shared' : a.billing.state === 'confirmed')
 
 const link = 'text-primary underline-offset-4 hover:underline'
 
-/** The two things Home is for: connect WhatsApp, then build the agent. `done` comes from live data. */
-function GetStarted({
+/** A link to another site: a new tab, and screen readers are told so. */
+function ExternalLink({ href, className, children }: { href: string; className?: string; children: ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className={cn('inline-flex items-center gap-1', link, className)}>
+      {children}
+      <ArrowUpRight className="size-3.5" aria-hidden />
+      <span className="sr-only">(opens in a new tab)</span>
+    </a>
+  )
+}
+
+/** A quiet note in place of a button someone's role can't use. */
+const WhoDoesIt = ({ children }: { children: ReactNode }) => <p className="rounded-md bg-muted px-3 py-2.5 text-sm text-muted-foreground">{children}</p>
+
+interface StepView {
+  title: string
+  icon: typeof Bot
+  /** One sentence on what this step is for. */
+  why: ReactNode
+  /** The step's one action (or who does it). */
+  action: ReactNode
+  docs: string
+}
+
+/** Setup on Home, kept small: one card with the next thing to do, one with what comes after.
+ *  Done-ness comes from live data (setupSteps.ts); the full checklist lives in the agent's overview. */
+const STEP_TITLE: Record<SetupStepId, string> = {
+  connect: 'Connect your WhatsApp number',
+  account: 'Finish account setup',
+  build: 'Build your AI agent',
+  test: 'Test it in a chat',
+  live: 'Go live',
+  invite: 'Invite your team',
+}
+
+/** Scrolls to a card on Home and puts focus on its first button or link (the omnibar's matches). */
+function focusCard(id: string) {
+  const el = document.getElementById(id)
+  el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  el?.querySelector<HTMLElement>('button, a')?.focus({ preventScroll: true })
+}
+
+function SetupGuide({
+  signals,
   snap,
-  accounts,
-  onNavigate,
+  account,
+  draftName,
+  onOpenSettings,
   onAccountChange,
-  onCreateAgent,
 }: {
-  onCreateAgent: () => void
+  signals: SetupSignals
   snap: Snapshot
-  accounts: WaAccount[]
-  onNavigate: (id: NavId) => void
+  account: WaAccount | undefined
+  draftName: string
+  onOpenSettings: (tab: SettingsTab) => void
   onAccountChange: (a: WaAccount) => void
 }) {
   const { me } = useAuth()
+  const navigate = useNavigate()
   const manage = can(me?.role, 'whatsapp.manage')
-  const account = accounts[0]
-  const connected = !!account
-  const billed = connected && billingDone(account)
-  const number = account?.phoneNumbers[0]
-  const agent = snap.agent
+  const edit = can(me?.role, 'agent.edit')
+  const ws = me?.workspace?.name ?? 'this workspace'
+  const { steps } = setupSteps(signals)
+  const agentOnly = <WhoDoesIt>An admin or owner of {ws} sets up the AI agent.</WhoDoesIt>
+  const view: Record<SetupStepId, StepView> = {
+    connect: {
+      title: STEP_TITLE.connect,
+      icon: Smartphone,
+      why: 'Your AI agent and inbox run on your own WhatsApp number. Connect it with Facebook in a few minutes.',
+      action: manage ? <ConnectNumberButton onConnected={onAccountChange} /> : <WhoDoesIt>An owner of {ws} connects the number.</WhoDoesIt>,
+      docs: `${DOCS_BASE}/guide/connect-number`,
+    },
+    account: {
+      title: STEP_TITLE.account,
+      icon: CreditCard,
+      why: account?.needsAttention ? 'A setup step didn’t finish. Retry it so your number can send messages.' : 'Add a payment method so your number can send messages.',
+      action: manage ? (
+        <Button onClick={() => navigate('/whatsapp?tab=account')}>
+          <CreditCard className="size-4" />
+          Finish setup
+        </Button>
+      ) : (
+        <WhoDoesIt>An owner of {ws} finishes this.</WhoDoesIt>
+      ),
+      docs: `${DOCS_BASE}/guide/connect-number#setup-steps`,
+    },
+    build: {
+      title: STEP_TITLE.build,
+      icon: Bot,
+      why: draftName ? `“${draftName}” is started. Finish its details so it can answer.` : 'Name it and give it your business details and FAQs. It takes a few minutes.',
+      action: edit ? (
+        <Button onClick={() => navigate(draftName && !snap.agent ? '/agents' : '/agents?new')}>
+          <Bot className="size-4" />
+          {draftName ? 'Continue setting it up' : 'Build agent'}
+        </Button>
+      ) : (
+        agentOnly
+      ),
+      docs: `${DOCS_BASE}/guide/build-agent`,
+    },
+    test: {
+      title: STEP_TITLE.test,
+      icon: MessageCircle,
+      why: 'Chat with your agent as a customer would, and check its answers before anyone else sees them.',
+      action: edit ? (
+        <Button onClick={() => navigate(studioPath('testEval'))}>
+          <MessageCircle className="size-4" />
+          Open Try it
+        </Button>
+      ) : (
+        agentOnly
+      ),
+      docs: `${DOCS_BASE}/guide/build-agent/test`,
+    },
+    live: {
+      title: STEP_TITLE.live,
+      icon: Rocket,
+      why: 'Switch it on for everyone, so it starts answering your customers.',
+      action: edit ? (
+        <Button onClick={() => navigate(studioPath('publish'))}>
+          <Rocket className="size-4" />
+          Go live
+        </Button>
+      ) : (
+        agentOnly
+      ),
+      docs: `${DOCS_BASE}/guide/build-agent/publish`,
+    },
+    invite: { title: STEP_TITLE.invite, icon: Users, why: null, action: null, docs: `${DOCS_BASE}/guide/settings#members-and-roles` },
+  }
+  const required = steps.filter((s) => !s.optional)
+  const current = required.find((s) => s.current)
+  if (!current) return null
+  const at = required.indexOf(current)
+  const next = view[current.id]
+  const later = required.slice(at + 1)
+  const invite = steps.find((s) => s.optional && !s.done)
   return (
-    <section className="rounded-lg border border-border p-6 md:p-8">
-      <h2 className="text-section font-semibold">{!connected ? 'Start by connecting WhatsApp' : agent ? 'You’re set up' : 'Next, build your AI agent'}</h2>
-      <ol className="mt-2 divide-y divide-border">
-        <Step
-          n={1}
-          done={billed}
-          title={connected ? 'WhatsApp connected' : 'Connect your WhatsApp Business number'}
-          note={
-            number && (
-              <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                <span>
-                  {[number.verifiedName || account.wabaName, number.display].filter(Boolean).join(' · ')}
-                </span>
-                {can(me?.role, 'numbers.view') && (
-                  <button type="button" className={link} onClick={() => onNavigate('whatsapp')}>
-                    Manage numbers &rarr;
-                  </button>
-                )}
-                {manage && <ConnectNumberButton variant="link" size="sm" label="Add another number" className="h-auto p-0" onConnected={onAccountChange} />}
-              </span>
-            )
-          }
-          action={
-            <div className="pt-2">
-              {connected ? (
-                <AccountSteps account={account} canEdit={manage} onChange={onAccountChange} />
-              ) : manage ? (
-                <ConnectNumberButton size="lg" onConnected={onAccountChange} />
-              ) : (
-                <p className="rounded-md bg-muted px-3 py-2.5 text-sm text-muted-foreground">Ask an owner of {me?.workspace?.name ?? 'this workspace'} to connect a WhatsApp number. Only owners can connect accounts.</p>
-              )}
-            </div>
-          }
-        >
-          {connected
-            ? account.needsAttention
-              ? 'Some setup steps didn’t finish. Retry them below.'
-              : 'Add a payment method so your number can send messages.'
-            : 'Your AI agent and inbox run on your own WhatsApp number. Connect it with Facebook in a few minutes, right here.'}
-        </Step>
-        <Step
-          n={2}
-          done={!!agent}
-          locked={connected ? undefined : 'Unlocks after you connect your number.'}
-          title={agent ? 'AI agent built' : 'Build your AI agent'}
-          note={
-            agent && (
-              <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                <AgentPill agent={agent} />
-                <span>
-                  On {[snap.number?.name, snap.number?.display].filter(Boolean).join(' · ')}
-                </span>
-                <button type="button" className={link} onClick={() => onNavigate('ai-agents')}>
-                  Open your agent &rarr;
-                </button>
-              </span>
-            )
-          }
-          action={
-            <Button size="sm" onClick={onCreateAgent}>
-              <Bot className="size-4" />
-              Build agent
-            </Button>
-          }
-        >
-          Name it, give it your business details and FAQs, test it, then publish. Its numbers then show here and in Analytics.
-        </Step>
-      </ol>
+    <section className="grid gap-4 lg:grid-cols-3" aria-label="Get set up">
+      <div id="home-next-step" className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5 lg:col-span-2">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-medium text-muted-foreground">
+            Next step · {at + 1} of {required.length}
+          </p>
+          <div className="flex gap-1" role="progressbar" aria-label="Setup progress" aria-valuemin={0} aria-valuemax={required.length} aria-valuenow={at}>
+            {required.map((s, i) => (
+              <span key={s.id} className={cn('h-1.5 w-6 rounded-full', i < at ? progressTone(at, required.length) : i === at ? 'bg-primary/40' : 'bg-muted')} />
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-4">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <next.icon className="size-5" />
+          </span>
+          <div className="min-w-0 space-y-1">
+            <h2 className="text-section font-semibold">{next.title}</h2>
+            <p className="text-sm text-muted-foreground">{next.why}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3 sm:pl-14">
+          {next.action}
+          <ExternalLink href={next.docs} className="text-sm">
+            Learn how
+          </ExternalLink>
+        </div>
+      </div>
+      <div className="flex flex-col rounded-lg border border-border bg-card p-5">
+        <p className="text-xs font-medium text-muted-foreground">After that</p>
+        {later.length ? (
+          <ol className="mt-3 space-y-2.5">
+            {later.map((s) => (
+              <li key={s.id} className="flex items-center gap-3 text-sm text-muted-foreground">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-border text-xs">{s.n}</span>
+                {view[s.id].title}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="mt-3 text-sm text-muted-foreground">This is the last step. Then Home becomes your dashboard.</p>
+        )}
+        {invite && (
+          <button type="button" onClick={() => onOpenSettings('members')} className={cn(link, 'mt-auto flex items-center gap-1.5 pt-4 text-sm')}>
+            <Users className="size-4" />
+            Invite your team (optional)
+          </button>
+        )}
+      </div>
     </section>
   )
 }
@@ -229,10 +286,24 @@ const QUALITY: Record<string, { label: string; tone: Tone }> = {
 }
 
 /** Once set up, Home is what needs attention today: open chats and tickets, the agent, the number. */
-function AtAGlance({ agent, draftName, chats: loadChats, onNavigate }: { agent: AgentOnNumber | null; draftName: string; chats: () => Promise<ChatSummary[]>; onNavigate: (id: NavId) => void }) {
+function AtAGlance({
+  agent,
+  draftName,
+  chats: loadChats,
+  onNavigate,
+  preview,
+}: {
+  agent: AgentOnNumber | null
+  draftName: string
+  chats: () => Promise<ChatSummary[]>
+  onNavigate: (id: NavId) => void
+  /** First visit: the same tiles, empty, with a hint of what fills them (whether a number is connected yet). Nothing is loaded. */
+  preview?: 'connected' | 'new'
+}) {
   // tickets null: they couldn't be loaded, so no count is shown (rather than a reassuring 0).
   const [data, setData] = useState<{ unread: number; chats: number; tickets: number | null; overdue: number; quality: string | null } | null>(null)
   useEffect(() => {
+    if (preview) return
     Promise.all([loadChats(), listTickets({ limit: '1000' }).catch(() => null), getNumberHealth().catch(() => [])]).then(([chats, tickets, health]) =>
       setData({
         unread: chats.reduce((n, c) => n + c.unread, 0),
@@ -242,7 +313,7 @@ function AtAGlance({ agent, draftName, chats: loadChats, onNavigate }: { agent: 
         quality: health[0]?.quality ?? null,
       }),
     )
-  }, [loadChats])
+  }, [loadChats, preview])
   const q = data?.quality ? QUALITY[data.quality] : undefined
   const tiles: { id: NavId; icon: typeof Inbox; label: string; value: ReactNode; note?: ReactNode; urgent?: boolean }[] = [
     { id: 'inbox', icon: Inbox, label: 'Unread messages', value: data?.unread ?? '—', note: data ? `${data.chats} chat${data.chats === 1 ? '' : 's'} waiting` : undefined, urgent: !!data?.unread },
@@ -269,6 +340,15 @@ function AtAGlance({ agent, draftName, chats: loadChats, onNavigate }: { agent: 
     },
     { id: 'whatsapp', icon: Smartphone, label: 'WhatsApp number', value: q ? <StatusPill tone={q.tone}>{q.label}</StatusPill> : '—', note: 'Quality rating from Meta' },
   ]
+  if (preview) {
+    const hints: Partial<Record<NavId, string>> = {
+      inbox: 'Shows unread messages once customers write',
+      tickets: 'Tickets open when chats need your team',
+      'ai-agents': 'Answers customers once it’s live',
+      whatsapp: preview === 'connected' ? 'Quality rating from Meta' : 'Quality rating appears after you connect',
+    }
+    for (const t of tiles) Object.assign(t, { note: hints[t.id], urgent: false })
+  }
   return (
     <section className="space-y-3">
       <h2 className="text-section font-semibold">At a glance</h2>
@@ -278,7 +358,7 @@ function AtAGlance({ agent, draftName, chats: loadChats, onNavigate }: { agent: 
             key={t.id}
             type="button"
             onClick={() => onNavigate(t.id)}
-            className={cn('group flex flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:border-border-strong', t.urgent ? 'border-warning/50' : 'border-border')}
+            className={cn('group flex flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors hover:border-border-strong', t.urgent ? 'border-warning/50' : preview ? 'border-dashed border-border' : 'border-border')}
           >
             <span className="flex items-center justify-between text-sm text-muted-foreground">
               <span className="flex items-center gap-2">
@@ -287,7 +367,7 @@ function AtAGlance({ agent, draftName, chats: loadChats, onNavigate }: { agent: 
               </span>
               <ChevronRight className="size-4 opacity-0 transition-opacity group-hover:opacity-100" />
             </span>
-            <span className="text-title font-semibold tabular-nums">{t.value}</span>
+            <span className={cn('text-title font-semibold tabular-nums', preview && 'text-muted-foreground')}>{t.value}</span>
             {t.note && <span className="text-xs text-muted-foreground">{t.note}</span>}
           </button>
         ))}
@@ -359,22 +439,25 @@ function RecentChats({ chats: loadChats, onOpenChat, onNavigate }: { chats: () =
   )
 }
 
+interface QuickAction {
+  icon: typeof Inbox
+  label: string
+  hint: string
+  run?: () => void
+  /** Another site, opened in a new tab. */
+  href?: string
+}
+
 /** The things people do most, one click away. */
-function QuickActions({ onNavigate, hasAgent }: { onNavigate: (id: NavId, tab?: SettingsTab) => void; hasAgent: boolean }) {
-  const navigate = useNavigate()
-  const { me } = useAuth()
-  const actions = [
-    hasAgent && { icon: MessageCircle, label: 'Test your AI agent', hint: 'Chat with it as a customer would', run: () => navigate('/agents') },
-    { icon: UserPlus, label: 'Add a contact', hint: 'Or import a CSV', run: () => onNavigate('contacts') },
-    can(me?.role, 'members.manage') && { icon: Users, label: 'Invite a teammate', hint: 'Agents, supervisors or admins', run: () => onNavigate('settings', 'members') },
-  ].filter(Boolean) as { icon: typeof Inbox; label: string; hint: string; run: () => void }[]
+function QuickActions({ title = 'Quick actions', actions }: { title?: string; actions: (QuickAction | false)[] }) {
+  const row = 'group flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/60'
   return (
     <section className="rounded-lg border border-border bg-card">
-      <h2 className="border-b border-border px-5 py-3 text-section font-semibold">Quick actions</h2>
+      <h2 className="border-b border-border px-5 py-3 text-section font-semibold">{title}</h2>
       <ul className="p-2">
-        {actions.map((a) => (
-          <li key={a.label}>
-            <button type="button" onClick={a.run} className="group flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/60">
+        {actions.filter((a): a is QuickAction => !!a).map((a) => {
+          const body = (
+            <>
               <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground group-hover:text-foreground">
                 <a.icon className="size-4" />
               </span>
@@ -382,8 +465,54 @@ function QuickActions({ onNavigate, hasAgent }: { onNavigate: (id: NavId, tab?: 
                 <span className="block text-sm font-medium">{a.label}</span>
                 <span className="block truncate text-xs text-muted-foreground">{a.hint}</span>
               </span>
-              <ChevronRight className="size-4 text-muted-foreground" />
-            </button>
+              {a.href ? <ArrowUpRight className="size-4 text-muted-foreground" aria-hidden /> : <ChevronRight className="size-4 text-muted-foreground" />}
+            </>
+          )
+          return (
+            <li key={a.label}>
+              {a.href ? (
+                <a href={a.href} target="_blank" rel="noreferrer" className={row}>
+                  {body}
+                  <span className="sr-only">(opens in a new tab)</span>
+                </a>
+              ) : (
+                <button type="button" onClick={a.run} className={row}>
+                  {body}
+                </button>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+/** First visit: Helo.ai's guides, each opening the docs site in a new tab. */
+function QuickStartGuides() {
+  return (
+    <section id="home-guides" className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-section font-semibold">Quick-start guides</h2>
+        <ExternalLink href={`${DOCS_BASE}/guide`} className="text-sm">
+          All guides
+        </ExternalLink>
+      </div>
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {QUICK_START.map((g) => (
+          <li key={g.href}>
+            <a href={g.href} target="_blank" rel="noreferrer" className="group flex h-full flex-col gap-3 rounded-lg border border-border bg-card p-5 transition-colors hover:border-border-strong">
+              <span className="flex items-start justify-between">
+                <span className="flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground group-hover:text-foreground">
+                  <g.icon className="size-5" />
+                </span>
+                <ArrowUpRight className="size-4 text-muted-foreground" aria-hidden />
+              </span>
+              <span className="font-semibold">{g.title}</span>
+              <span className="line-clamp-2 text-sm text-muted-foreground">{g.description}</span>
+              <span className="mt-auto text-xs text-muted-foreground">{g.minutes} min read</span>
+              <span className="sr-only">(opens in a new tab)</span>
+            </a>
           </li>
         ))}
       </ul>
@@ -497,41 +626,58 @@ function ThisWeek({ onNavigate }: { onNavigate: (id: NavId) => void }) {
   )
 }
 
-/** Home: connect WhatsApp and build the agent; once that's done, what needs attention today. */
+/** Home: a first visit gets the setup guide over quiet previews of the dashboard and the quick-start
+ *  guides; once set up, what needs attention today. */
 export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigate: (id: NavId) => void; onOpenSettings: (tab: SettingsTab) => void; onOpenChat: (phone: string) => void }) {
   const { me } = useAuth()
   const role = me?.role
   const navigate = useNavigate()
   const [snap, setSnap] = useState<Snapshot | null>(null)
-  // Signs this isn't a first visit: agents saved in the console (any number), and chats.
-  const [history, setHistory] = useState<{ agents: number; chats: number }>({ agents: 0, chats: 0 })
-  const { state } = useWizard()
+  // Signs this isn't a first visit: agents saved in the console (any number), and chats. Plus the
+  // setup guide's own signals: a test chat, and the team (people and pending invites).
+  const [history, setHistory] = useState<{ agents: number; chats: number; tested: boolean; members: number; invites: number }>({ agents: 0, chats: 0, tested: false, members: 1, invites: 0 })
+  const { state, resetWizard } = useWizard()
   const draftName = state.identity.agentName.trim()
   const [accounts, setAccounts] = useState<WaAccount[]>([])
   // At a glance and Recent conversations both show chats: one request between them.
   const chatsRequest = useRef<Promise<ChatSummary[]> | null>(null)
   const loadChats = useCallback(() => (chatsRequest.current ??= listChats().catch(() => [])), [])
+  const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  const reload = () => {
+    chatsRequest.current = null
+    setAttempt((n) => n + 1)
+  }
   useRegisterDevControls(
     'home-whatsapp',
     isDummyMode() ? (
       <DemoControlsGroup label="WhatsApp">
-        <Button size="sm" variant="outline" onClick={() => void import('@/app/api/supportDummy').then((m) => {
-            m.resetDummyWhatsApp(false)
-            setAttempt((n) => n + 1)
-          })}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            void Promise.all([import('@/app/api/supportDummy'), import('@/app/api/dummyMeta')]).then(([m, d]) => {
+              // A brand-new workspace: no number, no chats, no agent and no draft.
+              m.resetDummyWhatsApp(false)
+              d.resetDummyAgent()
+              resetDemoTeam()
+              resetWizard()
+              reload()
+            })
+          }
+        >
           New workspace (no number)
         </Button>
         <Button size="sm" variant="outline" onClick={() => void import('@/app/api/supportDummy').then((m) => {
             m.resetDummyWhatsApp(true)
-            setAttempt((n) => n + 1)
+            reload()
           })}>
           Number connected
         </Button>
       </DemoControlsGroup>
     ) : null,
   )
-  const [error, setError] = useState<string | null>(null)
-  const [attempt, setAttempt] = useState(0)
+  const invites = can(role, 'members.manage')
   useEffect(() => {
     let cancelled = false
     setError(null)
@@ -539,38 +685,86 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
       workspaceAccounts(role).then(async (a) => [a, await loadSnapshot(a)] as const),
       listStoredAgents().catch(() => null),
       loadChats(),
+      hasTestConversations().catch(() => false),
+      invites ? authApi.members().catch(() => null) : null,
     ]).then(
-      ([[a, s], stored, chats]) => {
+      ([[a, s], stored, chats, tested, team]) => {
         if (cancelled) return
         setSnap(s)
         setAccounts(a)
-        setHistory({ agents: stored?.length ?? 0, chats: chats.length })
+        setHistory({ agents: stored?.length ?? 0, chats: chats.length, tested, members: team?.members.length ?? 1, invites: team?.invites.filter((x) => !x.expired).length ?? 0 })
       },
       (err) => !cancelled && setError(errorText(err)),
     )
     return () => {
       cancelled = true
     }
-  }, [attempt, loadChats, role])
+  }, [attempt, loadChats, role, invites])
 
   const account = accounts[0]
-  const billed = !!account && billingDone(account)
   // Home is the dashboard once WhatsApp is connected and this isn't a first visit: an agent exists on
   // Meta or in the console (even a draft with just a name), or customers have already written.
-  // A first visit gets the setup guide; anything unfinished shows as a note above the dashboard.
+  // A first visit gets the setup guide; anything unfinished shows as the guide above the dashboard.
   const returning = !!snap && !!account && (!!snap.agent || history.agents > 0 || !!draftName || history.chats > 0)
-  const getStarted = snap && (
-    <GetStarted
-      onCreateAgent={() => navigate('/agents?new')}
+  const signals: SetupSignals = {
+    connected: !!account,
+    billed: !!account && billingDone(account),
+    built: !!snap?.agent || history.agents > 0 || !!draftName,
+    tested: history.tested || !!snap?.agent?.enabled,
+    live: !!snap?.agent?.enabled && snap.agent.audience === 'EVERYONE',
+    invited: history.members > 1 || history.invites > 0,
+    canInvite: invites,
+  }
+  const setupDone = setupSteps(signals).allDone
+  const guide = snap && (
+    <SetupGuide
+      signals={signals}
       snap={snap}
-      accounts={accounts}
-      onNavigate={onNavigate}
+      account={account}
+      draftName={draftName}
+      onOpenSettings={onOpenSettings}
       onAccountChange={(a) => {
         setAccounts((prev) => [...prev.filter((x) => x.wabaId !== a.wabaId), a])
         // A newly connected number changes what the rest of Home shows (its agent).
-        if (!accounts.some((x) => x.wabaId === a.wabaId)) setAttempt((n) => n + 1)
+        if (!accounts.some((x) => x.wabaId === a.wabaId)) reload()
       }}
     />
+  )
+  const quick: (QuickAction | false)[] = returning
+    ? [
+        (!!snap?.agent || !!draftName) && { icon: MessageCircle, label: 'Test your AI agent', hint: 'Chat with it as a customer would', run: () => navigate('/agents') },
+        { icon: UserPlus, label: 'Add a contact', hint: 'Or import a CSV', run: () => onNavigate('contacts') },
+        invites && { icon: Users, label: 'Invite a teammate', hint: 'Agents, supervisors or admins', run: () => onOpenSettings('members') },
+      ]
+    : [
+        { icon: Headset, label: 'Talk to Helo.ai', hint: 'Our team helps you get started', href: 'https://helo.ai/contact-us' },
+        { icon: UserPlus, label: 'Add a contact', hint: 'Or import a CSV', run: () => onNavigate('contacts') },
+        invites && { icon: Users, label: 'Invite a teammate', hint: 'Agents, supervisors or admins', run: () => onOpenSettings('members') },
+      ]
+
+  // The omnibar searches what's on Home: the next setup step, the tiles, the quick actions and guides.
+  // The guide shows on a first visit unless the agent lookup failed (lookupNotice takes its place).
+  const nextStep = snap && !setupDone && (returning || !snap.lookupError) ? setupSteps(signals).steps.find((s) => s.current) : undefined
+  const homeScope = useMemo(() => {
+    const items: OmniItem[] = []
+    if (nextStep) items.push({ id: 'next', label: `Next step: ${STEP_TITLE[nextStep.id]}`, hint: 'Setup', run: () => focusCard('home-next-step') })
+    items.push(
+      { id: 'inbox', label: 'Inbox', hint: 'Chats waiting', icon: Inbox, run: () => onNavigate('inbox') },
+      { id: 'tickets', label: 'Tickets', hint: 'Open and overdue', icon: Ticket, run: () => onNavigate('tickets') },
+      { id: 'recent', label: 'Recent conversations', hint: 'Inbox', icon: MessageCircle, run: () => onNavigate('inbox') },
+    )
+    for (const a of quick) if (a) items.push({ id: `quick:${a.label}`, label: a.label, hint: a.hint, icon: a.icon, run: a.href ? () => void window.open(a.href, '_blank', 'noreferrer') : a.run! })
+    if (snap && !returning) for (const g of QUICK_START) items.push({ id: `guide:${g.href}`, label: g.title, hint: 'Guide', keywords: g.description, icon: g.icon, run: () => void window.open(g.href, '_blank', 'noreferrer') })
+    if (returning && can(role, 'reports.view')) items.push({ id: 'week', label: 'Last 7 days', hint: 'Analytics', icon: BarChart3, run: () => onNavigate('analytics') })
+    return { id: 'home', placeholder: 'Search Home', items }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snap, returning, nextStep?.id, draftName, invites, role])
+  useOmnibarScope(homeScope)
+
+  const lookupNotice = snap?.lookupError && (
+    <Notice tone="warning" title="Couldn’t reach your AI agent" action={<Button variant="outline" size="sm" onClick={reload}>Try again</Button>}>
+      {snap.lookupError}
+    </Notice>
   )
 
   return (
@@ -582,56 +776,37 @@ export function HomePage({ onNavigate, onOpenSettings, onOpenChat }: { onNavigat
       {error ? (
         <div className="rounded-lg border border-border p-6 text-sm">
           <p className="text-destructive">Couldn&rsquo;t check your WhatsApp setup. {error}</p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => setAttempt((n) => n + 1)}>
+          <Button variant="outline" size="sm" className="mt-3" onClick={reload}>
             Try again
           </Button>
         </div>
       ) : !snap ? (
         <PageLoader context="home" />
+      ) : returning ? (
+        <>
+          {lookupNotice}
+          {!setupDone && guide}
+          <AtAGlance agent={snap.agent} draftName={draftName} chats={loadChats} onNavigate={onNavigate} />
+          <div className="grid items-start gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <RecentChats chats={loadChats} onOpenChat={onOpenChat} onNavigate={onNavigate} />
+            </div>
+            <QuickActions actions={quick} />
+          </div>
+          {/* The team's numbers are for people who read reports; everyone else has the tiles above. */}
+          {can(role, 'reports.view') && <ThisWeek onNavigate={onNavigate} />}
+        </>
       ) : (
         <>
-          {returning ? (
-            <>
-              {snap.lookupError && (
-                <Notice tone="warning" title="Couldn’t reach your AI agent" action={<Button variant="outline" size="sm" onClick={() => setAttempt((n) => n + 1)}>Try again</Button>}>
-                  {snap.lookupError}
-                </Notice>
-              )}
-              {!billed ? (
-                getStarted
-              ) : (
-                !snap.agent &&
-                !snap.lookupError && (
-                  <Notice
-                    title={draftName ? `“${draftName}” isn’t live yet` : 'Build your AI agent'}
-                    action={
-                      <Button size="sm" onClick={() => (draftName ? navigate('/agents') : navigate('/agents?new'))}>
-                        <Bot className="size-4" />
-                        {draftName ? 'Continue setting it up' : 'Build agent'}
-                      </Button>
-                    }
-                  >
-                    {draftName ? 'Finish its setup, test it, then publish to start answering customers.' : 'Name it, give it your business details and FAQs, test it, then publish.'}
-                  </Notice>
-                )
-              )}
-              <AtAGlance agent={snap.agent} draftName={draftName} chats={loadChats} onNavigate={onNavigate} />
-              <div className="grid items-start gap-6 lg:grid-cols-3">
-                <div className="lg:col-span-2">
-                  <RecentChats chats={loadChats} onOpenChat={onOpenChat} onNavigate={onNavigate} />
-                </div>
-                <QuickActions hasAgent={!!snap.agent || !!draftName} onNavigate={(id, tab) => (tab ? onOpenSettings(tab) : onNavigate(id))} />
-              </div>
-              {/* The team's numbers are for people who read reports; everyone else has the tiles above. */}
-              {can(me?.role, 'reports.view') && <ThisWeek onNavigate={onNavigate} />}
-            </>
-          ) : snap.lookupError ? (
-            <Notice tone="warning" title="Couldn’t reach your AI agent" action={<Button variant="outline" size="sm" onClick={() => setAttempt((n) => n + 1)}>Try again</Button>}>
-              {snap.lookupError}
-            </Notice>
-          ) : (
-            getStarted
-          )}
+          {lookupNotice || guide}
+          <AtAGlance preview={account ? 'connected' : 'new'} agent={snap.agent} draftName={draftName} chats={loadChats} onNavigate={onNavigate} />
+          <div className="grid items-start gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <RecentChats chats={loadChats} onOpenChat={onOpenChat} onNavigate={onNavigate} />
+            </div>
+            <QuickActions title="Need a hand?" actions={quick} />
+          </div>
+          <QuickStartGuides />
         </>
       )}
     </div>

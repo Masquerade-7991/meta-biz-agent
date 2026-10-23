@@ -7069,7 +7069,7 @@
           "Analytics"
         ],
         "summary": "Everything on the Analytics page",
-        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\nHeadline numbers with the same-length period before, a series per day, customer messages by weekday and hour, per agent, people, teams, escalations, tools (Meta’s insights) and consumption: WhatsApp spend by category, the Business Agent’s usage, service replies against the 1,000 free per number each month, and the budget. Rows stored before numbers were stamped count as the default number.",
+        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\nHeadline numbers with the same-length period before, a series per day (weeks and months are rolled up from it by the client: counts and money add up, rates from their counts), customer messages by weekday and hour, per agent, people, teams, escalations, tools (Meta’s insights) and consumption: WhatsApp spend by category, the Business Agent’s usage, service replies against the 1,000 free per number each month, and the budget. Handovers count the AI handing over and someone taking over (the same rows as the handovers log). `kpis.openNow`, `overdueNow` and `peopleAvailable` are right now, whatever the dates; `byAgent[].serviceMessages` is for the chosen dates. WhatsApp spend is Meta’s per account, never per number: `spendWholeAccount` is true when the agents filter leaves some out (spend then still covers them all, and `costPerResolved` is null). Rows stored before numbers were stamped count as the default number.",
         "parameters": [
           {
             "name": "from",
@@ -7139,6 +7139,10 @@
                         "null"
                       ]
                     },
+                    "spendWholeAccount": {
+                      "type": "boolean",
+                      "description": "WhatsApp spend covers agents outside the filter."
+                    },
                     "agents": {
                       "type": "array",
                       "items": {
@@ -7173,6 +7177,7 @@
                   "required": [
                     "range",
                     "currency",
+                    "spendWholeAccount",
                     "agents",
                     "kpis",
                     "series",
@@ -7221,7 +7226,7 @@
           "Analytics"
         ],
         "summary": "Rows behind the charts",
-        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\n`kind`: tickets, handovers, escalations, charges (one row per message status with pricing) or agent_usage (per hour). Newest first; columns say how to show each field.",
+        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\n`kind`: conversations (one row per chat in the dates: started, customer, agent, answeredBy `ai`|`team`|`none`, firstReplyMin, messages, its ticket and rating; team and person don’t apply), tickets, handovers (the AI handing over or someone taking over, with `how`), escalations, csat (one row per rating of a ticket resolved in the dates: when, customer, ticket, rating `good`|`okay`|`bad`, team, assignee, comment), charges (one row per message status with pricing) or agent_usage (per hour). Newest first unless `sort` says otherwise; columns say how to show each field and which can be sorted.",
         "parameters": [
           {
             "name": "kind",
@@ -7300,6 +7305,30 @@
               "description": "1–200. Default 50."
             },
             "description": "1–200. Default 50."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "A column key marked `sortable`. conversations: started, firstReplyMin, messages, answeredBy · tickets: opened, ticket, status, firstReplyMin, resolveMin, level · handovers: at, ticket, how, firstReplyMin, status · escalations: at, ticket, level · csat: when, ticket, rating · charges: at, category, type, billable, status · agent_usage: hour, messages, tokens, cost. Default: the first (the newest first)."
+            },
+            "description": "A column key marked `sortable`. conversations: started, firstReplyMin, messages, answeredBy · tickets: opened, ticket, status, firstReplyMin, resolveMin, level · handovers: at, ticket, how, firstReplyMin, status · escalations: at, ticket, level · csat: when, ticket, rating · charges: at, category, type, billable, status · agent_usage: hour, messages, tokens, cost. Default: the first (the newest first)."
+          },
+          {
+            "name": "dir",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "description": "Default desc."
+            },
+            "description": "Default desc."
           }
         ],
         "responses": {
@@ -7318,7 +7347,7 @@
                       "items": {
                         "type": "object"
                       },
-                      "description": "{key, label, numeric?}"
+                      "description": "{key, label, numeric?, sortable?}"
                     },
                     "rows": {
                       "type": "array",
@@ -7328,6 +7357,10 @@
                     },
                     "total": {
                       "type": "integer"
+                    },
+                    "sort": {
+                      "type": "object",
+                      "description": "{key, dir}: the order the rows are in."
                     }
                   },
                   "required": [
@@ -7336,6 +7369,16 @@
                     "rows",
                     "total"
                   ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The X log can be sorted by … / dir must be asc or desc.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -7403,7 +7446,7 @@
           "Analytics"
         ],
         "summary": "Download a report as CSV",
-        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\nUTF-8 with a byte-order mark so Excel reads it right; cells that start with = + - @ are quoted as text. Logs give up to 50,000 rows. Answers text/csv as an attachment.",
+        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\nUTF-8 with a byte-order mark so Excel reads it right; cells that start with = + - @ are quoted as text. Summaries: business_review, ai_agent, conversations, team, response_sla, csat, spend (their first table, by day). Records: conversations_log, tickets, handovers, escalations, csat_responses, charges, agent_usage, up to 50,000 rows. Old ids still work and give their new report: daily → business_review, agents → ai_agent, people and teams → team, consumption → spend. Answers text/csv as an attachment.",
         "parameters": [
           {
             "name": "id",
@@ -7411,7 +7454,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "description": "Report id from GET /api/reports (e.g. business_review, tickets).",
+              "description": "Report id from GET /api/reports (e.g. business_review, tickets), or an old one.",
               "pattern": "^[a-z_]+$"
             }
           },
@@ -7464,6 +7507,30 @@
               "description": "Ticket figures for one person (`none` = unassigned)."
             },
             "description": "Ticket figures for one person (`none` = unassigned)."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Records only: a sortable column of its log (see GET /api/analytics/logs/{kind})."
+            },
+            "description": "Records only: a sortable column of its log (see GET /api/analytics/logs/{kind})."
+          },
+          {
+            "name": "dir",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "description": "Records only. Default desc."
+            },
+            "description": "Records only. Default desc."
           }
         ],
         "responses": {
@@ -7473,6 +7540,16 @@
               "text/csv": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The X log can be sorted by … / dir must be asc or desc.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -7506,7 +7583,7 @@
           "Analytics"
         ],
         "summary": "Scheduled report emails",
-        "description": "**Who can call:** Supervisor or above (`reports.view`).",
+        "description": "**Who can call:** Supervisor or above (`reports.view`).\n\nReports saved under an old id (daily, agents, people, teams, consumption) are listed, and sent, as their new one.",
         "responses": {
           "200": {
             "description": "Success.",
@@ -7555,7 +7632,7 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "Report ids from GET /api/reports."
+                    "description": "Report ids from GET /api/reports; old ids are saved as their new one. The email’s button opens the first."
                   },
                   "cadence": {
                     "type": "string",
@@ -7688,7 +7765,7 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "Report ids from GET /api/reports."
+                    "description": "Report ids from GET /api/reports; old ids are saved as their new one. The email’s button opens the first."
                   },
                   "cadence": {
                     "type": "string",

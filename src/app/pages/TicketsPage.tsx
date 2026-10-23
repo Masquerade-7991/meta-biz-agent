@@ -15,7 +15,8 @@ import { SlaCell } from '@/app/tickets/SlaCell'
 import { cn } from '@/app/lib/utils'
 import { useMembers } from '@/app/auth/useMembers'
 import { usePolling } from '@/app/lib/usePolling'
-import { PillTabs, SearchInput } from '@/app/components/Filters'
+import { PillTabs } from '@/app/components/Filters'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
 import { customerLabel } from '@/app/lib/customer'
 import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
@@ -135,6 +136,20 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
   )
   useRegisterDevControls('tickets', demo)
 
+  // The omnibar is the ticket search; the text stays in the address (?q=) as before.
+  useOmnibarScope(
+    useMemo(
+      () => ({
+        id: 'tickets',
+        placeholder: 'Search tickets by number, subject or customer',
+        query: { value: q, onChange: (v: string) => setParam({ q: v || null }) },
+        items: (rows ?? []).slice(0, 6).map((t) => ({ id: String(t.number), label: `#${t.number} ${t.subject}`, hint: t.name ?? customerLabel(t.phone), run: () => setParam({ n: String(t.number) }) })),
+      }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [q, rows],
+    ),
+  )
+
   const nameOf = (id: string | null) => (id ? (members.find((m) => m.userId === id)?.name ?? 'Someone') : 'Unassigned')
   const all = rows ?? []
   const allPicked = all.length > 0 && all.every((t) => picked.has(t.number))
@@ -221,7 +236,6 @@ export function TicketsPage({ onOpenChat }: { onOpenChat: (phone: string) => voi
               <SelectItem value="new">Newest</SelectItem>
             </SelectContent>
           </Select>
-          <SearchInput value={q} onChange={(v) => setParam({ q: v || null })} placeholder="Number, subject, customer" label="Search tickets" className="h-9 w-56" />
         </div>
       </div>
       {filtered && (

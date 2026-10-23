@@ -3,7 +3,7 @@ import { CheckCircle2, ChevronRight, FileText, Inbox, Rocket, Ticket } from 'luc
 import { errorText } from '@/app/api/meta'
 import { StatusPill } from '@/app/components/ui/status'
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/app/components/ui/sheet'
-import { AGENT_STATUS, agentStatusOf } from '@/app/lib/status'
+import { AGENT_STATUS, agentStatusOf, progressTone } from '@/app/lib/status'
 import { readiness } from '@/app/wizard/readiness'
 import { cn } from '@/app/lib/utils'
 import { workspaceAccounts } from '@/app/api/whatsapp'
@@ -63,12 +63,8 @@ export function OverviewPage() {
             </p>
           </div>
           <div className="h-1.5 w-40 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={items.length} aria-valuenow={done}>
-            {/* Red for the first third (1–2 of 6), amber for the middle (3–4), green near the end (5–6). */}
             <div
-              className={cn(
-                'h-full rounded-full transition-[width,background-color]',
-                done * 3 <= items.length ? 'bg-destructive' : done * 3 <= items.length * 2 ? 'bg-warning' : 'bg-success',
-              )}
+              className={cn('h-full rounded-full transition-[width,background-color]', progressTone(done, items.length))}
               style={{ width: `${(done / items.length) * 100}%` }}
             />
           </div>

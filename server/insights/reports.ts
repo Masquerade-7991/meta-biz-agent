@@ -10,17 +10,17 @@ import { defineJob, enqueue } from '../platform/jobs.ts'
 import { mail } from '../platform/mail.ts'
 import { diff, trace } from '../platform/trace.ts'
 import { getSettings } from '../support/index.ts'
-import { dayStart, logPage, overview, parseFilter } from './analytics.ts'
+import { dayStart, logPage, overview, parseFilter, parseSort, type LogSort } from './analytics.ts'
 import { can } from '../../src/app/lib/permissions.ts'
 import { isoDay, type AnalyticsFilter, type LogPage, type Overview } from '../../src/app/analytics/types.ts'
 import {
-  isLogReport,
-  isReport,
+  logKindOf,
   MAX_LOG_ROWS,
   nextRunDay,
   REPORTS,
   reportFile,
   reportTable,
+  resolveReport,
   scheduleRange,
   tableCsv,
   type Cadence,
@@ -32,23 +32,28 @@ import type { Actor } from '../messaging/index.ts'
 const schedules = () => col('report_schedules')
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-/** One report's CSV for a filter. Logs are read in pages up to 50,000 rows. `o`: the overview
- *  already built for this filter (an email with several reports builds it once). */
-async function reportCsv(id: ReportId, f: AnalyticsFilter, o?: Overview) {
-  if (isLogReport(id)) {
-    const first: LogPage = await logPage(id, f, 0, 1000)
+/** One report's CSV for a filter. Logs are read in pages up to 50,000 rows, in `sort` order (default
+ *  newest first). `o`: the overview already built for this filter (an email with several reports builds it once). */
+async function reportCsv(id: ReportId, f: AnalyticsFilter, o?: Overview, sort?: LogSort) {
+  const kind = logKindOf(id)
+  if (kind) {
+    const first: LogPage = await logPage(kind, f, 0, 1000, sort)
     const rows = [...first.rows]
-    for (let skip = 1000; skip < Math.min(first.total, MAX_LOG_ROWS); skip += 1000) rows.push(...(await logPage(id, f, skip, 1000)).rows)
+    for (let skip = 1000; skip < Math.min(first.total, MAX_LOG_ROWS); skip += 1000) rows.push(...(await logPage(kind, f, skip, 1000, sort)).rows)
     return tableCsv(reportTable(id, null, { ...first, rows }))
   }
   return tableCsv(reportTable(id, o ?? (await overview(f)), null))
 }
 
 // ---- schedules ----
+/** Report ids as current ones: renamed and merged reports (daily, agents, people, teams, consumption)
+ *  map to their new id, once each; unknown ids drop. Saved schedules migrate this way when read. */
+const reportIds = (ids: unknown): ReportId[] => [...new Set((Array.isArray(ids) ? ids : []).map(resolveReport).filter((id) => id != null))]
+
 const out = (s: Obj): ReportSchedule => ({
   id: String(s._id),
   name: String(s.name),
-  reports: (s.reports as ReportId[]) ?? [],
+  reports: reportIds(s.reports),
   cadence: s.cadence as Cadence,
   hour: Number(s.hour),
   numbers: (s.numbers as string[]) ?? [],
@@ -65,7 +70,7 @@ const out = (s: Obj): ReportSchedule => ({
 async function parseSchedule(b: Obj, me: Actor) {
   const name = String(b.name ?? '').trim().slice(0, 80)
   if (!name) throw new HttpError(400, 'Give the schedule a name.')
-  const reports = (Array.isArray(b.reports) ? b.reports : []).filter(isReport)
+  const reports = reportIds(b.reports)
   if (!reports.length) throw new HttpError(400, 'Pick at least one report.')
   const cadence = (['daily', 'weekly', 'monthly'] as const).find((c) => c === b.cadence)
   if (!cadence) throw new HttpError(400, 'Cadence must be daily, weekly or monthly.')
@@ -154,7 +159,8 @@ async function buildAndSend(s: ReportSchedule) {
   const q = new URLSearchParams({ from: range.from, to: range.to })
   if (s.numbers.length) q.set('agents', s.numbers.join(','))
   if (s.team) q.set('team', s.team)
-  const path = `/analytics?${q}`
+  // The link opens the schedule's first report with the email's filters.
+  const path = `/reports/${s.reports[0] ?? 'business_review'}?${q}`
   // One refused address must not stop the others (or make a retry email the people already served).
   let sent = 0
   let failure: unknown = null
@@ -256,11 +262,14 @@ async function downloadCsv(res: http.ServerResponse, u: URL, me: Actor, id: stri
   try {
     if (!db) throw new HttpError(503, 'Reports need the database.')
     if (!can(me.role, 'reports.view')) throw new HttpError(403, 'Reports are for supervisors, admins and owners.')
-    if (!isReport(id)) throw new HttpError(404, `No report called ${id}.`)
+    // Old ids (daily, agents, people, teams, consumption) give their new report.
+    const report = resolveReport(id)
+    if (!report) throw new HttpError(404, `No report called ${id}.`)
     const f = parseFilter(u, (await getSettings()).hours.timezone)
-    const body = await reportCsv(id, f)
-    trace('report.downloaded', { report: id })
-    res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${reportFile(id, f.from, f.to)}"`, 'cache-control': 'no-store' }).end(body)
+    const kind = logKindOf(report)
+    const body = await reportCsv(report, f, undefined, kind ? parseSort(kind, u) : undefined)
+    trace('report.downloaded', { report })
+    res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${reportFile(report, f.from, f.to)}"`, 'cache-control': 'no-store' }).end(body)
   } catch (err) {
     const e = err instanceof HttpError ? err : new HttpError(500, 'The report couldn’t be built. Please try again.')
     if (!(err instanceof HttpError)) console.log(`report ${id} failed: ${err instanceof Error ? err.message : err}`)

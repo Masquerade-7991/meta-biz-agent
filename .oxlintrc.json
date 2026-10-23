@@ -16,7 +16,9 @@
           "useReportSaveStatus",
           "useRegisterDevControls",
           "useDevControlsEntries",
-          "useAuth"
+          "useAuth",
+          "useOmnibarScope",
+          "useOmnibarActiveScope"
         ]
       }
     ]

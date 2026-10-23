@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
+import { matchesText } from '@/app/omnibar/rank'
 import { useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { Bot, FlaskConical, MoreHorizontal, Pause, Play, Plus, SquarePen, Trash2 } from 'lucide-react'
@@ -332,6 +334,22 @@ export function AgentsListPage({
       ? localRows
       : []
 
+  // The omnibar filters this list (name, number, account).
+  const [q, setQ] = useState('')
+  const shown = rows.filter((a) => matchesText(q, a.name, a.phoneNumber, a.companyName))
+  useOmnibarScope(
+    useMemo(
+      () => ({
+        id: 'ai-agents',
+        placeholder: 'Search agents',
+        query: { value: q, onChange: setQ },
+        items: shown.slice(0, 6).map((a) => ({ id: a.id, label: a.name, hint: a.phoneNumber, icon: Bot, run: () => handleAction(a, 'open') })),
+      }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [q, shown],
+    ),
+  )
+
   function updateMetaRow(id: string, fields: Partial<AgentRow> | null) {
     setMetaRows((prev) => prev && (fields ? prev.map((r) => (r.id === id ? { ...r, ...fields } : r)) : prev.filter((r) => r.id !== id)))
   }
@@ -456,7 +474,14 @@ export function AgentsListPage({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((agent) => (
+                  {shown.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                        No agents match.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {shown.map((agent) => (
                     <TableRow key={agent.id} onClick={() => handleAction(agent, 'open')} className="cursor-pointer">
                       <TableCell>
                         <div className="flex items-center gap-3">

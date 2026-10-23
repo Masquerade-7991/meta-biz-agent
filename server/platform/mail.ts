@@ -151,7 +151,7 @@ export const mail = {
         heading: r.name,
         lines: [`${r.workspace} · ${r.period}`],
         table: r.table,
-        button: { label: 'Open Analytics', url: `${appUrl}${r.path}` },
+        button: { label: 'Open the report', url: `${appUrl}${r.path}` },
         note: files.length ? `The full figures are attached as CSV (${files.map((f) => f.filename).join(', ')}). They open in Excel or Google Sheets.` : undefined,
       },
       files.map((f) => ({ ...f, contentType: 'text/csv; charset=utf-8' })),

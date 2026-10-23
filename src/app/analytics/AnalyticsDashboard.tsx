@@ -25,7 +25,8 @@ import { change, dur, money, moneyShort, num, pct, pointChange } from './format'
 import { csatScore, LOG_KINDS, LOG_LABEL, type LogKind, type Overview } from './types'
 import { ticketsLink } from '@/app/tickets/ticketsLink'
 import { RecordsTable } from '@/app/reports/RecordsTable'
-import type { ReportId } from '@/app/reports/catalog'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
+import { reportOfLog, type ReportId } from '@/app/reports/catalog'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -34,6 +35,16 @@ const TABS = [
   { id: 'consumption', label: 'Consumption' },
   { id: 'logs', label: 'Logs' },
 ] as const
+type TabId = (typeof TABS)[number]['id']
+
+// What the omnibar finds on this page: each tab, and the named numbers and charts on it.
+const METRICS: [TabId, string][] = [
+  ...(['Conversations', 'Handled by AI alone', 'Customer satisfaction', 'Tickets resolved', 'Resolved on time', 'Cost per resolved conversation', 'Quality'] as const).map((m) => ['overview', m] as [TabId, string]),
+  ...(['Finished by the AI', 'Containment', 'Handovers', 'Handover rate', 'How tickets opened', 'Questions the AI couldn’t answer', 'Tools'] as const).map((m) => ['ai', m] as [TabId, string]),
+  ...(['Tickets opened', 'Typical first reply', 'Typical time to resolve', 'Escalations', 'When customers write', 'Satisfaction answers', 'Teams', 'People'] as const).map((m) => ['human', m] as [TabId, string]),
+  ...(['Total spend', 'Meta Business Agent', 'Agent tokens', 'This month’s budget', 'Spend per day', 'By message category', 'Free service replies this month'] as const).map((m) => ['consumption', m] as [TabId, string]),
+  ...LOG_KINDS.map((k) => ['logs', `${LOG_LABEL[k]} log`] as [TabId, string]),
+]
 
 /** One place for every number: all agents together or any of them, the team behind them, what it all cost, and the rows behind each chart. */
 export function AnalyticsDashboard() {
@@ -74,6 +85,20 @@ export function AnalyticsDashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, reload])
+
+  useOmnibarScope(
+    useMemo(
+      () => ({
+        id: 'analytics',
+        placeholder: 'Search analytics',
+        items: [
+          ...TABS.map((t) => ({ id: `tab:${t.id}`, label: t.label, hint: 'Tab', run: () => set({ tab: t.id === 'overview' ? null : t.id }) })),
+          ...METRICS.map(([t, m]) => ({ id: `${t}:${m}`, label: m, hint: TABS.find((x) => x.id === t)!.label, run: () => set({ tab: t === 'overview' ? null : t }) })),
+        ],
+      }),
+      [set],
+    ),
+  )
 
   const single = filter.numbers.length === 1 ? data?.agents.find((a) => a.id === filter.numbers[0]) : null
   return (
@@ -535,7 +560,7 @@ function LogsTab({ filter }: { filter: ReturnType<typeof useAnalyticsFilter>['fi
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PillTabs label="Log" options={options} value={kind} onChange={setKind} />
-        <OpenAsReport id={kind} />
+        <OpenAsReport id={reportOfLog(kind)} />
       </div>
       <RecordsTable kind={kind} filter={filter} />
     </div>
@@ -543,7 +568,7 @@ function LogsTab({ filter }: { filter: ReturnType<typeof useAnalyticsFilter>['fi
 }
 
 /** The tab's numbers as a report (view, download or schedule it there), with the same filters. */
-const TAB_REPORT: Record<string, ReportId> = { overview: 'business_review', ai: 'agents', human: 'people', consumption: 'consumption' }
+const TAB_REPORT: Record<string, ReportId> = { overview: 'business_review', ai: 'ai_agent', human: 'team', consumption: 'spend' }
 function OpenAsReport({ id }: { id: ReportId }) {
   const { search } = useLocation()
   const q = new URLSearchParams(search)

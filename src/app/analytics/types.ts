@@ -55,6 +55,7 @@ export interface AgentRow {
   handoffs: number
   csat: number | null
   agentCost: number
+  /** Free-form (service) replies delivered in the chosen range. */
   serviceMessages: number
 }
 
@@ -62,7 +63,8 @@ export interface Overview {
   range: { from: string; to: string; days: number; timezone: string; prevFrom: string; prevTo: string }
   currency: string | null
   /** Spend is reported per WhatsApp account, not per number: true when some agents are filtered out,
-   *  so spend still covers every agent and there's no honest cost per resolved conversation. */
+   *  so the WhatsApp spend (kpis.spend, series[].spend, consumption.byCategory) still covers every agent
+   *  and there's no honest cost per resolved conversation. Agent cost (agentCost) is per agent. */
   spendWholeAccount: boolean
   /** The agents/numbers this workspace has, for the filter. */
   agents: { id: string; label: string }[]
@@ -71,6 +73,7 @@ export interface Overview {
     containment: Kpi
     resolutionRate: Kpi
     csat: Kpi
+    /** Chats handed to people: the AI handed over or someone took over (the Handovers log's rows). */
     handoffs: Kpi
     ticketsOpened: Kpi
     ticketsResolved: Kpi
@@ -80,8 +83,9 @@ export interface Overview {
     escalations: Kpi
     spend: Kpi
     costPerResolved: Kpi
-    /** Handovers out of conversations, both counted for the chosen agents (team and person filters don't apply). */
+    /** Handovers (handed over or taken over) out of conversations, both counted for the chosen agents (team and person filters don't apply). */
     handoffRate: Kpi
+    /** Now-values: right now, whatever the range. */
     openNow: number
     overdueNow: number
     peopleAvailable: number
@@ -105,23 +109,60 @@ export interface Overview {
   }
 }
 
-export const LOG_KINDS = ['tickets', 'handovers', 'escalations', 'charges', 'agent_usage'] as const
+export const LOG_KINDS = ['conversations', 'tickets', 'handovers', 'escalations', 'csat', 'charges', 'agent_usage'] as const
 export type LogKind = (typeof LOG_KINDS)[number]
+export type SortDir = 'asc' | 'desc'
 
 export interface LogPage {
   kind: LogKind
-  columns: { key: string; label: string; numeric?: boolean }[]
+  /** `sortable`: the log can be ordered by it (`sort=<key>`). */
+  columns: { key: string; label: string; numeric?: boolean; sortable?: boolean }[]
   rows: Record<string, string | number | null>[]
   total: number
+  /** The order the rows are in (the default is newest first). */
+  sort?: { key: string; dir: SortDir }
 }
 
 export const LOG_LABEL: Record<LogKind, string> = {
+  conversations: 'Conversations',
   tickets: 'Tickets',
   handovers: 'Handovers',
   escalations: 'Escalations',
+  csat: 'Satisfaction responses',
   charges: 'Message charges',
   agent_usage: 'Agent usage',
 }
+
+/** What each headline number means: the label and the ⓘ text on KPI tiles in Reports (and Analytics),
+ *  and which way is good. Times are medians; rates are weighted by volume. */
+export const METRICS = {
+  conversations: { label: 'Conversations', better: 'up', help: 'Chats with a message from the customer, the AI or the team in these dates.' },
+  containment: { label: 'Handled by AI alone', better: 'up', help: 'Conversations the AI answered with nobody from the team writing, out of all conversations.' },
+  aiOnly: { label: 'AI alone', better: 'up', help: 'Conversations the AI answered with nobody from the team writing.' },
+  withTeam: { label: 'With the team', better: 'none', help: 'Conversations someone from the team wrote in.' },
+  noReply: { label: 'No reply', better: 'down', help: 'Conversations nobody answered: neither the AI nor the team.' },
+  handoffs: { label: 'Handovers', better: 'down', help: 'The AI handing a chat to a person, or someone taking it over.' },
+  handoffRate: { label: 'Handover rate', better: 'down', help: 'Handovers (the AI handing over or someone taking over) out of conversations.' },
+  csat: { label: 'Satisfaction', better: 'up', help: 'Good ratings count fully and okay ones half, out of all ratings received.' },
+  ratings: { label: 'Ratings received', better: 'up', help: 'How many customers answered the rating question.' },
+  good: { label: 'Good', better: 'up', help: 'Ratings of good.' },
+  okay: { label: 'Okay', better: 'none', help: 'Ratings of okay.' },
+  bad: { label: 'Bad', better: 'down', help: 'Ratings of bad.' },
+  ticketsOpened: { label: 'Tickets opened', better: 'none', help: 'Tickets opened in these dates.' },
+  ticketsResolved: { label: 'Tickets resolved', better: 'up', help: 'Tickets resolved in these dates.' },
+  slaMet: { label: 'Resolved on time', better: 'up', help: 'Resolved tickets that met their resolution target, out of all resolved tickets.' },
+  medianFirstReplyMin: { label: 'Median first reply', better: 'down', help: 'Half of tickets got their first reply from the team faster than this.' },
+  medianResolveMin: { label: 'Median time to resolve', better: 'down', help: 'Half of tickets were resolved faster than this, from opened to resolved.' },
+  escalations: { label: 'Escalations', better: 'down', help: 'Escalation levels reached; each level counts once per ticket.' },
+  openNow: { label: 'Open now', better: 'none', help: 'Tickets open right now, whatever the dates.' },
+  overdueNow: { label: 'Overdue now', better: 'down', help: 'Open tickets past a target right now, whatever the dates.' },
+  spend: { label: 'Spend', better: 'down', help: 'WhatsApp messages plus the Meta Business Agent, in these dates.' },
+  whatsappSpend: { label: 'WhatsApp spend', better: 'down', help: 'What Meta charged for messages. Meta reports it for the whole WhatsApp account, not per agent.' },
+  agentCost: { label: 'Agent cost', better: 'down', help: 'What the Meta Business Agent’s billed replies cost.' },
+  costPerResolved: { label: 'Cost per resolved conversation', better: 'down', help: 'WhatsApp and agent spend, divided by tickets resolved plus conversations the AI handled alone.' },
+  budgetUsed: { label: 'Budget used', better: 'down', help: 'This calendar month’s spend against the monthly budget.' },
+} as const satisfies Record<string, { label: string; better: 'up' | 'down' | 'none'; help: string }>
+export type MetricId = keyof typeof METRICS
 
 /** Meta's free service (non-template) replies per number each month, from 1 Oct 2026. */
 export const FREE_SERVICE_MESSAGES = 1000

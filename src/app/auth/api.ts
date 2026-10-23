@@ -108,6 +108,12 @@ let demoInvites: Invite[] = [
   { id: 'inv-demo-old', email: 'kabir@example.com', role: 'agent', invitedAt: new Date(Date.now() - 9 * DAY).toISOString(), sentAt: new Date(Date.now() - 9 * DAY).toISOString(), expiresAt: new Date(Date.now() - 2 * DAY).toISOString(), expired: true },
 ]
 let demoJoining: Joining[] = [{ userId: 'demo-joining', email: 'meera@example.com', role: 'agent', verifiedAt: new Date(Date.now() - 3_600_000).toISOString() }]
+/** Demo control (a new workspace): just you, no invites. */
+export function resetDemoTeam() {
+  demoMembers = demoMembers.slice(0, 1)
+  demoInvites = []
+  demoJoining = []
+}
 /** The demo workspace's people, for other dummy areas (teams, routing). */
 export const demoMemberList = () => demoMembers
 

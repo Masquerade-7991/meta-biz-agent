@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { ChevronRight, Headset, SearchX, UserRound, Building2, type LucideIcon } from 'lucide-react'
 import { EmptyState, PageContainer, PageHeader } from '@/app/components/ui/page'
-import { SearchInput } from '@/app/components/Filters'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
 import { useAuth } from '@/app/auth/AuthContext'
 import { pathFor } from '@/app/nav'
 import { matchesFilter, visibleAreas, type SettingsAreaId } from './areas'
@@ -18,13 +18,27 @@ export function SettingsHome() {
   const areas = visibleAreas(me?.role)
     .map((a) => ({ ...a, tabs: a.tabs.filter((t) => matchesFilter(t, a, q)) }))
     .filter((a) => a.tabs.length > 0)
+  const open = (href: string) => void confirmLeave().then((ok) => ok && navigate(href))
+
+  // The omnibar is "Find a setting" here.
+  useOmnibarScope(
+    useMemo(
+      () => ({
+        id: 'settings',
+        placeholder: 'Find a setting',
+        query: { value: q, onChange: setQ },
+        items: areas.flatMap((a) => a.tabs.map((t) => ({ id: t.slug, label: t.label, hint: a.label, run: () => open(pathFor('settings', t.slug)) }))).slice(0, 6),
+      }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [q, me?.role],
+    ),
+  )
 
   return (
     <PageContainer>
       <PageHeader
         title="Settings"
         description="Your workspace and its people, how the support desk works, and your own account."
-        actions={<SearchInput value={q} onChange={setQ} placeholder="Find a setting" label="Find a setting" className="h-9 w-64 max-w-full" />}
       />
       {areas.length === 0 ? (
         <EmptyState icon={SearchX} title="No setting matches" description={`Nothing is called “${q}”. Try another word, like hours, invite or password.`} />
@@ -55,7 +69,7 @@ export function SettingsHome() {
                           onClick={(e) => {
                             if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
                             e.preventDefault()
-                            void confirmLeave().then((ok) => ok && navigate(href))
+                            open(href)
                           }}
                           className="group flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-muted/60 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
                         >

@@ -4,14 +4,14 @@ import { jsonClient } from './client'
 import { isDummyMode } from './dummy'
 import { MetaError, parse } from './meta'
 import { filterQuery, getLog, getOverview } from './overview'
-import { isLogReport, nextRunDay, reportFile, reportTable, tableCsv, type ReportId, type ReportSchedule } from '../reports/catalog'
+import { logKindOf, nextRunDay, reportFile, reportTable, tableCsv, type ReportId, type ReportSchedule } from '../reports/catalog'
 import type { AnalyticsFilter } from '../analytics/types'
 
 let demoSchedules: ReportSchedule[] = [
   {
     id: 'demo-weekly',
     name: 'Weekly business review',
-    reports: ['business_review', 'agents', 'consumption'],
+    reports: ['business_review', 'ai_agent', 'spend'],
     cadence: 'weekly',
     hour: 9,
     numbers: [],
@@ -76,7 +76,8 @@ function save(name: string, blob: Blob) {
 export async function downloadReport(id: ReportId, f: AnalyticsFilter) {
   const name = reportFile(id, f.from, f.to)
   if (isDummyMode()) {
-    const t = isLogReport(id) ? reportTable(id, null, await getLog(id, f, 0, 5000)) : reportTable(id, await getOverview(f), null)
+    const kind = logKindOf(id)
+    const t = kind ? reportTable(id, null, await getLog(kind, f, 0, 5000)) : reportTable(id, await getOverview(f), null)
     return save(name, new Blob([tableCsv(t)], { type: 'text/csv;charset=utf-8' }))
   }
   const res = await fetch(`/api/reports/${id}.csv?${filterQuery(f)}`)

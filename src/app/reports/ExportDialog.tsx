@@ -5,7 +5,7 @@ import { Button } from '@/app/components/ui/button'
 import { Checkbox } from '@/app/components/ui/checkbox'
 import { Label } from '@/app/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog'
 import { errorDetail } from '@/app/api/meta'
 import { downloadReport, printUrl } from '@/app/api/reports'
 import { FilterBar } from '@/app/analytics/FilterBar'
@@ -62,10 +62,9 @@ export function ExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Export reports</DialogTitle>
-          <DialogDescription>Download several reports at once. To narrow by team or assignee, open a report and download it from there.</DialogDescription>
         </DialogHeader>
         <div className="space-y-5">
           <FilterBar filter={filter} range={range} agents={agents} teams={[]} people={[]} onChange={set} applies={['agents']} timezone={timezone} />
@@ -91,15 +90,14 @@ export function ExportDialog({
           </div>
           <div className="space-y-2">
             <Label>Format</Label>
-            <RadioGroup value={format} onValueChange={(v) => setFormat(v as 'csv' | 'pdf')} className="gap-2">
+            <RadioGroup value={format} onValueChange={(v) => setFormat(v as 'csv' | 'pdf')} className="flex gap-4">
               <label className="flex items-center gap-2 text-sm">
-                <RadioGroupItem value="csv" /> CSV: one file per report, opens in Excel or Google Sheets
+                <RadioGroupItem value="csv" /> CSV
               </label>
               <label className="flex items-center gap-2 text-sm">
-                <RadioGroupItem value="pdf" /> PDF: one document with the chosen summaries
+                <RadioGroupItem value="pdf" /> PDF
               </label>
             </RadioGroup>
-            {format === 'csv' && picked.length > 1 && <p className="text-meta text-muted-foreground">Your browser may ask once to allow several downloads.</p>}
           </div>
         </div>
         <DialogFooter className="items-center gap-3 sm:justify-between">

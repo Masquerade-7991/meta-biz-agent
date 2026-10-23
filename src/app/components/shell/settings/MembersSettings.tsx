@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Loader2, Users } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
@@ -8,7 +8,7 @@ import { Label } from '@/app/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table'
 import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
-import { SearchInput } from '@/app/components/Filters'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
 import { useAuth } from '@/app/auth/AuthContext'
 import { Field, FormError } from '@/app/auth/AuthLayout'
 import { authApi, type Invite, type Joining, type Member } from '@/app/auth/api'
@@ -80,6 +80,8 @@ export function MembersSettings() {
     authApi.members().then(setData, (err) => setLoadError(errorDetail(err)))
   }, [])
   useEffect(load, [load])
+  // The omnibar searches the members list (name or email).
+  useOmnibarScope(useMemo(() => ({ id: 'settings/members', placeholder: 'Search people by name or email', query: { value: q, onChange: setQ } }), [q]))
   if (!data) return <LoadGate error={loadError} onRetry={load} what="the members" />
 
   const sendInvite = async (e: FormEvent) => {
@@ -144,7 +146,6 @@ export function MembersSettings() {
         }
       >
         <div className="flex flex-wrap items-center gap-2">
-          <SearchInput value={q} onChange={setQ} placeholder="Search by name or email" label="Search members" className="h-9 w-64 max-w-full" />
           <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as Role | typeof ANY)}>
             <SelectTrigger className="h-9 w-40" aria-label="Role">
               <SelectValue />

@@ -78,50 +78,94 @@ Meta's rates, and the dates they change, are on Meta's own rate card. They chang
 
 ## Reports
 
-Open **Reports** in the sidebar. The **Library** lists every report in two groups:
+Open **Reports** in the sidebar. The **Library** shows every report as a small card, in two groups:
 
-- **Summaries:** totals for a period. You can read them on screen, or download them as CSV or PDF.
-- **Detailed records:** one row per ticket, handover or charge, for spreadsheets. You can read them on screen, a page at a time, or download them as CSV.
+- **Summaries:** the numbers for a period, with charts and a table. Read them on screen, or download them as CSV or PDF.
+- **Records:** one row per conversation, ticket, rating or charge. Read them on screen, a page at a time, or download them as CSV.
 
-![The Reports library with summaries and detailed records](/screens/reports.webp)
+To find a report, type its name in the search box at the top.
 
-| Report | What it covers | Filters |
+![The Reports library: summaries and records as cards](/screens/reports.webp)
+
+### Summaries
+
+| Report | What it answers | Filters |
 | --- | --- | --- |
-| Business review | The headline numbers against the period before: conversations, chats handled by AI alone, satisfaction, reply times, escalations and spend. | Date, agents, team, assignee |
-| Day by day | One row per day: conversations, AI alone, handovers, tickets, reply times, satisfaction and spend. | Date, agents, team, assignee |
-| AI agents | Each AI agent side by side. | Date, agents |
-| Team members | Per person: tickets resolved and open, first reply time, satisfaction and escalations. | Date, agents, team, assignee |
-| Teams | Per team: tickets opened and resolved, how many were on time, and escalations. | Date, agents, team, assignee |
-| Spend and usage | What WhatsApp messages and the Business Agent cost, by message type, and free replies used per number. | Date, agents |
-| Tickets | Every ticket opened in the period. | Date, agents, team, assignee |
-| Handovers | Every chat handed to a person: how, to whom and how fast they replied. | Date, agents, team, assignee |
-| Escalations | Every escalation level reached, why, and who was alerted. | Date, agents, team, assignee |
-| Message charges | One row per message Meta priced. | Date, agents |
-| AI agent usage by hour | The Business Agent's billed replies, tokens and cost, hour by hour. | Date, agents |
+| Business review | The headline numbers against the period before: conversations, handled by AI alone, satisfaction, resolved on time, first reply, spend and cost per resolved conversation. | Date, Agents, Team, Assigned to |
+| AI agent performance | How much the AI handles on its own: handled by AI alone, handover rate, no reply, satisfaction and agent cost, with handover reasons, tool success and each agent side by side. | Date, Agents |
+| Conversations | Who answered (AI alone, with the team or no reply), and when customers write, hour by hour. | Date, Agents |
+| Team performance | Tickets, reply times and ratings per person and per team. | Date, Agents, Team, Assigned to |
+| Response times & SLA | Reply and resolution times against your targets, tickets overdue now, and escalations by level. | Date, Agents, Team, Assigned to |
+| Customer satisfaction | How customers rated the help they got: good, okay and bad, over time and per person. | Date, Agents, Team, Assigned to |
+| Spend & usage | What WhatsApp messages and the AI agent cost: spend by message category, the agent's replies and tokens, and your monthly budget used. | Date, Agents |
 
-### View a report
+### Records
 
-Click a report to open it. Set the filters at the top: **Date**, **Agents**, **Team** and **Assigned to**. The exact dates and your business hours' time zone show underneath. A report only shows the filters it uses. Spend, for example, can't be split by team because Meta reports it for the whole account, and the page says so.
+| Report | One row per | Filters |
+| --- | --- | --- |
+| Conversations log | Conversation, and who answered it. | Date, Agents |
+| Tickets | Ticket opened, with its timings and rating. | Date, Agents, Team, Assigned to |
+| Handovers | Chat handed to a person by the AI, or taken over by someone. | Date, Agents, Team, Assigned to |
+| Escalations | Escalation level reached, and why. | Date, Agents, Team, Assigned to |
+| Satisfaction responses | Rating a customer gave. | Date, Agents, Team, Assigned to |
+| Message charges | Message Meta priced. | Date, Agents |
+| AI agent usage | Hour of the agent's billed replies and tokens. | Date, Agents |
 
-On **Analytics**, **Open as report** opens the matching report with the same filters.
+### Filters
+
+Click a card to open the report. The filters sit under its title: **Date**, **Agents**, **Team** and **Assigned to**. A report only shows the filters it uses, so reports about spend or conversations have just **Date** and **Agents**. The **Date** menu shows the exact dates and the time zone, which is your business hours' time zone from **Settings › Hours & targets**. **Clear filters** puts them back to the last 30 days, all agents.
+
+Filters stay in the page address, so they carry over when you move between reports. On **Analytics**, **Open as report** opens the matching report with the same filters.
+
+### Read a summary
+
+![The Business review summary: tiles, charts and the table over time](/screens/report-summary.webp)
+
+From top to bottom, a summary has:
+
+- **Tiles** with the period's key numbers. Each one shows the change against the period just before it, of the same length, and most have a small line of the days. For rates, the change is in points (pts). Green means better: for reply times and costs, lower is better. Hover over ⓘ beside a tile's name to read what it counts (see [What the report numbers mean](#what-the-report-numbers-mean)).
+- **Charts**, for example **Conversations by who answered** and **Quality** in the Business review.
+- **A table.** Tables over time are titled **Over time** and can be grouped by **Day**, **Week** or **Month**, with a **Change** column against the row before. Some reports have a choice of tables instead, such as **People** and **Teams** in Team performance.
+- **View records**, which opens the matching records report with the same filters. For example, Business review leads to the Conversations log, and Response times & SLA to Escalations.
+
+In a table:
+
+- Click a column heading to sort by it. Click it again to reverse the order.
+- The **Total** row at the bottom adds up counts and money. Rates are worked out from all the rows together, so a busy day weighs more than a quiet one. Median times in the Total row are the median for the whole period.
+- When you group by week or month, a median time column reads **(median of days)**: a week's median first reply is the median of its days' medians.
+
+**Open now** and **Overdue now** carry a **now** tag: they count tickets as they are right now, whatever the dates.
+
+**WhatsApp spend is for the whole account.** Meta reports message spend for the whole WhatsApp account, not per number. When you narrow **Agents** to some of your agents, spend tiles carry a **Whole account** tag: the figure still covers every number. Cost per resolved conversation then has no value; clear the agents filter to see it. In Spend & usage, the agents filter only narrows the AI agent's figures.
+
+### Read records
+
+![The Tickets records report: a sortable table, one row per ticket](/screens/report-records.webp)
+
+- The number of rows shows above the table, for example "809 tickets".
+- Click a column heading to sort by it. Click it again to reverse the order.
+- Times show as hours and minutes (1h 05m), and statuses and ratings as coloured labels.
+- More than 50 rows come in pages. Choose **50 a page** or **100 a page**, and use the arrows to move between pages.
+- Click a row with a ticket to open that ticket.
 
 ### Download a report
 
 On a report's page, click **Download**. It always uses the filters shown.
 
-- **CSV** opens in Excel or Google Sheets.
-- **PDF** (summaries only) opens a print-ready page. In the print dialog, choose **Save as PDF**.
+- **CSV** opens in Excel or Google Sheets. A summary's CSV has its first table, one row per day.
+- **PDF** (summaries only) opens a print-ready page with the tiles, charts and tables. In the print dialog, choose **Save as PDF**.
+- **Email on a schedule…** starts a new scheduled email with this report and its filters filled in.
 
-A CSV of detailed records holds up to 50,000 rows. If there are more, the menu says so: narrow the dates to get the rest.
+A records CSV holds up to 50,000 rows. When there are more, a line above the table says so: narrow the dates to get the rest.
 
 ### Download several at once
 
-In the **Library**, click **Export…**. Pick the reports, the date and the agents, and choose a format:
+In the **Library**, click **Export…**. Pick the date, the agents and the reports, and choose a format:
 
 - **CSV:** one file per report. Your browser may ask once to allow several downloads.
-- **PDF:** one document with the chosen summaries.
+- **PDF:** one document with the chosen summaries. Records come as CSV only.
 
-Team and assignee don't apply here. To narrow by them, download from the report's own page.
+**Team** and **Assigned to** don't apply here. To narrow by them, download from the report's own page.
 
 ### Email reports on a schedule
 
@@ -130,28 +174,57 @@ Team and assignee don't apply here. To narrow by them, download from the report'
 On **Reports**, open the **Scheduled emails** tab and click **New schedule**. Or, on a report's page, click **Download › Email on a schedule…**: that report and its filters are filled in for you.
 </Step>
 <Step>
-Name it, then choose **How often** (daily, weekly or monthly) and the hour under **At**.
+Give it a **Name**, then choose **How often** and the hour under **At**.
 </Step>
 <Step>
 Tick the **Reports to attach**, and under **Covering**, choose which agents and team the reports cover.
 </Step>
 <Step>
-Under **Send to**, tick colleagues, and add other email addresses if needed. Only owners and admins can send to addresses outside the workspace. A schedule can have up to 25 recipients.
+Under **Send to**, tick colleagues. Owners and admins can also add **Other email addresses** outside the workspace. A schedule can have up to 25 recipients.
 </Step>
 <Step>
-Save the schedule. The email has the headline numbers in the body and each report attached as a CSV.
+Click **Save schedule**. The email has the headline numbers in the body and each report attached as a CSV.
 </Step>
 </Steps>
 
 When it goes out:
 
-- **Daily** schedules send the previous day's figures every day.
-- **Weekly** schedules go out on Mondays and cover the last full week, Monday to Sunday.
-- **Monthly** schedules go out on the 1st and cover the previous month.
+- **Every day (yesterday)** sends the previous day's figures.
+- **Every Monday (last 7 days)** covers the last full week, Monday to Sunday.
+- **On the 1st (last month)** covers the previous month.
 - Times follow your business hours' time zone.
 - To see the same figures on screen, open a report with **Date: Yesterday**, **Last week (Mon–Sun)** or **Last month**.
 
-A schedule has a **Send now** button for a test, and can be paused without deleting it. A workspace can have up to 20 schedules.
+Each schedule has a **Send now** button for a test. Switch it to **Paused** to stop it without deleting it. A workspace can have up to 20 schedules.
+
+Schedules and links made before the reports were reorganised keep working. Day by day now opens the Business review, Team members and Teams open Team performance, and AI agents opens AI agent performance.
+
+### What the report numbers mean
+
+These are the definitions behind each tile's ⓘ.
+
+| Number | What it counts |
+| --- | --- |
+| Conversations | Chats with a message from the customer, the AI or the team in these dates. |
+| Handled by AI alone | Conversations the AI answered with nobody from the team writing, out of all conversations. **AI alone** is the same as a count. |
+| With the team | Conversations someone from the team wrote in. |
+| No reply | Conversations nobody answered: neither the AI nor the team. |
+| Handovers | The AI handing a chat to a person, or someone taking it over. |
+| Handover rate | Handovers (the AI handing over or someone taking over) out of conversations. |
+| Satisfaction | Good ratings count fully and okay ones half, out of all ratings received. |
+| Ratings received | How many customers answered the rating question. **Good**, **Okay** and **Bad** count each answer. |
+| Tickets opened / Tickets resolved | Tickets opened, or resolved, in these dates. |
+| Resolved on time | Resolved tickets that met their resolution target, out of all resolved tickets. |
+| Median first reply | Half of tickets got their first reply from the team faster than this. |
+| Median time to resolve | Half of tickets were resolved faster than this, from opened to resolved. |
+| Escalations | Escalation levels reached; each level counts once per ticket. |
+| Open now | Tickets open right now, whatever the dates. |
+| Overdue now | Open tickets past a target right now, whatever the dates. |
+| Spend | WhatsApp messages plus the Meta Business Agent, in these dates. |
+| WhatsApp spend | What Meta charged for messages. Meta reports it for the whole WhatsApp account, not per agent. |
+| Agent cost | What the Meta Business Agent's billed replies cost. |
+| Cost per resolved conversation | WhatsApp and agent spend, divided by tickets resolved plus conversations the AI handled alone. |
+| Budget used | This calendar month's spend against the monthly budget. |
 
 ## If something goes wrong
 
@@ -161,7 +234,10 @@ A schedule has a **Send now** button for a test, and can be paused without delet
 | **Couldn't download** a report | Try again. If it happens again, give Helo.ai support the error reference. |
 | **Only owners and admins send reports outside the workspace** | Remove outside addresses, or ask an admin to set up the schedule. |
 | **Nobody to send it to: everyone on this schedule has left the workspace** | Edit the schedule and add someone. |
-| Cost per resolved conversation is missing | Clear the agent filter so all agents are included. |
+| Cost per resolved conversation is missing | Clear the agents filter so all agents are included. |
+| A spend tile says **Whole account** | Meta reports message spend for the whole WhatsApp account. The figure covers every number, whatever the agents filter. |
+| **Nothing in this period. Try a longer date range.** | Widen **Date**, or clear the other filters. |
+| **The CSV has the first 50,000 of … rows** | Narrow the dates and download again for the rest. |
 | Agent cost is empty | Add a payment method for the AI agent in Meta. |
 
 ## Frequently asked questions
@@ -178,5 +254,14 @@ Yes. On the **Consumption** tab, **Total spend** adds message charges and the ag
 </Accordion>
 <Accordion title="Can I see the figures for one WhatsApp number?">
 Yes, for conversations and tickets: each AI agent answers on its own number, so pick it under **Agents**. Spend is only reported for the whole account.
+</Accordion>
+<Accordion title="Why doesn't a report offer the Team or Assigned to filter?">
+A report only shows the filters that change its numbers. Team and person narrow tickets, so reports about conversations, spend or the AI agent's usage have just **Date** and **Agents**.
+</Accordion>
+<Accordion title="What does (median of days) mean in a table?">
+When you group a table by week or month, each row's median time is the median of its days. The **Total** row is the true median for the whole period.
+</Accordion>
+<Accordion title="My old Day by day report or schedule is gone. What happened?">
+Nothing is lost. Every summary now has its own table over time, grouped by **Day**, **Week** or **Month**. Old links and saved schedules open the report that replaced them: Day by day the Business review, Team members and Teams Team performance, and AI agents AI agent performance.
 </Accordion>
 </Accordions>

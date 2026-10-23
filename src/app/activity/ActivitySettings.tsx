@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
-import { SearchInput } from '@/app/components/Filters'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
 import { SettingsSection } from '@/app/components/shell/SettingsSection'
 import { useMembers } from '@/app/auth/useMembers'
 import { activityCsvUrl, type ActivityQuery } from '@/app/api/activity'
@@ -32,6 +32,18 @@ export function ActivitySettings() {
   const filtered = userId !== ANY || area !== ANY || !!from || !!to || !!ref
   const csv = activityCsvUrl(query)
   const dateError = from && to && from > to ? 'The start date is after the end date.' : null
+  // The omnibar finds an error reference; anything else gets a hint in its dropdown.
+  useOmnibarScope(
+    useMemo(
+      () => ({
+        id: 'settings/activity',
+        placeholder: 'Paste an error reference',
+        query: { value: ref, onChange: setRef },
+        note: refOk ? undefined : 'Paste the error reference from a message (8 or more letters and numbers, like 3f9a1c2e) to see what happened.',
+      }),
+      [ref, refOk],
+    ),
+  )
 
   return (
     <SettingsSection
@@ -75,7 +87,6 @@ export function ActivitySettings() {
           To
           <Input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" />
         </label>
-        <SearchInput value={ref} onChange={setRef} placeholder="Error reference" label="Find an error reference" className="h-9 w-44" />
         {filtered && (
           <Button
             variant="ghost"

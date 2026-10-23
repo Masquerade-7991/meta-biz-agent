@@ -1,8 +1,8 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { ErrorBoundary } from '@/app/components/ErrorBoundary'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
-import { CircleHelp, ExternalLink, Menu, Search } from 'lucide-react'
-import { openCommandPalette, PALETTE_SHORTCUT } from '@/app/lib/commandPalette'
+import { CircleHelp, ExternalLink, Menu } from 'lucide-react'
+import { Omnibar, OmnibarButton } from '@/app/omnibar/Omnibar'
 import { NotificationsBell } from './NotificationsBell'
 import { ThemeToggle } from './ThemeToggle'
 import { HEADER_ICON_BUTTON } from './headerButton'
@@ -145,7 +145,7 @@ export function ProductShell({
         </SheetContent>
       </Sheet>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 sm:px-6">
+        <header className="relative flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 sm:px-6">
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
@@ -156,19 +156,9 @@ export function ProductShell({
           </button>
           <img src={mark} alt="Helo.ai" className="size-6 md:hidden" />
           <span className="truncate text-sm font-medium md:hidden">{activeItem.label}</span>
-          <button
-            type="button"
-            onClick={openCommandPalette}
-            className="ml-auto hidden h-9 w-72 items-center gap-2 rounded-md border border-border bg-muted/50 px-3 text-sm text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground md:flex"
-          >
-            <Search className="size-4" />
-            <span className="flex-1 text-left">Search or jump to…</span>
-            <kbd className="rounded border border-border bg-card px-1.5 font-mono text-micro">{PALETTE_SHORTCUT}</kbd>
-          </button>
+          <Omnibar className="md:w-80 lg:w-96" />
           <div className="ml-auto flex items-center gap-1 md:ml-2">
-            <button type="button" onClick={openCommandPalette} aria-label="Search or jump to" className={`${HEADER_ICON_BUTTON} md:hidden`}>
-              <Search className="size-5" />
-            </button>
+            <OmnibarButton />
             <ThemeToggle />
             <HelpMenu />
             <NotificationsBell

@@ -30,7 +30,7 @@ import {
   type Segment,
 } from '@/app/api/contacts'
 import { parseCsv, toCsv, toImportRows, type ImportRow } from '@/app/contacts/csv'
-import { SearchInput } from '@/app/components/Filters'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
 import { customerLabel, isBsuid } from '@/app/lib/customer'
 import { can } from '@/app/lib/permissions'
 import { useAuth } from '@/app/auth/AuthContext'
@@ -408,6 +408,19 @@ export function ContactsPage({ onOpenChat }: { onOpenChat: (phone: string) => vo
   const shownFields = useMemo(() => fields.slice(0, 3), [fields])
   const currentSegment = segments.find((s) => s.id === segment)
 
+  // The omnibar is the contact search (name, number or email); its matches open the contact.
+  useOmnibarScope(
+    useMemo(
+      () => ({
+        id: 'contacts',
+        placeholder: 'Search contacts by name, number or email',
+        query: { value: q, onChange: setQ },
+        items: (rows ?? []).slice(0, 6).map((c) => ({ id: c.phone, label: c.name || customerLabel(c.phone, c.username), hint: c.name ? customerLabel(c.phone, c.username) : (c.email ?? undefined), run: () => setEditing(c) })),
+      }),
+      [q, rows],
+    ),
+  )
+
   function exportCsv() {
     const list = rows ?? []
     const csv = toCsv([
@@ -448,7 +461,6 @@ export function ContactsPage({ onOpenChat }: { onOpenChat: (phone: string) => vo
       />
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        <SearchInput value={q} onChange={setQ} placeholder="Search name, number or email" label="Search contacts" className="h-9 w-64" />
         <Select value={segment} onValueChange={setSegment}>
           <SelectTrigger className="h-9 w-48" aria-label="Segment">
             <SelectValue />

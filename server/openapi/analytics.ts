@@ -16,10 +16,10 @@ export const analytics = area('Analytics', {
       id: 'getAnalyticsOverview',
       summary: 'Everything on the Analytics page',
       description:
-        'Headline numbers with the same-length period before, a series per day, customer messages by weekday and hour, per agent, people, teams, escalations, tools (Meta’s insights) and consumption: WhatsApp spend by category, the Business Agent’s usage, service replies against the 1,000 free per number each month, and the budget. Rows stored before numbers were stamped count as the default number.',
+        'Headline numbers with the same-length period before, a series per day (weeks and months are rolled up from it by the client: counts and money add up, rates from their counts), customer messages by weekday and hour, per agent, people, teams, escalations, tools (Meta’s insights) and consumption: WhatsApp spend by category, the Business Agent’s usage, service replies against the 1,000 free per number each month, and the budget. Handovers count the AI handing over and someone taking over (the same rows as the handovers log). `kpis.openNow`, `overdueNow` and `peopleAvailable` are right now, whatever the dates; `byAgent[].serviceMessages` is for the chosen dates. WhatsApp spend is Meta’s per account, never per number: `spendWholeAccount` is true when the agents filter leaves some out (spend then still covers them all, and `costPerResolved` is null). Rows stored before numbers were stamped count as the default number.',
       who: WHO,
       query: FILTER,
-      ok: d(o({ 'range*': 'object', 'currency*': 'string?', 'agents*': 'object[]', 'kpis*': 'object', 'series*': 'object[]', 'heatmap*': 'object[]', 'byAgent*': 'object[]', 'consumption*': 'object' }), 'See src/app/analytics/types.ts `Overview` for every field.'),
+      ok: d(o({ 'range*': 'object', 'currency*': 'string?', 'spendWholeAccount*': d('boolean', 'WhatsApp spend covers agents outside the filter.'), 'agents*': 'object[]', 'kpis*': 'object', 'series*': 'object[]', 'heatmap*': 'object[]', 'byAgent*': 'object[]', 'consumption*': 'object' }), 'See src/app/analytics/types.ts `Overview` for every field.'),
       errors: { 400: 'from and to must be dates (YYYY-MM-DD), from not after to. / Pick 366 days or fewer.', 403: 'Analytics are for supervisors, admins and owners.' },
     },
   },
@@ -27,18 +27,25 @@ export const analytics = area('Analytics', {
     get: {
       id: 'getAnalyticsLog',
       summary: 'Rows behind the charts',
-      description: '`kind`: tickets, handovers, escalations, charges (one row per message status with pricing) or agent_usage (per hour). Newest first; columns say how to show each field.',
+      description:
+        '`kind`: conversations (one row per chat in the dates: started, customer, agent, answeredBy `ai`|`team`|`none`, firstReplyMin, messages, its ticket and rating; team and person don’t apply), tickets, handovers (the AI handing over or someone taking over, with `how`), escalations, csat (one row per rating of a ticket resolved in the dates: when, customer, ticket, rating `good`|`okay`|`bad`, team, assignee, comment), charges (one row per message status with pricing) or agent_usage (per hour). Newest first unless `sort` says otherwise; columns say how to show each field and which can be sorted.',
       who: WHO,
-      query: { ...FILTER, skip: d('integer', 'Rows to skip. Default 0.'), limit: d('integer', '1–200. Default 50.') },
-      ok: o({ 'kind*': 'string', 'columns*': d('object[]', '{key, label, numeric?}'), 'rows*': 'object[]', 'total*': 'integer' }),
-      errors: { 404: 'No log called X.' },
+      query: {
+        ...FILTER,
+        skip: d('integer', 'Rows to skip. Default 0.'),
+        limit: d('integer', '1–200. Default 50.'),
+        sort: d('string', 'A column key marked `sortable`. conversations: started, firstReplyMin, messages, answeredBy · tickets: opened, ticket, status, firstReplyMin, resolveMin, level · handovers: at, ticket, how, firstReplyMin, status · escalations: at, ticket, level · csat: when, ticket, rating · charges: at, category, type, billable, status · agent_usage: hour, messages, tokens, cost. Default: the first (the newest first).'),
+        dir: d('asc|desc', 'Default desc.'),
+      },
+      ok: o({ 'kind*': 'string', 'columns*': d('object[]', '{key, label, numeric?, sortable?}'), 'rows*': 'object[]', 'total*': 'integer', sort: d('object', '{key, dir}: the order the rows are in.') }),
+      errors: { 400: 'The X log can be sorted by … / dir must be asc or desc.', 404: 'No log called X.' },
     },
   },
 })
 
 const SCHEDULE = o({
   'name*': d('string', 'Up to 80 characters.'),
-  'reports*': d('string[]', 'Report ids from GET /api/reports.'),
+  'reports*': d('string[]', 'Report ids from GET /api/reports; old ids are saved as their new one. The email’s button opens the first.'),
   'cadence*': d('daily|weekly|monthly', 'daily: yesterday · weekly: Mondays, the last 7 days · monthly: the 1st, last month.'),
   'hour*': d('integer', '0–23, in the support hours’ time zone.'),
   numbers: d('string[]', 'WhatsApp number ids; empty = all agents.'),
@@ -61,18 +68,19 @@ export const reports = area('Analytics', {
     get: {
       id: 'downloadReport',
       summary: 'Download a report as CSV',
-      description: 'UTF-8 with a byte-order mark so Excel reads it right; cells that start with = + - @ are quoted as text. Logs give up to 50,000 rows. Answers text/csv as an attachment.',
+      description:
+        'UTF-8 with a byte-order mark so Excel reads it right; cells that start with = + - @ are quoted as text. Summaries: business_review, ai_agent, conversations, team, response_sla, csat, spend (their first table, by day). Records: conversations_log, tickets, handovers, escalations, csat_responses, charges, agent_usage, up to 50,000 rows. Old ids still work and give their new report: daily → business_review, agents → ai_agent, people and teams → team, consumption → spend. Answers text/csv as an attachment.',
       who: WHO,
-      params: { id: d('string', 'Report id from GET /api/reports (e.g. business_review, tickets).', { pattern: '^[a-z_]+$' }) },
-      query: FILTER,
+      params: { id: d('string', 'Report id from GET /api/reports (e.g. business_review, tickets), or an old one.', { pattern: '^[a-z_]+$' }) },
+      query: { ...FILTER, sort: d('string', 'Records only: a sortable column of its log (see GET /api/analytics/logs/{kind}).'), dir: d('asc|desc', 'Records only. Default desc.') },
       ok: 'string',
       okType: 'text/csv',
       okDescription: 'The report as a CSV attachment (content-disposition: attachment).',
-      errors: { 404: 'No report called X.' },
+      errors: { 400: 'The X log can be sorted by … / dir must be asc or desc.', 404: 'No report called X.' },
     },
   },
   '/api/reports/schedules': {
-    get: { id: 'listReportSchedules', summary: 'Scheduled report emails', who: WHO, ok: 'object[]' },
+    get: { id: 'listReportSchedules', summary: 'Scheduled report emails', description: 'Reports saved under an old id (daily, agents, people, teams, consumption) are listed, and sent, as their new one.', who: WHO, ok: 'object[]' },
     post: { id: 'createReportSchedule', summary: 'Schedule a report email', description: '20 per workspace at most. The email carries the headline numbers; each report is attached as CSV.', who: WHO, body: SCHEDULE, ok: 'object', errors: SCHEDULE_ERRORS },
   },
   '/api/reports/schedules/{id}': {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
@@ -17,6 +17,8 @@ import { createTemplate, deleteTemplate, listTemplates, type NewTemplate, type W
 import { renderTemplate, slotsOf } from '@/app/templates/templates'
 import { can } from '@/app/lib/permissions'
 import { TemplatePreview } from './TemplatePreview'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
+import { matchesText } from '@/app/omnibar/rank'
 
 const TPL_STATUS: Record<string, string> = { APPROVED: 'bg-success text-success-foreground', REJECTED: 'bg-destructive text-destructive-foreground', PENDING: 'bg-warning/15 text-warning-foreground' }
 
@@ -33,6 +35,28 @@ export function TemplatesTab() {
     listTemplates().then(setTemplates, (err) => setError(errorDetail(err)))
   }, [])
   useEffect(load, [load])
+
+  // The omnibar filters the templates (name, category, language, text); a match scrolls to its card.
+  const [q, setQ] = useState('')
+  const shown = useMemo(() => templates?.filter((t) => matchesText(q, t.name, t.category, t.language, renderTemplate(t, {}))) ?? null, [templates, q])
+  useOmnibarScope(
+    useMemo(
+      () => ({
+        id: 'whatsapp/templates',
+        placeholder: 'Search templates',
+        query: { value: q, onChange: setQ },
+        items: (shown ?? []).slice(0, 6).map((t) => ({
+          id: t.id,
+          label: t.name,
+          hint: `${t.category.toLowerCase()} · ${t.language}`,
+          run: () => {
+            document.getElementById(`template-${t.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          },
+        })),
+      }),
+      [q, shown],
+    ),
+  )
 
   return (
     <div className="space-y-4">
@@ -52,10 +76,12 @@ export function TemplatesTab() {
         <PageLoader context="whatsapp" className="min-h-[30vh]" />
       ) : templates?.length === 0 ? (
         <p className="rounded-lg border border-border p-10 text-center text-sm text-muted-foreground">No templates yet.</p>
+      ) : shown?.length === 0 ? (
+        <p className="rounded-lg border border-border p-10 text-center text-sm text-muted-foreground">No templates match.</p>
       ) : (
         <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {templates?.map((t) => (
-            <li key={t.id} className="space-y-2 rounded-lg border border-border bg-card p-4">
+          {shown?.map((t) => (
+            <li key={t.id} id={`template-${t.id}`} className="space-y-2 rounded-lg border border-border bg-card p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{t.name}</p>

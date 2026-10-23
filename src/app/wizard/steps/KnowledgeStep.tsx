@@ -24,12 +24,14 @@ export function KnowledgeStep() {
   // Adding the website is the quickest way to give the agent knowledge, so it comes first.
   const [activeTab, setActiveTab] = useState<TabId>('website')
   const [gapQuestion, setGapQuestion] = useState<string | null>(null)
+  const [focusFaqId, setFocusFaqId] = useState<string | null>(null)
   const [loadStatus, setLoadStatus] = useState<'loading' | 'loaded' | 'failed'>(() => (state.demo.forceNextFailure ? 'loading' : 'loaded'))
 
   // Arriving here via a "Compiled configuration" link on Test & publish — jump to the tab it named.
   useEffect(() => {
     if (state.pendingStepFocus?.step === 'knowledge' && state.pendingStepFocus.tab) {
       setActiveTab(state.pendingStepFocus.tab as TabId)
+      if (state.pendingStepFocus.id) setFocusFaqId(state.pendingStepFocus.id)
       setPendingStepFocus(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,6 +191,8 @@ export function KnowledgeStep() {
               consumeForcedFailure={consumeForcedFailure}
               prefillQuestion={gapQuestion}
               onPrefillUsed={() => setGapQuestion(null)}
+              focusId={focusFaqId}
+              onFocusUsed={() => setFocusFaqId(null)}
             />
           )}
         </TabsContent>

@@ -3,6 +3,7 @@
 // rows (messages, tickets, Meta's insights, charges, usage) at request time; a workspace's volume
 // keeps this to a handful of indexed aggregations. Days are in the support hours' time zone.
 import type http from 'node:http'
+import type { Document } from 'mongodb'
 import { HttpError, type Obj, type Titles, obj, serveJson } from '../platform/http.ts'
 import { col, db, dbOffReason, ws } from '../platform/db.ts'
 import { currentAssets } from '../platform/context.ts'
@@ -28,10 +29,14 @@ import {
   type LogKind,
   type LogPage,
   type Overview,
+  type SortDir,
 } from '../../src/app/analytics/types.ts'
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/
 const OPEN = ['open', 'pending']
+/** A handover: the AI handed the chat over, or someone took it over. One definition for the count and the log. */
+const HANDOVER = ['handoff', 'takeover']
+const isHandover = (t: Obj) => HANDOVER.includes(String(t.source))
 const MAX_DAYS = 366
 
 /** The instant a local day starts in `tz`. */
@@ -128,7 +133,7 @@ async function period(f: AnalyticsFilter, tz: string, from: string, to: string):
     const c = chats.get(String(r._id.phone)) ?? { team: 0, ai: 0 }
     chats.set(String(r._id.phone), { team: Math.max(c.team, Number(r.team)), ai: Math.max(c.ai, Number(r.ai)) })
   }
-  const handoffsAll = await col('tickets').countDocuments({ workspaceId: ws(), source: 'handoff', createdAt: { $gte: start, $lt: end }, ...byNumber(f) })
+  const handoffsAll = await col('tickets').countDocuments({ workspaceId: ws(), source: { $in: HANDOVER }, createdAt: { $gte: start, $lt: end }, ...byNumber(f) })
 
   const tickets = await ticketRows(f, start, end)
   const opened = tickets.filter((t) => inRange(t.createdAt))
@@ -141,7 +146,7 @@ async function period(f: AnalyticsFilter, tz: string, from: string, to: string):
   const spendRows = await col('spend_daily').aggregate([{ $match: { workspaceId: ws(), day: { $gte: from, $lte: to } } }, { $group: { _id: '$day', cost: { $sum: '$cost' } } }]).toArray()
   const agentRows = await col('agent_usage')
     .aggregate([
-      { $match: { workspaceId: ws(), start: { $gte: start, $lt: end }, ...(f.numbers.length && { phoneNumberId: { $in: f.numbers } }) } },
+      { $match: { workspaceId: ws(), start: { $gte: start, $lt: end }, ...byNumber(f) } },
       { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$start', timezone: tz } }, cost: { $sum: '$cost' } } },
     ])
     .toArray()
@@ -157,7 +162,7 @@ async function period(f: AnalyticsFilter, tz: string, from: string, to: string):
     firstReplies: responded.map((t) => mins(t.createdAt, t.firstRespondedAt)),
     resolveTimes: resolved.map((t) => mins(t.createdAt, t.resolvedAt)),
     csat: { good: score(3), okay: score(2), bad: score(1) },
-    handoffs: opened.filter((t) => t.source === 'handoff').length,
+    handoffs: opened.filter(isHandover).length,
     escalations: escalationsIn.length,
     spend: spendRows.reduce((a, r) => a + Number(r.cost), 0),
     agentCost: agentRows.reduce((a, r) => a + Number(r.cost), 0),
@@ -196,7 +201,7 @@ async function period(f: AnalyticsFilter, tz: string, from: string, to: string):
       aiOnly,
       withTeam: team,
       noReply: c.length - team - aiOnly,
-      handoffs: (openedBy.get(date) ?? []).filter((t) => t.source === 'handoff').length,
+      handoffs: (openedBy.get(date) ?? []).filter(isHandover).length,
       ticketsOpened: openedBy.get(date)?.length ?? 0,
       ticketsResolved: res.length,
       backlog: tickets.filter((t) => +t.createdAt < dayEnd && (!t.resolvedAt || +t.resolvedAt >= dayEnd)).length,
@@ -247,15 +252,23 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
   const allTickets = await ticketRows({ ...f, numbers: [], team: null, person: null }, start, end)
   const inRange = (d: unknown) => !!d && +(d as Date) >= +start && +(d as Date) < +end
   const agentCost = await col('agent_usage').aggregate([{ $match: { workspaceId: ws(), start: { $gte: start, $lt: end } } }, { $group: { _id: '$phoneNumberId', cost: { $sum: '$cost' } } }]).toArray()
-  const monthStart = dayStart(isoDay(new Date(), tz).slice(0, 8) + '01', tz)
-  const service = await col('message_charges')
-    .aggregate([
-      { $match: { workspaceId: ws(), at: { $gte: monthStart }, category: 'service', status: { $in: ['delivered', 'read'] } } },
-      { $group: { _id: { n: '$phoneNumberId', m: '$waMessageId' } } },
-      { $group: { _id: '$_id.n', used: { $sum: 1 } } },
-    ])
-    .toArray()
-  const serviceBy = new Map(service.map((r) => [numberOf(r._id), Number(r.used)]))
+  const costBy = new Map<string, number>()
+  for (const r of agentCost) costBy.set(numberOf(r._id), (costBy.get(numberOf(r._id)) ?? 0) + Number(r.cost))
+  // Service replies delivered per number: in the chosen range (per agent), and this calendar month (the free tier).
+  const serviceIn = async (at: Obj) =>
+    new Map(
+      (
+        await col('message_charges')
+          .aggregate([
+            { $match: { workspaceId: ws(), at, category: 'service', status: { $in: ['delivered', 'read'] } } },
+            { $group: { _id: { n: '$phoneNumberId', m: '$waMessageId' } } },
+            { $group: { _id: '$_id.n', used: { $sum: 1 } } },
+          ])
+          .toArray()
+      ).map((r) => [numberOf(r._id), Number(r.used)]),
+    )
+  const serviceBy = await serviceIn({ $gte: start, $lt: end })
+  const monthBy = await serviceIn({ $gte: dayStart(isoDay(new Date(), tz).slice(0, 8) + '01', tz) })
   const byAgent: AgentRow[] = agents
     .filter((a) => !f.numbers.length || f.numbers.includes(a.id))
     .map((a) => {
@@ -269,9 +282,9 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
         label: a.label,
         conversations: chats.length,
         containment: ratio(aiOnly, chats.length),
-        handoffs: ts.filter((t) => t.source === 'handoff' && +(t.createdAt as Date) >= +start).length,
+        handoffs: ts.filter((t) => isHandover(t) && +(t.createdAt as Date) >= +start).length,
         csat: csatScore(sc(3), sc(2), sc(1)),
-        agentCost: Number(agentCost.find((r) => String(r._id) === a.id)?.cost ?? 0),
+        agentCost: costBy.get(a.id) ?? 0,
         serviceMessages: serviceBy.get(a.id) ?? 0,
       }
     })
@@ -348,7 +361,7 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
   const billing = await col('billing').findOne({ workspaceId: ws() })
   const byCategory = await col('spend_daily').aggregate([{ $match: { workspaceId: ws(), day: { $gte: f.from, $lte: f.to } } }, { $group: { _id: '$category', volume: { $sum: '$volume' }, cost: { $sum: '$cost' } } }, { $sort: { cost: -1 } }]).toArray()
   const [agentUse] = await col('agent_usage')
-    .aggregate([{ $match: { workspaceId: ws(), start: { $gte: start, $lt: end }, ...(f.numbers.length && { phoneNumberId: { $in: f.numbers } }) } }, { $group: { _id: null, m: { $sum: '$billableMessages' }, tk: { $sum: '$billableTokens' }, c: { $sum: '$cost' } } }])
+    .aggregate([{ $match: { workspaceId: ws(), start: { $gte: start, $lt: end }, ...byNumber(f) } }, { $group: { _id: null, m: { $sum: '$billableMessages' }, tk: { $sum: '$billableTokens' }, c: { $sum: '$cost' } } }])
     .toArray()
   const state = await col('agent_usage_state').findOne({ workspaceId: ws() }, { sort: { checkedAt: -1 } })
   const [assist] = await col('ai_usage').aggregate([{ $match: { workspaceId: ws(), day: { $gte: f.from, $lte: f.to } } }, { $group: { _id: null, tk: { $sum: { $add: ['$input', '$output'] } }, calls: { $sum: '$calls' } } }]).toArray()
@@ -358,6 +371,7 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
   const overdue = openTickets.filter((t) => +(t.firstRespondedAt ? t.resolveDueAt : t.firstResponseDueAt) < now).length
   const available = await col('memberships').countDocuments({ workspaceId: ws(), $or: [{ availability: 'online' }, { availability: { $exists: false } }] })
   const csatOf = (p: Period) => csatScore(p.csat.good, p.csat.okay, p.csat.bad)
+  // WhatsApp spend can't be split by number: say so whenever the agents filter leaves any out.
   const spendWholeAccount = f.numbers.length > 0 && agents.some((a) => !f.numbers.includes(a.id))
 
   return {
@@ -397,7 +411,7 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
     tools,
     consumption: {
       byCategory: byCategory.map((r) => ({ category: String(r._id ?? 'UNKNOWN'), volume: Number(r.volume), cost: Number(r.cost) })),
-      serviceFreeTier: agents.map((a) => ({ id: a.id, label: a.label, used: serviceBy.get(a.id) ?? 0, free: FREE_SERVICE_MESSAGES })),
+      serviceFreeTier: agents.map((a) => ({ id: a.id, label: a.label, used: monthBy.get(a.id) ?? 0, free: FREE_SERVICE_MESSAGES })),
       agent: { billableMessages: Number(agentUse?.m ?? 0), tokens: Number(agentUse?.tk ?? 0), cost: Number(agentUse?.c ?? 0), state: (state?.state as string | undefined) ?? null },
       assist: { tokens: Number(assist?.tk ?? 0), calls: Number(assist?.calls ?? 0) },
       budget: { monthly: Number(billing?.budget) || null, spentThisMonth: Number(month?.c ?? 0) },
@@ -408,31 +422,149 @@ export async function overview(f: AnalyticsFilter): Promise<Overview> {
 // ---- logs: the rows behind the charts, for tables and CSV ----
 const fmt = (d: unknown, tz: string) => (d ? new Intl.DateTimeFormat('en-GB', { timeZone: tz, dateStyle: 'medium', timeStyle: 'short' }).format(d as Date) : null)
 const minsBetween = (a: unknown, b: unknown) => (a && b ? Math.round((+(b as Date) - +(a as Date)) / 60_000) : null)
+const RATING: Record<number, string> = { 3: 'good', 2: 'okay', 1: 'bad' }
+const rating = (csat: unknown) => (csat ? (RATING[Number(obj(csat).score)] ?? null) : null)
+const elapsed = (from: string, to: string) => ({ $subtract: [to, from] })
 
-export async function logPage(kind: LogKind, f: AnalyticsFilter, skip: number, limit: number): Promise<LogPage> {
+/** Per log: the columns it can be ordered by, each as the value to sort on. The first is the default (newest first). */
+export const LOG_SORTS: Record<LogKind, Record<string, unknown>> = {
+  conversations: { started: '$started', firstReplyMin: '$firstReplyMs', messages: '$messages', answeredBy: '$answeredBy' },
+  tickets: { opened: '$createdAt', ticket: '$number', status: '$status', firstReplyMin: elapsed('$createdAt', '$firstRespondedAt'), resolveMin: elapsed('$createdAt', '$resolvedAt'), level: '$escalationLevel' },
+  handovers: { at: '$createdAt', ticket: '$number', how: '$source', firstReplyMin: elapsed('$createdAt', '$firstRespondedAt'), status: '$status' },
+  escalations: { at: '$escalations.at', ticket: '$number', level: '$escalations.level' },
+  csat: { when: { $ifNull: ['$csat.at', '$resolvedAt'] }, ticket: '$number', rating: '$csat.score' },
+  charges: { at: '$at', category: '$category', type: '$type', billable: '$billable', status: '$status' },
+  agent_usage: { hour: '$start', messages: '$billableMessages', tokens: '$billableTokens', cost: '$cost' },
+}
+export type LogSort = { key: string; dir: SortDir }
+
+/** `sort` and `dir` from a query: a whitelisted column of the log, asc or desc. Default: the newest first. */
+export function parseSort(kind: LogKind, u: URL): LogSort {
+  const key = u.searchParams.get('sort') || Object.keys(LOG_SORTS[kind])[0]
+  const dir = u.searchParams.get('dir') || 'desc'
+  if (!(key in LOG_SORTS[kind])) throw new HttpError(400, `The ${kind} log can be sorted by ${Object.keys(LOG_SORTS[kind]).join(', ')}.`)
+  if (dir !== 'asc' && dir !== 'desc') throw new HttpError(400, 'dir must be asc or desc.')
+  return { key, dir }
+}
+
+type Coll = ReturnType<typeof col>
+/** One sorted page and the total of a pipeline's rows. Ties keep a stable order (by _id). */
+async function sortedPage(c: Coll, pipeline: Obj[], kind: LogKind, sort: LogSort, skip: number, limit: number) {
+  const d = sort.dir === 'asc' ? 1 : -1
+  const [res] = await c
+    .aggregate([...pipeline, { $facet: { total: [{ $count: 'n' }], page: [{ $addFields: { _sort: LOG_SORTS[kind][sort.key] } }, { $sort: { _sort: d, _id: d } }, { $skip: skip }, { $limit: limit }] } }])
+    .toArray()
+  return { total: Number(res?.total?.[0]?.n ?? 0), rows: (res?.page ?? []) as Document[] }
+}
+
+export async function logPage(kind: LogKind, f: AnalyticsFilter, skip: number, limit: number, sort?: LogSort): Promise<LogPage> {
+  const by = sort ?? { key: Object.keys(LOG_SORTS[kind])[0], dir: 'desc' as const }
+  const page = await logRows(kind, f, skip, limit, by)
+  return { ...page, columns: page.columns.map((c) => (c.key in LOG_SORTS[kind] ? { ...c, sortable: true } : c)), sort: by }
+}
+
+async function logRows(kind: LogKind, f: AnalyticsFilter, skip: number, limit: number, sort: LogSort): Promise<LogPage> {
   const tz = (await getSettings()).hours.timezone
   const start = dayStart(f.from, tz)
   const end = dayStart(addDays(f.to, 1), tz)
   const names = async (ids: unknown[]) => new Map((await col('users').find({ _id: { $in: [...new Set(ids.filter(Boolean))] } as never }).toArray()).map((u) => [String(u._id), String(u.name ?? '')]))
   const contacts = async (phones: unknown[]) => new Map((await col('contacts').find({ workspaceId: ws(), phone: { $in: [...new Set(phones.map(String))] } }).toArray()).map((c) => [String(c.phone), String(c.name ?? '')]))
   const who = (m: Map<string, string>, phone: unknown) => m.get(String(phone)) || customerLabel(String(phone))
+  // Team and person narrow the ticket logs.
+  const ticketWhere = (): Obj => {
+    const where: Obj = { workspaceId: ws(), ...byNumber(f) }
+    if (f.team) where.teamId = f.team === 'none' ? null : f.team
+    if (f.person) where.assigneeId = f.person === 'none' ? null : f.person
+    return where
+  }
 
+  if (kind === 'conversations') {
+    // One row per chat with a message from the customer, the AI or the team in the range: the
+    // Conversations count's own definition (team and person don't apply, as there).
+    const { total, rows } = await sortedPage(
+      col('messages'),
+      [
+        { $match: { workspaceId: ws(), at: { $gte: start, $lt: end }, kind: { $ne: 'note' }, author: { $in: ['customer', 'ai', 'agent'] }, ...byNumber(f) } },
+        { $sort: { at: 1 } },
+        {
+          $group: {
+            _id: '$phone',
+            started: { $first: '$at' },
+            number: { $first: '$phoneNumberId' },
+            messages: { $sum: 1 },
+            ...CHAT_KIND,
+            firstIn: { $min: { $cond: [{ $eq: ['$author', 'customer'] }, '$at', null] } },
+            // ponytail: every reply time per chat in the range is held to find the first one after the customer wrote; fine at a workspace's volume, a $setWindowFields pass if chats run to thousands of replies.
+            replies: { $push: { $cond: [{ $in: ['$author', ['ai', 'agent']] }, '$at', '$$REMOVE'] } },
+          },
+        },
+        { $addFields: { firstReply: { $min: { $filter: { input: '$replies', cond: { $gte: ['$$this', '$firstIn'] } } } } } },
+        {
+          $project: {
+            started: 1,
+            number: 1,
+            messages: 1,
+            answeredBy: { $cond: [{ $eq: ['$team', 1] }, 'team', { $cond: [{ $eq: ['$ai', 1] }, 'ai', 'none'] }] },
+            firstReplyMs: { $cond: [{ $and: ['$firstIn', '$firstReply'] }, { $subtract: ['$firstReply', '$firstIn'] }, null] },
+          },
+        },
+      ],
+      kind,
+      sort,
+      skip,
+      limit,
+    )
+    const phones = rows.map((r) => r._id)
+    const [cust, agents, tks] = await Promise.all([
+      contacts(phones),
+      agentList(),
+      col('tickets')
+        .find({ workspaceId: ws(), phone: { $in: phones }, createdAt: { $lt: end }, $or: [{ status: { $in: OPEN } }, { resolvedAt: { $gte: start } }] }, { projection: { phone: 1, number: 1, csat: 1, createdAt: 1 } })
+        .sort({ createdAt: -1 })
+        .toArray(),
+    ])
+    const labels = new Map(agents.map((a) => [a.id, a.label]))
+    // The chat's latest ticket in the range.
+    const ticketOf = new Map<string, Obj>()
+    for (const t of tks) if (!ticketOf.has(String(t.phone))) ticketOf.set(String(t.phone), t)
+    return {
+      kind,
+      total,
+      columns: [
+        { key: 'started', label: 'Started' },
+        { key: 'customer', label: 'Customer' },
+        { key: 'agent', label: 'Agent' },
+        { key: 'answeredBy', label: 'Answered by' },
+        { key: 'firstReplyMin', label: 'Minutes to first reply', numeric: true },
+        { key: 'messages', label: 'Messages', numeric: true },
+        { key: 'ticket', label: 'Ticket' },
+        { key: 'csat', label: 'Satisfaction' },
+      ],
+      rows: rows.map((r) => {
+        const t = ticketOf.get(String(r._id))
+        return {
+          started: fmt(r.started, tz),
+          customer: who(cust, r._id),
+          agent: labels.get(numberOf(r.number)) ?? null,
+          answeredBy: String(r.answeredBy),
+          firstReplyMin: r.firstReplyMs == null ? null : Math.round(Number(r.firstReplyMs) / 60_000),
+          messages: Number(r.messages),
+          ticket: t ? `#${t.number}` : null,
+          csat: rating(t?.csat),
+        }
+      }),
+    }
+  }
   if (kind === 'escalations') {
-    // One row per escalation event (a ticket can have several), newest first, paged by event.
-    const base: Obj = { workspaceId: ws(), ...byNumber(f) }
-    if (f.team) base.teamId = f.team === 'none' ? null : f.team
-    if (f.person) base.assigneeId = f.person === 'none' ? null : f.person
-    const [res] = await col('tickets')
-      .aggregate([
-        { $match: { ...base, escalations: { $elemMatch: { at: { $gte: start, $lt: end } } } } },
-        { $unwind: '$escalations' },
-        { $match: { 'escalations.at': { $gte: start, $lt: end } } },
-        { $sort: { 'escalations.at': -1 } },
-        { $facet: { total: [{ $count: 'n' }], page: [{ $skip: skip }, { $limit: limit }] } },
-      ])
-      .toArray()
-    const total = Number(res?.total?.[0]?.n ?? 0)
-    const events = (res?.page ?? []) as Obj[]
+    // One row per escalation event (a ticket can have several), paged by event.
+    const { total, rows: events } = await sortedPage(
+      col('tickets'),
+      [{ $match: { ...ticketWhere(), escalations: { $elemMatch: { at: { $gte: start, $lt: end } } } } }, { $unwind: '$escalations' }, { $match: { 'escalations.at': { $gte: start, $lt: end } } }],
+      kind,
+      sort,
+      skip,
+      limit,
+    )
     const [cust, teams] = await Promise.all([contacts(events.map((t) => t.phone)), getTeams()])
     const team = (id: unknown) => teams.find((t) => t.id === id)?.name ?? null
     return {
@@ -454,14 +586,40 @@ export async function logPage(kind: LogKind, f: AnalyticsFilter, skip: number, l
       }),
     }
   }
+  if (kind === 'csat') {
+    // One row per rating: resolved in the range and rated, as the Satisfaction figures count them.
+    const { total, rows } = await sortedPage(col('tickets'), [{ $match: { ...ticketWhere(), status: 'resolved', resolvedAt: { $gte: start, $lt: end }, csat: { $ne: null } } }], kind, sort, skip, limit)
+    const [people, cust, teams] = await Promise.all([names(rows.map((t) => t.assigneeId)), contacts(rows.map((t) => t.phone)), getTeams()])
+    return {
+      kind,
+      total,
+      columns: [
+        { key: 'when', label: 'When' },
+        { key: 'customer', label: 'Customer' },
+        { key: 'ticket', label: 'Ticket' },
+        { key: 'rating', label: 'Rating' },
+        { key: 'team', label: 'Team' },
+        { key: 'assignee', label: 'Assignee' },
+        { key: 'comment', label: 'Comment' },
+      ],
+      rows: rows.map((t) => {
+        const c = obj(t.csat)
+        return {
+          when: fmt(c.at ?? t.resolvedAt, tz),
+          customer: who(cust, t.phone),
+          ticket: `#${t.number}`,
+          rating: rating(c),
+          team: teams.find((x) => x.id === t.teamId)?.name ?? null,
+          assignee: t.assigneeId ? (people.get(String(t.assigneeId)) ?? 'Someone') : null,
+          comment: c.comment ? String(c.comment) : null,
+        }
+      }),
+    }
+  }
   if (kind === 'tickets' || kind === 'handovers') {
-    const where: Obj = { workspaceId: ws(), ...byNumber(f) }
-    if (f.team) where.teamId = f.team === 'none' ? null : f.team
-    if (f.person) where.assigneeId = f.person === 'none' ? null : f.person
-    where.createdAt = { $gte: start, $lt: end }
-    if (kind === 'handovers') where.source = { $in: ['handoff', 'takeover'] }
-    const total = await col('tickets').countDocuments(where)
-    const rows = await col('tickets').find(where).sort({ createdAt: -1 }).skip(skip).limit(limit).toArray()
+    const where: Obj = { ...ticketWhere(), createdAt: { $gte: start, $lt: end } }
+    if (kind === 'handovers') where.source = { $in: HANDOVER }
+    const { total, rows } = await sortedPage(col('tickets'), [{ $match: where }], kind, sort, skip, limit)
     const [people, cust, teams] = await Promise.all([names(rows.map((t) => t.assigneeId)), contacts(rows.map((t) => t.phone)), getTeams()])
     const team = (id: unknown) => teams.find((t) => t.id === id)?.name ?? null
     if (kind === 'handovers')
@@ -525,9 +683,7 @@ export async function logPage(kind: LogKind, f: AnalyticsFilter, skip: number, l
     }
   }
   if (kind === 'charges') {
-    const where: Obj = { workspaceId: ws(), at: { $gte: start, $lt: end }, ...byNumber(f) }
-    const total = await col('message_charges').countDocuments(where)
-    const rows = await col('message_charges').find(where).sort({ at: -1 }).skip(skip).limit(limit).toArray()
+    const { total, rows } = await sortedPage(col('message_charges'), [{ $match: { workspaceId: ws(), at: { $gte: start, $lt: end }, ...byNumber(f) } }], kind, sort, skip, limit)
     const cust = await contacts(rows.map((r) => r.phone))
     const labels = new Map((await agentList()).map((a) => [a.id, a.label]))
     return {
@@ -554,9 +710,7 @@ export async function logPage(kind: LogKind, f: AnalyticsFilter, skip: number, l
     }
   }
   // agent_usage
-  const where: Obj = { workspaceId: ws(), start: { $gte: start, $lt: end }, ...(f.numbers.length && { phoneNumberId: { $in: f.numbers } }) }
-  const total = await col('agent_usage').countDocuments(where)
-  const rows = await col('agent_usage').find(where).sort({ start: -1 }).skip(skip).limit(limit).toArray()
+  const { total, rows } = await sortedPage(col('agent_usage'), [{ $match: { workspaceId: ws(), start: { $gte: start, $lt: end }, ...byNumber(f) } }], kind, sort, skip, limit)
   const labels = new Map((await agentList()).map((a) => [a.id, a.label]))
   return {
     kind,
@@ -568,7 +722,7 @@ export async function logPage(kind: LogKind, f: AnalyticsFilter, skip: number, l
       { key: 'tokens', label: 'Billable tokens', numeric: true },
       { key: 'cost', label: 'Cost', numeric: true },
     ],
-    rows: rows.map((r) => ({ hour: fmt(r.start, tz), agent: labels.get(String(r.phoneNumberId)) ?? null, messages: Number(r.billableMessages ?? 0), tokens: Number(r.billableTokens ?? 0), cost: Number(r.cost ?? 0) })),
+    rows: rows.map((r) => ({ hour: fmt(r.start, tz), agent: labels.get(numberOf(r.phoneNumberId)) ?? null, messages: Number(r.billableMessages ?? 0), tokens: Number(r.billableTokens ?? 0), cost: Number(r.cost ?? 0) })),
   }
 }
 
@@ -587,7 +741,8 @@ async function route(u: URL, me: Actor): Promise<unknown> {
     }
     const limit = Math.min(200, Math.max(1, int('limit', 50)))
     const skip = Math.max(0, int('skip', 0))
-    return logPage(m[1] as LogKind, f, skip, limit)
+    const kind = m[1] as LogKind
+    return logPage(kind, f, skip, limit, parseSort(kind, u))
   }
   throw new HttpError(404, 'Not found.')
 }

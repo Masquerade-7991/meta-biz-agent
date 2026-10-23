@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -10,10 +10,10 @@ import {
   Loader2,
   Plus,
   RefreshCw,
-  Search,
   Upload,
 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
 import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { Progress } from '@/app/components/ui/progress'
@@ -65,7 +65,6 @@ import {
 } from '@/app/api/meta'
 
 const FAQ_WARNING_THRESHOLD = 150
-const SEARCH_THRESHOLD = 20
 
 // ---- Pure helpers ----
 
@@ -135,6 +134,8 @@ export function FaqTab({
   consumeForcedFailure,
   prefillQuestion,
   onPrefillUsed,
+  focusId,
+  onFocusUsed,
 }: {
   faqs: FaqRow[]
   lastImport: KnowledgeState['lastFaqImport']
@@ -145,6 +146,9 @@ export function FaqTab({
   /** Opens a new FAQ with this question filled in (from "Questions your agent couldn't answer"). */
   prefillQuestion?: string | null
   onPrefillUsed?: () => void
+  /** Scrolls to and highlights this FAQ (picked in the omnibar from another section). */
+  focusId?: string | null
+  onFocusUsed?: () => void
 }) {
   const [newRow, setNewRow] = useState<{ question: string; answer: string } | null>(null)
   const [newRowError, setNewRowError] = useState<string | null>(null)
@@ -306,14 +310,33 @@ export function FaqTab({
   const suggestions = SERVICES_TYPE_CATEGORIES.includes(category) ? FAQ_STARTER_SUGGESTIONS.services : FAQ_STARTER_SUGGESTIONS.retail
 
   const isOverThreshold = faqs.length >= FAQ_WARNING_THRESHOLD
-  const visibleFaqs = search.trim()
-    ? faqs.filter((f) => {
-        const q = search.toLowerCase()
-        return f.question.toLowerCase().includes(q) || f.answer.toLowerCase().includes(q)
-      })
-    : faqs
+  const visibleFaqs = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return q ? faqs.filter((f) => f.question.toLowerCase().includes(q) || f.answer.toLowerCase().includes(q)) : faqs
+  }, [search, faqs])
 
   const showEmptyState = faqs.length === 0 && !newRow
+
+  // The omnibar is this tab's search (useOmnibarScope); its matches scroll to the row.
+  useOmnibarScope(
+    useMemo(
+      () => ({
+        id: 'studio/knowledge/faq',
+        placeholder: 'Search questions and answers',
+        query: { value: search, onChange: setSearch },
+        items: visibleFaqs.slice(0, 6).map((f) => ({ id: f.id, label: f.question, hint: 'FAQ', run: () => scrollToAndHighlight(f.id) })),
+      }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [search, visibleFaqs],
+    ),
+  )
+  useEffect(() => {
+    if (!focusId) return
+    setSearch('')
+    requestAnimationFrame(() => scrollToAndHighlight(focusId))
+    onFocusUsed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId])
 
   return (
     <div className={cn('space-y-4', loading && 'pointer-events-none opacity-50')} aria-hidden={loading}>
@@ -351,13 +374,6 @@ export function FaqTab({
       )}
 
       {deleteError && <InlineError message={deleteError} onRetry={() => setDeleteError(null)} />}
-
-      {faqs.length > SEARCH_THRESHOLD && (
-        <div className="relative max-w-sm">
-          <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search questions and answers" className="pl-9" />
-        </div>
-      )}
 
       {showEmptyState ? (
         <div className="space-y-3 rounded-lg border border-border bg-accent p-4">

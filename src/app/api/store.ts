@@ -125,6 +125,11 @@ interface TestHistoryEntry {
   startedAt: number
   messages: { from: 'customer' | 'agent' | 'system'; text: string; at: number; quickReplies?: string[] }[]
 }
+/** Whether the open number's agent has been tried in a test chat (Home's setup guide). */
+export async function hasTestConversations(): Promise<boolean> {
+  if (isDummyMode()) return (await import('./dummyMeta')).dummyTestChats() > 0
+  return !!(await listTestConversations())?.length
+}
 /** Past test chats in the Test tab's shape: handoffs and non-replies become the same system lines. */
 export async function listTestConversations(): Promise<TestHistoryEntry[] | null> {
   const list = await storeFetch<{ conversationId: string; createdAt: Stamp; messages: StoredTestMessage[] }[]>(

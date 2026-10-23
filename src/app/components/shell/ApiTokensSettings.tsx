@@ -15,8 +15,9 @@ import { can } from '@/app/lib/permissions'
 import { SettingsSection } from './SettingsSection'
 import { LoadGate, SettingsLink } from './settings/SettingsUi'
 import { copyText } from './settings/clipboard'
+import { DOCS_BASE } from '@/app/home/helpLinks'
 
-const DOCS_URL = 'https://helo-docs.vercel.app/docs/developers/api'
+const DOCS_URL = `${DOCS_BASE}/developers/api`
 const EXPIRY = [
   { days: '30', label: '30 days' },
   { days: '90', label: '90 days' },

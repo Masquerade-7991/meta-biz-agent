@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Ban, Loader2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
@@ -8,7 +8,7 @@ import { useAuth } from '@/app/auth/AuthContext'
 import { errorDetail } from '@/app/api/meta'
 import { blockUser, listBlocked, unblockUser } from '@/app/api/numbers'
 import { can } from '@/app/lib/permissions'
-import { SearchInput } from '@/app/components/Filters'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
 import { useForcedFailure } from './useForcedFailure'
 import type { TabProps } from './NumberPage'
 
@@ -31,6 +31,14 @@ export function BlockedTab({ detail }: TabProps) {
   useEffect(() => {
     if (canEdit) load()
   }, [canEdit, load])
+  const shown = rows?.filter((r) => r.user.includes(q.replace(/\D/g, ''))) ?? []
+  // The omnibar searches this number's blocked list.
+  useOmnibarScope(
+    useMemo(
+      () => (canEdit ? { id: 'whatsapp/number/blocked', placeholder: 'Search blocked numbers', query: { value: q, onChange: setQ } } : null),
+      [canEdit, q],
+    ),
+  )
 
   if (!canEdit)
     return (
@@ -38,8 +46,6 @@ export function BlockedTab({ detail }: TabProps) {
         Owners and admins manage who&rsquo;s blocked.
       </p>
     )
-  const shown = rows?.filter((r) => r.user.includes(q.replace(/\D/g, ''))) ?? []
-
   return (
     <div className="max-w-2xl space-y-6">
       <form
@@ -85,7 +91,7 @@ export function BlockedTab({ detail }: TabProps) {
         </p>
       ) : (
         <div className="space-y-2">
-          {rows.length > 8 && <SearchInput value={q} onChange={setQ} placeholder="Search blocked numbers" label="Search blocked numbers" />}
+          {shown.length === 0 && <p className="text-muted-foreground text-sm">No blocked numbers match.</p>}
           <ul className="divide-y divide-border rounded-lg border border-border">
             {shown.map((r) => (
               <li key={r.user} className="flex items-center justify-between px-4 py-2 text-sm">

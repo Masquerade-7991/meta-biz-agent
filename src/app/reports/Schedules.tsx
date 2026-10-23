@@ -7,7 +7,7 @@ import { Label } from '@/app/components/ui/label'
 import { Switch } from '@/app/components/ui/switch'
 import { Checkbox } from '@/app/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
-import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/app/components/ui/sheet'
+import { Sheet, SheetBody, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/app/components/ui/sheet'
 import { EmptyState, SectionHeader } from '@/app/components/ui/page'
 import { TagInput } from '@/app/components/wizard/TagInput'
 import { ConfirmDialog } from '@/app/components/wizard/ConfirmDialog'
@@ -18,7 +18,7 @@ import { PageLoader } from '@/app/components/ui/wavy-loader'
 import { InlineError } from '@/app/components/wizard/RetryBanner'
 import { AgentsFilter, TeamFilter } from '@/app/analytics/FilterBar'
 import type { Team } from '@/app/api/tickets'
-import { blankSchedule, CADENCE_LABEL, REPORT_GROUPS, REPORTS, reportOf, type Cadence, type ReportSchedule } from './catalog'
+import { blankSchedule, CADENCE_LABEL, REPORT_GROUPS, REPORTS, reportOf, resolveReport, type Cadence, type ReportSchedule } from './catalog'
 
 type Draft = Omit<ReportSchedule, 'id'>
 /** The period each email covers, in words (scheduleRange computes it). */
@@ -71,7 +71,6 @@ export function Schedules({
     <div>
       <SectionHeader
         title="Your schedules"
-        description="The headline numbers in the email, each chosen report attached as CSV. Times are in your business hours’ time zone."
         actions={
           <Button size="sm" onClick={() => setEditing({ id: null, s: blankSchedule(meId) })}>
             <Plus className="size-4" /> New schedule
@@ -194,7 +193,8 @@ function ScheduleSheet({
   const [error, setError] = useState<string | null>(null)
   if (editing !== shown) {
     setShown(editing)
-    setS(editing?.s ?? null)
+    // A schedule saved with an old report id ticks its new report.
+    setS(editing ? { ...editing.s, reports: [...new Set(editing.s.reports.map((id) => resolveReport(id) ?? id))] } : null)
     setError(null)
   }
   if (!s) return <Sheet open={false} />
@@ -218,10 +218,9 @@ function ScheduleSheet({
 
   return (
     <Sheet open={!!editing} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="sm:max-w-xl">
+      <SheetContent className="sm:max-w-xl" aria-describedby={undefined}>
         <SheetHeader>
           <SheetTitle>{editing?.id ? 'Edit schedule' : 'New scheduled email'}</SheetTitle>
-          <SheetDescription>The email has the headline numbers; each chosen report is attached as CSV.</SheetDescription>
         </SheetHeader>
         <SheetBody className="space-y-6">
           <div className="space-y-1.5">

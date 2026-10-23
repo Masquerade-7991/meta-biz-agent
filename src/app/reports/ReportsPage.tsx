@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
+import { matchesText } from '@/app/omnibar/rank'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
-import { ChevronRight, Download, FileSpreadsheet, FileText } from 'lucide-react'
+import { Download, FileText } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/app/components/ui/tabs'
 import { PageContainer, PageHeader } from '@/app/components/ui/page'
@@ -11,11 +13,10 @@ import { getSupportSettings, listTeams, type Team } from '@/app/api/tickets'
 import { can } from '@/app/lib/permissions'
 import { useAnalyticsFilter } from '@/app/analytics/useAnalyticsFilter'
 import { blankSchedule, isReport, REPORT_GROUPS, reportOf, REPORTS, type ReportId, type ReportSchedule } from './catalog'
+import { ReportCard } from './ReportCard'
 import { ReportView } from './ReportView'
 import { ExportDialog } from './ExportDialog'
 import { Schedules } from './Schedules'
-
-const FILTER_WORDS: Record<string, string> = { agents: 'agents', team: 'team', person: 'assignee' }
 
 /**
  * Reports, three ways in: the library (/reports) lists every report; a report's own page
@@ -60,6 +61,26 @@ export function ReportsPage() {
   }, [q])
   const started = useCallback(() => setStart(null), [])
 
+  // The omnibar filters the library's cards (title and description).
+  const [text, setText] = useState('')
+  const library = !reportId && sub !== 'schedules'
+  const shown = REPORTS.filter((r) => matchesText(text, r.title, r.description))
+  useOmnibarScope(
+    useMemo(
+      () =>
+        library
+          ? {
+              id: 'reports',
+              placeholder: 'Search reports',
+              query: { value: text, onChange: setText },
+              items: shown.slice(0, 6).map((r) => ({ id: r.id, label: r.title, hint: 'Report', icon: FileText, run: () => go(r.id) })),
+            }
+          : null,
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [library, text, search],
+    ),
+  )
+
   if (reportId)
     return (
       <PageContainer>
@@ -82,7 +103,6 @@ export function ReportsPage() {
     <PageContainer>
       <PageHeader
         title="Reports"
-        description="Open a report to read it on screen, download it, or have reports emailed on a schedule."
         actions={
           <Button variant="outline" onClick={() => setExporting(true)}>
             <Download className="size-4" /> Export…
@@ -100,29 +120,14 @@ export function ReportsPage() {
         <Schedules meId={me?.user.id} agents={agents} teams={teams} members={members} canEmailOutside={can(me?.role, 'settings.manage')} start={start} onStarted={started} />
       ) : (
         <div className="space-y-10">
-          {REPORT_GROUPS.map((g) => (
+          {shown.length === 0 && <p className="text-sm text-muted-foreground">No reports match.</p>}
+          {REPORT_GROUPS.filter((g) => shown.some((r) => r.group === g.id)).map((g) => (
             <section key={g.id} className="space-y-3">
-              <div>
-                <h2 className="text-section font-semibold">{g.title}</h2>
-                <p className="text-sm text-muted-foreground">{g.description}</p>
-              </div>
-              <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
-                {REPORTS.filter((r) => r.group === g.id).map((r) => (
+              <h2 className="text-section font-semibold">{g.title}</h2>
+              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {shown.filter((r) => r.group === g.id).map((r) => (
                   <li key={r.id}>
-                    <button type="button" onClick={() => go(r.id)} className="group flex w-full items-center gap-4 px-4 py-3.5 text-left transition-colors hover:bg-muted/60" data-density-row>
-                      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground group-hover:text-foreground">
-                        {r.group === 'summary' ? <FileText className="size-4" /> : <FileSpreadsheet className="size-4" />}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-medium">{r.title}</span>
-                        <span className="block text-sm text-muted-foreground">{r.description}</span>
-                      </span>
-                      <span className="hidden shrink-0 text-right text-meta text-muted-foreground sm:block">
-                        By date, {r.filters.map((x) => FILTER_WORDS[x]).join(', ')}
-                        <span className="block">{r.group === 'summary' ? 'CSV · PDF' : 'CSV'}</span>
-                      </span>
-                      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                    </button>
+                    <ReportCard id={r.id} to={`/reports/${r.id}${search}`} />
                   </li>
                 ))}
               </ul>

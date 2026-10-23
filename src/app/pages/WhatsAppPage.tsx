@@ -15,6 +15,8 @@ import { ConnectNumberButton } from '@/app/whatsapp/ConnectNumberDialog'
 import { NumberAvatar, NumberPage } from '@/app/whatsapp/NumberPage'
 import { statusHelp } from '@/app/whatsapp/profileRules'
 import { TemplatesTab } from '@/app/whatsapp/TemplatesTab'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
+import { matchesText } from '@/app/omnibar/rank'
 import { AccountTab } from '@/app/whatsapp/AccountTab'
 import { can } from '@/app/lib/permissions'
 import { cn } from '@/app/lib/utils'
@@ -87,7 +89,25 @@ export function WhatsAppPage() {
       // a blocked store just means the choice isn't remembered
     }
   }
-  const shown = account ? (rows ?? []).filter((n) => n.wabaId === account.id) : []
+  const inAccount = account ? (rows ?? []).filter((n) => n.wabaId === account.id) : []
+  // The omnibar filters the numbers on the Phone numbers tab (Message templates has its own scope).
+  const [q, setQ] = useState('')
+  const shown = inAccount.filter((n) => matchesText(q, n.verifiedName, n.display))
+  useOmnibarScope(
+    useMemo(
+      () =>
+        open || tab !== 'numbers'
+          ? null
+          : {
+              id: 'whatsapp',
+              placeholder: 'Search numbers',
+              query: { value: q, onChange: setQ },
+              items: shown.slice(0, 6).map((n) => ({ id: n.id, label: n.verifiedName || n.display, hint: n.display, run: () => setOpen(n.id) })),
+            },
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [open, tab, q, rows, account?.id],
+    ),
+  )
 
   return (
     <PageContainer>
@@ -152,7 +172,7 @@ export function WhatsAppPage() {
           ) : (
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList>
-                <TabsTrigger value="numbers">Phone numbers ({shown.length})</TabsTrigger>
+                <TabsTrigger value="numbers">Phone numbers ({inAccount.length})</TabsTrigger>
                 <TabsTrigger value="templates">Message templates</TabsTrigger>
                 {owner && <TabsTrigger value="account">Account</TabsTrigger>}
               </TabsList>
@@ -186,6 +206,13 @@ export function WhatsAppPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {shown.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                          No numbers match.
+                        </TableCell>
+                      </TableRow>
+                    )}
                     {shown.map((n) => {
                       const st = statusHelp(n.status)
                       return (

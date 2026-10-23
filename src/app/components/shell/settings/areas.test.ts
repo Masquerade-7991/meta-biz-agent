@@ -50,10 +50,8 @@ test('the filter box matches labels, descriptions and keywords', () => {
   assert.deepEqual(find(''), ALL_TABS.map((t) => t.slug))
 })
 
-test('the ⌘K palette and the Settings page read this catalog, not their own lists', () => {
-  const palette = readFileSync(new URL('../CommandPalette.tsx', import.meta.url), 'utf8')
-  assert.match(palette, /from '\.\/settings\/areas'/)
-  assert.doesNotMatch(palette, /tab: 'members'/)
+// The omnibar's Go to list is checked in src/app/omnibar/goTo.test.ts.
+test('the Settings page reads this catalog, not its own list', () => {
   const page = readFileSync(new URL('../SettingsPage.tsx', import.meta.url), 'utf8')
   assert.match(page, /from '\.\/settings\/areas'/)
   for (const t of ALL_TABS) assert.match(page, new RegExp(`${t.slug}: `), `SettingsPage renders ${t.slug}`)

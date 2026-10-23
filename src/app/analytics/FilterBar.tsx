@@ -2,7 +2,7 @@ import { Bot, CalendarRange, Check, ChevronDown, UserRound, Users, X } from 'luc
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover'
 import { cn } from '@/app/lib/utils'
 import { PRESETS } from './useAnalyticsFilter'
@@ -13,8 +13,8 @@ const EVERY: readonly ReportFilter[] = ['agents', 'team', 'person']
 
 /**
  * The filters every analytics view and report shares: period, agents (one, several or all), team and
- * assignee. Each control says what it is ("Team: All"), the exact dates show underneath, and a report
- * that ignores team or assignee hides them and says why (`applies`, `note`).
+ * assignee. Each control says what it is ("Team: All"); a report renders only the filters it uses
+ * (`applies`). The date popover names the exact dates and the time zone.
  */
 export function FilterBar({
   filter,
@@ -24,7 +24,6 @@ export function FilterBar({
   people,
   onChange,
   applies = EVERY,
-  note,
   timezone,
   className,
 }: {
@@ -36,9 +35,7 @@ export function FilterBar({
   onChange: (patch: Record<string, string | null>) => void
   /** The filters this view uses besides the date; the others are hidden. */
   applies?: readonly ReportFilter[]
-  /** Why some filters are hidden. */
-  note?: string
-  /** The workspace's time zone, named under the dates. */
+  /** The workspace's time zone, named in the date popover. */
   timezone?: string
   className?: string
 }) {
@@ -47,8 +44,7 @@ export function FilterBar({
   const span = `${fmtLong(filter.from)}${filter.from === filter.to ? '' : ` – ${fmtLong(filter.to)}`}`
 
   return (
-    <div className={cn('space-y-1.5', className)}>
-    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filters">
+    <div className={cn('flex flex-wrap items-center gap-2', className)} role="group" aria-label="Filters">
       <Popover>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="h-9">
@@ -56,6 +52,10 @@ export function FilterBar({
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 space-y-3">
+          <p className="text-sm font-medium">
+            {span}
+            {timezone && <span className="block text-meta font-normal text-muted-foreground">Times in {timezone}</span>}
+          </p>
           <div className="grid grid-cols-2 gap-1.5">
             {PRESETS.map((p) => (
               <Button key={p.id} size="sm" variant={range === p.id ? 'default' : 'outline'} onClick={() => onChange({ range: p.id, from: null, to: null })}>
@@ -100,12 +100,6 @@ export function FilterBar({
         </Button>
       ) : null}
     </div>
-    <p className="text-meta text-muted-foreground">
-      {span}
-      {timezone && ` · ${timezone} time`}
-      {note && ` · ${note}`}
-    </p>
-    </div>
   )
 }
 
@@ -128,7 +122,6 @@ export function AgentsFilter({ agents, value, onChange }: { agents: { id: string
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
-        <DropdownMenuLabel className="text-meta font-normal text-muted-foreground">Agents (one per WhatsApp number)</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => onChange([])}>
           <Check className={cn('size-4', value.length && 'invisible')} /> All agents together
         </DropdownMenuItem>

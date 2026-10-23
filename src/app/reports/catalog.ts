@@ -1,123 +1,82 @@
 // The reports anyone with reports.view can view on screen, download (CSV, opens in Excel; PDF for
-// summaries) or have emailed on a schedule. Each report is a table built from the Analytics overview or a log,
-// the same way on the server (CSV, emails) and in the browser (print view, Dummy mode).
-import { csatScore, type LogKind, type LogPage, type Overview } from '../analytics/types.ts'
+// summaries) or have emailed on a schedule. Summaries are built from the Analytics overview
+// (summary.ts), records from a log, the same way on the server (CSV, emails) and in the browser
+// (screen, print view, Dummy mode).
+import type { LogKind, LogPage, Overview } from '../analytics/types.ts'
 import { csvCell } from '../contacts/csv.ts'
+import { csvOf, summaryOf } from './summary.ts'
 
 /** Filters a report can be narrowed by besides the date (which every report has). `agents` = the
- *  WhatsApp numbers; `team` and `person` narrow ticket figures, so reports without tickets ignore them. */
+ *  WhatsApp numbers; `team` and `person` narrow ticket figures, so reports without tickets don't offer them. */
 export type ReportFilter = 'agents' | 'team' | 'person'
 const ALL: readonly ReportFilter[] = ['agents', 'team', 'person']
 const AGENTS_ONLY: readonly ReportFilter[] = ['agents']
 
-/** `group`: summaries are totals for a period (CSV and PDF); records are one row per item (CSV only).
+/** `group`: summaries are KPI tiles, charts and tables (CSV and PDF); records are one row per item
+ *  (CSV only), read from the log `log`. `records`: the record report a summary drills down to.
  *  `filters` must match what the server applies (server/insights/analytics.ts overview and logPage). */
 export const REPORTS = [
-  { id: 'business_review', group: 'summary', title: 'Business review', description: 'The headline numbers against the period before: conversations, chats handled by AI alone, satisfaction, reply times, escalations and spend.', source: 'overview', filters: ALL },
-  { id: 'daily', group: 'summary', title: 'Day by day', description: 'One row per day: conversations, AI alone, handovers, tickets, reply times, satisfaction and spend.', source: 'overview', filters: ALL },
-  { id: 'agents', group: 'summary', title: 'AI agents', description: 'Each AI agent side by side: conversations, chats handled alone, handovers, satisfaction and cost.', source: 'overview', filters: AGENTS_ONLY },
-  { id: 'people', group: 'summary', title: 'Team members', description: 'Per person: tickets resolved and open, first reply time, satisfaction and escalations.', source: 'overview', filters: ALL },
-  { id: 'teams', group: 'summary', title: 'Teams', description: 'Per team: tickets opened and resolved, how many were resolved on time, and escalations.', source: 'overview', filters: ALL },
-  { id: 'consumption', group: 'summary', title: 'Spend and usage', description: 'What WhatsApp messages and the Business Agent cost, by message type, and free replies used per number.', source: 'overview', filters: AGENTS_ONLY },
-  { id: 'tickets', group: 'records', title: 'Tickets', description: 'Every ticket opened in the period, with its team, assignee, timings, whether it was on time, escalation and rating.', source: 'log', filters: ALL },
-  { id: 'handovers', group: 'records', title: 'Handovers', description: 'Every chat handed to a person: how, to whom and how fast they replied.', source: 'log', filters: ALL },
-  { id: 'escalations', group: 'records', title: 'Escalations', description: 'Every escalation level reached, why, and who was alerted.', source: 'log', filters: ALL },
-  { id: 'charges', group: 'records', title: 'Message charges', description: 'One row per message Meta priced: type, pricing and whether it was billed.', source: 'log', filters: AGENTS_ONLY },
-  { id: 'agent_usage', group: 'records', title: 'AI agent usage by hour', description: 'The Business Agent’s billed replies, tokens and cost, hour by hour.', source: 'log', filters: AGENTS_ONLY },
-] as const
+  { id: 'business_review', group: 'summary', title: 'Business review', description: 'The headline numbers against the period before', filters: ALL, records: 'conversations_log' },
+  { id: 'ai_agent', group: 'summary', title: 'AI agent performance', description: 'How much the AI handles on its own', filters: AGENTS_ONLY, records: 'handovers' },
+  { id: 'conversations', group: 'summary', title: 'Conversations', description: 'Who answered, and when customers write', filters: AGENTS_ONLY, records: 'conversations_log' },
+  { id: 'team', group: 'summary', title: 'Team performance', description: 'Tickets, reply times and ratings per person and team', filters: ALL, records: 'tickets' },
+  { id: 'response_sla', group: 'summary', title: 'Response times & SLA', description: 'Reply and resolution times against your targets', filters: ALL, records: 'escalations' },
+  { id: 'csat', group: 'summary', title: 'Customer satisfaction', description: 'How customers rated the help they got', filters: ALL, records: 'csat_responses' },
+  { id: 'spend', group: 'summary', title: 'Spend & usage', description: 'What WhatsApp messages and the AI agent cost', filters: AGENTS_ONLY, records: 'charges' },
+  { id: 'conversations_log', group: 'records', title: 'Conversations log', description: 'Every conversation and who answered it', filters: AGENTS_ONLY, log: 'conversations' },
+  { id: 'tickets', group: 'records', title: 'Tickets', description: 'Every ticket opened, with its timings and rating', filters: ALL, log: 'tickets' },
+  { id: 'handovers', group: 'records', title: 'Handovers', description: 'Every chat handed to a person or taken over', filters: ALL, log: 'handovers' },
+  { id: 'escalations', group: 'records', title: 'Escalations', description: 'Every escalation level reached, and why', filters: ALL, log: 'escalations' },
+  { id: 'csat_responses', group: 'records', title: 'Satisfaction responses', description: 'Every rating a customer gave', filters: ALL, log: 'csat' },
+  { id: 'charges', group: 'records', title: 'Message charges', description: 'Every message Meta priced', filters: AGENTS_ONLY, log: 'charges' },
+  { id: 'agent_usage', group: 'records', title: 'AI agent usage', description: 'The agent’s billed replies and tokens, hour by hour', filters: AGENTS_ONLY, log: 'agent_usage' },
+] as const satisfies readonly { id: string; group: 'summary' | 'records'; title: string; description: string; filters: readonly ReportFilter[]; records?: string; log?: LogKind }[]
 
 export const REPORT_GROUPS = [
-  { id: 'summary', title: 'Summaries', description: 'Totals for a period. View them here, or download as CSV or PDF.' },
-  { id: 'records', title: 'Detailed records', description: 'One row per ticket, handover or charge, for spreadsheets. Download as CSV.' },
+  { id: 'summary', title: 'Summaries' },
+  { id: 'records', title: 'Records' },
 ] as const
 
-/** Why a report ignores team and assignee, shown where those filters would be. */
-export const FILTER_NOTE: Partial<Record<ReportId, string>> = {
-  agents: 'Team and assignee don’t apply: this report is about the AI agents.',
-  consumption: 'Team and assignee don’t apply: Meta reports spend for the whole account.',
-  charges: 'Team and assignee don’t apply: Meta prices messages for the whole account.',
-  agent_usage: 'Team and assignee don’t apply: this is the AI agent’s own usage.',
-}
+/** Reports that were renamed or folded into another: old links and saved schedules land on these. */
+export const RENAMED: Record<string, ReportId> = { daily: 'business_review', agents: 'ai_agent', people: 'team', teams: 'team', consumption: 'spend' }
 
 /** A record report's CSV holds at most this many rows (server/insights/reports.ts). */
 export const MAX_LOG_ROWS = 50_000
 
 export type ReportId = (typeof REPORTS)[number]['id']
+type Report = (typeof REPORTS)[number]
 export const isReport = (v: unknown): v is ReportId => REPORTS.some((r) => r.id === v)
-export const reportOf = (id: ReportId) => REPORTS.find((r) => r.id === id)!
-export const isLogReport = (id: ReportId): id is ReportId & LogKind => reportOf(id).source === 'log'
+/** A report id, old names included; null for anything else. */
+export const resolveReport = (v: unknown): ReportId | null => (isReport(v) ? v : typeof v === 'string' && Object.hasOwn(RENAMED, v) ? RENAMED[v] : null)
+export const reportOf = (id: ReportId) => REPORTS.find((r) => r.id === (resolveReport(id) ?? id))!
+/** The log a record report reads; null for summaries. */
+export const logKindOf = (id: ReportId): LogKind | null => {
+  const r: Report = reportOf(id)
+  return 'log' in r ? r.log : null
+}
+export const isLogReport = (id: ReportId) => logKindOf(id) != null
+/** The record report that shows a log. */
+export const reportOfLog = (kind: LogKind): ReportId => REPORTS.find((r) => 'log' in r && r.log === kind)!.id
+/** The record report a summary drills down to. */
+export const recordsOf = (id: ReportId): ReportId | null => {
+  const r: Report = reportOf(id)
+  return 'records' in r ? r.records : null
+}
 
 interface ReportTable {
   columns: string[]
   rows: (string | number | null)[][]
 }
 
-const r2 = (v: number | null) => (v == null ? null : Math.round(v * 100) / 100)
-const pctv = (v: number | null) => (v == null ? null : Math.round(v * 1000) / 10)
-
-/** One report as a table. Numbers stay numbers (Excel can sum them); rates are percents. */
+/** One report as a table: a log's columns and rows, or a summary's first table (by day). Numbers stay
+ *  numbers (Excel can sum them); rates are percents. */
 export function reportTable(id: ReportId, o: Overview | null, log: LogPage | null): ReportTable {
   if (isLogReport(id)) {
     if (!log) return { columns: [], rows: [] }
     return { columns: log.columns.map((c) => c.label), rows: log.rows.map((r) => log.columns.map((c) => r[c.key] ?? null)) }
   }
-  if (!o) return { columns: [], rows: [] }
-  const cur = o.currency ? ` (${o.currency})` : ''
-  switch (id) {
-    case 'business_review': {
-      const k = o.kpis
-      const row = (label: string, v: { value: number | null; prev: number | null }, f: (x: number | null) => number | null = (x) => x) => [label, f(v.value), f(v.prev)]
-      return {
-        columns: ['Measure', `${o.range.from} to ${o.range.to}`, `${o.range.prevFrom} to ${o.range.prevTo}`],
-        rows: [
-          row('Conversations', k.conversations),
-          row('Handled by AI alone (%)', k.containment, pctv),
-          row('Customer satisfaction (%)', k.csat, pctv),
-          row('Handovers to people', k.handoffs),
-          row('Tickets opened', k.ticketsOpened),
-          row('Tickets resolved', k.ticketsResolved),
-          row('Resolution rate (%)', k.resolutionRate, pctv),
-          row('Median first reply (minutes)', k.medianFirstReplyMin, r2),
-          row('Median time to resolve (minutes)', k.medianResolveMin, r2),
-          row('Resolved on time (%)', k.slaMet, pctv),
-          row('Escalations', k.escalations),
-          row(`Spend${cur}`, k.spend, r2),
-          row(`Cost per resolved conversation${cur}`, k.costPerResolved, r2),
-        ],
-      }
-    }
-    case 'daily':
-      return {
-        columns: ['Date', 'Conversations', 'AI alone', 'With the team', 'No reply', 'Handovers', 'Tickets opened', 'Tickets resolved', 'Open at end of day', 'Median first reply (minutes)', 'Resolved on time (%)', 'Satisfaction (%)', 'Escalations', `WhatsApp spend${cur}`, `Business Agent cost${cur}`],
-        rows: o.series.map((p) => [p.date, p.conversations, p.aiOnly, p.withTeam, p.noReply, p.handoffs, p.ticketsOpened, p.ticketsResolved, p.backlog, r2(p.medianFirstReplyMin), pctv(p.slaMet), pctv(csatScore(p.csatGood, p.csatOkay, p.csatBad)), p.escalations, r2(p.spend), r2(p.agentCost)]),
-      }
-    case 'agents':
-      return {
-        columns: ['Agent', 'Conversations', 'Handled by AI alone (%)', 'Handovers', 'Satisfaction (%)', `Business Agent cost${cur}`, 'Service replies this month'],
-        rows: o.byAgent.map((a) => [a.label, a.conversations, pctv(a.containment), a.handoffs, pctv(a.csat), r2(a.agentCost), a.serviceMessages]),
-      }
-    case 'people':
-      return {
-        columns: ['Person', 'Resolved', 'Open now', 'Median first reply (minutes)', 'Satisfaction (%)', 'Escalated'],
-        rows: o.people.map((p) => [p.name, p.resolved, p.open, r2(p.medianFirstReplyMin), pctv(p.csat), p.escalated]),
-      }
-    case 'teams':
-      return { columns: ['Team', 'Opened', 'Resolved', 'Resolved on time (%)', 'Escalated'], rows: o.teams.map((t) => [t.name, t.opened, t.resolved, pctv(t.slaMet), t.escalated]) }
-    case 'consumption': {
-      const c = o.consumption
-      return {
-        columns: ['Section', 'Item', 'Volume', `Cost${cur}`],
-        rows: [
-          ...c.byCategory.map((x) => ['WhatsApp messages', x.category, x.volume, r2(x.cost)]),
-          ['Meta Business Agent', 'Billable replies', c.agent.billableMessages, r2(c.agent.cost)],
-          ['Meta Business Agent', 'Billable tokens', c.agent.tokens, null],
-          ...c.serviceFreeTier.map((s) => ['Free service replies this month', s.label, s.used, null]),
-          ['Console writing help', 'AI tokens', c.assist.tokens, null],
-        ],
-      }
-    }
-  }
-  return { columns: [], rows: [] }
+  const first = o && summaryOf(reportOf(id).id, o).tables[0]
+  return first ? csvOf(first, o.currency) : { columns: [], rows: [] }
 }
 
 /** CSV that Excel opens with the right characters (UTF-8 mark first). Text cells go through csvCell, so a value can't run as a formula. */

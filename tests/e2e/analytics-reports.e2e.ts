@@ -99,8 +99,10 @@ test('report CSVs: a file for supervisors and up, with Excel’s byte-order mark
   const r = await s.api(w.supervisor, 'GET', '/api/reports/business_review.csv?from=2026-10-05&to=2026-10-06')
   assert.equal(r.status, 200, r.text)
   assert.match(r.headers.get('content-disposition') ?? '', /helo-business-review-2026-10-05-to-2026-10-06\.csv/)
-  assert.ok(r.text.startsWith('﻿Measure,2026-10-05 to 2026-10-06,2026-10-03 to 2026-10-04\r\n'))
-  assert.match(r.text, /\r\nConversations,3,0\r\n/)
+  // A summary's CSV is its first table, by day (src/app/reports/summary.ts).
+  assert.ok(r.text.startsWith('﻿Date,Conversations,'), r.text)
+  assert.match(r.text, /\r\n2026-10-05,1,/)
+  assert.match(r.text, /\r\n2026-10-06,2,/)
   assert.equal((await s.api(w.agent, 'GET', '/api/reports/business_review.csv')).status, 403)
   assert.equal((await s.api(w.owner, 'GET', '/api/reports/everything.csv')).status, 404)
   assert.equal((await s.api(w.owner, 'GET', '/api/reports/tickets.csv?from=2026-13-01&to=2026-13-02')).status, 400)
@@ -114,6 +116,109 @@ test('reports that ignore team and assignee give the same file with them set (ca
     assert.equal(plain.status, 200, plain.text)
     assert.equal(narrowed.text, plain.text, id)
   }
+})
+
+// From here on there's also a take-over on Tuesday (a handover too) and an hour of agent usage
+// stored before numbers were stamped (it belongs to the default number).
+test('handovers: the count and the log are the same rows, take-overs included', async () => {
+  await s.db.collection('tickets').insertOne({ workspaceId: w.id, phone: '919840000001', number: 1003, status: 'open', priority: 'normal', assigneeId: null, teamId: null, tags: [], source: 'takeover', phoneNumberId: NUM, createdAt: Z('2026-10-06T08:00:00Z'), firstResponseDueAt: Z('2026-10-06T09:00:00Z'), resolveDueAt: Z('2026-10-07T08:00:00Z'), firstRespondedAt: null, resolvedAt: null, csat: null, escalationLevel: 0 })
+  const q = 'from=2026-10-05&to=2026-10-06'
+  const o = (await overview(q)).json
+  const log = (await s.api(w.supervisor, 'GET', `/api/analytics/logs/handovers?${q}`)).json
+  assert.equal(o.kpis.handoffs.value, 2)
+  assert.equal(log.total, o.kpis.handoffs.value)
+  assert.equal(o.series.reduce((a: number, p: { handoffs: number }) => a + p.handoffs, 0), log.total)
+  assert.deepEqual(log.rows.map((r: { how: string }) => r.how).sort(), ['AI handed over', 'Someone took over'])
+  assert.equal(o.byAgent[0].handoffs, 2)
+})
+
+test('the conversations log: one row per chat the Conversations count counts', async () => {
+  const q = 'from=2026-10-05&to=2026-10-06'
+  const r = await s.api(w.supervisor, 'GET', `/api/analytics/logs/conversations?${q}&sort=firstReplyMin&dir=asc`)
+  assert.equal(r.status, 200, r.text)
+  assert.equal(r.json.total, (await overview(q)).json.kpis.conversations.value)
+  assert.deepEqual(r.json.sort, { key: 'firstReplyMin', dir: 'asc' })
+  // Nobody answered 03 (null sorts first), the AI answered 01 in a minute, the team answered 02 in five.
+  assert.deepEqual(
+    r.json.rows.map((x: Record<string, unknown>) => [x.answeredBy, x.firstReplyMin, x.messages, x.ticket, x.csat]),
+    [
+      ['none', null, 1, '#1001', 'good'],
+      ['ai', 1, 2, '#1003', null],
+      ['team', 1 * 5, 2, '#1002', null],
+    ],
+  )
+  assert.equal(r.json.rows[0].agent, 'E2E Number 1')
+  assert.ok(r.json.columns.find((c: { key: string }) => c.key === 'started').sortable)
+  assert.ok(!r.json.columns.find((c: { key: string }) => c.key === 'customer').sortable)
+})
+
+test('the satisfaction log: one row per rating the Satisfaction figures count', async () => {
+  const q = 'from=2026-10-05&to=2026-10-06'
+  const r = await s.api(w.supervisor, 'GET', `/api/analytics/logs/csat?${q}`)
+  assert.equal(r.status, 200, r.text)
+  const tue = (await overview(q)).json.series[1]
+  assert.equal(r.json.total, tue.csatGood + tue.csatOkay + tue.csatBad)
+  assert.deepEqual([r.json.rows[0].ticket, r.json.rows[0].rating, r.json.rows[0].comment], ['#1001', 'good', null])
+  // A team filter narrows it like the ticket figures.
+  assert.equal((await s.api(w.supervisor, 'GET', `/api/analytics/logs/csat?${q}&team=nope`)).json.total, 0)
+})
+
+test('logs sort by a whitelisted column, newest first by default', async () => {
+  const q = 'from=2026-10-05&to=2026-10-06'
+  const tickets = (x: string) => s.api(w.supervisor, 'GET', `/api/analytics/logs/tickets?${q}${x}`)
+  assert.deepEqual((await tickets('')).json.rows.map((r: { ticket: string }) => r.ticket), ['#1003', '#1001', '#1002'])
+  assert.deepEqual((await tickets('&sort=ticket&dir=asc')).json.rows.map((r: { ticket: string }) => r.ticket), ['#1001', '#1002', '#1003'])
+  assert.deepEqual((await tickets('&sort=firstReplyMin&dir=desc&limit=1')).json.rows.map((r: { ticket: string }) => r.ticket), ['#1001'])
+  assert.equal((await tickets('&sort=subject')).status, 400, 'subject is not sortable')
+  assert.equal((await tickets('&sort=ticket&dir=up')).status, 400)
+  // CSVs follow the same order.
+  const csv = await s.api(w.owner, 'GET', `/api/reports/tickets.csv?${q}&sort=ticket&dir=asc`)
+  assert.equal(csv.status, 200, csv.text)
+  assert.ok(csv.text.indexOf('#1001') < csv.text.indexOf('#1003'))
+})
+
+test('agent usage stored without a number counts for the default number, like every other report', async () => {
+  await s.db.collection('agent_usage').insertOne({ workspaceId: w.id, start: Z('2026-10-06T04:30:00Z'), billableMessages: 3, billableTokens: 900, cost: 1.5 })
+  const q = `from=2026-10-05&to=2026-10-06&numbers=${NUM}`
+  const log = (await s.api(w.supervisor, 'GET', `/api/analytics/logs/agent_usage?${q}`)).json
+  assert.equal(log.total, 1)
+  assert.equal(log.rows[0].agent, 'E2E Number 1')
+  const o = (await overview(q)).json
+  assert.equal(o.consumption.agent.billableMessages, 3)
+  assert.equal(o.byAgent[0].agentCost, 1.5)
+  assert.equal(o.spendWholeAccount, false, 'the one agent there is: spend is not wider than the filter')
+})
+
+test('new report ids download, and old ids give their new report', async () => {
+  const q = 'from=2026-10-05&to=2026-10-06'
+  for (const id of ['ai_agent', 'conversations', 'team', 'response_sla', 'csat', 'spend', 'conversations_log', 'csat_responses']) {
+    const r = await s.api(w.owner, 'GET', `/api/reports/${id}.csv?${q}`)
+    assert.equal(r.status, 200, `${id}: ${r.text}`)
+    assert.ok(r.text.length > 2, id)
+  }
+  for (const [old, now] of [['daily', 'business-review'], ['agents', 'ai-agent'], ['people', 'team'], ['teams', 'team'], ['consumption', 'spend']]) {
+    const r = await s.api(w.owner, 'GET', `/api/reports/${old}.csv?${q}`)
+    assert.equal(r.status, 200, `${old}: ${r.text}`)
+    assert.match(r.headers.get('content-disposition') ?? '', new RegExp(`helo-${now}-2026-10-05-to-2026-10-06\\.csv`), old)
+  }
+  const log = await s.api(w.owner, 'GET', `/api/reports/conversations_log.csv?${q}`)
+  assert.equal(log.text.split('\r\n').filter(Boolean).length, 1 + 3, 'a header and the three chats')
+})
+
+test('saved schedules with old ids read and send as the new reports; the email links to the report', async () => {
+  const id = '00000000-0000-4000-8000-000000000001'
+  await s.db.collection('report_schedules').insertOne({ _id: id as never, workspaceId: w.id, name: 'Old daily', reports: ['daily', 'agents', 'people', 'teams', 'consumption', 'gone'], cadence: 'daily', hour: 9, numbers: [], team: null, userIds: [w.admin.id], emails: [], enabled: true, createdAt: new Date() })
+  const listed = (await s.api(w.admin, 'GET', '/api/reports/schedules')).json.find((x: { id: string }) => x.id === id)
+  assert.deepEqual(listed.reports, ['business_review', 'ai_agent', 'team', 'spend'])
+  const r = await s.api(w.admin, 'POST', `/api/reports/schedules/${id}/send`)
+  assert.equal(r.status, 200, r.text)
+  const log = s.log()
+  assert.match(log, /\/reports\/business_review\?from=\d{4}-\d{2}-\d{2}&to=/)
+  assert.match(log, /attached: helo-ai-agent-/)
+  // Saving it with an old id stores the new one.
+  const put = await s.api(w.admin, 'PUT', `/api/reports/schedules/${id}`, { ...listed, reports: ['consumption'] })
+  assert.equal(put.status, 200, put.text)
+  assert.deepEqual((await s.db.collection('report_schedules').findOne({ _id: id as never }))?.reports, ['spend'])
 })
 
 test('schedules: who may send outside the workspace, and the limits', async () => {

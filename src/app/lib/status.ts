@@ -20,3 +20,6 @@ export function agentStatusOf(p: { activated: boolean; stopped: boolean; audienc
   if (!p.activated) return 'draft'
   return p.audienceMode === 'everyone' ? 'live' : 'testing'
 }
+
+/** A progress bar's colour: red for the first third, amber for the middle, green near the end. */
+export const progressTone = (done: number, total: number) => (done * 3 <= total ? 'bg-destructive' : done * 3 <= total * 2 ? 'bg-warning' : 'bg-success')

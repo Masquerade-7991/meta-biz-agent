@@ -22,7 +22,7 @@ export function KpiTile({
   unit = '%',
   to,
 }: {
-  label: string
+  label: React.ReactNode
   value: React.ReactNode
   sub?: React.ReactNode
   /** Fractional change against the previous period (0.12 = +12%); null hides it. */
@@ -36,8 +36,10 @@ export function KpiTile({
   to?: string
 }) {
   const shown = change != null && Number.isFinite(change)
+  // A change that rounds to 0 reads as no change: no arrow, no colour.
+  const flat = shown && Math.round(change * 100) === 0
   const up = shown && change > 0
-  const good = !shown || change === 0 || better === 'none' ? null : up === (better === 'up')
+  const good = !shown || flat || better === 'none' ? null : up === (better === 'up')
   const body = (
     <>
       <span className="flex items-center gap-1 text-meta text-muted-foreground">
@@ -55,7 +57,7 @@ export function KpiTile({
             )}
             title="Against the previous period of the same length"
           >
-            {change > 0 ? <ArrowUpRight className="size-3.5" /> : change < 0 ? <ArrowDownRight className="size-3.5" /> : null}
+            {flat ? null : change > 0 ? <ArrowUpRight className="size-3.5" /> : change < 0 ? <ArrowDownRight className="size-3.5" /> : null}
             {Math.abs(Math.round(change * 100))}
             {unit === '%' ? '%' : Math.abs(Math.round(change * 100)) === 1 ? ' pt' : ' pts'}
           </span>

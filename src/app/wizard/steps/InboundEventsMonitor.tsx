@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, Loader2, Search } from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
-import { Input } from '@/app/components/ui/input'
+import { useOmnibarScope } from '@/app/omnibar/OmnibarContext'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog'
 import {
@@ -213,6 +213,18 @@ export function InboundEventsMonitor({ events }: { events: AgentEventRow[] }) {
   const hasMore = filteredRows.length > pagedRows.length
   const openRow = openRowId ? (events.find((e) => e.id === openRowId) ?? null) : null
   const filtersActive = !!search.trim() || statusFilter !== 'all'
+  // The omnibar is this list's search; its matches open the event.
+  useOmnibarScope(
+    useMemo(
+      () => ({
+        id: 'studio/connections/events',
+        placeholder: 'Search events',
+        query: { value: search, onChange: setSearch },
+        items: filteredRows.slice(0, 6).map((r) => ({ id: r.id, label: r.eventType, hint: r.description, run: () => setOpenRowId(r.id) })),
+      }),
+      [search, filteredRows],
+    ),
+  )
 
   if (events.length === 0) {
     return (
@@ -232,10 +244,6 @@ export function InboundEventsMonitor({ events }: { events: AgentEventRow[] }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-55 flex-1">
-          <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search events..." className="pl-9" />
-        </div>
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as 'all' | AgentEventStatus)}>
           <SelectTrigger className="w-44" size="sm">
             <SelectValue />

@@ -3,8 +3,12 @@
 @import 'fumadocs-ui/css/preset.css';
 @import 'fumadocs-openapi/css/preset.css';
 
-/* Helo.ai tokens: neutral greys, hairline borders and one accent for links, actions and focus:
-   the Helo blue in light mode, the Helo brand red in dark mode (the .dark block and its backdrop). */
+/* Helo.ai tokens: neutral greys, hairline borders and two accent gradients per theme (blue in light,
+   pink in dark). --accent-grad is interactive (buttons, selected states, markers, link underlines);
+   --deco-grad is decorative (backdrop, card glow, landing accents). Gradients only go on surfaces: text
+   accents use --accent-text (= --color-fd-primary), a solid shade that passes WCAG AA. In light mode
+   it is #6f86d6's hue darkened until it reaches 4.5:1 on the background, card and muted surfaces and on
+   its own selected-row tint; in dark mode it is the first pink stop. */
 @theme {
   --color-fd-background: #ffffff;
   --color-fd-foreground: #1f2937;
@@ -15,13 +19,13 @@
   --color-fd-card: #fafaf9;
   --color-fd-card-foreground: #1f2937;
   --color-fd-border: #e7e6e3;
-  --color-fd-primary: #2270d0;
-  --color-fd-primary-foreground: #ffffff;
+  --color-fd-primary: #415fc9;
+  --color-fd-primary-foreground: #0b1220;
   --color-fd-secondary: #f4f4f2;
   --color-fd-secondary-foreground: #1c1b19;
-  --color-fd-accent: #eef4fc;
-  --color-fd-accent-foreground: #1d64bd;
-  --color-fd-ring: #2270d0;
+  --color-fd-accent: #edf4ff;
+  --color-fd-accent-foreground: #415fc9;
+  --color-fd-ring: #6f86d6;
 
   /* Typography: font stacks (the faces are loaded in app/layout.tsx). */
   --font-sans: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -39,13 +43,13 @@
   --color-fd-card: #17181b;
   --color-fd-card-foreground: #ececea;
   --color-fd-border: #2a2b2f;
-  --color-fd-primary: #f0434a;
+  --color-fd-primary: #ff758c;
   --color-fd-primary-foreground: #1a0507;
   --color-fd-secondary: #232427;
   --color-fd-secondary-foreground: #ececea;
-  --color-fd-accent: #3a1a1d;
-  --color-fd-accent-foreground: #f5a3a8;
-  --color-fd-ring: #f0434a;
+  --color-fd-accent: #332126;
+  --color-fd-accent-foreground: #ff9a9e;
+  --color-fd-ring: #ff758c;
 }
 
 .dark #nd-sidebar {
@@ -56,39 +60,54 @@
 
 :root {
   --radius: 10px;
+  --accent-text: var(--color-fd-primary);
+  --accent-grad: linear-gradient(135deg, #89f7fe, #66a6ff);
+  --deco-grad: linear-gradient(135deg, #48c6ef, #6f86d6);
+  /* The decorative colour for borders and glows, where a gradient can't go. */
+  --deco-end: #6f86d6;
+  --selection: rgb(102 166 255 / 0.25);
+}
+
+/* After :root so it wins (same specificity). */
+.dark {
+  --accent-grad: linear-gradient(135deg, #ff758c, #ff7eb3);
+  --deco-grad: linear-gradient(135deg, #ff9a9e, #fad0c4);
+  --deco-end: #ff9a9e;
+  --selection: rgb(255 117 140 / 0.3);
 }
 
 /* ---------------------------------------------------------------------------------------------
    Backdrop: fixed layers behind everything, CSS and inline SVG only.
-   1. body: a soft multi-colour gradient wash (light: Helo blue, a cool violet, a warm sand; dark: brand red, rose, a warm amber).
+   1. body: a soft multi-colour wash in the decorative gradient's stops (light: #48c6ef, #6f86d6, #89f7fe;
+      dark: #ff9a9e, #fad0c4, #ff758c).
    2. body::before: a fine dot grid with an isometric lattice, faded out behind the reading column.
    3. body::after: film grain over everything (dithers the gradient so it never bands) plus
       outline geometry in two corners: hexagons and a dotted arc top-right, rings, a triangle and
       a square bottom-left.
    --------------------------------------------------------------------------------------------- */
 :root {
-  --bd-wash-a: rgb(34 112 208 / 0.16);
-  --bd-wash-b: rgb(124 92 220 / 0.10);
-  --bd-wash-c: rgb(214 170 110 / 0.14);
-  --bd-glow: rgb(34 112 208 / 0.12);
+  --bd-wash-a: rgb(72 198 239 / 0.16);
+  --bd-wash-b: rgb(111 134 214 / 0.10);
+  --bd-wash-c: rgb(137 247 254 / 0.14);
+  --bd-glow: rgb(111 134 214 / 0.12);
   --bd-pattern-opacity: 0.9;
   --bd-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --bd-grain-opacity: 0.2;
-  --bd-shapes-tr: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='640' viewBox='0 0 640 640' fill='none' stroke='%232270d0' stroke-opacity='0.32'%3E%3Cpolygon points='420,40 590,138 590,334 420,432 250,334 250,138' stroke-width='1.2'/%3E%3Cpolygon points='420,130 512,183 512,289 420,342 328,289 328,183' stroke-width='1' transform='rotate(30 420 236)'/%3E%3Ccircle cx='420' cy='236' r='36' stroke-width='1'/%3E%3Ccircle cx='250' cy='460' r='120' stroke-width='1' stroke-dasharray='2 7'/%3E%3Cline x1='590' y1='334' x2='640' y2='363' stroke-width='1'/%3E%3C/svg%3E");
-  --bd-shapes-bl: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='560' viewBox='0 0 560 560' fill='none' stroke='%232270d0' stroke-opacity='0.28'%3E%3Ccircle cx='60' cy='500' r='170' stroke-width='1.2'/%3E%3Ccircle cx='60' cy='500' r='240' stroke-width='1'/%3E%3Ccircle cx='60' cy='500' r='310' stroke-width='1' stroke-dasharray='1 6'/%3E%3Cpolygon points='330,150 420,306 240,306' stroke-width='1.2'/%3E%3C/svg%3E");
+  --bd-shapes-tr: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='640' viewBox='0 0 640 640' fill='none' stroke='%236f86d6' stroke-opacity='0.32'%3E%3Cpolygon points='420,40 590,138 590,334 420,432 250,334 250,138' stroke-width='1.2'/%3E%3Cpolygon points='420,130 512,183 512,289 420,342 328,289 328,183' stroke-width='1' transform='rotate(30 420 236)'/%3E%3Ccircle cx='420' cy='236' r='36' stroke-width='1'/%3E%3Ccircle cx='250' cy='460' r='120' stroke-width='1' stroke-dasharray='2 7'/%3E%3Cline x1='590' y1='334' x2='640' y2='363' stroke-width='1'/%3E%3C/svg%3E");
+  --bd-shapes-bl: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='560' viewBox='0 0 560 560' fill='none' stroke='%236f86d6' stroke-opacity='0.28'%3E%3Ccircle cx='60' cy='500' r='170' stroke-width='1.2'/%3E%3Ccircle cx='60' cy='500' r='240' stroke-width='1'/%3E%3Ccircle cx='60' cy='500' r='310' stroke-width='1' stroke-dasharray='1 6'/%3E%3Cpolygon points='330,150 420,306 240,306' stroke-width='1.2'/%3E%3C/svg%3E");
   --bd-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cg fill='none' stroke='%231c1b19' stroke-opacity='.07' stroke-width='.6'%3E%3Cpath d='M0 0l56 32.3M56 0L0 32.3M0 64.7l56 32.3M56 64.7L0 97M28 0v97'/%3E%3C/g%3E%3Cg fill='%231c1b19' fill-opacity='.2'%3E%3Ccircle cx='0' cy='0' r='.9'/%3E%3Ccircle cx='56' cy='0' r='.9'/%3E%3Ccircle cx='28' cy='16.2' r='.9'/%3E%3Ccircle cx='0' cy='32.3' r='.9'/%3E%3Ccircle cx='56' cy='32.3' r='.9'/%3E%3Ccircle cx='28' cy='48.5' r='.9'/%3E%3Ccircle cx='0' cy='64.7' r='.9'/%3E%3Ccircle cx='56' cy='64.7' r='.9'/%3E%3Ccircle cx='28' cy='80.8' r='.9'/%3E%3Ccircle cx='0' cy='97' r='.9'/%3E%3Ccircle cx='56' cy='97' r='.9'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 .dark {
-  --bd-wash-a: rgb(240 67 74 / 0.20);
-  --bd-wash-b: rgb(190 50 80 / 0.12);
-  --bd-wash-c: rgb(214 120 80 / 0.08);
-  --bd-glow: rgb(240 67 74 / 0.16);
+  --bd-wash-a: rgb(255 154 158 / 0.20);
+  --bd-wash-b: rgb(250 208 196 / 0.12);
+  --bd-wash-c: rgb(255 117 140 / 0.08);
+  --bd-glow: rgb(255 154 158 / 0.16);
   --bd-pattern-opacity: 1;
   --bd-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.32 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --bd-grain-opacity: 0.16;
-  --bd-shapes-tr: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='640' viewBox='0 0 640 640' fill='none' stroke='%23f5a3a8' stroke-opacity='0.26'%3E%3Cpolygon points='420,40 590,138 590,334 420,432 250,334 250,138' stroke-width='1.2'/%3E%3Cpolygon points='420,130 512,183 512,289 420,342 328,289 328,183' stroke-width='1' transform='rotate(30 420 236)'/%3E%3Ccircle cx='420' cy='236' r='36' stroke-width='1'/%3E%3Ccircle cx='250' cy='460' r='120' stroke-width='1' stroke-dasharray='2 7'/%3E%3Cline x1='590' y1='334' x2='640' y2='363' stroke-width='1'/%3E%3C/svg%3E");
-  --bd-shapes-bl: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='560' viewBox='0 0 560 560' fill='none' stroke='%23f5a3a8' stroke-opacity='0.22'%3E%3Ccircle cx='60' cy='500' r='170' stroke-width='1.2'/%3E%3Ccircle cx='60' cy='500' r='240' stroke-width='1'/%3E%3Ccircle cx='60' cy='500' r='310' stroke-width='1' stroke-dasharray='1 6'/%3E%3Cpolygon points='330,150 420,306 240,306' stroke-width='1.2'/%3E%3C/svg%3E");
+  --bd-shapes-tr: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='640' viewBox='0 0 640 640' fill='none' stroke='%23ff9a9e' stroke-opacity='0.26'%3E%3Cpolygon points='420,40 590,138 590,334 420,432 250,334 250,138' stroke-width='1.2'/%3E%3Cpolygon points='420,130 512,183 512,289 420,342 328,289 328,183' stroke-width='1' transform='rotate(30 420 236)'/%3E%3Ccircle cx='420' cy='236' r='36' stroke-width='1'/%3E%3Ccircle cx='250' cy='460' r='120' stroke-width='1' stroke-dasharray='2 7'/%3E%3Cline x1='590' y1='334' x2='640' y2='363' stroke-width='1'/%3E%3C/svg%3E");
+  --bd-shapes-bl: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='560' height='560' viewBox='0 0 560 560' fill='none' stroke='%23ff9a9e' stroke-opacity='0.22'%3E%3Ccircle cx='60' cy='500' r='170' stroke-width='1.2'/%3E%3Ccircle cx='60' cy='500' r='240' stroke-width='1'/%3E%3Ccircle cx='60' cy='500' r='310' stroke-width='1' stroke-dasharray='1 6'/%3E%3Cpolygon points='330,150 420,306 240,306' stroke-width='1.2'/%3E%3C/svg%3E");
   --bd-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.06' stroke-width='.6'%3E%3Cpath d='M0 0l56 32.3M56 0L0 32.3M0 64.7l56 32.3M56 64.7L0 97M28 0v97'/%3E%3C/g%3E%3Cg fill='%23ffffff' fill-opacity='.18'%3E%3Ccircle cx='0' cy='0' r='.9'/%3E%3Ccircle cx='56' cy='0' r='.9'/%3E%3Ccircle cx='28' cy='16.2' r='.9'/%3E%3Ccircle cx='0' cy='32.3' r='.9'/%3E%3Ccircle cx='56' cy='32.3' r='.9'/%3E%3Ccircle cx='28' cy='48.5' r='.9'/%3E%3Ccircle cx='0' cy='64.7' r='.9'/%3E%3Ccircle cx='56' cy='64.7' r='.9'/%3E%3Ccircle cx='28' cy='80.8' r='.9'/%3E%3Ccircle cx='0' cy='97' r='.9'/%3E%3Ccircle cx='56' cy='97' r='.9'/%3E%3C/g%3E%3C/svg%3E");
 }
 
@@ -274,7 +293,20 @@ body {
 }
 #nd-sidebar :where(a, button)[data-active='true'] {
   font-weight: 600;
-  color: var(--color-fd-primary);
+  color: var(--accent-text);
+}
+/* The selected page: a 3px gradient bar on the left edge (nested items keep it on the tree line). */
+#nd-sidebar a[data-active='true']::before {
+  content: '';
+  position: absolute;
+  inset-block: 0.5rem;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 3px;
+  background-image: var(--accent-grad);
+}
+#nd-sidebar a[data-active='true'][class*='before:inset-s-2.5']::before {
+  inset-inline-start: 9px;
 }
 /* Category headers ("Support desk"): the separators between groups, not the section switcher. */
 #nd-sidebar :where(p:not(button p)) {
@@ -304,7 +336,13 @@ body {
 }
 #nd-toc :where(a)[data-active='true'] {
   font-weight: 500;
-  color: var(--color-fd-primary);
+  color: var(--accent-text);
+}
+/* The track marker along the active headings (fumadocs draws it as an SVG stroke): the decorative
+   colour, since a stroke can't take a CSS gradient; the moving thumb dot is .bg-fd-primary, so gradient. */
+#nd-toc .stroke-fd-primary {
+  stroke: var(--deco-end);
+  stroke-width: 2;
 }
 
 /* Surfaces let the backdrop read through faintly; code and tables stay solid for legibility. */
@@ -334,11 +372,70 @@ a[data-card="true"] {
 }
 a[data-card="true"]:hover {
   transform: translateY(-1px);
-  border-color: color-mix(in oklab, var(--color-fd-primary) 35%, var(--color-fd-border));
-  box-shadow: 0 1px 2px rgb(28 27 25 / 0.04), 0 10px 28px -12px rgb(34 112 208 / 0.25);
+  border-color: color-mix(in oklab, var(--deco-end) 45%, var(--color-fd-border));
+  box-shadow: 0 1px 2px rgb(28 27 25 / 0.04), 0 10px 28px -12px color-mix(in oklab, var(--deco-end) 35%, transparent);
 }
 .dark a[data-card="true"]:hover {
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 28px -12px rgb(240 67 74 / 0.3);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 28px -12px color-mix(in oklab, var(--deco-end) 30%, transparent);
+}
+
+/* Solid primary surfaces (fumadocs buttons, Try in Playground, Send, the TOC thumb, the landing badge
+   dot) wear the interactive gradient; the solid colour stays underneath as the fallback. */
+.bg-fd-primary {
+  background-image: var(--accent-grad);
+}
+/* The page's button rule above sets text-strong; on the gradient the text is primary-foreground. */
+#nd-page .bg-fd-primary {
+  color: var(--color-fd-primary-foreground);
+}
+
+/* Body links: accent text with a 1px gradient underline that thickens on hover. Heading anchors,
+   cards and not-prose blocks keep their own look. */
+.prose a:not([data-card]):not(:where(h1, h2, h3, h4, h5, h6, [class~='not-prose']) a) {
+  color: var(--accent-text);
+  text-decoration: none;
+  background-image: var(--accent-grad);
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 100% 1px;
+  padding-bottom: 1px;
+  transition: background-size 160ms ease, opacity 0.2s;
+}
+.prose a:not([data-card]):not(:where(h1, h2, h3, h4, h5, h6, [class~='not-prose']) a):hover {
+  background-size: 100% 2px;
+}
+
+/* Landing page: the headline is gradient text in dark mode (the pinks pass AA as text); light mode
+   keeps it solid (the blues don't) with a short gradient rule under it. Icon tiles are a soft tint
+   of the decorative gradient. */
+.dark .hero-title {
+  background-image: var(--deco-grad);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  /* The background stops at the line box: room for descenders (g, y) without moving the layout. */
+  padding-bottom: 0.12em;
+  margin-bottom: -0.12em;
+}
+.hero-rule {
+  display: block;
+  width: 64px;
+  height: 3px;
+  margin-top: 16px;
+  border-radius: 3px;
+  background-image: var(--deco-grad);
+}
+.dark .hero-rule {
+  display: none;
+}
+.deco-tile {
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--color-fd-card) 84%, transparent), color-mix(in oklab, var(--color-fd-card) 84%, transparent)),
+    var(--deco-grad);
+}
+
+::selection {
+  background-color: var(--selection);
 }
 
 :focus-visible {

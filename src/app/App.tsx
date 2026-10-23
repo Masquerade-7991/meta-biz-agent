@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { ErrorBoundary } from '@/app/components/ErrorBoundary'
 import { BrowserRouter, Navigate, useLocation, useNavigate } from 'react-router'
+import { RENAMED } from '@/app/reports/catalog'
 import { Toaster } from '@/app/components/ui/sonner'
 import { TooltipProvider } from '@/app/components/ui/tooltip'
 import { WizardProvider, useWizard } from '@/app/wizard/WizardContext'
@@ -11,7 +12,7 @@ import { DevControlsButton } from '@/app/components/wizard/DevControlsButton'
 import { LoaderPreview } from '@/app/components/wizard/LoaderPreview'
 import { navFromPath, NAV_ITEMS, pathFor, type NavId } from '@/app/nav'
 import { sectionFromSlug, STUDIO_BASE, studioPath } from '@/app/wizard/studioPaths'
-import { CommandPalette } from '@/app/components/shell/CommandPalette'
+import { OmnibarProvider } from '@/app/omnibar/OmnibarContext'
 import { isDummyMode } from '@/app/api/dummy'
 import { AuthProvider, useAuth } from '@/app/auth/AuthContext'
 import { PageLoader } from '@/app/components/ui/wavy-loader'
@@ -123,6 +124,9 @@ function Gate() {
   const path = location.pathname
   // The print view of a report: no console around it, so the page prints (or saves as PDF) cleanly.
   if (path === '/reports/print') return <ReportPrint />
+  // A renamed or folded report's old address lands on its new one before any page code loads.
+  const oldReport = path.match(/^\/reports\/([a-z_]+)$/)?.[1]
+  if (oldReport && Object.hasOwn(RENAMED, oldReport)) return <Navigate to={`/reports/${RENAMED[oldReport]}${location.search}`} replace />
   if (path === '/agents/setup') return <SetupFrontDoor onFinish={() => navigate(STUDIO_BASE)} />
   if (path === STUDIO_BASE || path.startsWith(STUDIO_BASE + '/'))
     return <AgentBuilderFlow onExitToShell={(page) => navigate(pathFor(page ?? 'ai-agents'))} />
@@ -154,12 +158,13 @@ export default function App() {
       <WizardProvider>
         <TooltipProvider>
           <DevControlsProvider>
-            <ErrorBoundary>
-              <Suspense fallback={<PageLoader fullscreen />}>
-                <Gate />
-              </Suspense>
-            </ErrorBoundary>
-            <CommandPalette />
+            <OmnibarProvider>
+              <ErrorBoundary>
+                <Suspense fallback={<PageLoader fullscreen />}>
+                  <Gate />
+                </Suspense>
+              </ErrorBoundary>
+            </OmnibarProvider>
             <LeaveGuardHost />
             {(isDummyMode() || import.meta.env.DEV) && (
               <>

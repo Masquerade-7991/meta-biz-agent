@@ -28,7 +28,14 @@ const PAGES: [string, string][] = [
   ['analytics', '/analytics'],
   ['reports', '/reports'],
   ['report-summary', '/reports/business_review'],
+  ['report-ai', '/reports/ai_agent'],
+  ['report-team', '/reports/team'],
+  ['report-spend', '/reports/spend'],
   ['report-records', '/reports/tickets'],
+  ['report-conversations-log', '/reports/conversations_log'],
+  ['report-csat-responses', '/reports/csat_responses'],
+  // A report folded into the business review: the old address lands on it.
+  ['report-old', '/reports/daily'],
   ['report-schedules', '/reports/schedules'],
   ['settings', '/settings/support'],
   // Settings: the home, each area's first tab, the new tabs, and the addresses that redirect.
@@ -44,9 +51,13 @@ const PAGES: [string, string][] = [
   ['whatsapp-account', '/whatsapp?tab=account'],
   ['settings-whatsapp', '/settings/whatsapp'],
   ['settings-unknown', '/settings/nonsense'],
+  // Home on a first visit: in Dummy mode the Demo controls' "New workspace (no number)" (the other
+  // modes' fresh workspace already has no number, so it's checked in Dummy mode only). Kept last: it
+  // clears this browser's demo agent and draft, which the pages above show.
+  ['home-first', '/'],
 ]
 /** Addresses that must land somewhere else (path + query). */
-const REDIRECTS: Record<string, string> = { '/settings/whatsapp': '/whatsapp?tab=account', '/settings/nonsense': '/settings' }
+const REDIRECTS: Record<string, string> = { '/settings/whatsapp': '/whatsapp?tab=account', '/settings/nonsense': '/settings', '/reports/daily': '/reports/business_review' }
 // Pages that load nothing visible (a fixed list): no loader or error to look for. The Reports library's
 // reports load on their own pages, which are checked.
 const NO_DATA = new Set(['reports', 'settings-home', 'settings-unknown'])
@@ -54,6 +65,8 @@ const NO_DATA = new Set(['reports', 'settings-home', 'settings-unknown'])
 // working (DATA below): they're checked in dummy and empty modes only.
 for (const id of ['settings-general', 'settings-members', 'settings-profile', 'settings-notifications', 'settings-security']) NO_DATA.add(id)
 const pages = args.pages ? PAGES.filter(([id]) => args.pages.split(',').includes(id)) : PAGES
+const DUMMY_ONLY = new Set(['home-first'])
+const realPages = pages.filter(([id]) => !DUMMY_ONLY.has(id))
 const OUT = path.join(import.meta.dirname, 'out')
 mkdirSync(OUT, { recursive: true })
 const VITE_PORT = 5176
@@ -96,6 +109,55 @@ async function settle(page: Page, ms = 12_000) {
   await page.waitForTimeout(300)
 }
 
+/** Dummy mode: switches Home to a brand-new workspace through the Demo controls (shown from 1024 wide). */
+async function newWorkspace(page: Page): Promise<string[]> {
+  const size = page.viewportSize()!
+  await page.setViewportSize({ width: 1440, height: 900 })
+  try {
+    await page.getByRole('button', { name: 'Demo controls' }).click()
+    await page.getByRole('button', { name: 'New workspace (no number)' }).click()
+    await page.keyboard.press('Escape')
+    await page.getByRole('heading', { name: 'Quick-start guides' }).waitFor({ timeout: 8000 })
+  } catch (err) {
+    return [`couldn't show a new workspace: ${err instanceof Error ? err.message.split('\n')[0] : err}`]
+  } finally {
+    await page.setViewportSize(size)
+    await page.waitForTimeout(400)
+  }
+  return []
+}
+
+// The omnibar's placeholder on each page (its search scope, src/app/omnibar/), checked in Dummy mode.
+const OMNIBAR: Record<string, string> = {
+  home: 'Search Home',
+  inbox: 'Search chats, numbers and messages',
+  tickets: 'Search tickets by number, subject or customer',
+  contacts: 'Search contacts by name, number or email',
+  agents: 'Search agents',
+  whatsapp: 'Search numbers',
+  analytics: 'Search analytics',
+  reports: 'Search reports',
+  settings: 'Search this page',
+  'settings-home': 'Find a setting',
+  'settings-members': 'Search people by name or email',
+}
+
+/** The omnibar shows this page's placeholder, ⌘K / Ctrl K focuses it and opens its dropdown, Esc leaves. */
+async function omnibar(page: Page, id: string): Promise<string[]> {
+  const want = OMNIBAR[id]
+  if (!want) return []
+  const box = page.locator('header input[role=combobox]')
+  const got = await box.getAttribute('placeholder', { timeout: 3000 }).catch(() => null)
+  if (got !== want) return [`omnibar placeholder: expected "${want}", got "${got}"`]
+  const problems: string[] = []
+  await page.keyboard.press('Control+k')
+  const open = await page.locator('[role=listbox]').waitFor({ timeout: 3000 }).then(() => true, () => false)
+  if (!open || !(await box.evaluate((el) => el === document.activeElement))) problems.push('⌘K / Ctrl K did not focus the omnibar and open its dropdown')
+  await page.keyboard.press('Escape')
+  if (await box.evaluate((el) => el === document.activeElement)) problems.push('Esc did not leave the omnibar')
+  return problems
+}
+
 async function check(ctx: BrowserContext, mode: string, [id, url]: [string, string], width: number, theme: string, extra?: (p: Page) => Promise<string[]>, axe = false) {
   const page = await ctx.newPage()
   await page.setViewportSize({ width, height: width < 500 ? 844 : 900 })
@@ -113,6 +175,7 @@ async function check(ctx: BrowserContext, mode: string, [id, url]: [string, stri
     problems.push(`did not load: ${err instanceof Error ? err.message.split('\n')[0] : err}`)
   }
   await settle(page, mode === 'loading' ? 2500 : 12_000)
+  if (id === 'home-first') problems.push(...(await newWorkspace(page)))
   const layout = await page.evaluate(() => ({
     scroll: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     raw: (document.body.innerText.match(/\b(undefined|NaN)\b|\[object Object\]|Invalid Date/g) ?? []).slice(0, 3),
@@ -177,18 +240,18 @@ try {
   if (MODES.includes('dummy'))
     for (const theme of ['light', 'dark']) {
       const ctx = await context(theme, true)
-      for (const p of pages) for (const width of [1440, 390]) await check(ctx, 'dummy', p, width, theme, undefined, width === 1440)
+      for (const p of pages) for (const width of [1440, 390]) await check(ctx, 'dummy', p, width, theme, width === 1440 ? (page) => omnibar(page, p[0]) : undefined, width === 1440)
       await ctx.close()
     }
   if (MODES.includes('empty')) {
     const ctx = await context('light', false)
-    for (const p of pages) for (const width of [1440, 390]) await check(ctx, 'empty', p, width, 'light')
+    for (const p of realPages) for (const width of [1440, 390]) await check(ctx, 'empty', p, width, 'light')
     await ctx.close()
   }
   if (MODES.includes('error')) {
     const ctx = await context('light', false)
     await ctx.route(DATA, (r) => r.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ title: 'Server error', detail: 'Injected by the UI checks.', status: 500 }) }))
-    for (const p of pages.filter(([name]) => !NO_DATA.has(name)))
+    for (const p of realPages.filter(([name]) => !NO_DATA.has(name)))
       await check(ctx, 'error', p, 1440, 'light', async (page) => {
         // Waits for it (up to 8 s): a page under load can still be between its loader and its message.
         const shown = await page
@@ -203,7 +266,7 @@ try {
     await ctx.route(DATA, () => {
       // never answer: the page must show it's loading
     })
-    for (const p of pages.filter(([name]) => !NO_DATA.has(name)))
+    for (const p of realPages.filter(([name]) => !NO_DATA.has(name)))
       await check(ctx, 'loading', p, 1440, 'light', async (page) => {
         const loading = await page.evaluate(() => !!document.querySelector('[role=status], [aria-busy=true], .animate-pulse, .animate-spin'))
         return loading ? [] : ['no loading indicator while data is on its way']
@@ -215,7 +278,7 @@ try {
     // Vite serves each lazily loaded page as its own module (a hashed chunk after a build).
     const LAZY = /^\/src\/app\/(pages\/|analytics\/AnalyticsDashboard|reports\/ReportsPage|components\/shell\/SettingsPage)/
     await ctx.route((u) => LAZY.test(u.pathname), (r) => r.abort())
-    for (const p of pages.filter(([id]) => id !== 'agents'))
+    for (const p of realPages.filter(([id]) => id !== 'agents'))
       await check(ctx, 'stale', p, 1440, 'light', async (page) => {
         const reload = await page
           .getByRole('button', { name: 'Reload' })
