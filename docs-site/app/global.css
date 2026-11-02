@@ -177,7 +177,7 @@ html::after {
   --text-secondary: #4b5563;
   --text-label: #6b7280;
   --text-muted: #9ca3af;
-  --code-fg: #dc2626;
+  --code-fg: #047857;
   --measure: 720px;
 }
 .dark {
@@ -186,7 +186,7 @@ html::after {
   --text-secondary: #9ca3af;
   --text-label: #9ca3af;
   --text-muted: #6b7280;
-  --code-fg: #f87171;
+  --code-fg: #34d399;
 }
 
 body {
@@ -257,7 +257,7 @@ body {
   color: var(--text-strong);
 }
 
-/* Inline code: mono chips in red (AA-safe shade). Code blocks keep their syntax colours. */
+/* Inline code: mono chips in green (AA-safe shade). Code blocks keep their syntax colours. */
 .prose :where(:not(pre) > code) {
   font-family: var(--font-mono);
   font-weight: 500;
